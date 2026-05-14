@@ -1,4 +1,5 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import {
   Activity,
   Bot,
@@ -47,6 +48,28 @@ const statusLabels: Record<TaskStatus, string> = {
 
 const statusOrder: TaskStatus[] = ["planned", "in_progress", "review", "done"];
 const isTauri = "__TAURI_INTERNALS__" in window;
+const notificationBodyLimit = 240;
+let notificationPermissionRequested = false;
+
+async function notifySessionEvent(title: string, body: string) {
+  if (!isTauri) return;
+
+  try {
+    let granted = await isPermissionGranted();
+    if (!granted && !notificationPermissionRequested) {
+      notificationPermissionRequested = true;
+      granted = (await requestPermission()) === "granted";
+    }
+    if (!granted) return;
+
+    sendNotification({
+      title,
+      body: body.length > notificationBodyLimit ? `${body.slice(0, notificationBodyLimit - 3)}...` : body,
+    });
+  } catch (error) {
+    console.error("Failed to send session notification", error);
+  }
+}
 
 function App() {
   const [repos, setRepos] = useState<Repo[]>([]);
@@ -137,12 +160,22 @@ function App() {
     const register = async () => {
       await addListener<SessionIdleEvent>("session_idle", (event) => {
         const task = tasksRef.current.find((task) => task.id === event.payload.taskId);
-        setMessage(`${task?.agentName ?? "Codex"} finished: ${task?.title ?? "task is waiting"}`);
+        const agentName = task?.agentName ?? "Codex";
+        const taskTitle = task?.title ?? "task is waiting";
+        const detail = event.payload.message ? ` ${event.payload.message}` : "";
+        const message = `${agentName} finished: ${taskTitle}${detail}`;
+        setMessage(message);
+        void notifySessionEvent(`${agentName} finished`, `${taskTitle}${detail}`);
       });
       await addListener<SessionNeedsInputEvent>("session_needs_input", (event) => {
         const task = tasksRef.current.find((task) => task.id === event.payload.taskId);
+        const agentName = task?.agentName ?? "Codex";
+        const taskTitle = task?.title ?? "a task";
         const prompt = event.payload.prompt ? `: ${event.payload.prompt}` : "";
-        setMessage(`${task?.agentName ?? "Codex"} needs input for ${task?.title ?? "a task"}${prompt}`);
+        const reason = event.payload.reason ? ` (${event.payload.reason})` : "";
+        const message = `${agentName} needs input for ${taskTitle}${reason}${prompt}`;
+        setMessage(message);
+        void notifySessionEvent(`${agentName} needs input`, `${taskTitle}${reason}${prompt}`);
       });
       await addListener<SessionExitedEvent>("session_exited", (event) => {
         setTasks((current) =>
