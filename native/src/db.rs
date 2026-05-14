@@ -435,6 +435,20 @@ impl Database {
             .ok_or_else(|| "Task not found after update".into())
     }
 
+    pub fn delete_task(&self, task_id: i64) -> Result<(), String> {
+        let existing = self
+            .task_by_id(task_id)?
+            .ok_or_else(|| "Task not found".to_string())?;
+        if existing.active_session_id.is_some() {
+            return Err("Stop the running session before deleting this task".into());
+        }
+
+        self.conn
+            .execute("DELETE FROM tasks WHERE id = ?1", params![task_id])
+            .map_err(|error| format!("Failed to delete task: {error}"))?;
+        Ok(())
+    }
+
     pub fn set_active_session(&self, task_id: i64, session_id: Option<&str>) -> Result<(), String> {
         self.conn
             .execute(
@@ -839,5 +853,56 @@ mod tests {
             refreshed.last_session_label.as_deref(),
             Some("Implement resume")
         );
+    }
+
+    #[test]
+    fn deletes_task_without_active_session() {
+        let db = Database::open_in_memory().unwrap();
+        let repo_dir = tempdir().unwrap();
+        std::process::Command::new("git")
+            .arg("init")
+            .arg(repo_dir.path())
+            .output()
+            .unwrap();
+        let repo = db
+            .add_repo(repo_dir.path().to_string_lossy().to_string())
+            .unwrap();
+        let task = db
+            .create_task_record(repo.id, "Remove stale task".to_string(), None, false, None)
+            .unwrap();
+
+        db.delete_task(task.id).unwrap();
+
+        assert!(db.task_by_id(task.id).unwrap().is_none());
+    }
+
+    #[test]
+    fn delete_task_rejects_active_session() {
+        let db = Database::open_in_memory().unwrap();
+        let repo_dir = tempdir().unwrap();
+        std::process::Command::new("git")
+            .arg("init")
+            .arg(repo_dir.path())
+            .output()
+            .unwrap();
+        let repo = db
+            .add_repo(repo_dir.path().to_string_lossy().to_string())
+            .unwrap();
+        let task = db
+            .create_task_record(repo.id, "Running task".to_string(), None, false, None)
+            .unwrap();
+        db.start_session_record(
+            task.id,
+            "session-123",
+            "codex",
+            repo_dir.path().to_str().unwrap(),
+            None,
+        )
+        .unwrap();
+
+        let error = db.delete_task(task.id).unwrap_err();
+
+        assert!(error.contains("Stop the running session"), "{error}");
+        assert!(db.task_by_id(task.id).unwrap().is_some());
     }
 }

@@ -65,6 +65,11 @@ fn update_task_metadata(
 }
 
 #[tauri::command]
+fn delete_task(task_id: i64, state: State<'_, AppState>) -> AppResult<()> {
+    state.db.lock().delete_task(task_id)
+}
+
+#[tauri::command]
 fn list_agent_profiles(state: State<'_, AppState>) -> AppResult<Vec<AgentProfile>> {
     state.db.lock().list_agent_profiles()
 }
@@ -186,6 +191,7 @@ pub fn run() {
             create_task,
             list_tasks,
             update_task_metadata,
+            delete_task,
             list_agent_profiles,
             upsert_agent_profile,
             start_session,

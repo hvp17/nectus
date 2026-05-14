@@ -323,6 +323,16 @@ select {
   box-shadow: 0 0 0 2px var(--ring);
 }
 
+.task-card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.delete-task-trigger {
+  display: inline-flex;
+}
+
 .branch-line {
   justify-content: flex-start;
   color: var(--muted-foreground);

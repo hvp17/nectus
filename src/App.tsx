@@ -13,6 +13,7 @@ import {
   RotateCcw,
   Square,
   TerminalSquare,
+  Trash2,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
@@ -30,6 +31,7 @@ import {
 } from "./components/ui/dropdown-menu";
 import { Input } from "./components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip";
 import { TerminalPane } from "./TerminalPane";
 import type { AgentProfile, Repo, Session, TaskStatus, TaskSummary } from "./types";
 
@@ -54,6 +56,7 @@ function App() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [confirmingDeleteTaskId, setConfirmingDeleteTaskId] = useState<number | undefined>();
   const selectedRepoIdRef = useRef<number | undefined>(undefined);
   const selectedAgentProfileIdRef = useRef<number | undefined>(undefined);
 
@@ -160,6 +163,31 @@ function App() {
     }
   }
 
+  async function requestDeleteTask(task: TaskSummary) {
+    setMessage(null);
+    if (task.activeSessionId) {
+      setMessage("Stop the running session before deleting this task.");
+      return;
+    }
+    if (confirmingDeleteTaskId !== task.id) {
+      setConfirmingDeleteTaskId(task.id);
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await api.deleteTask(task.id);
+      setTasks((current) => current.filter((item) => item.id !== task.id));
+      setSelectedTaskId((current) => (current === task.id ? undefined : current));
+      setConfirmingDeleteTaskId(undefined);
+      setMessage(`Deleted ${task.title}`);
+    } catch (error) {
+      setMessage(String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function startSession(task: TaskSummary) {
     const agentProfileId = task.agentProfileId ?? selectedAgentProfileId ?? agentProfiles[0]?.id;
     if (!agentProfileId) return;
@@ -215,45 +243,46 @@ function App() {
   }, []);
 
   return (
-    <main className={`app-shell ${selectedTask ? "detail-open" : ""}`}>
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">N</div>
-          <div>
-            <h1>Nectus</h1>
-            <span>Parallel agent tasks</span>
+    <TooltipProvider>
+      <main className={`app-shell ${selectedTask ? "detail-open" : ""}`}>
+        <aside className="sidebar">
+          <div className="brand">
+            <div className="brand-mark">N</div>
+            <div>
+              <h1>Nectus</h1>
+              <span>Parallel agent tasks</span>
+            </div>
           </div>
-        </div>
 
-        <div className="sidebar-section">
-          <div className="section-title project-section-title">
-            <span>Projects</span>
-            <Button type="button" size="icon-lg" onClick={addProject} disabled={busy} title="Add project" aria-label="Add project">
-              <FolderPlus size={16} />
-            </Button>
-          </div>
-          {repos.length === 0 ? (
-            <div className="empty-mini">{loading ? "Loading projects..." : "No projects yet"}</div>
-          ) : (
-            repos.map((repo) => (
-              <Button
-                variant={repo.id === selectedRepoId ? "secondary" : "ghost"}
-                className={`repo-item ${repo.id === selectedRepoId ? "selected" : ""}`}
-                key={repo.id}
-                onClick={() => {
-                  setSelectedRepoId(repo.id);
-                  setSelectedTaskId(undefined);
-                }}
-              >
-                <FolderGit2 size={16} />
-                <span>{repo.name}</span>
+          <div className="sidebar-section">
+            <div className="section-title project-section-title">
+              <span>Projects</span>
+              <Button type="button" size="icon-lg" onClick={addProject} disabled={busy} title="Add project" aria-label="Add project">
+                <FolderPlus size={16} />
               </Button>
-            ))
-          )}
-        </div>
-      </aside>
+            </div>
+            {repos.length === 0 ? (
+              <div className="empty-mini">{loading ? "Loading projects..." : "No projects yet"}</div>
+            ) : (
+              repos.map((repo) => (
+                <Button
+                  variant={repo.id === selectedRepoId ? "secondary" : "ghost"}
+                  className={`repo-item ${repo.id === selectedRepoId ? "selected" : ""}`}
+                  key={repo.id}
+                  onClick={() => {
+                    setSelectedRepoId(repo.id);
+                    setSelectedTaskId(undefined);
+                  }}
+                >
+                  <FolderGit2 size={16} />
+                  <span>{repo.name}</span>
+                </Button>
+              ))
+            )}
+          </div>
+        </aside>
 
-      <section className="workspace">
+        <section className="workspace">
         <header className="topbar">
           <div>
             <p className="eyebrow">Operations</p>
@@ -345,7 +374,15 @@ function App() {
                   >
                     <div className="card-row">
                       <strong>{task.title}</strong>
-                      {task.activeSessionId ? <Badge>live</Badge> : null}
+                      <div className="task-card-actions">
+                        {task.activeSessionId ? <Badge>live</Badge> : null}
+                        <DeleteTaskButton
+                          task={task}
+                          busy={busy}
+                          confirming={confirmingDeleteTaskId === task.id}
+                          onDelete={requestDeleteTask}
+                        />
+                      </div>
                     </div>
                     <div className="branch-line">
                       {task.hasWorktree ? <GitBranch size={14} /> : <Bot size={14} />}
@@ -360,11 +397,11 @@ function App() {
             </section>
           ))}
         </div>
-      </section>
+        </section>
 
-      {selectedTask ? (
-        <aside className="detail-pane">
-          <>
+        {selectedTask ? (
+          <aside className="detail-pane">
+            <>
             <div className="detail-header">
               <div>
                 <p className="eyebrow">Selected task</p>
@@ -387,6 +424,13 @@ function App() {
                     <Play size={15} />
                     Start
                   </Button>
+                  <DeleteTaskButton
+                    task={selectedTask}
+                    busy={busy}
+                    confirming={confirmingDeleteTaskId === selectedTask.id}
+                    onDelete={requestDeleteTask}
+                    size="lg"
+                  />
                 </div>
               )}
             </div>
@@ -442,10 +486,55 @@ function App() {
               Agent terminal
             </div>
             <TerminalPane sessionId={selectedTask.activeSessionId} onSessionExit={onSessionExit} />
-          </>
-        </aside>
-      ) : null}
-    </main>
+            </>
+          </aside>
+        ) : null}
+      </main>
+    </TooltipProvider>
+  );
+}
+
+function DeleteTaskButton({
+  task,
+  busy,
+  confirming,
+  onDelete,
+  size = "icon-sm",
+}: {
+  task: TaskSummary;
+  busy: boolean;
+  confirming: boolean;
+  onDelete: (task: TaskSummary) => void;
+  size?: "icon-sm" | "lg";
+}) {
+  const disabled = busy || Boolean(task.activeSessionId);
+  const label = task.activeSessionId ? "Stop session before deleting" : confirming ? "Confirm delete" : "Delete task";
+
+  return (
+    <Tooltip open={confirming || undefined}>
+      <TooltipTrigger asChild>
+        <span className="delete-task-trigger">
+          <Button
+            type="button"
+            variant="destructive"
+            size={size}
+            disabled={disabled}
+            aria-label={label}
+            title={label}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete(task);
+            }}
+          >
+            <Trash2 size={15} />
+            {size === "lg" ? "Delete" : null}
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        {task.activeSessionId ? "Stop session first" : confirming ? "Click again to delete" : "Delete task"}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

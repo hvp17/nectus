@@ -69,6 +69,9 @@ export const api = {
   }): Promise<TaskSummary> {
     return invoke("update_task_metadata", input);
   },
+  async deleteTask(taskId: number): Promise<void> {
+    return invoke("delete_task", { taskId });
+  },
   async listAgentProfiles(): Promise<AgentProfile[]> {
     if (!isTauri) return demoProfiles;
     return invoke("list_agent_profiles");
