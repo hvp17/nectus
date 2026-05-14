@@ -3,7 +3,7 @@ use crate::models::{AgentProfile, AgentProfileInput, Repo, TaskStatus, TaskSumma
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub struct Database {
     conn: Connection,
@@ -441,6 +441,13 @@ impl Database {
             .ok_or_else(|| "Task not found".to_string())?;
         if existing.active_session_id.is_some() {
             return Err("Stop the running session before deleting this task".into());
+        }
+
+        if let Some(worktree_path) = existing.worktree_path {
+            let repo = self
+                .repo_by_id(existing.repo_id)?
+                .ok_or_else(|| "Repository not found".to_string())?;
+            git_ops::remove_worktree(PathBuf::from(&repo.path).as_path(), Path::new(&worktree_path))?;
         }
 
         self.conn

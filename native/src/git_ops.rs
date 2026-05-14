@@ -100,6 +100,39 @@ pub fn create_worktree(
     }
 }
 
+pub fn remove_worktree(repo_path: &Path, worktree_path: &Path) -> Result<(), String> {
+    if !worktree_path.exists() {
+        return Ok(());
+    }
+
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo_path)
+        .arg("worktree")
+        .arg("remove")
+        .arg("--force")
+        .arg(worktree_path)
+        .output()
+        .map_err(|error| format!("Failed to run git worktree remove: {error}"))?;
+
+    if output.status.success() {
+        // Also try to remove the parent directory if it's empty (the one we created in create_worktree)
+        if let Some(parent) = worktree_path.parent() {
+            if parent.exists() {
+                let _ = std::fs::remove_dir(parent); // Ignore error if not empty
+            }
+        }
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        Err(if stderr.is_empty() {
+            "git worktree remove failed".into()
+        } else {
+            stderr
+        })
+    }
+}
+
 pub fn is_dirty(path: &Path) -> bool {
     let Ok(output) = Command::new("git")
         .arg("-C")
