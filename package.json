@@ -8,6 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "desktop:dev": "tauri dev --config native/tauri.conf.json",
+    "desktop:build": "tauri build --config native/tauri.conf.json",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -31,4 +33,3 @@
     "vitest": "^4.1.6"
   }
 }
-

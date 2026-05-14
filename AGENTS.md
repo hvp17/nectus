@@ -5,7 +5,7 @@
 Nectus Desktop is a Mac-first Tauri 2 desktop app for managing parallel Codex/Claude work across git worktrees.
 
 - Frontend: React + TypeScript + Vite in `src/`
-- Desktop backend: Rust + Tauri in `src-tauri/`
+- Desktop backend: Rust + Tauri in `native/`
 - Local storage: SQLite through Rust-side `rusqlite`
 - Embedded terminal: Rust `portable-pty` backend + `xterm.js` frontend
 - Package manager: `pnpm`
@@ -37,7 +37,7 @@ Use this when working on layout, React state, styling, and non-Tauri UI behavior
 Run the full desktop app locally:
 
 ```bash
-pnpm tauri dev
+pnpm desktop:dev
 ```
 
 Use this for validating:
@@ -59,14 +59,14 @@ pnpm build
 Build the Mac desktop app and DMG:
 
 ```bash
-pnpm tauri build
+pnpm desktop:build
 ```
 
 Expected release outputs:
 
 ```text
-src-tauri/target/release/bundle/macos/Nectus Desktop.app
-src-tauri/target/release/bundle/dmg/Nectus Desktop_0.1.0_aarch64.dmg
+native/target/release/bundle/macos/Nectus Desktop.app
+native/target/release/bundle/dmg/Nectus Desktop_0.1.0_aarch64.dmg
 ```
 
 ## Tests
@@ -80,7 +80,7 @@ pnpm test
 Run Rust tests:
 
 ```bash
-cd src-tauri
+cd native
 cargo test
 ```
 
@@ -89,13 +89,13 @@ Run the standard verification set before claiming work is complete:
 ```bash
 pnpm test
 pnpm build
-cd src-tauri && cargo test
+cd native && cargo test
 ```
 
 For release-impacting changes, also run:
 
 ```bash
-pnpm tauri build
+pnpm desktop:build
 ```
 
 ## Backend Boundaries
@@ -104,11 +104,11 @@ Keep OS, git, SQLite, and PTY behavior in Rust.
 
 Important backend files:
 
-- `src-tauri/src/lib.rs`: Tauri command registration and app setup
-- `src-tauri/src/db.rs`: SQLite schema, migrations, and persistence
-- `src-tauri/src/git_ops.rs`: git repo/worktree validation and operations
-- `src-tauri/src/sessions.rs`: PTY lifecycle and terminal event emission
-- `src-tauri/src/models.rs`: shared serializable data types
+- `native/src/lib.rs`: Tauri command registration and app setup
+- `native/src/db.rs`: SQLite schema, migrations, and persistence
+- `native/src/git_ops.rs`: git repo/worktree validation and operations
+- `native/src/sessions.rs`: PTY lifecycle and terminal event emission
+- `native/src/models.rs`: shared serializable data types
 
 Tauri commands exposed to the frontend include:
 
