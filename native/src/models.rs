@@ -116,6 +116,17 @@ pub struct Session {
 pub struct SessionOutputEvent {
     pub session_id: String,
     pub data: String,
+    pub start_offset: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionOutputSnapshot {
+    pub session_id: String,
+    pub data: String,
+    pub truncated: bool,
+    pub start_offset: u64,
+    pub end_offset: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]

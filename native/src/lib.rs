@@ -5,7 +5,8 @@ mod sessions;
 
 use crate::db::Database;
 use crate::models::{
-    AgentProfile, AgentProfileInput, AppResult, Repo, Session, TaskStatus, TaskSummary,
+    AgentProfile, AgentProfileInput, AppResult, Repo, Session, SessionOutputSnapshot, TaskStatus,
+    TaskSummary,
 };
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
@@ -160,6 +161,14 @@ fn send_session_input(
     state.sessions.write_input(&session_id, &data)
 }
 
+#[tauri::command]
+fn session_output_snapshot(
+    session_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<SessionOutputSnapshot> {
+    state.sessions.output_snapshot(&session_id)
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -198,7 +207,8 @@ pub fn run() {
             resume_session,
             stop_session,
             resize_session,
-            send_session_input
+            send_session_input,
+            session_output_snapshot
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,6 +1,7 @@
 use crate::db::Database;
 use crate::models::{
-    AgentProfile, Repo, Session, SessionExitedEvent, SessionOutputEvent, SessionState, TaskSummary,
+    AgentProfile, Repo, Session, SessionExitedEvent, SessionOutputEvent, SessionOutputSnapshot,
+    SessionState, TaskSummary,
 };
 use chrono::Utc;
 use parking_lot::Mutex;
@@ -14,6 +15,8 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
+const OUTPUT_BUFFER_LIMIT: usize = 2 * 1024 * 1024;
+
 pub struct SessionManager {
     sessions: Arc<Mutex<HashMap<String, RunningSession>>>,
 }
@@ -25,6 +28,10 @@ struct RunningSession {
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
     child: Box<dyn Child + Send + Sync>,
+    output_buffer: String,
+    output_truncated: bool,
+    output_start_offset: u64,
+    output_end_offset: u64,
 }
 
 impl SessionManager {
@@ -124,6 +131,10 @@ impl SessionManager {
                 master: pair.master,
                 writer,
                 child,
+                output_buffer: String::new(),
+                output_truncated: false,
+                output_start_offset: 0,
+                output_end_offset: 0,
             },
         );
 
@@ -143,11 +154,17 @@ impl SessionManager {
                         Ok(0) => break,
                         Ok(count) => {
                             let data = String::from_utf8_lossy(&buffer[..count]).to_string();
+                            let start_offset = sessions
+                                .lock()
+                                .get_mut(&session_id)
+                                .map(|running| append_output_buffer(running, &data))
+                                .unwrap_or(0);
                             let _ = app.emit(
                                 "session_output",
                                 SessionOutputEvent {
                                     session_id: session_id.clone(),
                                     data,
+                                    start_offset,
                                 },
                             );
                         }
@@ -177,6 +194,20 @@ impl SessionManager {
         });
 
         Ok(session)
+    }
+
+    pub fn output_snapshot(&self, session_id: &str) -> Result<SessionOutputSnapshot, String> {
+        let sessions = self.sessions.lock();
+        let running = sessions
+            .get(session_id)
+            .ok_or_else(|| "Session is not running".to_string())?;
+        Ok(SessionOutputSnapshot {
+            session_id: session_id.to_string(),
+            data: running.output_buffer.clone(),
+            truncated: running.output_truncated,
+            start_offset: running.output_start_offset,
+            end_offset: running.output_end_offset,
+        })
     }
 
     pub fn stop(&self, db: Arc<Mutex<Database>>, session_id: String) -> Result<Session, String> {
@@ -248,6 +279,27 @@ impl SessionManager {
             }
         }
     }
+}
+
+fn append_output_buffer(running: &mut RunningSession, data: &str) -> u64 {
+    let start_offset = running.output_end_offset;
+    running.output_buffer.push_str(data);
+    running.output_end_offset += data.len() as u64;
+
+    if running.output_buffer.len() > OUTPUT_BUFFER_LIMIT {
+        running.output_truncated = true;
+        let excess = running.output_buffer.len() - OUTPUT_BUFFER_LIMIT;
+        let drain_to = running
+            .output_buffer
+            .char_indices()
+            .map(|(index, _)| index)
+            .find(|index| *index >= excess)
+            .unwrap_or(running.output_buffer.len());
+        running.output_buffer.drain(..drain_to);
+        running.output_start_offset += drain_to as u64;
+    }
+
+    start_offset
 }
 
 fn resolve_agent_command(command: &str) -> Result<PathBuf, String> {

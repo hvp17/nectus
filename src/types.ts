@@ -55,6 +55,15 @@ export interface Session {
 export interface SessionOutputEvent {
   sessionId: string;
   data: string;
+  startOffset: number;
+}
+
+export interface SessionOutputSnapshot {
+  sessionId: string;
+  data: string;
+  truncated: boolean;
+  startOffset: number;
+  endOffset: number;
 }
 
 export interface SessionExitedEvent {

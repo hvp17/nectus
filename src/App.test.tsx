@@ -16,6 +16,9 @@ vi.mock("./api", () => ({
     startSession: vi.fn(),
     resumeSession: vi.fn(),
     stopSession: vi.fn(),
+    resizeSession: vi.fn(),
+    sendSessionInput: vi.fn(),
+    sessionOutputSnapshot: vi.fn(),
   },
 }));
 

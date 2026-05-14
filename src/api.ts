@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { AgentProfile, Repo, Session, TaskStatus, TaskSummary } from "./types";
+import type { AgentProfile, Repo, Session, SessionOutputSnapshot, TaskStatus, TaskSummary } from "./types";
 
 const isTauri = "__TAURI_INTERNALS__" in window;
 
@@ -93,5 +93,8 @@ export const api = {
   },
   async sendSessionInput(sessionId: string, data: string): Promise<void> {
     return invoke("send_session_input", { sessionId, data });
+  },
+  async sessionOutputSnapshot(sessionId: string): Promise<SessionOutputSnapshot> {
+    return invoke("session_output_snapshot", { sessionId });
   },
 };
