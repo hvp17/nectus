@@ -1,6 +1,7 @@
 :root {
-  color: #1d252c;
-  background: #e9ece6;
+  color: #edf1ea;
+  background: #0e1417;
+  color-scheme: dark;
   font-family:
     ui-sans-serif,
     -apple-system,
@@ -21,9 +22,9 @@ body {
   min-width: 1120px;
   min-height: 720px;
   background:
-    linear-gradient(90deg, rgba(21, 26, 28, 0.04) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(21, 26, 28, 0.04) 1px, transparent 1px),
-    #e9ece6;
+    linear-gradient(90deg, rgba(214, 255, 114, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(214, 255, 114, 0.035) 1px, transparent 1px),
+    #0e1417;
   background-size: 24px 24px;
 }
 
@@ -107,11 +108,11 @@ button {
 input,
 select {
   min-width: 0;
-  border: 1px solid #ccd1cb;
+  border: 1px solid #334047;
   border-radius: 7px;
   padding: 10px 11px;
-  background: #fbfcf7;
-  color: #1d252c;
+  background: #151d21;
+  color: #edf1ea;
 }
 
 .sidebar input {
@@ -143,9 +144,9 @@ select {
 }
 
 .ghost-button {
-  border: 1px solid #ccd1cb;
-  background: #fbfcf7;
-  color: #1d252c;
+  border: 1px solid #3a474d;
+  background: #161f23;
+  color: #edf1ea;
 }
 
 .danger-button {
@@ -213,14 +214,14 @@ button:disabled {
   grid-template-columns: 22px 1fr auto;
   align-items: center;
   gap: 8px;
-  border: 1px solid #d2d6cf;
+  border: 1px solid #2f3b40;
   border-radius: 8px;
   padding: 12px;
-  background: rgba(251, 252, 247, 0.82);
+  background: rgba(20, 28, 32, 0.9);
 }
 
 .metric span {
-  color: #667174;
+  color: #8f9ba1;
   font-size: 13px;
 }
 
@@ -230,11 +231,11 @@ button:disabled {
 
 .message {
   margin-bottom: 14px;
-  border: 1px solid #cbd2c8;
+  border: 1px solid #4d4431;
   border-radius: 8px;
   padding: 10px 12px;
-  background: #fffdf0;
-  color: #343a2e;
+  background: #201d14;
+  color: #f4d98d;
 }
 
 .worktree-form {
@@ -250,10 +251,10 @@ button:disabled {
 
 .status-column {
   min-height: 360px;
-  border: 1px solid #d2d6cf;
+  border: 1px solid #2f3b40;
   border-radius: 8px;
   padding: 10px;
-  background: rgba(251, 252, 247, 0.58);
+  background: rgba(15, 21, 24, 0.74);
 }
 
 .column-heading,
@@ -268,7 +269,7 @@ button:disabled {
 
 .column-heading {
   margin-bottom: 10px;
-  color: #455056;
+  color: #a8b3b8;
   font-size: 13px;
   font-weight: 800;
 }
@@ -279,7 +280,7 @@ button:disabled {
   min-width: 24px;
   height: 24px;
   border-radius: 999px;
-  background: #e1e6dc;
+  background: #243036;
 }
 
 .worktree-card {
@@ -287,22 +288,22 @@ button:disabled {
   gap: 10px;
   width: 100%;
   margin-bottom: 10px;
-  border: 1px solid #d6dad3;
+  border: 1px solid #303d43;
   border-radius: 8px;
   padding: 12px;
-  background: #fbfcf7;
+  background: #151d21;
   color: inherit;
   text-align: left;
 }
 
 .worktree-card.selected {
-  border-color: #111;
+  border-color: #d6ff72;
   box-shadow: 0 0 0 2px #d6ff72;
 }
 
 .branch-line {
   justify-content: flex-start;
-  color: #47535b;
+  color: #9eaaaf;
   font-family: "SFMono-Regular", Menlo, monospace;
   font-size: 12px;
 }
@@ -321,8 +322,8 @@ button:disabled {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  border-left: 1px solid #ced4cd;
-  background: #fbfcf7;
+  border-left: 1px solid #2f3b40;
+  background: #11181c;
 }
 
 .detail-header {
@@ -331,7 +332,7 @@ button:disabled {
   justify-content: space-between;
   gap: 12px;
   padding: 24px;
-  border-bottom: 1px solid #e0e3dd;
+  border-bottom: 1px solid #2a353b;
 }
 
 .detail-header h3 {
@@ -344,11 +345,11 @@ button:disabled {
   gap: 10px 12px;
   margin: 0;
   padding: 18px 24px;
-  border-bottom: 1px solid #e0e3dd;
+  border-bottom: 1px solid #2a353b;
 }
 
 .detail-list dt {
-  color: #7a8587;
+  color: #8f9ba1;
   font-weight: 800;
 }
 
@@ -367,7 +368,7 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #0f5b68;
+  color: #9ee7f3;
   font-weight: 800;
   text-decoration: none;
 }
@@ -375,7 +376,7 @@ button:disabled {
 .terminal-title {
   justify-content: flex-start;
   padding: 14px 24px;
-  color: #536064;
+  color: #a8b3b8;
   font-weight: 850;
 }
 
@@ -392,13 +393,13 @@ button:disabled {
   align-content: center;
   height: 100%;
   padding: 34px;
-  color: #6a7578;
+  color: #8f9ba1;
   text-align: center;
 }
 
 .empty-detail h3 {
   margin: 12px 0 4px;
-  color: #1d252c;
+  color: #edf1ea;
 }
 
 @media (max-width: 1220px) {
@@ -410,4 +411,3 @@ button:disabled {
     grid-template-columns: repeat(2, minmax(180px, 1fr));
   }
 }
-
