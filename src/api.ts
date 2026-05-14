@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import type { AgentProfile, Repo, Session, WorktreeSummary, WorktreeStatus } from "./types";
 
 const isTauri = "__TAURI_INTERNALS__" in window;
@@ -31,6 +32,15 @@ export const api = {
   },
   async addRepo(path: string): Promise<Repo> {
     return invoke("add_repo", { path });
+  },
+  async pickRepositoryFolder(): Promise<string | null> {
+    if (!isTauri) return null;
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: "Select repository folder",
+    });
+    return typeof selected === "string" ? selected : null;
   },
   async listWorktrees(repoId?: number): Promise<WorktreeSummary[]> {
     if (!isTauri) return [];
@@ -77,4 +87,3 @@ export const api = {
     return invoke("send_session_input", { sessionId, data });
   },
 };
-

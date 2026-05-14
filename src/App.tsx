@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Circle,
   ExternalLink,
+  FolderOpen,
   FolderGit2,
   GitBranch,
   Play,
@@ -14,6 +15,10 @@ import {
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
+import { Button } from "./components/ui/button";
+import { Input } from "./components/ui/input";
+import { Label } from "./components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
 import { TerminalPane } from "./TerminalPane";
 import type { AgentProfile, Repo, Session, WorktreeStatus, WorktreeSummary } from "./types";
 
@@ -87,6 +92,18 @@ function App() {
       setMessage(String(error));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function pickRepoFolder() {
+    setMessage(null);
+    try {
+      const selected = await api.pickRepositoryFolder();
+      if (selected) {
+        setRepoPath(selected);
+      }
+    } catch (error) {
+      setMessage(String(error));
     }
   }
 
@@ -177,17 +194,20 @@ function App() {
         </div>
 
         <form className="repo-form" onSubmit={submitRepo}>
-          <label htmlFor="repo-path">Repository path</label>
+          <Label htmlFor="repo-path">Repository path</Label>
           <div className="inline-field">
-            <input
+            <Input
               id="repo-path"
-              placeholder="/Users/tomas/project"
+              placeholder="Select a repository folder"
               value={repoPath}
               onChange={(event) => setRepoPath(event.target.value)}
             />
-            <button className="icon-button" disabled={busy || !repoPath.trim()} title="Add repository">
+            <Button className="icon-button" type="button" size="icon" onClick={pickRepoFolder} disabled={busy} title="Select repository folder">
+              <FolderOpen size={16} />
+            </Button>
+            <Button className="icon-button" size="icon" disabled={busy || !repoPath.trim()} title="Add repository">
               <Plus size={16} />
-            </button>
+            </Button>
           </div>
         </form>
 
@@ -216,10 +236,10 @@ function App() {
             <p className="eyebrow">Operations</p>
             <h2>{selectedRepo ? selectedRepo.name : "Add your first repository"}</h2>
           </div>
-          <button className="ghost-button" onClick={() => refresh()} title="Refresh">
+          <Button className="ghost-button" variant="outline" onClick={() => refresh()} title="Refresh">
             <RefreshCw size={16} />
             Refresh
-          </button>
+          </Button>
         </header>
 
         <div className="metrics">
@@ -232,22 +252,27 @@ function App() {
 
         {selectedRepo ? (
           <form className="worktree-form" onSubmit={submitWorktree}>
-            <input placeholder="task title" value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} />
-            <input placeholder="branch name" value={branchName} onChange={(event) => setBranchName(event.target.value)} />
-            <select
-              value={selectedAgentProfileId ?? ""}
-              onChange={(event) => setSelectedAgentProfileId(Number(event.target.value))}
+            <Input placeholder="task title" value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} />
+            <Input placeholder="branch name" value={branchName} onChange={(event) => setBranchName(event.target.value)} />
+            <Select
+              value={selectedAgentProfileId ? String(selectedAgentProfileId) : undefined}
+              onValueChange={(value) => setSelectedAgentProfileId(Number(value))}
             >
-              {agentProfiles.map((profile) => (
-                <option value={profile.id} key={profile.id}>
-                  {profile.name}
-                </option>
-              ))}
-            </select>
-            <button disabled={busy || !taskTitle.trim() || !branchName.trim()}>
+              <SelectTrigger aria-label="Agent profile">
+                <SelectValue placeholder="Agent" />
+              </SelectTrigger>
+              <SelectContent>
+                {agentProfiles.map((profile) => (
+                  <SelectItem value={String(profile.id)} key={profile.id}>
+                    {profile.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button disabled={busy || !taskTitle.trim() || !branchName.trim()}>
               <Plus size={16} />
               Create worktree
-            </button>
+            </Button>
           </form>
         ) : null}
 
@@ -294,15 +319,15 @@ function App() {
                 <h3>{selectedWorktree.taskTitle}</h3>
               </div>
               {selectedWorktree.activeSessionId ? (
-                <button className="danger-button" onClick={() => stopSession(selectedWorktree.activeSessionId!)}>
+                <Button className="danger-button" variant="destructive" onClick={() => stopSession(selectedWorktree.activeSessionId!)}>
                   <Square size={15} />
                   Stop
-                </button>
+                </Button>
               ) : (
-                <button className="primary-button" onClick={() => startSession(selectedWorktree)}>
+                <Button className="primary-button" onClick={() => startSession(selectedWorktree)}>
                   <Play size={15} />
                   Start
-                </button>
+                </Button>
               )}
             </div>
 
@@ -313,13 +338,18 @@ function App() {
               <dd className="path">{selectedWorktree.path}</dd>
               <dt>Status</dt>
               <dd>
-                <select value={selectedWorktree.status} onChange={(event) => updateStatus(selectedWorktree, event.target.value as WorktreeStatus)}>
-                  {statusOrder.map((status) => (
-                    <option value={status} key={status}>
-                      {statusLabels[status]}
-                    </option>
-                  ))}
-                </select>
+                <Select value={selectedWorktree.status} onValueChange={(value) => updateStatus(selectedWorktree, value as WorktreeStatus)}>
+                  <SelectTrigger aria-label="Worktree status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusOrder.map((status) => (
+                      <SelectItem value={status} key={status}>
+                        {statusLabels[status]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </dd>
               <dt>PR</dt>
               <dd>
@@ -362,4 +392,3 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
 }
 
 export default App;
-
