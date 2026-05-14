@@ -5,13 +5,13 @@ mod sessions;
 
 use crate::db::Database;
 use crate::models::{
-    AgentProfile, AgentProfileInput, AppResult, Repo, Session, SessionOutputSnapshot, TaskStatus,
-    TaskSummary,
+    AgentProfile, AgentProfileInput, AppResult, Repo, Session, SessionExitedEvent,
+    SessionOutputSnapshot, TaskStatus, TaskSummary,
 };
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
 use std::sync::Arc;
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 
 pub struct AppState {
     db: Arc<Mutex<Database>>,
@@ -138,8 +138,20 @@ fn resume_session(
 }
 
 #[tauri::command]
-fn stop_session(session_id: String, state: State<'_, AppState>) -> AppResult<Session> {
-    state.sessions.stop(state.db.clone(), session_id)
+fn stop_session(
+    session_id: String,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<Session> {
+    let session = state.sessions.stop(state.db.clone(), session_id.clone())?;
+    let _ = app.emit(
+        "session_exited",
+        SessionExitedEvent {
+            session_id,
+            exit_code: None,
+        },
+    );
+    Ok(session)
 }
 
 #[tauri::command]

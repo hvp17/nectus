@@ -135,3 +135,22 @@ pub struct SessionExitedEvent {
     pub session_id: String,
     pub exit_code: Option<i32>,
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionIdleEvent {
+    pub session_id: String,
+    pub task_id: i64,
+    pub turn_id: Option<String>,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionNeedsInputEvent {
+    pub session_id: String,
+    pub task_id: i64,
+    pub turn_id: Option<String>,
+    pub reason: String,
+    pub prompt: Option<String>,
+}

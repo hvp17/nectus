@@ -70,3 +70,18 @@ export interface SessionExitedEvent {
   sessionId: string;
   exitCode?: number | null;
 }
+
+export interface SessionIdleEvent {
+  sessionId: string;
+  taskId: number;
+  turnId?: string | null;
+  message?: string | null;
+}
+
+export interface SessionNeedsInputEvent {
+  sessionId: string;
+  taskId: number;
+  turnId?: string | null;
+  reason: string;
+  prompt?: string | null;
+}

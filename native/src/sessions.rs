@@ -1,7 +1,7 @@
 use crate::db::Database;
 use crate::models::{
-    AgentProfile, Repo, Session, SessionExitedEvent, SessionOutputEvent, SessionOutputSnapshot,
-    SessionState, TaskSummary,
+    AgentProfile, Repo, Session, SessionExitedEvent, SessionIdleEvent, SessionNeedsInputEvent,
+    SessionOutputEvent, SessionOutputSnapshot, SessionState, TaskSummary,
 };
 use chrono::Utc;
 use parking_lot::Mutex;
@@ -9,9 +9,10 @@ use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize}
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
@@ -137,6 +138,17 @@ impl SessionManager {
                 output_end_offset: 0,
             },
         );
+
+        if is_codex_command(&agent.command) {
+            spawn_codex_event_watcher(
+                app.clone(),
+                self.sessions.clone(),
+                task.id,
+                session_id.clone(),
+                cwd_path.clone(),
+                started_at.clone(),
+            );
+        }
 
         std::thread::spawn({
             let app = app.clone();
@@ -427,6 +439,7 @@ fn is_claude_command(command: &str) -> bool {
 struct CodexSessionMetadata {
     id: String,
     label: Option<String>,
+    path: PathBuf,
 }
 
 fn latest_codex_session_metadata(cwd: &Path, started_at: &str) -> Option<CodexSessionMetadata> {
@@ -458,13 +471,18 @@ fn collect_codex_session_ids(
         if path.extension().and_then(|value| value.to_str()) != Some("jsonl") {
             continue;
         }
-        let Ok(contents) = fs::read_to_string(&path) else {
+        let Ok(file) = fs::File::open(&path) else {
             continue;
         };
-        let Some(first_line) = contents.lines().next() else {
+        let mut reader = BufReader::new(file);
+        let mut first_line = String::new();
+        let Ok(bytes_read) = reader.read_line(&mut first_line) else {
             continue;
         };
-        let Ok(value) = serde_json::from_str::<serde_json::Value>(first_line) else {
+        if bytes_read == 0 {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&first_line) else {
             continue;
         };
         if value.pointer("/type").and_then(|value| value.as_str()) != Some("session_meta") {
@@ -502,6 +520,7 @@ fn collect_codex_session_ids(
                 CodexSessionMetadata {
                     id,
                     label: codex_session_label(payload),
+                    path: path.clone(),
                 },
             ));
         }
@@ -520,6 +539,149 @@ fn codex_session_label(payload: &serde_json::Value) -> Option<String> {
         }
     }
     None
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum CodexSessionEvent {
+    Idle {
+        turn_id: Option<String>,
+        message: Option<String>,
+    },
+    NeedsInput {
+        turn_id: Option<String>,
+        reason: String,
+        prompt: Option<String>,
+    },
+}
+
+fn spawn_codex_event_watcher(
+    app: AppHandle,
+    sessions: Arc<Mutex<HashMap<String, RunningSession>>>,
+    task_id: i64,
+    session_id: String,
+    cwd: PathBuf,
+    started_at: String,
+) {
+    std::thread::spawn(move || {
+        let started_at = match chrono::DateTime::parse_from_rfc3339(&started_at) {
+            Ok(value) => value,
+            Err(_) => return,
+        };
+        let mut metadata = None;
+        for _ in 0..120 {
+            if !sessions.lock().contains_key(&session_id) {
+                return;
+            }
+            if let Some(found) = latest_codex_session_metadata(&cwd, &started_at.to_rfc3339()) {
+                metadata = Some(found);
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        let Some(metadata) = metadata else {
+            return;
+        };
+
+        let mut processed_lines = 0_usize;
+        loop {
+            if !sessions.lock().contains_key(&session_id) {
+                return;
+            }
+            let Ok(contents) = fs::read_to_string(&metadata.path) else {
+                std::thread::sleep(Duration::from_millis(500));
+                continue;
+            };
+            for line in contents.lines().skip(processed_lines) {
+                if let Some(event) = codex_session_event_from_line(line, started_at) {
+                    match event {
+                        CodexSessionEvent::Idle { turn_id, message } => {
+                            let _ = app.emit(
+                                "session_idle",
+                                SessionIdleEvent {
+                                    session_id: session_id.clone(),
+                                    task_id,
+                                    turn_id,
+                                    message,
+                                },
+                            );
+                        }
+                        CodexSessionEvent::NeedsInput {
+                            turn_id,
+                            reason,
+                            prompt,
+                        } => {
+                            let _ = app.emit(
+                                "session_needs_input",
+                                SessionNeedsInputEvent {
+                                    session_id: session_id.clone(),
+                                    task_id,
+                                    turn_id,
+                                    reason,
+                                    prompt,
+                                },
+                            );
+                        }
+                    }
+                }
+            }
+            processed_lines = contents.lines().count();
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    });
+}
+
+fn codex_session_event_from_line(
+    line: &str,
+    started_at: chrono::DateTime<chrono::FixedOffset>,
+) -> Option<CodexSessionEvent> {
+    let value = serde_json::from_str::<serde_json::Value>(line).ok()?;
+    let timestamp = value
+        .pointer("/timestamp")
+        .and_then(|value| value.as_str())
+        .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())?;
+    if timestamp < started_at {
+        return None;
+    }
+    if value.pointer("/type").and_then(|value| value.as_str()) != Some("event_msg") {
+        return None;
+    }
+    let payload = value.pointer("/payload")?;
+    let payload_type = payload.pointer("/type").and_then(|value| value.as_str())?;
+    match payload_type {
+        "task_complete" => Some(CodexSessionEvent::Idle {
+            turn_id: payload
+                .pointer("/turn_id")
+                .and_then(|value| value.as_str())
+                .map(ToOwned::to_owned),
+            message: payload
+                .pointer("/last_agent_message")
+                .and_then(|value| value.as_str())
+                .map(ToOwned::to_owned),
+        }),
+        value if is_codex_needs_input_event(value) => Some(CodexSessionEvent::NeedsInput {
+            turn_id: payload
+                .pointer("/turn_id")
+                .and_then(|value| value.as_str())
+                .map(ToOwned::to_owned),
+            reason: payload_type.to_string(),
+            prompt: payload
+                .pointer("/prompt")
+                .or_else(|| payload.pointer("/message"))
+                .or_else(|| payload.pointer("/reason"))
+                .and_then(|value| value.as_str())
+                .map(ToOwned::to_owned),
+        }),
+        _ => None,
+    }
+}
+
+fn is_codex_needs_input_event(payload_type: &str) -> bool {
+    let normalized = payload_type.to_ascii_lowercase();
+    normalized.contains("approval")
+        || normalized.contains("permission")
+        || normalized.contains("confirmation")
+        || normalized.contains("request_user_input")
+        || normalized.contains("needs_input")
 }
 
 #[cfg(unix)]
@@ -602,5 +764,42 @@ mod tests {
         }
 
         assert_eq!(resolved, executable);
+    }
+
+    #[test]
+    fn recognizes_codex_task_complete_as_idle_event() {
+        let started_at = chrono::DateTime::parse_from_rfc3339("2026-05-14T10:00:00Z").unwrap();
+        let line = r#"{"timestamp":"2026-05-14T10:00:05.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","last_agent_message":"Done."}}"#;
+
+        assert_eq!(
+            codex_session_event_from_line(line, started_at),
+            Some(CodexSessionEvent::Idle {
+                turn_id: Some("turn-1".to_string()),
+                message: Some("Done.".to_string()),
+            })
+        );
+    }
+
+    #[test]
+    fn ignores_codex_events_before_nectus_session_start() {
+        let started_at = chrono::DateTime::parse_from_rfc3339("2026-05-14T10:00:00Z").unwrap();
+        let line = r#"{"timestamp":"2026-05-14T09:59:59.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","last_agent_message":"Done."}}"#;
+
+        assert_eq!(codex_session_event_from_line(line, started_at), None);
+    }
+
+    #[test]
+    fn recognizes_codex_approval_events_as_needing_input() {
+        let started_at = chrono::DateTime::parse_from_rfc3339("2026-05-14T10:00:00Z").unwrap();
+        let line = r#"{"timestamp":"2026-05-14T10:00:05.000Z","type":"event_msg","payload":{"type":"exec_approval_request","turn_id":"turn-2","message":"Allow command?"}}"#;
+
+        assert_eq!(
+            codex_session_event_from_line(line, started_at),
+            Some(CodexSessionEvent::NeedsInput {
+                turn_id: Some("turn-2".to_string()),
+                reason: "exec_approval_request".to_string(),
+                prompt: Some("Allow command?".to_string()),
+            })
+        );
     }
 }

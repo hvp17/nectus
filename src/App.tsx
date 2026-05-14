@@ -1,3 +1,4 @@
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   Activity,
   Bot,
@@ -26,7 +27,16 @@ import { Label } from "./components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip";
 import { TerminalPane } from "./TerminalPane";
-import type { AgentProfile, Repo, Session, TaskStatus, TaskSummary } from "./types";
+import type {
+  AgentProfile,
+  Repo,
+  Session,
+  SessionExitedEvent,
+  SessionIdleEvent,
+  SessionNeedsInputEvent,
+  TaskStatus,
+  TaskSummary,
+} from "./types";
 
 const statusLabels: Record<TaskStatus, string> = {
   planned: "Planned",
@@ -36,6 +46,7 @@ const statusLabels: Record<TaskStatus, string> = {
 };
 
 const statusOrder: TaskStatus[] = ["planned", "in_progress", "review", "done"];
+const isTauri = "__TAURI_INTERNALS__" in window;
 
 function App() {
   const [repos, setRepos] = useState<Repo[]>([]);
@@ -56,6 +67,7 @@ function App() {
   const [confirmingDeleteTaskId, setConfirmingDeleteTaskId] = useState<number | undefined>();
   const selectedRepoIdRef = useRef<number | undefined>(undefined);
   const selectedAgentProfileIdRef = useRef<number | undefined>(undefined);
+  const tasksRef = useRef<TaskSummary[]>([]);
 
   useEffect(() => {
     selectedRepoIdRef.current = selectedRepoId;
@@ -70,6 +82,10 @@ function App() {
     ? tasks.filter((task) => task.repoId === selectedRepoId)
     : tasks;
   const selectedTask = visibleTasks.find((task) => task.id === selectedTaskId);
+
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
 
   const counts = useMemo(() => {
     return {
@@ -102,6 +118,48 @@ function App() {
   useEffect(() => {
     refresh().catch((error) => setMessage(String(error)));
   }, [refresh]);
+
+  useEffect(() => {
+    if (!isTauri) return;
+
+    const unlistenCallbacks: UnlistenFn[] = [];
+    let disposed = false;
+
+    const addListener = async <T,>(eventName: string, handler: Parameters<typeof listen<T>>[1]) => {
+      const unlisten = await listen<T>(eventName, handler);
+      if (disposed) {
+        unlisten();
+      } else {
+        unlistenCallbacks.push(unlisten);
+      }
+    };
+
+    const register = async () => {
+      await addListener<SessionIdleEvent>("session_idle", (event) => {
+        const task = tasksRef.current.find((task) => task.id === event.payload.taskId);
+        setMessage(`${task?.agentName ?? "Codex"} finished: ${task?.title ?? "task is waiting"}`);
+      });
+      await addListener<SessionNeedsInputEvent>("session_needs_input", (event) => {
+        const task = tasksRef.current.find((task) => task.id === event.payload.taskId);
+        const prompt = event.payload.prompt ? `: ${event.payload.prompt}` : "";
+        setMessage(`${task?.agentName ?? "Codex"} needs input for ${task?.title ?? "a task"}${prompt}`);
+      });
+      await addListener<SessionExitedEvent>("session_exited", (event) => {
+        setTasks((current) =>
+          current.map((task) => (task.activeSessionId === event.payload.sessionId ? { ...task, activeSessionId: null } : task)),
+        );
+      });
+    };
+
+    register().catch((error) => {
+      if (!disposed) setMessage(String(error));
+    });
+
+    return () => {
+      disposed = true;
+      unlistenCallbacks.forEach((unlisten) => unlisten());
+    };
+  }, []);
 
   async function addProject() {
     setMessage(null);
