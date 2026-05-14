@@ -148,14 +148,14 @@ select {
   font: inherit;
 }
 
-button {
-  cursor: pointer;
-}
-
 .app-shell {
   display: grid;
-  grid-template-columns: 260px minmax(560px, 1fr) 420px;
+  grid-template-columns: 260px minmax(560px, 1fr);
   min-height: 100vh;
+}
+
+.app-shell.detail-open {
+  grid-template-columns: 260px minmax(560px, 1fr) 420px;
 }
 
 .sidebar {
@@ -220,58 +220,10 @@ button {
   gap: 8px;
 }
 
-input,
-select {
-  min-width: 0;
-  border: 1px solid var(--input);
-  border-radius: var(--radius-md);
-  padding: 10px 11px;
-  background: var(--background);
-  color: var(--foreground);
-}
-
 .sidebar input {
   border-color: var(--sidebar-border);
   background: var(--sidebar-accent);
   color: var(--sidebar-accent-foreground);
-}
-
-.icon-button,
-.ghost-button,
-.primary-button,
-.danger-button,
-.worktree-form button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 38px;
-  border: 0;
-  border-radius: var(--radius-md);
-  font-weight: 750;
-}
-
-.icon-button,
-.primary-button,
-.worktree-form button {
-  background: var(--primary);
-  color: var(--primary-foreground);
-}
-
-.ghost-button {
-  border: 1px solid var(--border);
-  background: var(--background);
-  color: var(--foreground);
-}
-
-.danger-button {
-  background: var(--destructive);
-  color: var(--primary-foreground);
-}
-
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
 }
 
 .sidebar-section {
@@ -280,21 +232,9 @@ button:disabled {
 }
 
 .repo-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   width: 100%;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  padding: 10px;
-  background: transparent;
+  justify-content: flex-start;
   color: inherit;
-  text-align: left;
-}
-
-.repo-item.selected {
-  border-color: var(--sidebar-border);
-  background: var(--sidebar-accent);
 }
 
 .workspace {
@@ -325,33 +265,17 @@ button:disabled {
 }
 
 .metric {
-  display: grid;
-  grid-template-columns: 22px 1fr auto;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 12px;
-  background: var(--card);
-  color: var(--card-foreground);
-}
-
-.metric span {
-  color: var(--muted-foreground);
-  font-size: 13px;
+  gap: 2px;
 }
 
 .metric strong {
-  font-size: 22px;
+  display: block;
+  font-size: 24px;
+  line-height: 1;
 }
 
 .message {
   margin-bottom: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 10px 12px;
-  background: var(--muted);
-  color: var(--foreground);
 }
 
 .worktree-form {
@@ -367,8 +291,6 @@ button:disabled {
 
 .status-column {
   min-height: 360px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
   padding: 10px;
   background: var(--muted);
 }
@@ -390,27 +312,14 @@ button:disabled {
   font-weight: 800;
 }
 
-.column-heading b {
-  display: grid;
-  place-items: center;
-  min-width: 24px;
-  height: 24px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-foreground);
-}
-
 .worktree-card {
   display: grid;
   gap: 10px;
   width: 100%;
   margin-bottom: 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
   padding: 12px;
-  background: var(--card);
-  color: var(--card-foreground);
   text-align: left;
+  cursor: pointer;
 }
 
 .worktree-card.selected {
@@ -423,16 +332,6 @@ button:disabled {
   color: var(--muted-foreground);
   font-family: "SFMono-Regular", Menlo, monospace;
   font-size: 12px;
-}
-
-.live-dot {
-  border-radius: 999px;
-  padding: 3px 7px;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
 }
 
 .detail-pane {
@@ -504,23 +403,8 @@ button:disabled {
   padding: 10px;
 }
 
-.empty-detail {
-  display: grid;
-  place-items: center;
-  align-content: center;
-  height: 100%;
-  padding: 34px;
-  color: var(--muted-foreground);
-  text-align: center;
-}
-
-.empty-detail h3 {
-  margin: 12px 0 4px;
-  color: var(--foreground);
-}
-
 @media (max-width: 1220px) {
-  .app-shell {
+  .app-shell.detail-open {
     grid-template-columns: 230px minmax(520px, 1fr) 360px;
   }
 

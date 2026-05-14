@@ -2,7 +2,6 @@ import {
   Activity,
   Bot,
   CheckCircle2,
-  Circle,
   ExternalLink,
   FolderOpen,
   FolderGit2,
@@ -15,7 +14,10 @@ import {
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
+import { Alert, AlertDescription } from "./components/ui/alert";
+import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { Input } from "./components/ui/input";
 import { Label } from "./components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
@@ -48,7 +50,7 @@ function App() {
   const visibleWorktrees = selectedRepoId
     ? worktrees.filter((worktree) => worktree.repoId === selectedRepoId)
     : worktrees;
-  const selectedWorktree = worktrees.find((worktree) => worktree.id === selectedWorktreeId) ?? visibleWorktrees[0];
+  const selectedWorktree = visibleWorktrees.find((worktree) => worktree.id === selectedWorktreeId);
 
   const counts = useMemo(() => {
     return {
@@ -69,10 +71,7 @@ function App() {
     setSelectedRepoId(nextRepoId);
     const worktreeResult = await api.listWorktrees();
     setWorktrees(worktreeResult);
-    if (!selectedWorktreeId && worktreeResult[0]) {
-      setSelectedWorktreeId(worktreeResult[0].id);
-    }
-  }, [selectedAgentProfileId, selectedRepoId, selectedWorktreeId]);
+  }, [selectedAgentProfileId, selectedRepoId]);
 
   useEffect(() => {
     refresh().catch((error) => setMessage(String(error)));
@@ -183,7 +182,7 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${selectedWorktree ? "detail-open" : ""}`}>
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">N</div>
@@ -202,10 +201,10 @@ function App() {
               value={repoPath}
               onChange={(event) => setRepoPath(event.target.value)}
             />
-            <Button className="icon-button" type="button" size="icon" onClick={pickRepoFolder} disabled={busy} title="Select repository folder">
+            <Button type="button" size="icon-lg" onClick={pickRepoFolder} disabled={busy} title="Select repository folder">
               <FolderOpen size={16} />
             </Button>
-            <Button className="icon-button" size="icon" disabled={busy || !repoPath.trim()} title="Add repository">
+            <Button size="icon-lg" disabled={busy || !repoPath.trim()} title="Add repository">
               <Plus size={16} />
             </Button>
           </div>
@@ -217,14 +216,18 @@ function App() {
             <div className="empty-mini">No repositories yet</div>
           ) : (
             repos.map((repo) => (
-              <button
+              <Button
+                variant={repo.id === selectedRepoId ? "secondary" : "ghost"}
                 className={`repo-item ${repo.id === selectedRepoId ? "selected" : ""}`}
                 key={repo.id}
-                onClick={() => setSelectedRepoId(repo.id)}
+                onClick={() => {
+                  setSelectedRepoId(repo.id);
+                  setSelectedWorktreeId(undefined);
+                }}
               >
                 <FolderGit2 size={16} />
                 <span>{repo.name}</span>
-              </button>
+              </Button>
             ))
           )}
         </div>
@@ -236,7 +239,7 @@ function App() {
             <p className="eyebrow">Operations</p>
             <h2>{selectedRepo ? selectedRepo.name : "Add your first repository"}</h2>
           </div>
-          <Button className="ghost-button" variant="outline" onClick={() => refresh()} title="Refresh">
+          <Button variant="outline" size="lg" onClick={() => refresh()} title="Refresh">
             <RefreshCw size={16} />
             Refresh
           </Button>
@@ -248,7 +251,11 @@ function App() {
           <Metric icon={<CheckCircle2 size={18} />} label="In review" value={counts.review} />
         </div>
 
-        {message ? <div className="message">{message}</div> : null}
+        {message ? (
+          <Alert className="message">
+            <AlertDescription>{message}</AlertDescription>
+          </Alert>
+        ) : null}
 
         {selectedRepo ? (
           <form className="worktree-form" onSubmit={submitWorktree}>
@@ -281,19 +288,27 @@ function App() {
             <section className="status-column" key={status}>
               <div className="column-heading">
                 <span>{statusLabels[status]}</span>
-                <b>{visibleWorktrees.filter((worktree) => worktree.status === status).length}</b>
+                <Badge variant="secondary">{visibleWorktrees.filter((worktree) => worktree.status === status).length}</Badge>
               </div>
               {visibleWorktrees
                 .filter((worktree) => worktree.status === status)
                 .map((worktree) => (
-                  <button
+                  <Card
                     className={`worktree-card ${selectedWorktree?.id === worktree.id ? "selected" : ""}`}
                     key={worktree.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setSelectedWorktreeId(worktree.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedWorktreeId(worktree.id);
+                      }
+                    }}
                   >
                     <div className="card-row">
                       <strong>{worktree.taskTitle}</strong>
-                      {worktree.activeSessionId ? <span className="live-dot">live</span> : null}
+                      {worktree.activeSessionId ? <Badge>live</Badge> : null}
                     </div>
                     <div className="branch-line">
                       <GitBranch size={14} />
@@ -303,15 +318,15 @@ function App() {
                       <span>{worktree.agentName ?? "No agent"}</span>
                       <span>{worktree.isDirty ? "dirty" : "clean"}</span>
                     </div>
-                  </button>
+                  </Card>
                 ))}
             </section>
           ))}
         </div>
       </section>
 
-      <aside className="detail-pane">
-        {selectedWorktree ? (
+      {selectedWorktree ? (
+        <aside className="detail-pane">
           <>
             <div className="detail-header">
               <div>
@@ -319,12 +334,12 @@ function App() {
                 <h3>{selectedWorktree.taskTitle}</h3>
               </div>
               {selectedWorktree.activeSessionId ? (
-                <Button className="danger-button" variant="destructive" onClick={() => stopSession(selectedWorktree.activeSessionId!)}>
+                <Button variant="destructive" size="lg" onClick={() => stopSession(selectedWorktree.activeSessionId!)}>
                   <Square size={15} />
                   Stop
                 </Button>
               ) : (
-                <Button className="primary-button" onClick={() => startSession(selectedWorktree)}>
+                <Button size="lg" onClick={() => startSession(selectedWorktree)}>
                   <Play size={15} />
                   Start
                 </Button>
@@ -369,25 +384,23 @@ function App() {
             </div>
             <TerminalPane sessionId={selectedWorktree.activeSessionId} onSessionExit={onSessionExit} />
           </>
-        ) : (
-          <div className="empty-detail">
-            <Circle size={28} />
-            <h3>No worktree selected</h3>
-            <p>Create a task worktree to start a Codex or Claude session.</p>
-          </div>
-        )}
-      </aside>
+        </aside>
+      ) : null}
     </main>
   );
 }
 
 function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
   return (
-    <div className="metric">
-      {icon}
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
+    <Card size="sm" className="metric">
+      <CardHeader>
+        <CardTitle>{label}</CardTitle>
+        <CardAction>{icon}</CardAction>
+      </CardHeader>
+      <CardContent>
+        <strong>{value}</strong>
+      </CardContent>
+    </Card>
   );
 }
 
