@@ -137,4 +137,3 @@ mod tests {
         assert!(validate_repo_path(dir.path()).is_err());
     }
 }
-

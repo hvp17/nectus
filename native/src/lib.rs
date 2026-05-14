@@ -4,7 +4,9 @@ mod models;
 mod sessions;
 
 use crate::db::Database;
-use crate::models::{AgentProfile, AgentProfileInput, AppResult, Repo, Session, WorktreeStatus, WorktreeSummary};
+use crate::models::{
+    AgentProfile, AgentProfileInput, AppResult, Repo, Session, TaskStatus, TaskSummary,
+};
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -26,36 +28,40 @@ fn list_repos(state: State<'_, AppState>) -> AppResult<Vec<Repo>> {
 }
 
 #[tauri::command]
-fn create_worktree(
+fn create_task(
     repo_id: i64,
-    branch_name: String,
-    task_title: String,
+    title: String,
     agent_profile_id: Option<i64>,
+    has_worktree: Option<bool>,
+    branch_name: Option<String>,
     state: State<'_, AppState>,
-) -> AppResult<WorktreeSummary> {
-    state
-        .db
-        .lock()
-        .create_worktree_record(repo_id, branch_name, task_title, agent_profile_id)
+) -> AppResult<TaskSummary> {
+    state.db.lock().create_task_record(
+        repo_id,
+        title,
+        agent_profile_id,
+        has_worktree.unwrap_or(false),
+        branch_name,
+    )
 }
 
 #[tauri::command]
-fn list_worktrees(repo_id: Option<i64>, state: State<'_, AppState>) -> AppResult<Vec<WorktreeSummary>> {
-    state.db.lock().list_worktrees(repo_id)
+fn list_tasks(repo_id: Option<i64>, state: State<'_, AppState>) -> AppResult<Vec<TaskSummary>> {
+    state.db.lock().list_tasks(repo_id)
 }
 
 #[tauri::command]
-fn update_worktree_metadata(
-    worktree_id: i64,
-    task_title: Option<String>,
-    status: Option<WorktreeStatus>,
+fn update_task_metadata(
+    task_id: i64,
+    title: Option<String>,
+    status: Option<TaskStatus>,
     pr_url: Option<String>,
     state: State<'_, AppState>,
-) -> AppResult<WorktreeSummary> {
+) -> AppResult<TaskSummary> {
     state
         .db
         .lock()
-        .update_worktree_metadata(worktree_id, task_title, status, pr_url)
+        .update_task_metadata(task_id, title, status, pr_url)
 }
 
 #[tauri::command]
@@ -64,29 +70,37 @@ fn list_agent_profiles(state: State<'_, AppState>) -> AppResult<Vec<AgentProfile
 }
 
 #[tauri::command]
-fn upsert_agent_profile(profile: AgentProfileInput, state: State<'_, AppState>) -> AppResult<AgentProfile> {
+fn upsert_agent_profile(
+    profile: AgentProfileInput,
+    state: State<'_, AppState>,
+) -> AppResult<AgentProfile> {
     state.db.lock().upsert_agent_profile(profile)
 }
 
 #[tauri::command]
 fn start_session(
-    worktree_id: i64,
+    task_id: i64,
     agent_profile_id: i64,
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> AppResult<Session> {
-    let (worktree, agent) = {
+    let (task, repo, agent) = {
         let db = state.db.lock();
-        let worktree = db
-            .worktree_by_id(worktree_id)?
-            .ok_or_else(|| "Worktree not found".to_string())?;
+        let task = db
+            .task_by_id(task_id)?
+            .ok_or_else(|| "Task not found".to_string())?;
+        let repo = db
+            .repo_by_id(task.repo_id)?
+            .ok_or_else(|| "Repository not found".to_string())?;
         let agent = db
             .agent_profile_by_id(agent_profile_id)?
             .ok_or_else(|| "Agent profile not found".to_string())?;
-        (worktree, agent)
+        (task, repo, agent)
     };
 
-    state.sessions.start(app, state.db.clone(), worktree, agent)
+    state
+        .sessions
+        .start(app, state.db.clone(), task, repo, agent)
 }
 
 #[tauri::command]
@@ -95,12 +109,21 @@ fn stop_session(session_id: String, state: State<'_, AppState>) -> AppResult<Ses
 }
 
 #[tauri::command]
-fn resize_session(session_id: String, rows: u16, cols: u16, state: State<'_, AppState>) -> AppResult<()> {
+fn resize_session(
+    session_id: String,
+    rows: u16,
+    cols: u16,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
     state.sessions.resize(&session_id, rows, cols)
 }
 
 #[tauri::command]
-fn send_session_input(session_id: String, data: String, state: State<'_, AppState>) -> AppResult<()> {
+fn send_session_input(
+    session_id: String,
+    data: String,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
     state.sessions.write_input(&session_id, &data)
 }
 
@@ -122,16 +145,18 @@ pub fn run() {
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
                 if let Some(state) = window.try_state::<AppState>() {
-                    state.sessions.stop_all(&window.app_handle(), state.db.clone());
+                    state
+                        .sessions
+                        .stop_all(&window.app_handle(), state.db.clone());
                 }
             }
         })
         .invoke_handler(tauri::generate_handler![
             add_repo,
             list_repos,
-            create_worktree,
-            list_worktrees,
-            update_worktree_metadata,
+            create_task,
+            list_tasks,
+            update_task_metadata,
             list_agent_profiles,
             upsert_agent_profile,
             start_session,

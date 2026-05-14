@@ -1,5 +1,5 @@
 use crate::git_ops;
-use crate::models::{AgentProfile, AgentProfileInput, Repo, WorktreeStatus, WorktreeSummary};
+use crate::models::{AgentProfile, AgentProfileInput, Repo, TaskStatus, TaskSummary};
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::BTreeMap;
@@ -16,7 +16,8 @@ impl Database {
                 .map_err(|error| format!("Failed to create app data folder: {error}"))?;
         }
 
-        let conn = Connection::open(path).map_err(|error| format!("Failed to open database: {error}"))?;
+        let conn =
+            Connection::open(path).map_err(|error| format!("Failed to open database: {error}"))?;
         let db = Self { conn };
         db.migrate()?;
         db.seed_agent_profiles()?;
@@ -57,22 +58,91 @@ impl Database {
                   updated_at TEXT NOT NULL
                 );
 
-                CREATE TABLE IF NOT EXISTS worktrees (
+                CREATE TABLE IF NOT EXISTS tasks (
                   id INTEGER PRIMARY KEY AUTOINCREMENT,
                   repo_id INTEGER NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
-                  branch_name TEXT NOT NULL,
-                  path TEXT NOT NULL UNIQUE,
-                  task_title TEXT NOT NULL,
+                  title TEXT NOT NULL,
                   status TEXT NOT NULL,
                   pr_url TEXT,
                   agent_profile_id INTEGER REFERENCES agent_profiles(id),
                   active_session_id TEXT,
+                  has_worktree INTEGER NOT NULL DEFAULT 0,
+                  branch_name TEXT,
+                  worktree_path TEXT,
                   created_at TEXT NOT NULL,
-                  updated_at TEXT NOT NULL
+                  updated_at TEXT NOT NULL,
+                  CHECK (
+                    (has_worktree = 0 AND branch_name IS NULL AND worktree_path IS NULL)
+                    OR
+                    (has_worktree = 1 AND branch_name IS NOT NULL AND worktree_path IS NOT NULL)
+                  )
                 );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS tasks_worktree_path_unique
+                ON tasks(worktree_path)
+                WHERE has_worktree = 1;
+
+                CREATE UNIQUE INDEX IF NOT EXISTS tasks_repo_branch_unique
+                ON tasks(repo_id, branch_name)
+                WHERE has_worktree = 1;
                 ",
             )
-            .map_err(|error| format!("Failed to migrate database: {error}"))
+            .map_err(|error| format!("Failed to migrate database: {error}"))?;
+
+        self.migrate_legacy_worktrees()
+    }
+
+    fn migrate_legacy_worktrees(&self) -> Result<(), String> {
+        let has_worktrees_table: bool = self
+            .conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'worktrees')",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|error| format!("Failed to inspect legacy worktrees table: {error}"))?;
+        if !has_worktrees_table {
+            return Ok(());
+        }
+
+        let task_count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM tasks", [], |row| row.get(0))
+            .map_err(|error| format!("Failed to inspect tasks table: {error}"))?;
+        if task_count > 0 {
+            return Ok(());
+        }
+
+        let mut columns = self
+            .conn
+            .prepare("PRAGMA table_info(worktrees)")
+            .map_err(|error| format!("Failed to inspect worktrees table: {error}"))?;
+        let column_names = rows(
+            columns
+                .query_map([], |row| row.get::<_, String>(1))
+                .map_err(|error| format!("Failed to inspect worktrees columns: {error}"))?,
+        )?;
+        let has_worktree_expr = if column_names.iter().any(|name| name == "has_worktree") {
+            "has_worktree"
+        } else {
+            "1"
+        };
+
+        self.conn
+            .execute_batch(&format!(
+                "
+                INSERT INTO tasks
+                  (id, repo_id, title, status, pr_url, agent_profile_id, active_session_id,
+                   has_worktree, branch_name, worktree_path, created_at, updated_at)
+                SELECT id, repo_id, task_title, status, pr_url, agent_profile_id, active_session_id,
+                       {has_worktree_expr},
+                       CASE WHEN {has_worktree_expr} = 1 THEN branch_name ELSE NULL END,
+                       CASE WHEN {has_worktree_expr} = 1 THEN path ELSE NULL END,
+                       created_at, updated_at
+                FROM worktrees;
+                "
+            ))
+            .map_err(|error| format!("Failed to migrate legacy worktrees: {error}"))
     }
 
     fn seed_agent_profiles(&self) -> Result<(), String> {
@@ -100,7 +170,9 @@ impl Database {
             .and_then(|value| value.to_str())
             .unwrap_or("Repository")
             .to_string();
-        let default_root = git_ops::default_worktree_root(&repo_path).to_string_lossy().to_string();
+        let default_root = git_ops::default_worktree_root(&repo_path)
+            .to_string_lossy()
+            .to_string();
         let created_at = now();
 
         self.conn
@@ -129,9 +201,14 @@ impl Database {
     pub fn list_repos(&self) -> Result<Vec<Repo>, String> {
         let mut stmt = self
             .conn
-            .prepare("SELECT id, name, path, default_worktree_root, created_at FROM repos ORDER BY name")
+            .prepare(
+                "SELECT id, name, path, default_worktree_root, created_at FROM repos ORDER BY name",
+            )
             .map_err(|error| error.to_string())?;
-        let result = rows(stmt.query_map([], repo_from_row).map_err(|error| error.to_string())?);
+        let result = rows(
+            stmt.query_map([], repo_from_row)
+                .map_err(|error| error.to_string())?,
+        );
         result
     }
 
@@ -157,119 +234,150 @@ impl Database {
             .map_err(|error| error.to_string())
     }
 
-    pub fn create_worktree_record(
+    pub fn create_task_record(
         &self,
         repo_id: i64,
-        branch_name: String,
-        task_title: String,
+        title: String,
         agent_profile_id: Option<i64>,
-    ) -> Result<WorktreeSummary, String> {
+        has_worktree: bool,
+        branch_name: Option<String>,
+    ) -> Result<TaskSummary, String> {
         let repo = self
             .repo_by_id(repo_id)?
             .ok_or_else(|| "Repository not found".to_string())?;
-        git_ops::validate_branch_name(&branch_name)?;
 
-        let worktree_path = PathBuf::from(&repo.default_worktree_root).join(&branch_name);
-        git_ops::create_worktree(PathBuf::from(&repo.path).as_path(), &worktree_path, &branch_name)?;
+        let (branch_name, worktree_path) = if has_worktree {
+            let branch_name = branch_name
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| "Branch name is required".to_string())?;
+            git_ops::validate_branch_name(&branch_name)?;
+            let worktree_path = PathBuf::from(&repo.default_worktree_root).join(&branch_name);
+            git_ops::create_worktree(
+                PathBuf::from(&repo.path).as_path(),
+                &worktree_path,
+                &branch_name,
+            )?;
+            (
+                Some(branch_name),
+                Some(worktree_path.to_string_lossy().to_string()),
+            )
+        } else {
+            (None, None)
+        };
 
         let now = now();
         self.conn
             .execute(
                 "
-                INSERT INTO worktrees
-                  (repo_id, branch_name, path, task_title, status, pr_url, agent_profile_id, active_session_id, created_at, updated_at)
-                VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6, NULL, ?7, ?7)
+                INSERT INTO tasks
+                  (repo_id, title, status, pr_url, agent_profile_id, active_session_id, has_worktree, branch_name, worktree_path, created_at, updated_at)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)
                 ",
                 params![
                     repo_id,
-                    branch_name,
-                    worktree_path.to_string_lossy(),
-                    task_title,
-                    WorktreeStatus::Planned.as_str(),
+                    title,
+                    TaskStatus::Planned.as_str(),
+                    None::<String>,
                     agent_profile_id,
+                    None::<String>,
+                    has_worktree,
+                    branch_name,
+                    worktree_path,
                     now
                 ],
             )
-            .map_err(|error| format!("Failed to save worktree: {error}"))?;
+            .map_err(|error| format!("Failed to save task: {error}"))?;
 
-        self.worktree_by_id(self.conn.last_insert_rowid())?
-            .ok_or_else(|| "Worktree was saved but could not be loaded".into())
+        self.task_by_id(self.conn.last_insert_rowid())?
+            .ok_or_else(|| "Task was saved but could not be loaded".into())
     }
 
-    pub fn list_worktrees(&self, repo_id: Option<i64>) -> Result<Vec<WorktreeSummary>, String> {
+    pub fn list_tasks(&self, repo_id: Option<i64>) -> Result<Vec<TaskSummary>, String> {
         let sql = "
-            SELECT w.id, w.repo_id, w.branch_name, w.path, w.task_title, w.status, w.pr_url,
-                   w.agent_profile_id, a.name, w.active_session_id, w.created_at, w.updated_at
-            FROM worktrees w
-            LEFT JOIN agent_profiles a ON a.id = w.agent_profile_id
+            SELECT t.id, t.repo_id, t.title, t.status, t.pr_url, t.agent_profile_id, a.name,
+                   t.has_worktree, t.branch_name, t.worktree_path, t.active_session_id, t.created_at, t.updated_at
+            FROM tasks t
+            LEFT JOIN agent_profiles a ON a.id = t.agent_profile_id
         ";
 
         if let Some(repo_id) = repo_id {
             let mut stmt = self
                 .conn
-                .prepare(&format!("{sql} WHERE w.repo_id = ?1 ORDER BY w.updated_at DESC"))
+                .prepare(&format!(
+                    "{sql} WHERE t.repo_id = ?1 ORDER BY t.updated_at DESC"
+                ))
                 .map_err(|error| error.to_string())?;
-            let result = self.worktree_rows(
-                stmt.query_map(params![repo_id], worktree_from_row)
+            let result = self.task_rows(
+                stmt.query_map(params![repo_id], task_from_row)
                     .map_err(|error| error.to_string())?,
             );
             result
         } else {
             let mut stmt = self
                 .conn
-                .prepare(&format!("{sql} ORDER BY w.updated_at DESC"))
+                .prepare(&format!("{sql} ORDER BY t.updated_at DESC"))
                 .map_err(|error| error.to_string())?;
-            let result = self.worktree_rows(stmt.query_map([], worktree_from_row).map_err(|error| error.to_string())?);
+            let result = self.task_rows(
+                stmt.query_map([], task_from_row)
+                    .map_err(|error| error.to_string())?,
+            );
             result
         }
     }
 
-    pub fn worktree_by_id(&self, id: i64) -> Result<Option<WorktreeSummary>, String> {
+    pub fn task_by_id(&self, id: i64) -> Result<Option<TaskSummary>, String> {
         let row = self
             .conn
             .query_row(
                 "
-                SELECT w.id, w.repo_id, w.branch_name, w.path, w.task_title, w.status, w.pr_url,
-                       w.agent_profile_id, a.name, w.active_session_id, w.created_at, w.updated_at
-                FROM worktrees w
-                LEFT JOIN agent_profiles a ON a.id = w.agent_profile_id
-                WHERE w.id = ?1
+                SELECT t.id, t.repo_id, t.title, t.status, t.pr_url, t.agent_profile_id, a.name,
+                       t.has_worktree, t.branch_name, t.worktree_path, t.active_session_id, t.created_at, t.updated_at
+                FROM tasks t
+                LEFT JOIN agent_profiles a ON a.id = t.agent_profile_id
+                WHERE t.id = ?1
                 ",
                 params![id],
-                worktree_from_row,
+                task_from_row,
             )
             .optional()
             .map_err(|error| error.to_string())?;
-        Ok(row.map(|mut worktree| {
-            worktree.is_dirty = git_ops::is_dirty(PathBuf::from(&worktree.path).as_path());
-            worktree
+        Ok(row.map(|mut task| {
+            task.is_dirty = task
+                .worktree_path
+                .as_ref()
+                .is_some_and(|path| git_ops::is_dirty(PathBuf::from(path).as_path()));
+            task
         }))
     }
 
-    fn worktree_rows<I>(&self, mapped: I) -> Result<Vec<WorktreeSummary>, String>
+    fn task_rows<I>(&self, mapped: I) -> Result<Vec<TaskSummary>, String>
     where
-        I: Iterator<Item = rusqlite::Result<WorktreeSummary>>,
+        I: Iterator<Item = rusqlite::Result<TaskSummary>>,
     {
         mapped
             .map(|row| {
-                let mut worktree = row.map_err(|error| error.to_string())?;
-                worktree.is_dirty = git_ops::is_dirty(PathBuf::from(&worktree.path).as_path());
-                Ok(worktree)
+                let mut task = row.map_err(|error| error.to_string())?;
+                task.is_dirty = task
+                    .worktree_path
+                    .as_ref()
+                    .is_some_and(|path| git_ops::is_dirty(PathBuf::from(path).as_path()));
+                Ok(task)
             })
             .collect()
     }
 
-    pub fn update_worktree_metadata(
+    pub fn update_task_metadata(
         &self,
-        worktree_id: i64,
-        task_title: Option<String>,
-        status: Option<WorktreeStatus>,
+        task_id: i64,
+        title: Option<String>,
+        status: Option<TaskStatus>,
         pr_url: Option<String>,
-    ) -> Result<WorktreeSummary, String> {
+    ) -> Result<TaskSummary, String> {
         let existing = self
-            .worktree_by_id(worktree_id)?
-            .ok_or_else(|| "Worktree not found".to_string())?;
-        let task_title = task_title.unwrap_or(existing.task_title);
+            .task_by_id(task_id)?
+            .ok_or_else(|| "Task not found".to_string())?;
+        let title = title.unwrap_or(existing.title);
         let status = status.unwrap_or(existing.status);
         let pr_url = pr_url.or(existing.pr_url);
         let updated_at = now();
@@ -277,23 +385,23 @@ impl Database {
         self.conn
             .execute(
                 "
-                UPDATE worktrees
-                SET task_title = ?1, status = ?2, pr_url = ?3, updated_at = ?4
+                UPDATE tasks
+                SET title = ?1, status = ?2, pr_url = ?3, updated_at = ?4
                 WHERE id = ?5
                 ",
-                params![task_title, status.as_str(), pr_url, updated_at, worktree_id],
+                params![title, status.as_str(), pr_url, updated_at, task_id],
             )
-            .map_err(|error| format!("Failed to update worktree: {error}"))?;
+            .map_err(|error| format!("Failed to update task: {error}"))?;
 
-        self.worktree_by_id(worktree_id)?
-            .ok_or_else(|| "Worktree not found after update".into())
+        self.task_by_id(task_id)?
+            .ok_or_else(|| "Task not found after update".into())
     }
 
-    pub fn set_active_session(&self, worktree_id: i64, session_id: Option<&str>) -> Result<(), String> {
+    pub fn set_active_session(&self, task_id: i64, session_id: Option<&str>) -> Result<(), String> {
         self.conn
             .execute(
-                "UPDATE worktrees SET active_session_id = ?1, updated_at = ?2 WHERE id = ?3",
-                params![session_id, now(), worktree_id],
+                "UPDATE tasks SET active_session_id = ?1, updated_at = ?2 WHERE id = ?3",
+                params![session_id, now(), task_id],
             )
             .map_err(|error| format!("Failed to update active session: {error}"))?;
         Ok(())
@@ -304,7 +412,10 @@ impl Database {
             .conn
             .prepare("SELECT id, name, command, args_json, env_json, created_at, updated_at FROM agent_profiles ORDER BY id")
             .map_err(|error| error.to_string())?;
-        let result = rows(stmt.query_map([], agent_from_row).map_err(|error| error.to_string())?);
+        let result = rows(
+            stmt.query_map([], agent_from_row)
+                .map_err(|error| error.to_string())?,
+        );
         result
     }
 
@@ -391,7 +502,9 @@ fn rows<T, I>(mapped: I) -> Result<Vec<T>, String>
 where
     I: Iterator<Item = rusqlite::Result<T>>,
 {
-    mapped.map(|row| row.map_err(|error| error.to_string())).collect()
+    mapped
+        .map(|row| row.map_err(|error| error.to_string()))
+        .collect()
 }
 
 fn repo_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Repo> {
@@ -404,22 +517,23 @@ fn repo_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Repo> {
     })
 }
 
-fn worktree_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorktreeSummary> {
-    let status: String = row.get(5)?;
-    Ok(WorktreeSummary {
+fn task_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<TaskSummary> {
+    let status: String = row.get(3)?;
+    Ok(TaskSummary {
         id: row.get(0)?,
         repo_id: row.get(1)?,
-        branch_name: row.get(2)?,
-        path: row.get(3)?,
-        task_title: row.get(4)?,
-        status: WorktreeStatus::from_str(&status),
-        pr_url: row.get(6)?,
-        agent_profile_id: row.get(7)?,
-        agent_name: row.get(8)?,
+        title: row.get(2)?,
+        status: TaskStatus::from_str(&status),
+        pr_url: row.get(4)?,
+        agent_profile_id: row.get(5)?,
+        agent_name: row.get(6)?,
+        has_worktree: row.get(7)?,
+        branch_name: row.get(8)?,
+        worktree_path: row.get(9)?,
         is_dirty: false,
-        active_session_id: row.get(9)?,
-        created_at: row.get(10)?,
-        updated_at: row.get(11)?,
+        active_session_id: row.get(10)?,
+        created_at: row.get(11)?,
+        updated_at: row.get(12)?,
     })
 }
 
@@ -440,6 +554,7 @@ fn agent_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentProfile> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn seeds_default_agent_profiles() {
@@ -470,5 +585,35 @@ mod tests {
         assert_eq!(profile.name, "Custom");
         assert_eq!(profile.args, vec!["--resume"]);
         assert_eq!(profile.env.get("MODEL").unwrap(), "fast");
+    }
+
+    #[test]
+    fn creates_task_without_worktree() {
+        let db = Database::open_in_memory().unwrap();
+        let repo_dir = tempdir().unwrap();
+        std::process::Command::new("git")
+            .arg("init")
+            .arg(repo_dir.path())
+            .output()
+            .unwrap();
+        let repo = db
+            .add_repo(repo_dir.path().to_string_lossy().to_string())
+            .unwrap();
+
+        let task = db
+            .create_task_record(
+                repo.id,
+                "Review dependency updates".to_string(),
+                None,
+                false,
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(task.repo_id, repo.id);
+        assert_eq!(task.title, "Review dependency updates");
+        assert!(!task.has_worktree);
+        assert_eq!(task.branch_name, None);
+        assert_eq!(task.worktree_path, None);
     }
 }

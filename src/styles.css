@@ -198,13 +198,11 @@ select {
   color: var(--muted-foreground);
 }
 
-.repo-form,
-.worktree-form {
+.task-form {
   display: grid;
   gap: 10px;
 }
 
-.repo-form label,
 .section-title,
 .eyebrow {
   color: var(--muted-foreground);
@@ -214,21 +212,19 @@ select {
   text-transform: uppercase;
 }
 
-.inline-field {
-  display: grid;
-  grid-template-columns: 1fr 38px 38px;
-  gap: 8px;
-}
-
-.sidebar input {
-  border-color: var(--sidebar-border);
-  background: var(--sidebar-accent);
-  color: var(--sidebar-accent-foreground);
-}
-
 .sidebar-section {
   display: grid;
   gap: 8px;
+}
+
+.project-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.project-section-title button {
+  color: var(--sidebar-foreground);
 }
 
 .repo-item {
@@ -278,7 +274,7 @@ select {
   margin-bottom: 14px;
 }
 
-.worktree-form {
+.task-form {
   grid-template-columns: 1.5fr 1fr 150px 170px;
   margin-bottom: 16px;
 }
@@ -312,7 +308,7 @@ select {
   font-weight: 800;
 }
 
-.worktree-card {
+.task-card {
   display: grid;
   gap: 10px;
   width: 100%;
@@ -322,7 +318,7 @@ select {
   cursor: pointer;
 }
 
-.worktree-card.selected {
+.task-card.selected {
   border-color: var(--ring);
   box-shadow: 0 0 0 2px var(--ring);
 }

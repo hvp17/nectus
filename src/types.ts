@@ -1,4 +1,4 @@
-export type WorktreeStatus = "planned" | "in_progress" | "review" | "done";
+export type TaskStatus = "planned" | "in_progress" | "review" | "done";
 export type SessionState = "running" | "stopped";
 
 export interface Repo {
@@ -9,16 +9,17 @@ export interface Repo {
   createdAt: string;
 }
 
-export interface WorktreeSummary {
+export interface TaskSummary {
   id: number;
   repoId: number;
-  branchName: string;
-  path: string;
-  taskTitle: string;
-  status: WorktreeStatus;
+  title: string;
+  status: TaskStatus;
   prUrl?: string | null;
   agentProfileId?: number | null;
   agentName?: string | null;
+  hasWorktree: boolean;
+  branchName?: string | null;
+  worktreePath?: string | null;
   isDirty: boolean;
   activeSessionId?: string | null;
   createdAt: string;
@@ -37,7 +38,7 @@ export interface AgentProfile {
 
 export interface Session {
   id: string;
-  worktreeId: number;
+  taskId: number;
   agentProfileId: number;
   state: SessionState;
   pid?: number | null;
@@ -54,4 +55,3 @@ export interface SessionExitedEvent {
   sessionId: string;
   exitCode?: number | null;
 }
-

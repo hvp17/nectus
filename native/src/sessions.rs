@@ -1,5 +1,7 @@
 use crate::db::Database;
-use crate::models::{AgentProfile, Session, SessionExitedEvent, SessionOutputEvent, SessionState, WorktreeSummary};
+use crate::models::{
+    AgentProfile, Repo, Session, SessionExitedEvent, SessionOutputEvent, SessionState, TaskSummary,
+};
 use chrono::Utc;
 use parking_lot::Mutex;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
@@ -30,11 +32,12 @@ impl SessionManager {
         &self,
         app: AppHandle,
         db: Arc<Mutex<Database>>,
-        worktree: WorktreeSummary,
+        task: TaskSummary,
+        repo: Repo,
         agent: AgentProfile,
     ) -> Result<Session, String> {
-        if worktree.active_session_id.is_some() {
-            return Err("Worktree already has a running session".into());
+        if task.active_session_id.is_some() {
+            return Err("Task already has a running session".into());
         }
 
         let pty_system = native_pty_system();
@@ -54,7 +57,8 @@ impl SessionManager {
         for (key, value) in &agent.env {
             command.env(key, value);
         }
-        command.cwd(&worktree.path);
+        let cwd = task.worktree_path.as_deref().unwrap_or(&repo.path);
+        command.cwd(cwd);
 
         let child = pair
             .slave
@@ -68,7 +72,7 @@ impl SessionManager {
 
         let session = Session {
             id: Uuid::new_v4().to_string(),
-            worktree_id: worktree.id,
+            task_id: task.id,
             agent_profile_id: agent.id,
             state: SessionState::Running,
             pid,
@@ -77,12 +81,12 @@ impl SessionManager {
         };
         let session_id = session.id.clone();
 
-        db.lock().set_active_session(worktree.id, Some(&session_id))?;
+        db.lock().set_active_session(task.id, Some(&session_id))?;
 
         std::thread::spawn({
             let app = app.clone();
             let db = db.clone();
-            let worktree_id = worktree.id;
+            let task_id = task.id;
             let session_id = session_id.clone();
             move || {
                 let mut buffer = [0_u8; 8192];
@@ -102,7 +106,7 @@ impl SessionManager {
                         Err(_) => break,
                     }
                 }
-                let _ = db.lock().set_active_session(worktree_id, None);
+                let _ = db.lock().set_active_session(task_id, None);
                 let _ = app.emit(
                     "session_exited",
                     SessionExitedEvent {
@@ -134,7 +138,8 @@ impl SessionManager {
         let stopped_at = Utc::now().to_rfc3339();
         running.session.state = SessionState::Stopped;
         running.session.stopped_at = Some(stopped_at);
-        db.lock().set_active_session(running.session.worktree_id, None)?;
+        db.lock()
+            .set_active_session(running.session.task_id, None)?;
         Ok(running.session)
     }
 
@@ -179,7 +184,7 @@ impl SessionManager {
                         exit_code: None,
                     },
                 );
-                let _ = db.lock().set_active_session(session.worktree_id, None);
+                let _ = db.lock().set_active_session(session.task_id, None);
             }
         }
     }

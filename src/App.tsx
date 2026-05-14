@@ -1,9 +1,10 @@
 import {
   Activity,
   Bot,
+  ChevronDown,
   CheckCircle2,
   ExternalLink,
-  FolderOpen,
+  FolderPlus,
   FolderGit2,
   GitBranch,
   Play,
@@ -18,28 +19,34 @@ import { Alert, AlertDescription } from "./components/ui/alert";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "./components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./components/ui/dropdown-menu";
 import { Input } from "./components/ui/input";
-import { Label } from "./components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
 import { TerminalPane } from "./TerminalPane";
-import type { AgentProfile, Repo, Session, WorktreeStatus, WorktreeSummary } from "./types";
+import type { AgentProfile, Repo, Session, TaskStatus, TaskSummary } from "./types";
 
-const statusLabels: Record<WorktreeStatus, string> = {
+const statusLabels: Record<TaskStatus, string> = {
   planned: "Planned",
   in_progress: "In progress",
   review: "Review",
   done: "Done",
 };
 
-const statusOrder: WorktreeStatus[] = ["planned", "in_progress", "review", "done"];
+const statusOrder: TaskStatus[] = ["planned", "in_progress", "review", "done"];
 
 function App() {
   const [repos, setRepos] = useState<Repo[]>([]);
-  const [worktrees, setWorktrees] = useState<WorktreeSummary[]>([]);
+  const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [selectedRepoId, setSelectedRepoId] = useState<number | undefined>();
-  const [selectedWorktreeId, setSelectedWorktreeId] = useState<number | undefined>();
-  const [repoPath, setRepoPath] = useState("");
+  const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>();
   const [branchName, setBranchName] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [selectedAgentProfileId, setSelectedAgentProfileId] = useState<number | undefined>();
@@ -47,82 +54,47 @@ function App() {
   const [busy, setBusy] = useState(false);
 
   const selectedRepo = repos.find((repo) => repo.id === selectedRepoId);
-  const visibleWorktrees = selectedRepoId
-    ? worktrees.filter((worktree) => worktree.repoId === selectedRepoId)
-    : worktrees;
-  const selectedWorktree = visibleWorktrees.find((worktree) => worktree.id === selectedWorktreeId);
+  const visibleTasks = selectedRepoId
+    ? tasks.filter((task) => task.repoId === selectedRepoId)
+    : tasks;
+  const selectedTask = visibleTasks.find((task) => task.id === selectedTaskId);
 
   const counts = useMemo(() => {
     return {
-      active: worktrees.filter((worktree) => worktree.activeSessionId).length,
-      dirty: worktrees.filter((worktree) => worktree.isDirty).length,
-      review: worktrees.filter((worktree) => worktree.status === "review").length,
+      active: tasks.filter((task) => task.activeSessionId).length,
+      dirty: tasks.filter((task) => task.isDirty).length,
+      review: tasks.filter((task) => task.status === "review").length,
     };
-  }, [worktrees]);
+  }, [tasks]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (preferredRepoId?: number) => {
     const [repoResult, profileResult] = await Promise.all([api.listRepos(), api.listAgentProfiles()]);
     setRepos(repoResult);
     setAgentProfiles(profileResult);
     if (!selectedAgentProfileId && profileResult[0]) {
       setSelectedAgentProfileId(profileResult[0].id);
     }
-    const nextRepoId = selectedRepoId ?? repoResult[0]?.id;
+    const nextRepoId = preferredRepoId ?? selectedRepoId ?? repoResult[0]?.id;
     setSelectedRepoId(nextRepoId);
-    const worktreeResult = await api.listWorktrees();
-    setWorktrees(worktreeResult);
+    const taskResult = await api.listTasks();
+    setTasks(taskResult);
   }, [selectedAgentProfileId, selectedRepoId]);
 
   useEffect(() => {
     refresh().catch((error) => setMessage(String(error)));
   }, [refresh]);
 
-  async function submitRepo(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setMessage(null);
-    try {
-      const repo = await api.addRepo(repoPath.trim());
-      setRepoPath("");
-      setSelectedRepoId(repo.id);
-      await refresh();
-      setMessage(`Added ${repo.name}`);
-    } catch (error) {
-      setMessage(String(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function pickRepoFolder() {
+  async function addProject() {
     setMessage(null);
     try {
       const selected = await api.pickRepositoryFolder();
       if (selected) {
-        setRepoPath(selected);
+        setBusy(true);
+        const repo = await api.addRepo(selected);
+        setSelectedRepoId(repo.id);
+        await refresh(repo.id);
+        setMessage(`Added ${repo.name}`);
       }
-    } catch (error) {
-      setMessage(String(error));
-    }
-  }
-
-  async function submitWorktree(event: FormEvent) {
-    event.preventDefault();
-    if (!selectedRepoId) return;
-    setBusy(true);
-    setMessage(null);
-    try {
-      const worktree = await api.createWorktree({
-        repoId: selectedRepoId,
-        branchName: branchName.trim(),
-        taskTitle: taskTitle.trim(),
-        agentProfileId: selectedAgentProfileId,
-      });
-      setBranchName("");
-      setTaskTitle("");
-      setSelectedWorktreeId(worktree.id);
-      await refresh();
-      setMessage(`Created ${worktree.branchName}`);
     } catch (error) {
       setMessage(String(error));
     } finally {
@@ -130,24 +102,53 @@ function App() {
     }
   }
 
-  async function updateStatus(worktree: WorktreeSummary, status: WorktreeStatus) {
+  async function submitTask(event: FormEvent) {
+    event.preventDefault();
+    await createTask(false);
+  }
+
+  async function createTask(hasWorktree: boolean) {
+    if (!selectedRepoId) return;
+    setBusy(true);
     setMessage(null);
     try {
-      const updated = await api.updateWorktreeMetadata({ worktreeId: worktree.id, status });
-      setWorktrees((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      const task = await api.createTask({
+        repoId: selectedRepoId,
+        title: taskTitle.trim(),
+        agentProfileId: selectedAgentProfileId,
+        hasWorktree,
+        branchName: hasWorktree ? branchName.trim() : null,
+      });
+      setBranchName("");
+      setTaskTitle("");
+      setSelectedTaskId(task.id);
+      await refresh();
+      setMessage(hasWorktree ? `Created ${task.branchName}` : `Created ${task.title}`);
+    } catch (error) {
+      setMessage(String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function updateStatus(task: TaskSummary, status: TaskStatus) {
+    setMessage(null);
+    try {
+      const updated = await api.updateTaskMetadata({ taskId: task.id, status });
+      setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     } catch (error) {
       setMessage(String(error));
     }
   }
 
-  async function startSession(worktree: WorktreeSummary) {
-    const agentProfileId = worktree.agentProfileId ?? selectedAgentProfileId ?? agentProfiles[0]?.id;
+  async function startSession(task: TaskSummary) {
+    const agentProfileId = task.agentProfileId ?? selectedAgentProfileId ?? agentProfiles[0]?.id;
     if (!agentProfileId) return;
     setMessage(null);
     try {
-      const session = await api.startSession(worktree.id, agentProfileId);
+      const session = await api.startSession(task.id, agentProfileId);
       applySession(session);
-      setSelectedWorktreeId(worktree.id);
+      setSelectedTaskId(task.id);
     } catch (error) {
       setMessage(String(error));
     }
@@ -164,11 +165,11 @@ function App() {
   }
 
   function applySession(session: Session) {
-    setWorktrees((current) =>
-      current.map((worktree) => {
-        if (worktree.id !== session.worktreeId) return worktree;
+    setTasks((current) =>
+      current.map((task) => {
+        if (task.id !== session.taskId) return task;
         return {
-          ...worktree,
+          ...task,
           activeSessionId: session.state === "running" ? session.id : null,
         };
       }),
@@ -176,44 +177,31 @@ function App() {
   }
 
   function onSessionExit(sessionId: string) {
-    setWorktrees((current) =>
-      current.map((worktree) => (worktree.activeSessionId === sessionId ? { ...worktree, activeSessionId: null } : worktree)),
+    setTasks((current) =>
+      current.map((task) => (task.activeSessionId === sessionId ? { ...task, activeSessionId: null } : task)),
     );
   }
 
   return (
-    <main className={`app-shell ${selectedWorktree ? "detail-open" : ""}`}>
+    <main className={`app-shell ${selectedTask ? "detail-open" : ""}`}>
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">N</div>
           <div>
             <h1>Nectus</h1>
-            <span>Parallel agent worktrees</span>
+            <span>Parallel agent tasks</span>
           </div>
         </div>
 
-        <form className="repo-form" onSubmit={submitRepo}>
-          <Label htmlFor="repo-path">Repository path</Label>
-          <div className="inline-field">
-            <Input
-              id="repo-path"
-              placeholder="Select a repository folder"
-              value={repoPath}
-              onChange={(event) => setRepoPath(event.target.value)}
-            />
-            <Button type="button" size="icon-lg" onClick={pickRepoFolder} disabled={busy} title="Select repository folder">
-              <FolderOpen size={16} />
-            </Button>
-            <Button size="icon-lg" disabled={busy || !repoPath.trim()} title="Add repository">
-              <Plus size={16} />
+        <div className="sidebar-section">
+          <div className="section-title project-section-title">
+            <span>Projects</span>
+            <Button type="button" size="icon-lg" onClick={addProject} disabled={busy} title="Add project" aria-label="Add project">
+              <FolderPlus size={16} />
             </Button>
           </div>
-        </form>
-
-        <div className="sidebar-section">
-          <div className="section-title">Repos</div>
           {repos.length === 0 ? (
-            <div className="empty-mini">No repositories yet</div>
+            <div className="empty-mini">No projects yet</div>
           ) : (
             repos.map((repo) => (
               <Button
@@ -222,7 +210,7 @@ function App() {
                 key={repo.id}
                 onClick={() => {
                   setSelectedRepoId(repo.id);
-                  setSelectedWorktreeId(undefined);
+                  setSelectedTaskId(undefined);
                 }}
               >
                 <FolderGit2 size={16} />
@@ -237,7 +225,7 @@ function App() {
         <header className="topbar">
           <div>
             <p className="eyebrow">Operations</p>
-            <h2>{selectedRepo ? selectedRepo.name : "Add your first repository"}</h2>
+            <h2>{selectedRepo ? selectedRepo.name : "Add your first project"}</h2>
           </div>
           <Button variant="outline" size="lg" onClick={() => refresh()} title="Refresh">
             <RefreshCw size={16} />
@@ -247,7 +235,7 @@ function App() {
 
         <div className="metrics">
           <Metric icon={<Activity size={18} />} label="Running agents" value={counts.active} />
-          <Metric icon={<GitBranch size={18} />} label="Dirty worktrees" value={counts.dirty} />
+          <Metric icon={<GitBranch size={18} />} label="Dirty tasks" value={counts.dirty} />
           <Metric icon={<CheckCircle2 size={18} />} label="In review" value={counts.review} />
         </div>
 
@@ -258,7 +246,7 @@ function App() {
         ) : null}
 
         {selectedRepo ? (
-          <form className="worktree-form" onSubmit={submitWorktree}>
+          <form className="task-form" onSubmit={submitTask}>
             <Input placeholder="task title" value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} />
             <Input placeholder="branch name" value={branchName} onChange={(event) => setBranchName(event.target.value)} />
             <Select
@@ -276,10 +264,27 @@ function App() {
                 ))}
               </SelectContent>
             </Select>
-            <Button disabled={busy || !taskTitle.trim() || !branchName.trim()}>
-              <Plus size={16} />
-              Create worktree
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" disabled={busy || !taskTitle.trim()}>
+                  <Plus size={16} />
+                  Create Task
+                  <ChevronDown size={14} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="task-menu">
+                <DropdownMenuItem onSelect={() => createTask(false)}>
+                  <Bot size={14} />
+                  Create Task
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>With worktree</DropdownMenuLabel>
+                <DropdownMenuItem disabled={!branchName.trim()} onSelect={() => createTask(true)}>
+                  <GitBranch size={14} />
+                  Create Task
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </form>
         ) : null}
 
@@ -288,35 +293,35 @@ function App() {
             <section className="status-column" key={status}>
               <div className="column-heading">
                 <span>{statusLabels[status]}</span>
-                <Badge variant="secondary">{visibleWorktrees.filter((worktree) => worktree.status === status).length}</Badge>
+                <Badge variant="secondary">{visibleTasks.filter((task) => task.status === status).length}</Badge>
               </div>
-              {visibleWorktrees
-                .filter((worktree) => worktree.status === status)
-                .map((worktree) => (
+              {visibleTasks
+                .filter((task) => task.status === status)
+                .map((task) => (
                   <Card
-                    className={`worktree-card ${selectedWorktree?.id === worktree.id ? "selected" : ""}`}
-                    key={worktree.id}
+                    className={`task-card ${selectedTask?.id === task.id ? "selected" : ""}`}
+                    key={task.id}
                     role="button"
                     tabIndex={0}
-                    onClick={() => setSelectedWorktreeId(worktree.id)}
+                    onClick={() => setSelectedTaskId(task.id)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
-                        setSelectedWorktreeId(worktree.id);
+                        setSelectedTaskId(task.id);
                       }
                     }}
                   >
                     <div className="card-row">
-                      <strong>{worktree.taskTitle}</strong>
-                      {worktree.activeSessionId ? <Badge>live</Badge> : null}
+                      <strong>{task.title}</strong>
+                      {task.activeSessionId ? <Badge>live</Badge> : null}
                     </div>
                     <div className="branch-line">
-                      <GitBranch size={14} />
-                      {worktree.branchName}
+                      {task.hasWorktree ? <GitBranch size={14} /> : <Bot size={14} />}
+                      {task.hasWorktree ? task.branchName : "No worktree"}
                     </div>
                     <div className="card-row muted">
-                      <span>{worktree.agentName ?? "No agent"}</span>
-                      <span>{worktree.isDirty ? "dirty" : "clean"}</span>
+                      <span>{task.agentName ?? "No agent"}</span>
+                      <span>{task.hasWorktree ? (task.isDirty ? "dirty" : "clean") : "task"}</span>
                     </div>
                   </Card>
                 ))}
@@ -325,21 +330,21 @@ function App() {
         </div>
       </section>
 
-      {selectedWorktree ? (
+      {selectedTask ? (
         <aside className="detail-pane">
           <>
             <div className="detail-header">
               <div>
-                <p className="eyebrow">Selected worktree</p>
-                <h3>{selectedWorktree.taskTitle}</h3>
+                <p className="eyebrow">Selected task</p>
+                <h3>{selectedTask.title}</h3>
               </div>
-              {selectedWorktree.activeSessionId ? (
-                <Button variant="destructive" size="lg" onClick={() => stopSession(selectedWorktree.activeSessionId!)}>
+              {selectedTask.activeSessionId ? (
+                <Button variant="destructive" size="lg" onClick={() => stopSession(selectedTask.activeSessionId!)}>
                   <Square size={15} />
                   Stop
                 </Button>
               ) : (
-                <Button size="lg" onClick={() => startSession(selectedWorktree)}>
+                <Button size="lg" onClick={() => startSession(selectedTask)}>
                   <Play size={15} />
                   Start
                 </Button>
@@ -347,14 +352,20 @@ function App() {
             </div>
 
             <dl className="detail-list">
-              <dt>Branch</dt>
-              <dd>{selectedWorktree.branchName}</dd>
-              <dt>Path</dt>
-              <dd className="path">{selectedWorktree.path}</dd>
+              <dt>Mode</dt>
+              <dd>{selectedTask.hasWorktree ? "With worktree" : "Task only"}</dd>
+              {selectedTask.hasWorktree ? (
+                <>
+                  <dt>Branch</dt>
+                  <dd>{selectedTask.branchName}</dd>
+                  <dt>Path</dt>
+                  <dd className="path">{selectedTask.worktreePath}</dd>
+                </>
+              ) : null}
               <dt>Status</dt>
               <dd>
-                <Select value={selectedWorktree.status} onValueChange={(value) => updateStatus(selectedWorktree, value as WorktreeStatus)}>
-                  <SelectTrigger aria-label="Worktree status">
+                <Select value={selectedTask.status} onValueChange={(value) => updateStatus(selectedTask, value as TaskStatus)}>
+                  <SelectTrigger aria-label="Task status">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -368,8 +379,8 @@ function App() {
               </dd>
               <dt>PR</dt>
               <dd>
-                {selectedWorktree.prUrl ? (
-                  <a href={selectedWorktree.prUrl} target="_blank" rel="noreferrer">
+                {selectedTask.prUrl ? (
+                  <a href={selectedTask.prUrl} target="_blank" rel="noreferrer">
                     Open <ExternalLink size={13} />
                   </a>
                 ) : (
@@ -382,7 +393,7 @@ function App() {
               <TerminalSquare size={16} />
               Agent terminal
             </div>
-            <TerminalPane sessionId={selectedWorktree.activeSessionId} onSessionExit={onSessionExit} />
+            <TerminalPane sessionId={selectedTask.activeSessionId} onSessionExit={onSessionExit} />
           </>
         </aside>
       ) : null}

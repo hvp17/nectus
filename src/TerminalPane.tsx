@@ -59,7 +59,7 @@ export function TerminalPane({ sessionId, onSessionExit }: TerminalPaneProps) {
     terminal.reset();
 
     if (!sessionId) {
-      terminal.writeln("Select a worktree and start Codex or Claude.");
+      terminal.writeln("Select a task and start Codex or Claude.");
       return;
     }
 

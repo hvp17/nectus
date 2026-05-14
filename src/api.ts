@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { AgentProfile, Repo, Session, WorktreeSummary, WorktreeStatus } from "./types";
+import type { AgentProfile, Repo, Session, TaskStatus, TaskSummary } from "./types";
 
 const isTauri = "__TAURI_INTERNALS__" in window;
 
@@ -38,34 +38,36 @@ export const api = {
     const selected = await open({
       directory: true,
       multiple: false,
-      title: "Select repository folder",
+      title: "Choose project folder",
     });
     return typeof selected === "string" ? selected : null;
   },
-  async listWorktrees(repoId?: number): Promise<WorktreeSummary[]> {
+  async listTasks(repoId?: number): Promise<TaskSummary[]> {
     if (!isTauri) return [];
-    return invoke("list_worktrees", { repoId: repoId ?? null });
+    return invoke("list_tasks", { repoId: repoId ?? null });
   },
-  async createWorktree(input: {
+  async createTask(input: {
     repoId: number;
-    branchName: string;
-    taskTitle: string;
+    title: string;
     agentProfileId?: number | null;
-  }): Promise<WorktreeSummary> {
-    return invoke("create_worktree", {
+    hasWorktree?: boolean;
+    branchName?: string | null;
+  }): Promise<TaskSummary> {
+    return invoke("create_task", {
       repoId: input.repoId,
-      branchName: input.branchName,
-      taskTitle: input.taskTitle,
+      title: input.title,
       agentProfileId: input.agentProfileId ?? null,
+      hasWorktree: input.hasWorktree ?? false,
+      branchName: input.branchName ?? null,
     });
   },
-  async updateWorktreeMetadata(input: {
-    worktreeId: number;
-    taskTitle?: string | null;
-    status?: WorktreeStatus | null;
+  async updateTaskMetadata(input: {
+    taskId: number;
+    title?: string | null;
+    status?: TaskStatus | null;
     prUrl?: string | null;
-  }): Promise<WorktreeSummary> {
-    return invoke("update_worktree_metadata", input);
+  }): Promise<TaskSummary> {
+    return invoke("update_task_metadata", input);
   },
   async listAgentProfiles(): Promise<AgentProfile[]> {
     if (!isTauri) return demoProfiles;
@@ -74,8 +76,8 @@ export const api = {
   async upsertAgentProfile(profile: Partial<AgentProfile> & Pick<AgentProfile, "name" | "command">): Promise<AgentProfile> {
     return invoke("upsert_agent_profile", { profile });
   },
-  async startSession(worktreeId: number, agentProfileId: number): Promise<Session> {
-    return invoke("start_session", { worktreeId, agentProfileId });
+  async startSession(taskId: number, agentProfileId: number): Promise<Session> {
+    return invoke("start_session", { taskId, agentProfileId });
   },
   async stopSession(sessionId: string): Promise<Session> {
     return invoke("stop_session", { sessionId });

@@ -15,45 +15,46 @@ pub struct Repo {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum WorktreeStatus {
+pub enum TaskStatus {
     Planned,
     InProgress,
     Review,
     Done,
 }
 
-impl WorktreeStatus {
+impl TaskStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
-            WorktreeStatus::Planned => "planned",
-            WorktreeStatus::InProgress => "in_progress",
-            WorktreeStatus::Review => "review",
-            WorktreeStatus::Done => "done",
+            TaskStatus::Planned => "planned",
+            TaskStatus::InProgress => "in_progress",
+            TaskStatus::Review => "review",
+            TaskStatus::Done => "done",
         }
     }
 
     pub fn from_str(value: &str) -> Self {
         match value {
-            "in_progress" => WorktreeStatus::InProgress,
-            "review" => WorktreeStatus::Review,
-            "done" => WorktreeStatus::Done,
-            _ => WorktreeStatus::Planned,
+            "in_progress" => TaskStatus::InProgress,
+            "review" => TaskStatus::Review,
+            "done" => TaskStatus::Done,
+            _ => TaskStatus::Planned,
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct WorktreeSummary {
+pub struct TaskSummary {
     pub id: i64,
     pub repo_id: i64,
-    pub branch_name: String,
-    pub path: String,
-    pub task_title: String,
-    pub status: WorktreeStatus,
+    pub title: String,
+    pub status: TaskStatus,
     pub pr_url: Option<String>,
     pub agent_profile_id: Option<i64>,
     pub agent_name: Option<String>,
+    pub has_worktree: bool,
+    pub branch_name: Option<String>,
+    pub worktree_path: Option<String>,
     pub is_dirty: bool,
     pub active_session_id: Option<String>,
     pub created_at: String,
@@ -95,7 +96,7 @@ pub enum SessionState {
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     pub id: String,
-    pub worktree_id: i64,
+    pub task_id: i64,
     pub agent_profile_id: i64,
     pub state: SessionState,
     pub pid: Option<u32>,
