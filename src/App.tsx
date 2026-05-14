@@ -1,7 +1,6 @@
 import {
   Activity,
   Bot,
-  ChevronDown,
   CheckCircle2,
   ExternalLink,
   FolderPlus,
@@ -14,6 +13,7 @@ import {
   Square,
   TerminalSquare,
   Trash2,
+  X,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
@@ -21,15 +21,8 @@ import { Alert, AlertDescription } from "./components/ui/alert";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "./components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "./components/ui/dropdown-menu";
 import { Input } from "./components/ui/input";
+import { Label } from "./components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip";
 import { TerminalPane } from "./TerminalPane";
@@ -50,8 +43,12 @@ function App() {
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [selectedRepoId, setSelectedRepoId] = useState<number | undefined>();
   const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>();
-  const [branchName, setBranchName] = useState("");
-  const [taskTitle, setTaskTitle] = useState("");
+  const [createTaskOpen, setCreateTaskOpen] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskPrompt, setNewTaskPrompt] = useState("");
+  const [newTaskBranchName, setNewTaskBranchName] = useState("");
+  const [newTaskHasWorktree, setNewTaskHasWorktree] = useState(false);
+  const [newTaskAgentProfileId, setNewTaskAgentProfileId] = useState<number | undefined>();
   const [selectedAgentProfileId, setSelectedAgentProfileId] = useState<number | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -126,26 +123,60 @@ function App() {
 
   async function submitTask(event: FormEvent) {
     event.preventDefault();
-    await createTask(false);
+    await createTask();
   }
 
-  async function createTask(hasWorktree: boolean) {
+  function resetCreateTaskForm() {
+    setNewTaskTitle("");
+    setNewTaskPrompt("");
+    setNewTaskBranchName("");
+    setNewTaskHasWorktree(false);
+    setNewTaskAgentProfileId(undefined);
+  }
+
+  function closeCreateTaskModal() {
+    setCreateTaskOpen(false);
+    resetCreateTaskForm();
+  }
+
+  function getGeneratedTaskTitle() {
+    const title = newTaskTitle.trim();
+    if (title) return title;
+
+    const firstPromptLine = newTaskPrompt
+      .trim()
+      .split("\n")
+      .map((line) => line.trim())
+      .find(Boolean);
+
+    return firstPromptLine ? firstPromptLine.slice(0, 80) : "Untitled task";
+  }
+
+  async function createTask() {
     if (!selectedRepoId) return;
+    if (!newTaskAgentProfileId) {
+      setMessage("Select Codex or Claude before creating a task.");
+      return;
+    }
+    if (newTaskHasWorktree && !newTaskBranchName.trim()) {
+      setMessage("Enter a branch name to create a worktree.");
+      return;
+    }
     setBusy(true);
     setMessage(null);
     try {
       const task = await api.createTask({
         repoId: selectedRepoId,
-        title: taskTitle.trim(),
-        agentProfileId: selectedAgentProfileId,
-        hasWorktree,
-        branchName: hasWorktree ? branchName.trim() : null,
+        title: getGeneratedTaskTitle(),
+        agentProfileId: newTaskAgentProfileId,
+        hasWorktree: newTaskHasWorktree,
+        branchName: newTaskHasWorktree ? newTaskBranchName.trim() : null,
       });
-      setBranchName("");
-      setTaskTitle("");
+      resetCreateTaskForm();
+      setCreateTaskOpen(false);
       setSelectedTaskId(task.id);
       await refresh(selectedRepoId);
-      setMessage(hasWorktree ? `Created ${task.branchName}` : `Created ${task.title}`);
+      setMessage(newTaskHasWorktree ? `Created ${task.branchName}` : `Created ${task.title}`);
     } catch (error) {
       setMessage(String(error));
     } finally {
@@ -307,46 +338,12 @@ function App() {
         ) : null}
 
         {selectedRepo ? (
-          <form className="task-form" onSubmit={submitTask}>
-            <Input placeholder="task title" value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} />
-            <Input placeholder="branch name" value={branchName} onChange={(event) => setBranchName(event.target.value)} />
-            <Select
-              value={selectedAgentProfileId ? String(selectedAgentProfileId) : undefined}
-              onValueChange={(value) => setSelectedAgentProfileId(Number(value))}
-            >
-              <SelectTrigger aria-label="Agent profile">
-                <SelectValue placeholder="Agent" />
-              </SelectTrigger>
-              <SelectContent>
-                {agentProfiles.map((profile) => (
-                  <SelectItem value={String(profile.id)} key={profile.id}>
-                    {profile.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" disabled={busy || !taskTitle.trim()}>
-                  <Plus size={16} />
-                  Create Task
-                  <ChevronDown size={14} />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="task-menu">
-                <DropdownMenuItem onSelect={() => createTask(false)}>
-                  <Bot size={14} />
-                  Create Task
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>With worktree</DropdownMenuLabel>
-                <DropdownMenuItem disabled={!branchName.trim()} onSelect={() => createTask(true)}>
-                  <GitBranch size={14} />
-                  Create Task
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </form>
+          <div className="task-toolbar">
+            <Button type="button" size="lg" onClick={() => setCreateTaskOpen(true)} disabled={busy}>
+              <Plus size={16} />
+              Create new task
+            </Button>
+          </div>
         ) : null}
 
         <div className="columns">
@@ -398,6 +395,123 @@ function App() {
           ))}
         </div>
         </section>
+
+        {createTaskOpen ? (
+          <div className="modal-backdrop" role="presentation" onMouseDown={closeCreateTaskModal}>
+            <form
+              className="task-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="create-task-title"
+              onSubmit={submitTask}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className="task-modal-header">
+                <div>
+                  <p className="eyebrow">Task setup</p>
+                  <h3 id="create-task-title">Create new task</h3>
+                </div>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={closeCreateTaskModal}
+                  aria-label="Close task modal"
+                  title="Close"
+                >
+                  <X size={16} />
+                </Button>
+              </div>
+
+              <div className="task-modal-body">
+                <div className="field">
+                  <Label htmlFor="new-task-title">Title</Label>
+                  <Input
+                    id="new-task-title"
+                    placeholder="Optional"
+                    value={newTaskTitle}
+                    onChange={(event) => setNewTaskTitle(event.target.value)}
+                  />
+                </div>
+
+                <fieldset className="field-group">
+                  <legend>Model</legend>
+                  <div className="choice-grid">
+                    {agentProfiles.map((profile) => (
+                      <label className="choice-card" key={profile.id}>
+                        <input
+                          type="radio"
+                          name="agent-profile"
+                          value={profile.id}
+                          checked={newTaskAgentProfileId === profile.id}
+                          onChange={() => setNewTaskAgentProfileId(profile.id)}
+                        />
+                        <span>{profile.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+
+                <div className="field">
+                  <Label htmlFor="new-task-prompt">Chat prompt</Label>
+                  <textarea
+                    id="new-task-prompt"
+                    value={newTaskPrompt}
+                    onChange={(event) => setNewTaskPrompt(event.target.value)}
+                    placeholder="What should the agent work on?"
+                    rows={6}
+                  />
+                </div>
+
+                <fieldset className="field-group">
+                  <legend>Git worktree</legend>
+                  <div className="choice-grid">
+                    <label className="choice-card">
+                      <input
+                        type="radio"
+                        name="worktree-mode"
+                        checked={!newTaskHasWorktree}
+                        onChange={() => setNewTaskHasWorktree(false)}
+                      />
+                      <span>Without worktree</span>
+                    </label>
+                    <label className="choice-card">
+                      <input
+                        type="radio"
+                        name="worktree-mode"
+                        checked={newTaskHasWorktree}
+                        onChange={() => setNewTaskHasWorktree(true)}
+                      />
+                      <span>Use worktree</span>
+                    </label>
+                  </div>
+                </fieldset>
+
+                {newTaskHasWorktree ? (
+                  <div className="field">
+                    <Label htmlFor="new-task-branch">Branch name</Label>
+                    <Input
+                      id="new-task-branch"
+                      placeholder="feature/my-task"
+                      value={newTaskBranchName}
+                      onChange={(event) => setNewTaskBranchName(event.target.value)}
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="task-modal-actions">
+                <Button type="button" variant="outline" size="lg" onClick={closeCreateTaskModal}>
+                  Cancel
+                </Button>
+                <Button type="submit" size="lg" disabled={busy || !newTaskAgentProfileId || (newTaskHasWorktree && !newTaskBranchName.trim())}>
+                  <Plus size={16} />
+                  Create task
+                </Button>
+              </div>
+            </form>
+          </div>
+        ) : null}
 
         {selectedTask ? (
           <aside className="detail-pane">
