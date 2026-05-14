@@ -6,7 +6,9 @@ use chrono::Utc;
 use parking_lot::Mutex;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use std::collections::HashMap;
+use std::env;
 use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
@@ -51,7 +53,8 @@ impl SessionManager {
             })
             .map_err(|error| format!("Failed to open PTY: {error}"))?;
 
-        let mut command = CommandBuilder::new(&agent.command);
+        let executable = resolve_agent_command(&agent.command)?;
+        let mut command = CommandBuilder::new(executable);
         for arg in &agent.args {
             command.arg(arg);
         }
@@ -193,5 +196,120 @@ impl SessionManager {
                 let _ = db.lock().set_active_session(session.task_id, None);
             }
         }
+    }
+}
+
+fn resolve_agent_command(command: &str) -> Result<PathBuf, String> {
+    let command_path = Path::new(command);
+    if command_path.components().count() > 1 {
+        return if command_path.exists() {
+            Ok(command_path.to_path_buf())
+        } else {
+            Err(format!("Agent command does not exist: {command}"))
+        };
+    }
+
+    let path_value = env::var_os("PATH").unwrap_or_default();
+    for path_dir in env::split_paths(&path_value) {
+        let candidate = path_dir.join(command);
+        if is_executable_file(&candidate) {
+            return Ok(candidate);
+        }
+    }
+
+    for candidate in bundled_agent_candidates(command) {
+        if is_executable_file(&candidate) {
+            return Ok(candidate);
+        }
+    }
+
+    let path_display = path_value.to_string_lossy();
+    let fallback_display = bundled_agent_candidates(command)
+        .into_iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    Err(format!(
+        "Unable to find `{command}` in PATH \"{path_display}\"{}",
+        if fallback_display.is_empty() {
+            String::new()
+        } else {
+            format!(" or known app locations: {fallback_display}")
+        }
+    ))
+}
+
+fn bundled_agent_candidates(command: &str) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if command == "codex" {
+        candidates.push(PathBuf::from(
+            "/Applications/Codex.app/Contents/Resources/codex",
+        ));
+        if let Some(home) = env::var_os("HOME") {
+            candidates.push(
+                PathBuf::from(home)
+                    .join("Applications")
+                    .join("Codex.app")
+                    .join("Contents")
+                    .join("Resources")
+                    .join("codex"),
+            );
+        }
+    }
+    candidates
+}
+
+#[cfg(unix)]
+fn is_executable_file(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+
+    path.is_file()
+        && path
+            .metadata()
+            .map(|metadata| metadata.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn is_executable_file(path: &Path) -> bool {
+    path.is_file()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+    use tempfile::tempdir;
+
+    #[test]
+    fn resolves_command_from_path() {
+        let dir = tempdir().unwrap();
+        let executable = dir.path().join("test-agent");
+        std::fs::write(&executable, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let old_path = env::var_os("PATH");
+        env::set_var("PATH", dir.path());
+        let resolved = resolve_agent_command("test-agent").unwrap();
+        if let Some(old_path) = old_path {
+            env::set_var("PATH", old_path);
+        } else {
+            env::remove_var("PATH");
+        }
+
+        assert_eq!(resolved, executable);
+    }
+
+    #[test]
+    fn preserves_existing_explicit_command_path() {
+        let dir = tempdir().unwrap();
+        let executable = dir.path().join("agent");
+        std::fs::write(&executable, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        assert_eq!(
+            resolve_agent_command(executable.to_str().unwrap()).unwrap(),
+            executable
+        );
     }
 }
