@@ -48,7 +48,7 @@ function App() {
 
   return (
     <TooltipProvider>
-      <main className="app-shell bg-background text-foreground">
+      <main className={`app-shell bg-background text-foreground ${selectedTask ? "detail-open" : ""}`}>
         <Sidebar
           repos={repos}
           selectedRepoId={selectedRepoId}
@@ -61,7 +61,7 @@ function App() {
           loading={loading}
         />
 
-        <div className={`relative flex flex-col flex-1 min-w-0 overflow-hidden ${selectedTask ? "detail-open" : ""}`}>
+        <div className="relative flex flex-col flex-1 min-w-0 overflow-hidden">
           <Workspace
             selectedRepo={selectedRepo}
             visibleTasks={visibleTasks}

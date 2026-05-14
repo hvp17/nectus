@@ -34,16 +34,8 @@ export function TaskDetailDrawer({
   if (!task) return null;
 
   return (
-    <>
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 z-40 bg-background/40 backdrop-blur-[2px] transition-opacity" 
-        onClick={onClose}
-      />
-      
-      {/* Sliding Drawer */}
-      <aside className="fixed inset-y-0 right-0 z-50 w-[480px] bg-background border-l border-border shadow-2xl flex flex-col animate-in slide-in-from-right duration-300 ease-out">
-        <div className="flex items-center justify-between p-6 border-b">
+    <aside className="detail-pane flex flex-col animate-in slide-in-from-right duration-300 ease-out">
+      <div className="flex items-center justify-between p-6 border-b">
           <div className="min-w-0">
             <p className="eyebrow">Task Detail</p>
             <h3 className="text-xl font-bold truncate leading-tight">{task.title}</h3>
@@ -127,6 +119,5 @@ export function TaskDetailDrawer({
           </div>
         </div>
       </aside>
-    </>
-  );
-}
+    );
+  }
