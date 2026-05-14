@@ -79,6 +79,9 @@ export const api = {
   async startSession(taskId: number, agentProfileId: number): Promise<Session> {
     return invoke("start_session", { taskId, agentProfileId });
   },
+  async resumeSession(taskId: number): Promise<Session> {
+    return invoke("resume_session", { taskId });
+  },
   async stopSession(sessionId: string): Promise<Session> {
     return invoke("stop_session", { sessionId });
   },

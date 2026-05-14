@@ -7,6 +7,7 @@ use parking_lot::Mutex;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use std::collections::HashMap;
 use std::env;
+use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -19,6 +20,8 @@ pub struct SessionManager {
 
 struct RunningSession {
     session: Session,
+    agent_command: String,
+    cwd: PathBuf,
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
     child: Box<dyn Child + Send + Sync>,
@@ -38,10 +41,20 @@ impl SessionManager {
         task: TaskSummary,
         repo: Repo,
         agent: AgentProfile,
+        resume: bool,
     ) -> Result<Session, String> {
         if task.active_session_id.is_some() {
             return Err("Task already has a running session".into());
         }
+        let resume_session_id = if resume {
+            Some(
+                task.last_session_id
+                    .as_deref()
+                    .ok_or_else(|| "Task does not have a saved session to resume".to_string())?,
+            )
+        } else {
+            None
+        };
 
         let pty_system = native_pty_system();
         let pair = pty_system
@@ -53,15 +66,17 @@ impl SessionManager {
             })
             .map_err(|error| format!("Failed to open PTY: {error}"))?;
 
+        let session_id = resume_session_id
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
         let executable = resolve_agent_command(&agent.command)?;
         let mut command = CommandBuilder::new(executable);
-        for arg in &agent.args {
-            command.arg(arg);
-        }
+        configure_agent_command(&mut command, &agent, &session_id, resume);
         for (key, value) in &agent.env {
             command.env(key, value);
         }
         let cwd = task.worktree_path.as_deref().unwrap_or(&repo.path);
+        let cwd_path = PathBuf::from(cwd);
         command.cwd(cwd);
 
         let child = pair
@@ -79,7 +94,9 @@ impl SessionManager {
             .map_err(|error| format!("Failed to create PTY reader: {error}"))?;
 
         let session = Session {
-            id: Uuid::new_v4().to_string(),
+            id: session_id.clone(),
+            resumable_session_id: Some(session_id.clone()),
+            resumable_session_label: task.last_session_label.clone(),
             task_id: task.id,
             agent_profile_id: agent.id,
             state: SessionState::Running,
@@ -88,13 +105,22 @@ impl SessionManager {
             stopped_at: None,
         };
         let session_id = session.id.clone();
+        let started_at = session.started_at.clone();
 
-        db.lock().set_active_session(task.id, Some(&session_id))?;
+        db.lock().start_session_record(
+            task.id,
+            &session_id,
+            &agent.command,
+            cwd,
+            task.last_session_label.as_deref(),
+        )?;
 
         self.sessions.lock().insert(
             session.id.clone(),
             RunningSession {
                 session: session.clone(),
+                agent_command: agent.command.clone(),
+                cwd: cwd_path.clone(),
                 master: pair.master,
                 writer,
                 child,
@@ -107,6 +133,9 @@ impl SessionManager {
             let sessions = self.sessions.clone();
             let task_id = task.id;
             let session_id = session_id.clone();
+            let agent_command = agent.command.clone();
+            let cwd = cwd_path;
+            let started_at = started_at.clone();
             move || {
                 let mut buffer = [0_u8; 8192];
                 loop {
@@ -126,6 +155,15 @@ impl SessionManager {
                     }
                 }
                 if sessions.lock().remove(&session_id).is_some() {
+                    if is_codex_command(&agent_command) {
+                        if let Some(metadata) = latest_codex_session_metadata(&cwd, &started_at) {
+                            let _ = db.lock().set_last_session(
+                                task_id,
+                                &metadata.id,
+                                metadata.label.as_deref(),
+                            );
+                        }
+                    }
                     let _ = db.lock().set_active_session(task_id, None);
                     let _ = app.emit(
                         "session_exited",
@@ -150,6 +188,19 @@ impl SessionManager {
         let stopped_at = Utc::now().to_rfc3339();
         running.session.state = SessionState::Stopped;
         running.session.stopped_at = Some(stopped_at);
+        if is_codex_command(&running.agent_command) {
+            if let Some(metadata) =
+                latest_codex_session_metadata(&running.cwd, &running.session.started_at)
+            {
+                db.lock().set_last_session(
+                    running.session.task_id,
+                    &metadata.id,
+                    metadata.label.as_deref(),
+                )?;
+                running.session.resumable_session_id = Some(metadata.id);
+                running.session.resumable_session_label = metadata.label;
+            }
+        }
         db.lock()
             .set_active_session(running.session.task_id, None)?;
         Ok(running.session)
@@ -217,14 +268,14 @@ fn resolve_agent_command(command: &str) -> Result<PathBuf, String> {
         }
     }
 
-    for candidate in bundled_agent_candidates(command) {
+    for candidate in fallback_agent_candidates(command) {
         if is_executable_file(&candidate) {
             return Ok(candidate);
         }
     }
 
     let path_display = path_value.to_string_lossy();
-    let fallback_display = bundled_agent_candidates(command)
+    let fallback_display = fallback_agent_candidates(command)
         .into_iter()
         .map(|path| path.display().to_string())
         .collect::<Vec<_>>()
@@ -239,8 +290,9 @@ fn resolve_agent_command(command: &str) -> Result<PathBuf, String> {
     ))
 }
 
-fn bundled_agent_candidates(command: &str) -> Vec<PathBuf> {
+fn fallback_agent_candidates(command: &str) -> Vec<PathBuf> {
     let mut candidates = Vec::new();
+    candidates.extend(user_bin_candidates(command));
     if command == "codex" {
         candidates.push(PathBuf::from(
             "/Applications/Codex.app/Contents/Resources/codex",
@@ -257,6 +309,165 @@ fn bundled_agent_candidates(command: &str) -> Vec<PathBuf> {
         }
     }
     candidates
+}
+
+fn user_bin_candidates(command: &str) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(home) = env::var_os("HOME") {
+        let home = PathBuf::from(home);
+        candidates.push(home.join(".local").join("bin").join(command));
+        candidates.push(home.join(".cargo").join("bin").join(command));
+        candidates.push(home.join(".npm-global").join("bin").join(command));
+    }
+    for dir in [
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+        "/opt/local/bin",
+        "/usr/local/sbin",
+        "/opt/homebrew/sbin",
+    ] {
+        candidates.push(PathBuf::from(dir).join(command));
+    }
+    candidates
+}
+
+fn configure_agent_command(
+    command: &mut CommandBuilder,
+    agent: &AgentProfile,
+    session_id: &str,
+    resume: bool,
+) {
+    if resume && is_codex_command(&agent.command) {
+        command.arg("resume");
+    }
+    for arg in &agent.args {
+        command.arg(arg);
+    }
+    if resume && is_codex_command(&agent.command) {
+        command.arg(session_id);
+    }
+    if is_claude_command(&agent.command) {
+        if resume {
+            command.arg("--resume");
+            command.arg(session_id);
+        } else {
+            command.arg("--session-id");
+            command.arg(session_id);
+        }
+    }
+}
+
+fn is_codex_command(command: &str) -> bool {
+    Path::new(command)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name == "codex")
+}
+
+fn is_claude_command(command: &str) -> bool {
+    Path::new(command)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name == "claude")
+}
+
+#[derive(Debug, Clone)]
+struct CodexSessionMetadata {
+    id: String,
+    label: Option<String>,
+}
+
+fn latest_codex_session_metadata(cwd: &Path, started_at: &str) -> Option<CodexSessionMetadata> {
+    let home = env::var_os("HOME")?;
+    let sessions_dir = PathBuf::from(home).join(".codex").join("sessions");
+    let started_at = chrono::DateTime::parse_from_rfc3339(started_at).ok()?;
+    let cwd = cwd.to_string_lossy();
+    let mut best: Option<(chrono::DateTime<chrono::FixedOffset>, CodexSessionMetadata)> = None;
+    collect_codex_session_ids(&sessions_dir, &cwd, started_at, &mut best);
+    best.map(|(_, metadata)| metadata)
+}
+
+fn collect_codex_session_ids(
+    dir: &Path,
+    cwd: &str,
+    started_at: chrono::DateTime<chrono::FixedOffset>,
+    best: &mut Option<(chrono::DateTime<chrono::FixedOffset>, CodexSessionMetadata)>,
+) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_codex_session_ids(&path, cwd, started_at, best);
+            continue;
+        }
+        if path.extension().and_then(|value| value.to_str()) != Some("jsonl") {
+            continue;
+        }
+        let Ok(contents) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let Some(first_line) = contents.lines().next() else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(first_line) else {
+            continue;
+        };
+        if value.pointer("/type").and_then(|value| value.as_str()) != Some("session_meta") {
+            continue;
+        }
+        let Some(payload) = value.pointer("/payload") else {
+            continue;
+        };
+        if payload.pointer("/cwd").and_then(|value| value.as_str()) != Some(cwd) {
+            continue;
+        }
+        let Some(id) = payload
+            .pointer("/id")
+            .and_then(|value| value.as_str())
+            .map(ToOwned::to_owned)
+        else {
+            continue;
+        };
+        let Some(timestamp) = payload
+            .pointer("/timestamp")
+            .and_then(|value| value.as_str())
+            .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+        else {
+            continue;
+        };
+        if timestamp < started_at {
+            continue;
+        }
+        if best
+            .as_ref()
+            .is_none_or(|(best_timestamp, _)| timestamp > *best_timestamp)
+        {
+            *best = Some((
+                timestamp,
+                CodexSessionMetadata {
+                    id,
+                    label: codex_session_label(payload),
+                },
+            ));
+        }
+    }
+}
+
+fn codex_session_label(payload: &serde_json::Value) -> Option<String> {
+    for pointer in ["/thread_name", "/name", "/title", "/initial_prompt"] {
+        if let Some(label) = payload
+            .pointer(pointer)
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            return Some(label.chars().take(120).collect());
+        }
+    }
+    None
 }
 
 #[cfg(unix)]
@@ -311,5 +522,33 @@ mod tests {
             resolve_agent_command(executable.to_str().unwrap()).unwrap(),
             executable
         );
+    }
+
+    #[test]
+    fn resolves_command_from_user_local_bin_when_gui_path_is_minimal() {
+        let home = tempdir().unwrap();
+        let bin_dir = home.path().join(".local").join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let executable = bin_dir.join("claude");
+        std::fs::write(&executable, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let old_home = env::var_os("HOME");
+        let old_path = env::var_os("PATH");
+        env::set_var("HOME", home.path());
+        env::set_var("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
+        let resolved = resolve_agent_command("claude").unwrap();
+        if let Some(old_home) = old_home {
+            env::set_var("HOME", old_home);
+        } else {
+            env::remove_var("HOME");
+        }
+        if let Some(old_path) = old_path {
+            env::set_var("PATH", old_path);
+        } else {
+            env::remove_var("PATH");
+        }
+
+        assert_eq!(resolved, executable);
     }
 }

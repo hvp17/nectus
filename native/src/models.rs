@@ -58,6 +58,10 @@ pub struct TaskSummary {
     pub worktree_path: Option<String>,
     pub is_dirty: bool,
     pub active_session_id: Option<String>,
+    pub last_session_id: Option<String>,
+    pub last_session_agent: Option<String>,
+    pub last_session_cwd: Option<String>,
+    pub last_session_label: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -97,6 +101,8 @@ pub enum SessionState {
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     pub id: String,
+    pub resumable_session_id: Option<String>,
+    pub resumable_session_label: Option<String>,
     pub task_id: i64,
     pub agent_profile_id: i64,
     pub state: SessionState,

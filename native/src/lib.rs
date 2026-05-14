@@ -100,7 +100,35 @@ fn start_session(
 
     state
         .sessions
-        .start(app, state.db.clone(), task, repo, agent)
+        .start(app, state.db.clone(), task, repo, agent, false)
+}
+
+#[tauri::command]
+fn resume_session(
+    task_id: i64,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<Session> {
+    let (task, repo, agent) = {
+        let db = state.db.lock();
+        let task = db
+            .task_by_id(task_id)?
+            .ok_or_else(|| "Task not found".to_string())?;
+        let agent_profile_id = task
+            .agent_profile_id
+            .ok_or_else(|| "Task does not have an agent profile to resume".to_string())?;
+        let repo = db
+            .repo_by_id(task.repo_id)?
+            .ok_or_else(|| "Repository not found".to_string())?;
+        let agent = db
+            .agent_profile_by_id(agent_profile_id)?
+            .ok_or_else(|| "Agent profile not found".to_string())?;
+        (task, repo, agent)
+    };
+
+    state
+        .sessions
+        .start(app, state.db.clone(), task, repo, agent, true)
 }
 
 #[tauri::command]
@@ -161,6 +189,7 @@ pub fn run() {
             list_agent_profiles,
             upsert_agent_profile,
             start_session,
+            resume_session,
             stop_session,
             resize_session,
             send_session_input

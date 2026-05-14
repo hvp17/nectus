@@ -10,6 +10,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  RotateCcw,
   Square,
   TerminalSquare,
 } from "lucide-react";
@@ -182,6 +183,17 @@ function App() {
     }
   }
 
+  async function resumeSession(task: TaskSummary) {
+    setMessage(null);
+    try {
+      const session = await api.resumeSession(task.id);
+      applySession(session);
+      setSelectedTaskId(task.id);
+    } catch (error) {
+      setMessage(String(error));
+    }
+  }
+
   const applySession = useCallback((session: Session) => {
     setTasks((current) =>
       current.map((task) => {
@@ -189,6 +201,8 @@ function App() {
         return {
           ...task,
           activeSessionId: session.state === "running" ? session.id : null,
+          lastSessionId: session.resumableSessionId ?? session.id,
+          lastSessionLabel: session.resumableSessionLabel ?? task.lastSessionLabel,
         };
       }),
     );
@@ -362,10 +376,18 @@ function App() {
                   Stop
                 </Button>
               ) : (
-                <Button size="lg" onClick={() => startSession(selectedTask)}>
-                  <Play size={15} />
-                  Start
-                </Button>
+                <div className="detail-actions">
+                  {selectedTask.lastSessionId ? (
+                    <Button variant="outline" size="lg" onClick={() => resumeSession(selectedTask)}>
+                      <RotateCcw size={15} />
+                      Resume
+                    </Button>
+                  ) : null}
+                  <Button size="lg" onClick={() => startSession(selectedTask)}>
+                    <Play size={15} />
+                    Start
+                  </Button>
+                </div>
               )}
             </div>
 
@@ -405,6 +427,14 @@ function App() {
                   <span className="muted">None</span>
                 )}
               </dd>
+              <dt>Session</dt>
+              <dd className="path">
+                {selectedTask.lastSessionLabel ? `${selectedTask.lastSessionLabel} (${selectedTask.lastSessionId})` : selectedTask.lastSessionId ?? "None"}
+              </dd>
+              <dt>Agent</dt>
+              <dd className="path">{selectedTask.lastSessionAgent ?? selectedTask.agentName ?? "None"}</dd>
+              <dt>CWD</dt>
+              <dd className="path">{selectedTask.lastSessionCwd ?? selectedTask.worktreePath ?? "None"}</dd>
             </dl>
 
             <div className="terminal-title">

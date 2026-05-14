@@ -66,6 +66,10 @@ impl Database {
                   pr_url TEXT,
                   agent_profile_id INTEGER REFERENCES agent_profiles(id),
                   active_session_id TEXT,
+                  last_session_id TEXT,
+                  last_session_agent TEXT,
+                  last_session_cwd TEXT,
+                  last_session_label TEXT,
                   has_worktree INTEGER NOT NULL DEFAULT 0,
                   branch_name TEXT,
                   worktree_path TEXT,
@@ -89,7 +93,38 @@ impl Database {
             )
             .map_err(|error| format!("Failed to migrate database: {error}"))?;
 
+        self.add_missing_column("tasks", "last_session_id", "TEXT")?;
+        self.add_missing_column("tasks", "last_session_agent", "TEXT")?;
+        self.add_missing_column("tasks", "last_session_cwd", "TEXT")?;
+        self.add_missing_column("tasks", "last_session_label", "TEXT")?;
         self.migrate_legacy_worktrees()
+    }
+
+    fn add_missing_column(
+        &self,
+        table: &str,
+        column: &str,
+        column_type: &str,
+    ) -> Result<(), String> {
+        let mut stmt = self
+            .conn
+            .prepare(&format!("PRAGMA table_info({table})"))
+            .map_err(|error| format!("Failed to inspect {table} table: {error}"))?;
+        let columns = rows(
+            stmt.query_map([], |row| row.get::<_, String>(1))
+                .map_err(|error| format!("Failed to inspect {table} columns: {error}"))?,
+        )?;
+        if columns.iter().any(|name| name == column) {
+            return Ok(());
+        }
+
+        self.conn
+            .execute(
+                &format!("ALTER TABLE {table} ADD COLUMN {column} {column_type}"),
+                [],
+            )
+            .map_err(|error| format!("Failed to add {column} column: {error}"))?;
+        Ok(())
     }
 
     fn migrate_legacy_worktrees(&self) -> Result<(), String> {
@@ -132,9 +167,9 @@ impl Database {
             .execute_batch(&format!(
                 "
                 INSERT INTO tasks
-                  (id, repo_id, title, status, pr_url, agent_profile_id, active_session_id,
+                  (id, repo_id, title, status, pr_url, agent_profile_id, active_session_id, last_session_id, last_session_agent, last_session_cwd, last_session_label,
                    has_worktree, branch_name, worktree_path, created_at, updated_at)
-                SELECT id, repo_id, task_title, status, pr_url, agent_profile_id, active_session_id,
+                SELECT id, repo_id, task_title, status, pr_url, agent_profile_id, active_session_id, active_session_id, NULL, NULL, NULL,
                        {has_worktree_expr},
                        CASE WHEN {has_worktree_expr} = 1 THEN branch_name ELSE NULL END,
                        CASE WHEN {has_worktree_expr} = 1 THEN path ELSE NULL END,
@@ -265,8 +300,8 @@ impl Database {
             .execute(
                 "
                 INSERT INTO tasks
-                  (repo_id, title, status, pr_url, agent_profile_id, active_session_id, has_worktree, branch_name, worktree_path, created_at, updated_at)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)
+                  (repo_id, title, status, pr_url, agent_profile_id, active_session_id, last_session_id, last_session_agent, last_session_cwd, last_session_label, has_worktree, branch_name, worktree_path, created_at, updated_at)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?14)
                 ",
                 params![
                     repo_id,
@@ -274,6 +309,10 @@ impl Database {
                     TaskStatus::Planned.as_str(),
                     None::<String>,
                     agent_profile_id,
+                    None::<String>,
+                    None::<String>,
+                    None::<String>,
+                    None::<String>,
                     None::<String>,
                     has_worktree,
                     branch_name,
@@ -290,7 +329,9 @@ impl Database {
     pub fn list_tasks(&self, repo_id: Option<i64>) -> Result<Vec<TaskSummary>, String> {
         let sql = "
             SELECT t.id, t.repo_id, t.title, t.status, t.pr_url, t.agent_profile_id, a.name,
-                   t.has_worktree, t.branch_name, t.worktree_path, t.active_session_id, t.created_at, t.updated_at
+                   t.has_worktree, t.branch_name, t.worktree_path, t.active_session_id,
+                   t.last_session_id, t.last_session_agent, t.last_session_cwd, t.last_session_label,
+                   t.created_at, t.updated_at
             FROM tasks t
             LEFT JOIN agent_profiles a ON a.id = t.agent_profile_id
         ";
@@ -326,7 +367,9 @@ impl Database {
             .query_row(
                 "
                 SELECT t.id, t.repo_id, t.title, t.status, t.pr_url, t.agent_profile_id, a.name,
-                       t.has_worktree, t.branch_name, t.worktree_path, t.active_session_id, t.created_at, t.updated_at
+                       t.has_worktree, t.branch_name, t.worktree_path, t.active_session_id,
+                       t.last_session_id, t.last_session_agent, t.last_session_cwd, t.last_session_label,
+                       t.created_at, t.updated_at
                 FROM tasks t
                 LEFT JOIN agent_profiles a ON a.id = t.agent_profile_id
                 WHERE t.id = ?1
@@ -399,6 +442,47 @@ impl Database {
                 params![session_id, now(), task_id],
             )
             .map_err(|error| format!("Failed to update active session: {error}"))?;
+        Ok(())
+    }
+
+    pub fn start_session_record(
+        &self,
+        task_id: i64,
+        session_id: &str,
+        agent: &str,
+        cwd: &str,
+        label: Option<&str>,
+    ) -> Result<(), String> {
+        self.conn
+            .execute(
+                "
+                UPDATE tasks
+                SET active_session_id = ?1,
+                    last_session_id = ?1,
+                    last_session_agent = ?2,
+                    last_session_cwd = ?3,
+                    last_session_label = ?4,
+                    updated_at = ?5
+                WHERE id = ?6
+                ",
+                params![session_id, agent, cwd, label, now(), task_id],
+            )
+            .map_err(|error| format!("Failed to update session state: {error}"))?;
+        Ok(())
+    }
+
+    pub fn set_last_session(
+        &self,
+        task_id: i64,
+        session_id: &str,
+        label: Option<&str>,
+    ) -> Result<(), String> {
+        self.conn
+            .execute(
+                "UPDATE tasks SET last_session_id = ?1, last_session_label = ?2, updated_at = ?3 WHERE id = ?4",
+                params![session_id, label, now(), task_id],
+            )
+            .map_err(|error| format!("Failed to update saved session: {error}"))?;
         Ok(())
     }
 
@@ -535,8 +619,12 @@ fn task_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Result<TaskSummary
         worktree_path: row.get(9)?,
         is_dirty: false,
         active_session_id: row.get(10)?,
-        created_at: row.get(11)?,
-        updated_at: row.get(12)?,
+        last_session_id: row.get(11)?,
+        last_session_agent: row.get(12)?,
+        last_session_cwd: row.get(13)?,
+        last_session_label: row.get(14)?,
+        created_at: row.get(15)?,
+        updated_at: row.get(16)?,
     }))
 }
 
@@ -703,5 +791,53 @@ mod tests {
         let error = db.list_tasks(None).unwrap_err();
 
         assert!(error.contains("Unknown task status"), "{error}");
+    }
+
+    #[test]
+    fn starting_and_stopping_session_preserves_last_session_snapshot() {
+        let db = Database::open_in_memory().unwrap();
+        let repo_dir = tempdir().unwrap();
+        std::process::Command::new("git")
+            .arg("init")
+            .arg(repo_dir.path())
+            .output()
+            .unwrap();
+        let repo = db
+            .add_repo(repo_dir.path().to_string_lossy().to_string())
+            .unwrap();
+        let task = db
+            .create_task_record(
+                repo.id,
+                "Continue agent work".to_string(),
+                None,
+                false,
+                None,
+            )
+            .unwrap();
+
+        db.start_session_record(task.id, "session-123", "codex", "/tmp/worktree", None)
+            .unwrap();
+        let running = db.task_by_id(task.id).unwrap().unwrap();
+        assert_eq!(running.active_session_id.as_deref(), Some("session-123"));
+        assert_eq!(running.last_session_id.as_deref(), Some("session-123"));
+        assert_eq!(running.last_session_agent.as_deref(), Some("codex"));
+        assert_eq!(running.last_session_cwd.as_deref(), Some("/tmp/worktree"));
+        assert_eq!(running.last_session_label, None);
+
+        db.set_active_session(task.id, None).unwrap();
+        let stopped = db.task_by_id(task.id).unwrap().unwrap();
+        assert_eq!(stopped.active_session_id, None);
+        assert_eq!(stopped.last_session_id.as_deref(), Some("session-123"));
+        assert_eq!(stopped.last_session_agent.as_deref(), Some("codex"));
+        assert_eq!(stopped.last_session_cwd.as_deref(), Some("/tmp/worktree"));
+
+        db.set_last_session(task.id, "session-456", Some("Implement resume"))
+            .unwrap();
+        let refreshed = db.task_by_id(task.id).unwrap().unwrap();
+        assert_eq!(refreshed.last_session_id.as_deref(), Some("session-456"));
+        assert_eq!(
+            refreshed.last_session_label.as_deref(),
+            Some("Implement resume")
+        );
     }
 }

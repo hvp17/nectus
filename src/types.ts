@@ -22,6 +22,10 @@ export interface TaskSummary {
   worktreePath?: string | null;
   isDirty: boolean;
   activeSessionId?: string | null;
+  lastSessionId?: string | null;
+  lastSessionAgent?: string | null;
+  lastSessionCwd?: string | null;
+  lastSessionLabel?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -38,6 +42,8 @@ export interface AgentProfile {
 
 export interface Session {
   id: string;
+  resumableSessionId?: string | null;
+  resumableSessionLabel?: string | null;
   taskId: number;
   agentProfileId: number;
   state: SessionState;
