@@ -188,14 +188,8 @@ impl Database {
             )
             .map_err(|error| format!("Failed to save repository: {error}"))?;
 
-        let id = self.conn.last_insert_rowid();
-        if id == 0 {
-            self.repo_by_path(&repo_path.to_string_lossy())?
-                .ok_or_else(|| "Repository was saved but could not be loaded".into())
-        } else {
-            self.repo_by_id(id)?
-                .ok_or_else(|| "Repository was saved but could not be loaded".into())
-        }
+        self.repo_by_path(&repo_path.to_string_lossy())?
+            .ok_or_else(|| "Repository was saved but could not be loaded".into())
     }
 
     pub fn list_repos(&self) -> Result<Vec<Repo>, String> {
@@ -342,6 +336,7 @@ impl Database {
             )
             .optional()
             .map_err(|error| error.to_string())?;
+        let row = row.transpose()?;
         Ok(row.map(|mut task| {
             task.is_dirty = task
                 .worktree_path
@@ -353,11 +348,11 @@ impl Database {
 
     fn task_rows<I>(&self, mapped: I) -> Result<Vec<TaskSummary>, String>
     where
-        I: Iterator<Item = rusqlite::Result<TaskSummary>>,
+        I: Iterator<Item = rusqlite::Result<Result<TaskSummary, String>>>,
     {
         mapped
             .map(|row| {
-                let mut task = row.map_err(|error| error.to_string())?;
+                let mut task = row.map_err(|error| error.to_string())??;
                 task.is_dirty = task
                     .worktree_path
                     .as_ref()
@@ -471,15 +466,19 @@ impl Database {
                 )
                 .map_err(|error| format!("Failed to save agent profile: {error}"))?;
 
-            let id = self.conn.last_insert_rowid();
-            if id == 0 {
-                self.agent_profile_by_name(&profile.name)?
-                    .ok_or_else(|| "Agent profile not found after save".into())
-            } else {
-                self.agent_profile_by_id(id)?
-                    .ok_or_else(|| "Agent profile not found after save".into())
-            }
+            self.agent_profile_by_name(&profile.name)?
+                .ok_or_else(|| "Agent profile not found after save".into())
         }
+    }
+
+    pub fn clear_active_sessions(&self) -> Result<(), String> {
+        self.conn
+            .execute(
+                "UPDATE tasks SET active_session_id = NULL, updated_at = ?1 WHERE active_session_id IS NOT NULL",
+                params![now()],
+            )
+            .map_err(|error| format!("Failed to clear stale active sessions: {error}"))?;
+        Ok(())
     }
 
     fn agent_profile_by_name(&self, name: &str) -> Result<Option<AgentProfile>, String> {
@@ -517,13 +516,17 @@ fn repo_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Repo> {
     })
 }
 
-fn task_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<TaskSummary> {
+fn task_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Result<TaskSummary, String>> {
     let status: String = row.get(3)?;
-    Ok(TaskSummary {
+    let status = match TaskStatus::from_str(&status) {
+        Ok(status) => status,
+        Err(error) => return Ok(Err(error)),
+    };
+    Ok(Ok(TaskSummary {
         id: row.get(0)?,
         repo_id: row.get(1)?,
         title: row.get(2)?,
-        status: TaskStatus::from_str(&status),
+        status,
         pr_url: row.get(4)?,
         agent_profile_id: row.get(5)?,
         agent_name: row.get(6)?,
@@ -534,7 +537,7 @@ fn task_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<TaskSummary> {
         active_session_id: row.get(10)?,
         created_at: row.get(11)?,
         updated_at: row.get(12)?,
-    })
+    }))
 }
 
 fn agent_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentProfile> {
@@ -615,5 +618,90 @@ mod tests {
         assert!(!task.has_worktree);
         assert_eq!(task.branch_name, None);
         assert_eq!(task.worktree_path, None);
+    }
+
+    #[test]
+    fn adding_existing_repo_returns_existing_repo() {
+        let db = Database::open_in_memory().unwrap();
+        let first_repo_dir = tempdir().unwrap();
+        let second_repo_dir = tempdir().unwrap();
+        for repo_dir in [&first_repo_dir, &second_repo_dir] {
+            std::process::Command::new("git")
+                .arg("init")
+                .arg(repo_dir.path())
+                .output()
+                .unwrap();
+        }
+
+        let first = db
+            .add_repo(first_repo_dir.path().to_string_lossy().to_string())
+            .unwrap();
+        let _second = db
+            .add_repo(second_repo_dir.path().to_string_lossy().to_string())
+            .unwrap();
+
+        let duplicate = db
+            .add_repo(first_repo_dir.path().to_string_lossy().to_string())
+            .unwrap();
+
+        assert_eq!(duplicate.id, first.id);
+        assert_eq!(duplicate.path, first.path);
+    }
+
+    #[test]
+    fn upserting_existing_agent_profile_returns_existing_profile() {
+        let db = Database::open_in_memory().unwrap();
+        let custom = db
+            .upsert_agent_profile(AgentProfileInput {
+                id: None,
+                name: "Custom".to_string(),
+                command: "custom-agent".to_string(),
+                args: vec![],
+                env: BTreeMap::new(),
+            })
+            .unwrap();
+
+        let codex = db
+            .upsert_agent_profile(AgentProfileInput {
+                id: None,
+                name: "Codex".to_string(),
+                command: "codex-next".to_string(),
+                args: vec!["--fast".to_string()],
+                env: BTreeMap::new(),
+            })
+            .unwrap();
+
+        assert_ne!(codex.id, custom.id);
+        assert_eq!(codex.name, "Codex");
+        assert_eq!(codex.command, "codex-next");
+    }
+
+    #[test]
+    fn list_tasks_rejects_unknown_status() {
+        let db = Database::open_in_memory().unwrap();
+        let repo_dir = tempdir().unwrap();
+        std::process::Command::new("git")
+            .arg("init")
+            .arg(repo_dir.path())
+            .output()
+            .unwrap();
+        let repo = db
+            .add_repo(repo_dir.path().to_string_lossy().to_string())
+            .unwrap();
+
+        db.conn
+            .execute(
+                "
+                INSERT INTO tasks
+                  (repo_id, title, status, has_worktree, created_at, updated_at)
+                VALUES (?1, 'Bad status', 'archived', 0, 'now', 'now')
+                ",
+                params![repo.id],
+            )
+            .unwrap();
+
+        let error = db.list_tasks(None).unwrap_err();
+
+        assert!(error.contains("Unknown task status"), "{error}");
     }
 }

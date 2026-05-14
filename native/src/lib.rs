@@ -136,6 +136,7 @@ pub fn run() {
                 .app_data_dir()
                 .map_err(|error| format!("Failed to find app data directory: {error}"))?;
             let db = Database::open(data_dir.join("nectus.sqlite3"))?;
+            db.clear_active_sessions()?;
             app.manage(AppState {
                 db: Arc::new(Mutex::new(db)),
                 sessions: SessionManager::new(),

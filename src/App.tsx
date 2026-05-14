@@ -13,7 +13,7 @@ import {
   Square,
   TerminalSquare,
 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { Alert, AlertDescription } from "./components/ui/alert";
 import { Badge } from "./components/ui/badge";
@@ -52,6 +52,17 @@ function App() {
   const [selectedAgentProfileId, setSelectedAgentProfileId] = useState<number | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const selectedRepoIdRef = useRef<number | undefined>(undefined);
+  const selectedAgentProfileIdRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    selectedRepoIdRef.current = selectedRepoId;
+  }, [selectedRepoId]);
+
+  useEffect(() => {
+    selectedAgentProfileIdRef.current = selectedAgentProfileId;
+  }, [selectedAgentProfileId]);
 
   const selectedRepo = repos.find((repo) => repo.id === selectedRepoId);
   const visibleTasks = selectedRepoId
@@ -68,17 +79,24 @@ function App() {
   }, [tasks]);
 
   const refresh = useCallback(async (preferredRepoId?: number) => {
-    const [repoResult, profileResult] = await Promise.all([api.listRepos(), api.listAgentProfiles()]);
-    setRepos(repoResult);
-    setAgentProfiles(profileResult);
-    if (!selectedAgentProfileId && profileResult[0]) {
-      setSelectedAgentProfileId(profileResult[0].id);
+    setLoading(true);
+    try {
+      const [repoResult, profileResult] = await Promise.all([api.listRepos(), api.listAgentProfiles()]);
+      setRepos(repoResult);
+      setAgentProfiles(profileResult);
+      if (!selectedAgentProfileIdRef.current && profileResult[0]) {
+        selectedAgentProfileIdRef.current = profileResult[0].id;
+        setSelectedAgentProfileId(profileResult[0].id);
+      }
+      const nextRepoId = preferredRepoId ?? selectedRepoIdRef.current ?? repoResult[0]?.id;
+      selectedRepoIdRef.current = nextRepoId;
+      setSelectedRepoId(nextRepoId);
+      const taskResult = await api.listTasks();
+      setTasks(taskResult);
+    } finally {
+      setLoading(false);
     }
-    const nextRepoId = preferredRepoId ?? selectedRepoId ?? repoResult[0]?.id;
-    setSelectedRepoId(nextRepoId);
-    const taskResult = await api.listTasks();
-    setTasks(taskResult);
-  }, [selectedAgentProfileId, selectedRepoId]);
+  }, []);
 
   useEffect(() => {
     refresh().catch((error) => setMessage(String(error)));
@@ -122,7 +140,7 @@ function App() {
       setBranchName("");
       setTaskTitle("");
       setSelectedTaskId(task.id);
-      await refresh();
+      await refresh(selectedRepoId);
       setMessage(hasWorktree ? `Created ${task.branchName}` : `Created ${task.title}`);
     } catch (error) {
       setMessage(String(error));
@@ -164,7 +182,7 @@ function App() {
     }
   }
 
-  function applySession(session: Session) {
+  const applySession = useCallback((session: Session) => {
     setTasks((current) =>
       current.map((task) => {
         if (task.id !== session.taskId) return task;
@@ -174,13 +192,13 @@ function App() {
         };
       }),
     );
-  }
+  }, []);
 
-  function onSessionExit(sessionId: string) {
+  const onSessionExit = useCallback((sessionId: string) => {
     setTasks((current) =>
       current.map((task) => (task.activeSessionId === sessionId ? { ...task, activeSessionId: null } : task)),
     );
-  }
+  }, []);
 
   return (
     <main className={`app-shell ${selectedTask ? "detail-open" : ""}`}>
@@ -201,7 +219,7 @@ function App() {
             </Button>
           </div>
           {repos.length === 0 ? (
-            <div className="empty-mini">No projects yet</div>
+            <div className="empty-mini">{loading ? "Loading projects..." : "No projects yet"}</div>
           ) : (
             repos.map((repo) => (
               <Button
@@ -225,7 +243,7 @@ function App() {
         <header className="topbar">
           <div>
             <p className="eyebrow">Operations</p>
-            <h2>{selectedRepo ? selectedRepo.name : "Add your first project"}</h2>
+            <h2>{selectedRepo ? selectedRepo.name : loading ? "Loading projects" : "Add your first project"}</h2>
           </div>
           <Button variant="outline" size="lg" onClick={() => refresh()} title="Refresh">
             <RefreshCw size={16} />

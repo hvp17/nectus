@@ -14,6 +14,11 @@ export function TerminalPane({ sessionId, onSessionExit }: TerminalPaneProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const sessionIdRef = useRef<string | null | undefined>(sessionId);
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -39,8 +44,9 @@ export function TerminalPane({ sessionId, onSessionExit }: TerminalPaneProps) {
 
     const resizeObserver = new ResizeObserver(() => {
       fit.fit();
-      if (sessionId) {
-        api.resizeSession(sessionId, terminal.rows, terminal.cols).catch(() => undefined);
+      const activeSessionId = sessionIdRef.current;
+      if (activeSessionId) {
+        api.resizeSession(activeSessionId, terminal.rows, terminal.cols).catch(() => undefined);
       }
     });
     resizeObserver.observe(hostRef.current);
@@ -64,19 +70,26 @@ export function TerminalPane({ sessionId, onSessionExit }: TerminalPaneProps) {
     }
 
     terminal.writeln(`Connected to session ${sessionId}`);
+    fitRef.current?.fit();
+    api.resizeSession(sessionId, terminal.rows, terminal.cols).catch(() => undefined);
     const dataDisposable = terminal.onData((data) => {
       api.sendSessionInput(sessionId, data).catch((error) => terminal.writeln(`\r\n${String(error)}`));
     });
 
     let unlistenOutput: UnlistenFn | undefined;
     let unlistenExit: UnlistenFn | undefined;
+    let disposed = false;
 
     listen<SessionOutputEvent>("session_output", (event) => {
       if (event.payload.sessionId === sessionId) {
         terminal.write(event.payload.data);
       }
     }).then((unlisten) => {
-      unlistenOutput = unlisten;
+      if (disposed) {
+        unlisten();
+      } else {
+        unlistenOutput = unlisten;
+      }
     });
 
     listen<SessionExitedEvent>("session_exited", (event) => {
@@ -85,10 +98,15 @@ export function TerminalPane({ sessionId, onSessionExit }: TerminalPaneProps) {
         onSessionExit(sessionId);
       }
     }).then((unlisten) => {
-      unlistenExit = unlisten;
+      if (disposed) {
+        unlisten();
+      } else {
+        unlistenExit = unlisten;
+      }
     });
 
     return () => {
+      disposed = true;
       dataDisposable.dispose();
       unlistenOutput?.();
       unlistenExit?.();
@@ -97,4 +115,3 @@ export function TerminalPane({ sessionId, onSessionExit }: TerminalPaneProps) {
 
   return <div className="terminal-host" ref={hostRef} />;
 }
-

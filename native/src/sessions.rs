@@ -12,19 +12,20 @@ use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
 pub struct SessionManager {
-    sessions: Mutex<HashMap<String, RunningSession>>,
+    sessions: Arc<Mutex<HashMap<String, RunningSession>>>,
 }
 
 struct RunningSession {
     session: Session,
     master: Box<dyn MasterPty + Send>,
+    writer: Box<dyn Write + Send>,
     child: Box<dyn Child + Send + Sync>,
 }
 
 impl SessionManager {
     pub fn new() -> Self {
         Self {
-            sessions: Mutex::new(HashMap::new()),
+            sessions: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -65,6 +66,10 @@ impl SessionManager {
             .spawn_command(command)
             .map_err(|error| format!("Failed to start {}: {error}", agent.name))?;
         let pid = child.process_id();
+        let writer = pair
+            .master
+            .take_writer()
+            .map_err(|error| format!("Failed to open PTY writer: {error}"))?;
         let mut reader = pair
             .master
             .try_clone_reader()
@@ -83,9 +88,20 @@ impl SessionManager {
 
         db.lock().set_active_session(task.id, Some(&session_id))?;
 
+        self.sessions.lock().insert(
+            session.id.clone(),
+            RunningSession {
+                session: session.clone(),
+                master: pair.master,
+                writer,
+                child,
+            },
+        );
+
         std::thread::spawn({
             let app = app.clone();
             let db = db.clone();
+            let sessions = self.sessions.clone();
             let task_id = task.id;
             let session_id = session_id.clone();
             move || {
@@ -106,25 +122,18 @@ impl SessionManager {
                         Err(_) => break,
                     }
                 }
-                let _ = db.lock().set_active_session(task_id, None);
-                let _ = app.emit(
-                    "session_exited",
-                    SessionExitedEvent {
-                        session_id,
-                        exit_code: None,
-                    },
-                );
+                if sessions.lock().remove(&session_id).is_some() {
+                    let _ = db.lock().set_active_session(task_id, None);
+                    let _ = app.emit(
+                        "session_exited",
+                        SessionExitedEvent {
+                            session_id,
+                            exit_code: None,
+                        },
+                    );
+                }
             }
         });
-
-        self.sessions.lock().insert(
-            session.id.clone(),
-            RunningSession {
-                session: session.clone(),
-                master: pair.master,
-                child,
-            },
-        );
 
         Ok(session)
     }
@@ -148,11 +157,8 @@ impl SessionManager {
         let running = sessions
             .get_mut(session_id)
             .ok_or_else(|| "Session is not running".to_string())?;
-        let mut writer = running
-            .master
-            .take_writer()
-            .map_err(|error| format!("Failed to open PTY writer: {error}"))?;
-        writer
+        running
+            .writer
             .write_all(data.as_bytes())
             .map_err(|error| format!("Failed to write to PTY: {error}"))
     }

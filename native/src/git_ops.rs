@@ -10,7 +10,12 @@ pub fn validate_repo_path(path: &Path) -> Result<(), String> {
     }
 
     let output = Command::new("git")
-        .args(["-C", &path.to_string_lossy(), "rev-parse", "--show-toplevel"])
+        .args([
+            "-C",
+            &path.to_string_lossy(),
+            "rev-parse",
+            "--show-toplevel",
+        ])
         .output()
         .map_err(|error| format!("Failed to run git: {error}"))?;
 
@@ -57,7 +62,11 @@ pub fn validate_branch_name(branch_name: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub fn create_worktree(repo_path: &Path, worktree_path: &Path, branch_name: &str) -> Result<(), String> {
+pub fn create_worktree(
+    repo_path: &Path,
+    worktree_path: &Path,
+    branch_name: &str,
+) -> Result<(), String> {
     validate_branch_name(branch_name)?;
     if worktree_path.exists() {
         return Err("Worktree path already exists".into());
@@ -118,15 +127,29 @@ mod tests {
 
     #[test]
     fn rejects_unsafe_branch_names() {
-        for value in ["", "-bad", "feature bad", "main..dev", "x:y", "x.lock", "x//y"] {
-            assert!(validate_branch_name(value).is_err(), "{value} should be rejected");
+        for value in [
+            "",
+            "-bad",
+            "feature bad",
+            "main..dev",
+            "x:y",
+            "x.lock",
+            "x//y",
+        ] {
+            assert!(
+                validate_branch_name(value).is_err(),
+                "{value} should be rejected"
+            );
         }
     }
 
     #[test]
     fn accepts_common_branch_names() {
         for value in ["feature/settings", "fix-auth", "user/TOM-123"] {
-            assert!(validate_branch_name(value).is_ok(), "{value} should be accepted");
+            assert!(
+                validate_branch_name(value).is_ok(),
+                "{value} should be accepted"
+            );
         }
     }
 

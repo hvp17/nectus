@@ -32,12 +32,13 @@ impl TaskStatus {
         }
     }
 
-    pub fn from_str(value: &str) -> Self {
+    pub fn from_str(value: &str) -> Result<Self, String> {
         match value {
-            "in_progress" => TaskStatus::InProgress,
-            "review" => TaskStatus::Review,
-            "done" => TaskStatus::Done,
-            _ => TaskStatus::Planned,
+            "planned" => Ok(TaskStatus::Planned),
+            "in_progress" => Ok(TaskStatus::InProgress),
+            "review" => Ok(TaskStatus::Review),
+            "done" => Ok(TaskStatus::Done),
+            _ => Err(format!("Unknown task status: {value}")),
         }
     }
 }
