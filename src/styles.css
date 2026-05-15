@@ -543,6 +543,53 @@ textarea {
   margin: 0;
 }
 
+.toast-viewport {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 60;
+  width: min(440px, calc(100vw - 48px));
+}
+
+.nectus-toast {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 16px;
+  border-color: oklch(1 0 0 / 14%);
+  border-radius: 16px;
+  background: oklch(0.18 0 0 / 96%);
+  padding: 20px 22px;
+  color: oklch(0.96 0 0);
+  box-shadow: 0 24px 70px oklch(0 0 0 / 35%);
+}
+
+.nectus-toast > svg {
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+}
+
+.nectus-toast [data-slot="alert-title"] {
+  font-size: 17px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.nectus-toast [data-slot="alert-description"] {
+  max-width: 34ch;
+  color: oklch(0.74 0 0);
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.toast-dismiss {
+  color: oklch(0.74 0 0);
+}
+
+.toast-dismiss:hover {
+  color: oklch(0.96 0 0);
+  background: oklch(1 0 0 / 8%);
+}
+
 @media (max-width: 1220px) {
   .app-shell.detail-open {
     grid-template-columns: 230px minmax(520px, 1fr) 360px;

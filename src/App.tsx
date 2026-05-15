@@ -1,10 +1,30 @@
+import { useEffect } from "react";
 import { TooltipProvider } from "./components/ui/tooltip";
-import { Alert, AlertDescription } from "./components/ui/alert";
+import { CheckCircle2Icon, InfoIcon, XIcon } from "lucide-react";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "./components/ui/alert";
+import { Button } from "./components/ui/button";
 import { Sidebar } from "./components/Sidebar";
 import { Workspace } from "./components/Workspace";
 import { TaskDetailDrawer } from "./components/TaskDetailDrawer";
 import { CreateTaskModal } from "./components/CreateTaskModal";
 import { useApp } from "./hooks/useApp";
+
+function getToastContent(message: string) {
+  const separator = message.indexOf(": ");
+  if (separator > 0) {
+    return {
+      title: message.slice(0, separator),
+      body: message.slice(separator + 2),
+      icon: "success" as const,
+    };
+  }
+
+  return {
+    title: "Nectus",
+    body: message,
+    icon: "info" as const,
+  };
+}
 
 function App() {
   const {
@@ -18,6 +38,7 @@ function App() {
     selectedTask,
     counts,
     message,
+    setMessage,
     busy,
     loading,
     refresh,
@@ -45,6 +66,16 @@ function App() {
     onSessionExit,
     agentProfiles,
   } = useApp();
+
+  useEffect(() => {
+    if (!message) return;
+
+    const timeout = window.setTimeout(() => {
+      setMessage(null);
+    }, 2500);
+
+    return () => window.clearTimeout(timeout);
+  }, [message, setMessage]);
 
   return (
     <TooltipProvider>
@@ -76,13 +107,7 @@ function App() {
             confirmingDeleteTaskId={confirmingDeleteTaskId}
           />
 
-          {message && (
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-300">
-              <Alert className="shadow-2xl border-primary/20 bg-background/95 backdrop-blur">
-                <AlertDescription className="font-medium">{message}</AlertDescription>
-              </Alert>
-            </div>
-          )}
+          {message && <ToastNotification message={message} onDismiss={() => setMessage(null)} />}
         </div>
 
         <TaskDetailDrawer
@@ -118,6 +143,33 @@ function App() {
         )}
       </main>
     </TooltipProvider>
+  );
+}
+
+function ToastNotification({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  const toast = getToastContent(message);
+  const Icon = toast.icon === "success" ? CheckCircle2Icon : InfoIcon;
+
+  return (
+    <div className="toast-viewport animate-in fade-in slide-in-from-top-3 duration-300">
+      <Alert className="nectus-toast">
+        <Icon />
+        <AlertTitle>{toast.title}</AlertTitle>
+        <AlertDescription>{toast.body}</AlertDescription>
+        <AlertAction>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="toast-dismiss"
+            aria-label="Dismiss notification"
+            onClick={onDismiss}
+          >
+            <XIcon />
+          </Button>
+        </AlertAction>
+      </Alert>
+    </div>
   );
 }
 

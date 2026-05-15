@@ -11,27 +11,16 @@ import type {
   TaskStatus,
   TaskSummary,
 } from "../types";
-import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 
 const isTauri = "__TAURI_INTERNALS__" in window;
-const notificationBodyLimit = 240;
-let notificationPermissionRequested = false;
-
 async function notifySessionEvent(title: string, body: string) {
   if (!isTauri) return;
 
   try {
-    let granted = await isPermissionGranted();
-    if (!granted && !notificationPermissionRequested) {
-      notificationPermissionRequested = true;
-      granted = (await requestPermission()) === "granted";
+    const sent = await api.sendSystemNotification(title, body);
+    if (!sent) {
+      console.warn("Notification permission not granted");
     }
-    if (!granted) return;
-
-    sendNotification({
-      title,
-      body: body.length > notificationBodyLimit ? `${body.slice(0, notificationBodyLimit - 3)}...` : body,
-    });
   } catch (error) {
     console.error("Failed to send session notification", error);
   }

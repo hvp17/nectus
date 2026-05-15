@@ -143,6 +143,8 @@ Important frontend files:
 
 Do not call shell/git directly from the frontend. Add Rust commands instead.
 
+Prefer shadcn/ui components for UI primitives as much as possible. Keep custom components to a minimum, and use custom code mainly for app-specific layout, orchestration, and composition around shadcn components rather than reimplementing buttons, alerts, dialogs, inputs, menus, tooltips, cards, or similar primitives.
+
 ## Product Defaults
 
 Preserve these V1 decisions unless the user asks to change them:

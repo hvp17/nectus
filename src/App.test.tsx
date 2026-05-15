@@ -19,6 +19,7 @@ vi.mock("./api", () => ({
     resizeSession: vi.fn(),
     sendSessionInput: vi.fn(),
     sessionOutputSnapshot: vi.fn(),
+    sendSystemNotification: vi.fn(),
   },
 }));
 
@@ -26,6 +27,7 @@ const mockedApi = vi.mocked(api);
 
 describe("App", () => {
   beforeEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
     mockedApi.listRepos.mockResolvedValue([]);
     mockedApi.listAgentProfiles.mockResolvedValue([
@@ -54,7 +56,7 @@ describe("App", () => {
   it("renders the empty repo state", async () => {
     render(<App />);
 
-    expect(await screen.findByText("Add your first project")).toBeInTheDocument();
+    expect(await screen.findByText("No projects yet")).toBeInTheDocument();
     expect(screen.getByText("Operations")).toBeInTheDocument();
   });
 
@@ -91,15 +93,15 @@ describe("App", () => {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /create new task/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
 
-    expect(screen.getByRole("dialog", { name: /create new task/i })).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/task title/i)).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText(/chat prompt/i), {
+    fireEvent.change(screen.getByLabelText(/instructions/i), {
       target: { value: "Review modal task flow" },
     });
     fireEvent.click(screen.getByRole("radio", { name: /claude/i }));
-    fireEvent.click(screen.getByRole("radio", { name: /without worktree/i }));
+    fireEvent.click(screen.getByRole("radio", { name: /direct edit/i }));
     fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
 
     await waitFor(() => {
@@ -111,5 +113,106 @@ describe("App", () => {
         branchName: null,
       });
     });
+  });
+
+  it("dismisses the alert when the close button is clicked", async () => {
+    mockedApi.listRepos.mockResolvedValue([
+      {
+        id: 7,
+        name: "nectus-desktop",
+        path: "/tmp/nectus-desktop",
+        defaultWorktreeRoot: "/tmp/nectus-desktop-worktrees",
+        createdAt: "2026-05-14T00:00:00.000Z",
+      },
+    ]);
+    mockedApi.createTask.mockResolvedValue({
+      id: 11,
+      repoId: 7,
+      title: "Review modal task flow",
+      status: "planned",
+      prUrl: null,
+      agentProfileId: 2,
+      agentName: "Claude",
+      hasWorktree: false,
+      branchName: null,
+      worktreePath: null,
+      isDirty: false,
+      activeSessionId: null,
+      lastSessionId: null,
+      lastSessionAgent: null,
+      lastSessionCwd: null,
+      lastSessionLabel: null,
+      createdAt: "2026-05-14T00:00:00.000Z",
+      updatedAt: "2026-05-14T00:00:00.000Z",
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+    fireEvent.change(screen.getByLabelText(/instructions/i), {
+      target: { value: "Review modal task flow" },
+    });
+    fireEvent.click(screen.getByRole("radio", { name: /claude/i }));
+    fireEvent.click(screen.getByRole("radio", { name: /direct edit/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
+
+    expect(await screen.findByText("Created Review modal task flow")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /dismiss notification/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Created Review modal task flow")).not.toBeInTheDocument();
+    });
+  });
+
+  it("automatically dismisses alerts after a short delay", async () => {
+    mockedApi.listRepos.mockResolvedValue([
+      {
+        id: 7,
+        name: "nectus-desktop",
+        path: "/tmp/nectus-desktop",
+        defaultWorktreeRoot: "/tmp/nectus-desktop-worktrees",
+        createdAt: "2026-05-14T00:00:00.000Z",
+      },
+    ]);
+    mockedApi.createTask.mockResolvedValue({
+      id: 11,
+      repoId: 7,
+      title: "Review modal task flow",
+      status: "planned",
+      prUrl: null,
+      agentProfileId: 2,
+      agentName: "Claude",
+      hasWorktree: false,
+      branchName: null,
+      worktreePath: null,
+      isDirty: false,
+      activeSessionId: null,
+      lastSessionId: null,
+      lastSessionAgent: null,
+      lastSessionCwd: null,
+      lastSessionLabel: null,
+      createdAt: "2026-05-14T00:00:00.000Z",
+      updatedAt: "2026-05-14T00:00:00.000Z",
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+    fireEvent.change(screen.getByLabelText(/instructions/i), {
+      target: { value: "Review modal task flow" },
+    });
+    fireEvent.click(screen.getByRole("radio", { name: /claude/i }));
+    fireEvent.click(screen.getByRole("radio", { name: /direct edit/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
+
+    expect(await screen.findByText("Created Review modal task flow")).toBeInTheDocument();
+
+    await waitFor(
+      () => {
+        expect(screen.queryByText("Created Review modal task flow")).not.toBeInTheDocument();
+      },
+      { timeout: 3500 },
+    );
   });
 });

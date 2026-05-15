@@ -1,8 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import type { AgentProfile, Repo, Session, SessionOutputSnapshot, TaskStatus, TaskSummary } from "./types";
 
 const isTauri = "__TAURI_INTERNALS__" in window;
+const notificationBodyLimit = 240;
 
 const demoProfiles: AgentProfile[] = [
   {
@@ -96,5 +98,22 @@ export const api = {
   },
   async sessionOutputSnapshot(sessionId: string): Promise<SessionOutputSnapshot> {
     return invoke("session_output_snapshot", { sessionId });
+  },
+  async sendSystemNotification(title: string, body: string): Promise<boolean> {
+    if (!isTauri) return false;
+
+    let granted = await isPermissionGranted();
+    if (!granted) {
+      const permission = await requestPermission();
+      granted = permission === "granted";
+    }
+
+    if (!granted) return false;
+
+    sendNotification({
+      title,
+      body: body.length > notificationBodyLimit ? `${body.slice(0, notificationBodyLimit - 3)}...` : body,
+    });
+    return true;
   },
 };
