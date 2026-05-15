@@ -1,31 +1,13 @@
 import { useEffect } from "react";
 import { TooltipProvider } from "./components/ui/tooltip";
-import { CheckCircle2Icon, InfoIcon, XIcon } from "lucide-react";
-import { Alert, AlertAction, AlertDescription, AlertTitle } from "./components/ui/alert";
-import { Button } from "./components/ui/button";
 import { Sidebar } from "./components/Sidebar";
 import { Workspace } from "./components/Workspace";
 import { TaskDetailDrawer } from "./components/TaskDetailDrawer";
 import { CreateTaskModal } from "./components/CreateTaskModal";
 import { SettingsPage } from "./components/SettingsPage";
+import { ToastNotification } from "./ToastNotification";
 import { useApp } from "./hooks/useApp";
-
-function getToastContent(message: string) {
-  const separator = message.indexOf(": ");
-  if (separator > 0) {
-    return {
-      title: message.slice(0, separator),
-      body: message.slice(separator + 2),
-      icon: "success" as const,
-    };
-  }
-
-  return {
-    title: "Nectus",
-    body: message,
-    icon: "info" as const,
-  };
-}
+import { useAppTheme } from "./hooks/useAppTheme";
 
 function App() {
   const {
@@ -73,6 +55,8 @@ function App() {
     saveAgentProfile,
   } = useApp();
 
+  useAppTheme(settings);
+
   useEffect(() => {
     if (!message) return;
 
@@ -82,18 +66,6 @@ function App() {
 
     return () => window.clearTimeout(timeout);
   }, [message, setMessage]);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    const applyTheme = () => {
-      const prefersDark =
-        typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches;
-      root.classList.toggle("dark", settings?.theme === "dark" || (settings?.theme === "system" && prefersDark));
-    };
-
-    applyTheme();
-    root.dataset.density = settings?.density ?? "comfortable";
-  }, [settings?.theme, settings?.density]);
 
   return (
     <TooltipProvider>
@@ -188,33 +160,6 @@ function App() {
         )}
       </main>
     </TooltipProvider>
-  );
-}
-
-function ToastNotification({ message, onDismiss }: { message: string; onDismiss: () => void }) {
-  const toast = getToastContent(message);
-  const Icon = toast.icon === "success" ? CheckCircle2Icon : InfoIcon;
-
-  return (
-    <div className="toast-viewport animate-in fade-in slide-in-from-top-3 duration-300">
-      <Alert className="nectus-toast">
-        <Icon />
-        <AlertTitle>{toast.title}</AlertTitle>
-        <AlertDescription className="toast-body">{toast.body}</AlertDescription>
-        <AlertAction>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="toast-dismiss"
-            aria-label="Dismiss notification"
-            onClick={onDismiss}
-          >
-            <XIcon />
-          </Button>
-        </AlertAction>
-      </Alert>
-    </div>
   );
 }
 
