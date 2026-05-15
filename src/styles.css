@@ -618,6 +618,15 @@ textarea {
   line-height: 1.45;
 }
 
+.toast-body {
+  display: -webkit-box;
+  max-height: calc(1.45em * 4);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
 .toast-dismiss {
   color: oklch(0.74 0 0);
 }

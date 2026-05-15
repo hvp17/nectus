@@ -251,6 +251,55 @@ describe("App", () => {
     });
   });
 
+  it("renders notification text in the clamped toast body", async () => {
+    const longTaskTitle =
+      "Review a long running agent summary that explains the final state, the important changed files, and the next manual verification steps";
+
+    mockedApi.listRepos.mockResolvedValue([
+      {
+        id: 7,
+        name: "nectus-desktop",
+        path: "/tmp/nectus-desktop",
+        defaultWorktreeRoot: "/tmp/nectus-desktop-worktrees",
+        createdAt: "2026-05-14T00:00:00.000Z",
+      },
+    ]);
+    mockedApi.createTask.mockResolvedValue({
+      id: 11,
+      repoId: 7,
+      title: longTaskTitle,
+      status: "planned",
+      prUrl: null,
+      agentProfileId: 2,
+      agentName: "Claude",
+      hasWorktree: false,
+      branchName: null,
+      worktreePath: null,
+      isDirty: false,
+      activeSessionId: null,
+      lastSessionId: null,
+      lastSessionAgent: null,
+      lastSessionCwd: null,
+      lastSessionLabel: null,
+      createdAt: "2026-05-14T00:00:00.000Z",
+      updatedAt: "2026-05-14T00:00:00.000Z",
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+    fireEvent.change(screen.getByLabelText(/instructions/i), {
+      target: { value: longTaskTitle },
+    });
+    fireEvent.click(screen.getByRole("radio", { name: /claude/i }));
+    fireEvent.click(screen.getByRole("radio", { name: /direct edit/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
+
+    const toastBody = await screen.findByText(`Created ${longTaskTitle}`);
+
+    expect(toastBody).toHaveClass("toast-body");
+  });
+
   it("automatically dismisses alerts after a short delay", async () => {
     mockedApi.listRepos.mockResolvedValue([
       {
