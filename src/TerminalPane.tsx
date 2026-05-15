@@ -3,6 +3,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { useEffect, useRef } from "react";
 import { api } from "./api";
+import { isTauriRuntime } from "./sessionNotifications";
 import type { SessionExitedEvent, SessionOutputEvent } from "./types";
 
 interface TerminalPaneProps {
@@ -37,7 +38,7 @@ export function TerminalPane({ sessionId, onSessionExit }: TerminalPaneProps) {
   }, [sessionId]);
 
   useEffect(() => {
-    if (!hostRef.current) return;
+    if (!hostRef.current || !isTauriRuntime()) return;
 
     const unlistenCallbacks: UnlistenFn[] = [];
     let disposed = false;
@@ -99,6 +100,10 @@ export function TerminalPane({ sessionId, onSessionExit }: TerminalPaneProps) {
     host.toggleAttribute("data-empty", !sessionId);
 
     if (!sessionId) {
+      return;
+    }
+
+    if (!isTauriRuntime()) {
       return;
     }
 

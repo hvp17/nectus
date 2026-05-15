@@ -149,6 +149,29 @@ describe("App", () => {
     expect(mockedApi.listTasks).not.toHaveBeenCalled();
   });
 
+  it("keeps the board visible while opening a task inspector that can expand full width", async () => {
+    window.history.pushState({}, "", "/?demo=1");
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /drag this task into review/i }));
+
+    const layout = screen.getByTestId("dashboard-layout");
+    expect(layout).toHaveAttribute("data-detail-open", "true");
+    expect(layout).toHaveAttribute("data-detail-expanded", "false");
+    expect(screen.getByRole("heading", { name: /task board/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/task inspector/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /expand terminal/i }));
+
+    expect(layout).toHaveAttribute("data-detail-expanded", "true");
+    expect(screen.getByRole("button", { name: /restore dashboard/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /restore dashboard/i }));
+
+    expect(layout).toHaveAttribute("data-detail-expanded", "false");
+  });
+
   it("opens settings and saves appearance preferences", async () => {
     render(<App />);
 
@@ -238,6 +261,7 @@ describe("App", () => {
       expect(mockedApi.createTask).toHaveBeenCalledWith({
         repoId: 7,
         title: "Review modal task flow",
+        prompt: "Review modal task flow",
         agentProfileId: 2,
         hasWorktree: false,
         branchName: null,

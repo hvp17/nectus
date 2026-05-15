@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RefreshCw, Plus, Activity, GitBranch, CheckCircle2 } from "lucide-react";
+import { RefreshCw, Plus, Activity, GitBranch, CheckCircle2, AlertTriangle, CircleCheckBig } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardAction } from "./ui/card";
 import { TaskCard } from "./TaskCard";
+import { getTaskAttention, type TaskAttention } from "../sessionAttention";
 import { TaskStatus, TaskSummary, Repo } from "../types";
 
 const statusLabels: Record<TaskStatus, string> = {
@@ -58,12 +59,13 @@ interface WorkspaceProps {
   selectedRepo?: Repo;
   visibleTasks: TaskSummary[];
   selectedTaskId?: number;
+  taskAttention: TaskAttention[];
   onSelectTask: (id: number) => void;
   onRefresh: () => void;
   onCreateTask: () => void;
   onDeleteTask: (task: TaskSummary) => void;
   onUpdateStatus: (task: TaskSummary, status: TaskStatus) => void;
-  counts: { active: number; dirty: number; review: number };
+  counts: { active: number; dirty: number; review: number; needsInput: number; finished: number };
   busy: boolean;
   loading: boolean;
   confirmingDeleteTaskId?: number;
@@ -73,6 +75,7 @@ export function Workspace({
   selectedRepo,
   visibleTasks,
   selectedTaskId,
+  taskAttention,
   onSelectTask,
   onRefresh,
   onCreateTask,
@@ -149,7 +152,7 @@ export function Workspace({
   }, [clearTaskDrag, moveDroppedTask]);
 
   return (
-    <section className="workspace p-10 overflow-auto max-w-[1400px] mx-auto w-full">
+    <section className="workspace p-10 overflow-auto max-w-[1400px] mx-auto w-full" aria-label="Dashboard workspace">
       <header className="topbar">
         <div>
           <p className="eyebrow">Operations</p>
@@ -163,10 +166,12 @@ export function Workspace({
         </Button>
       </header>
 
-      <div className="metrics mb-8">
-        <Metric icon={<Activity size={18} />} label="Active Agents" value={counts.active} />
-        <Metric icon={<GitBranch size={18} />} label="Dirty Tasks" value={counts.dirty} />
-        <Metric icon={<CheckCircle2 size={18} />} label="In Review" value={counts.review} />
+      <div className="metrics operational-metrics mb-8">
+        <Metric icon={<AlertTriangle size={18} />} label="Needs Input" value={counts.needsInput} tone="warning" />
+        <Metric icon={<Activity size={18} />} label="Running" value={counts.active} tone="live" />
+        <Metric icon={<CircleCheckBig size={18} />} label="Finished" value={counts.finished} tone="success" />
+        <Metric icon={<GitBranch size={18} />} label="Dirty" value={counts.dirty} tone="dirty" />
+        <Metric icon={<CheckCircle2 size={18} />} label="Review" value={counts.review} />
       </div>
 
       <div className="flex items-center justify-between mb-4">
@@ -201,6 +206,7 @@ export function Workspace({
                   <TaskCard
                     key={task.id}
                     task={task}
+                    attention={getTaskAttention(taskAttention, task.id)}
                     isSelected={selectedTaskId === task.id}
                     busy={busy}
                     confirmingDelete={confirmingDeleteTaskId === task.id}
@@ -249,9 +255,19 @@ function StatusColumn({
   );
 }
 
-function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
+function Metric({
+  icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  tone?: "warning" | "live" | "success" | "dirty";
+}) {
   return (
-    <Card size="sm" className="metric border-none bg-muted/30 shadow-none">
+    <Card size="sm" className="metric border-none bg-muted/30 shadow-none" data-tone={tone}>
       <CardHeader className="flex-row items-center justify-between pb-1">
         <CardTitle className="text-[11px] font-bold uppercase tracking-wider opacity-60">{label}</CardTitle>
         <CardAction className="opacity-40">{icon}</CardAction>

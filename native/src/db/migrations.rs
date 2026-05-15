@@ -45,6 +45,7 @@ impl Database {
                   id INTEGER PRIMARY KEY AUTOINCREMENT,
                   repo_id INTEGER NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
                   title TEXT NOT NULL,
+                  prompt TEXT,
                   status TEXT NOT NULL,
                   pr_url TEXT,
                   agent_profile_id INTEGER REFERENCES agent_profiles(id),
@@ -80,6 +81,7 @@ impl Database {
         self.add_missing_column("tasks", "last_session_agent", "TEXT")?;
         self.add_missing_column("tasks", "last_session_cwd", "TEXT")?;
         self.add_missing_column("tasks", "last_session_label", "TEXT")?;
+        self.add_missing_column("tasks", "prompt", "TEXT")?;
         self.add_missing_column(
             "agent_profiles",
             "agent_kind",

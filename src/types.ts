@@ -16,6 +16,7 @@ export interface TaskSummary {
   id: number;
   repoId: number;
   title: string;
+  prompt?: string | null;
   status: TaskStatus;
   prUrl?: string | null;
   agentProfileId?: number | null;

@@ -185,6 +185,7 @@ impl Database {
         &self,
         repo_id: i64,
         title: String,
+        prompt: Option<String>,
         agent_profile_id: Option<i64>,
         has_worktree: bool,
         branch_name: Option<String>,
@@ -218,12 +219,13 @@ impl Database {
             .execute(
                 "
                 INSERT INTO tasks
-                  (repo_id, title, status, pr_url, agent_profile_id, active_session_id, last_session_id, last_session_agent, last_session_cwd, last_session_label, has_worktree, branch_name, worktree_path, created_at, updated_at)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?14)
+                  (repo_id, title, prompt, status, pr_url, agent_profile_id, active_session_id, last_session_id, last_session_agent, last_session_cwd, last_session_label, has_worktree, branch_name, worktree_path, created_at, updated_at)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15)
                 ",
                 params![
                     repo_id,
                     title,
+                    prompt,
                     TaskStatus::Planned.as_str(),
                     None::<String>,
                     agent_profile_id,
@@ -246,7 +248,7 @@ impl Database {
 
     pub fn list_tasks(&self, repo_id: Option<i64>) -> Result<Vec<TaskSummary>, String> {
         let sql = "
-            SELECT t.id, t.repo_id, t.title, t.status, t.pr_url, t.agent_profile_id, a.name, a.agent_kind,
+            SELECT t.id, t.repo_id, t.title, t.prompt, t.status, t.pr_url, t.agent_profile_id, a.name, a.agent_kind,
                    t.has_worktree, t.branch_name, t.worktree_path, t.active_session_id,
                    t.last_session_id, t.last_session_agent, t.last_session_cwd, t.last_session_label,
                    t.created_at, t.updated_at
@@ -284,7 +286,7 @@ impl Database {
             .conn
             .query_row(
                 "
-                SELECT t.id, t.repo_id, t.title, t.status, t.pr_url, t.agent_profile_id, a.name, a.agent_kind,
+                SELECT t.id, t.repo_id, t.title, t.prompt, t.status, t.pr_url, t.agent_profile_id, a.name, a.agent_kind,
                        t.has_worktree, t.branch_name, t.worktree_path, t.active_session_id,
                        t.last_session_id, t.last_session_agent, t.last_session_cwd, t.last_session_label,
                        t.created_at, t.updated_at

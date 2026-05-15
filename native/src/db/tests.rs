@@ -1,4 +1,3 @@
-
 use super::*;
 use tempfile::tempdir;
 
@@ -141,6 +140,7 @@ fn creates_task_without_worktree() {
         .create_task_record(
             repo.id,
             "Review dependency updates".to_string(),
+            Some("Review dependency updates and summarize risk".to_string()),
             None,
             false,
             None,
@@ -149,6 +149,10 @@ fn creates_task_without_worktree() {
 
     assert_eq!(task.repo_id, repo.id);
     assert_eq!(task.title, "Review dependency updates");
+    assert_eq!(
+        task.prompt.as_deref(),
+        Some("Review dependency updates and summarize risk")
+    );
     assert!(!task.has_worktree);
     assert_eq!(task.branch_name, None);
     assert_eq!(task.worktree_path, None);
@@ -262,6 +266,7 @@ fn starting_and_stopping_session_preserves_last_session_snapshot() {
             repo.id,
             "Continue agent work".to_string(),
             None,
+            None,
             false,
             None,
         )
@@ -306,7 +311,14 @@ fn deletes_task_without_active_session() {
         .add_repo(repo_dir.path().to_string_lossy().to_string())
         .unwrap();
     let task = db
-        .create_task_record(repo.id, "Remove stale task".to_string(), None, false, None)
+        .create_task_record(
+            repo.id,
+            "Remove stale task".to_string(),
+            None,
+            None,
+            false,
+            None,
+        )
         .unwrap();
 
     db.delete_task(task.id).unwrap();
@@ -327,7 +339,7 @@ fn delete_task_rejects_active_session() {
         .add_repo(repo_dir.path().to_string_lossy().to_string())
         .unwrap();
     let task = db
-        .create_task_record(repo.id, "Running task".to_string(), None, false, None)
+        .create_task_record(repo.id, "Running task".to_string(), None, None, false, None)
         .unwrap();
     db.start_session_record(
         task.id,

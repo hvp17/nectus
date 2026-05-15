@@ -40,7 +40,8 @@ export function CreateTaskModal({
   newTaskAgentProfileId,
   setNewTaskAgentProfileId,
 }: CreateTaskModalProps) {
-  const submitDisabled = busy || !newTaskAgentProfileId || (newTaskHasWorktree && !newTaskBranchName.trim());
+  const submitDisabled =
+    busy || !newTaskAgentProfileId || !newTaskPrompt.trim() || (newTaskHasWorktree && !newTaskBranchName.trim());
 
   return (
     <div className="modal-backdrop z-[100]" onMouseDown={onClose}>

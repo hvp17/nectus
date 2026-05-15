@@ -64,6 +64,7 @@ export const api = {
   async createTask(input: {
     repoId: number;
     title: string;
+    prompt?: string | null;
     agentProfileId?: number | null;
     hasWorktree?: boolean;
     branchName?: string | null;
@@ -71,6 +72,7 @@ export const api = {
     return invoke("create_task", {
       repoId: input.repoId,
       title: input.title,
+      prompt: input.prompt ?? null,
       agentProfileId: input.agentProfileId ?? null,
       hasWorktree: input.hasWorktree ?? false,
       branchName: input.branchName ?? null,

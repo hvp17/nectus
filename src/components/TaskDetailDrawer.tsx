@@ -1,12 +1,28 @@
-import { ArrowLeft, Square, RotateCcw, Play, ExternalLink, TerminalSquare } from "lucide-react";
+import {
+  ArrowLeft,
+  Square,
+  RotateCcw,
+  Play,
+  ExternalLink,
+  TerminalSquare,
+  Maximize2,
+  Minimize2,
+  AlertTriangle,
+  CircleCheckBig,
+  GitBranch,
+} from "lucide-react";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { TerminalPane } from "../TerminalPane";
+import { formatAttentionReason, type TaskAttention } from "../sessionAttention";
 import { TaskSummary, TaskStatus } from "../types";
 
 interface TaskDetailDrawerProps {
   task: TaskSummary | undefined;
+  attention?: TaskAttention;
+  isExpanded: boolean;
   onClose: () => void;
+  onToggleExpanded: () => void;
   onStopSession: (sessionId: string) => void;
   onResumeSession: (task: TaskSummary) => void;
   onStartSession: (task: TaskSummary) => void;
@@ -24,7 +40,10 @@ const statusLabels: Record<TaskStatus, string> = {
 
 export function TaskDetailDrawer({
   task,
+  attention,
+  isExpanded,
   onClose,
+  onToggleExpanded,
   onStopSession,
   onResumeSession,
   onStartSession,
@@ -35,8 +54,12 @@ export function TaskDetailDrawer({
   const canResumeSession = task.agentKind === "codex" || task.agentKind === "claude";
 
   return (
-    <aside className="detail-pane flex flex-col animate-in slide-in-from-right duration-300 ease-out">
-      <div className="flex items-start justify-between gap-4 p-6 border-b">
+    <aside
+      className="detail-pane flex flex-col animate-in slide-in-from-right duration-300 ease-out"
+      aria-label="Task inspector"
+      data-expanded={isExpanded ? "true" : "false"}
+    >
+      <div className="detail-header flex items-start justify-between gap-4 p-6 border-b">
         <div className="min-w-0">
           <Button
             variant="ghost"
@@ -48,7 +71,25 @@ export function TaskDetailDrawer({
           </Button>
           <p className="eyebrow">Task Detail</p>
           <h3 className="text-xl font-bold truncate leading-tight">{task.title}</h3>
+          <div className="detail-status-row">
+            <span className="detail-status-chip" data-status={task.status}>
+              {statusLabels[task.status]}
+            </span>
+            {task.activeSessionId && <span className="detail-status-chip live">Running</span>}
+            {task.isDirty && <span className="detail-status-chip dirty">Dirty worktree</span>}
+          </div>
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-8 w-8"
+          aria-label={isExpanded ? "Restore dashboard" : "Expand terminal"}
+          title={isExpanded ? "Restore dashboard" : "Expand terminal"}
+          onClick={onToggleExpanded}
+        >
+          {isExpanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+        </Button>
       </div>
 
         <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
@@ -75,6 +116,22 @@ export function TaskDetailDrawer({
                 )}
              </div>
 
+             {attention && (
+               <div className="attention-panel" data-kind={attention.kind}>
+                 <div className="attention-panel-icon">
+                   {attention.kind === "needs_input" ? <AlertTriangle size={16} /> : <CircleCheckBig size={16} />}
+                 </div>
+                 <div>
+                   <strong>
+                     {attention.kind === "needs_input"
+                       ? formatAttentionReason(attention.reason)
+                       : "Agent finished"}
+                   </strong>
+                   {(attention.prompt || attention.message) && <p>{attention.prompt ?? attention.message}</p>}
+                 </div>
+               </div>
+             )}
+
              <dl className="grid grid-cols-[80px_1fr] gap-x-4 gap-y-3 text-sm">
                 <dt className="text-muted-foreground font-semibold">Mode</dt>
                 <dd className="font-medium">{task.hasWorktree ? "With worktree" : "Task only"}</dd>
@@ -82,7 +139,10 @@ export function TaskDetailDrawer({
                 {task.hasWorktree && (
                   <>
                     <dt className="text-muted-foreground font-semibold">Branch</dt>
-                    <dd className="font-mono text-xs font-medium">{task.branchName}</dd>
+                    <dd className="font-mono text-xs font-medium inline-flex items-center gap-1.5 min-w-0">
+                      <GitBranch size={12} />
+                      <span className="truncate">{task.branchName}</span>
+                    </dd>
                   </>
                 )}
                 
@@ -111,6 +171,13 @@ export function TaskDetailDrawer({
 
                 <dt className="text-muted-foreground font-semibold">Agent</dt>
                 <dd className="truncate opacity-80">{task.lastSessionAgent ?? task.agentName ?? "None"}</dd>
+
+                {task.prompt && (
+                  <>
+                    <dt className="text-muted-foreground font-semibold">Brief</dt>
+                    <dd className="task-brief">{task.prompt}</dd>
+                  </>
+                )}
              </dl>
           </div>
 

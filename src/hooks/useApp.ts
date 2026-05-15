@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { api } from "../api";
 import { defaultDemoSettings, demoAgentProfiles, demoRepo, demoTasks } from "../demoData";
+import {
+  clearTaskAttention,
+  getAttentionCounts,
+  getTaskAttention,
+  type TaskAttention,
+} from "../sessionAttention";
 import { useCreateTaskForm } from "./useCreateTaskForm";
 import { useSessionCommands } from "./useSessionCommands";
 import { useSessionEvents } from "./useSessionEvents";
@@ -23,6 +29,7 @@ export function useApp() {
   const [selectedRepoId, setSelectedRepoId] = useState<number | undefined>();
   const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>();
   const [selectedAgentProfileId, setSelectedAgentProfileId] = useState<number | undefined>();
+  const [taskAttention, setTaskAttention] = useState<TaskAttention[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -69,12 +76,15 @@ export function useApp() {
   const selectedTask = useMemo(() => tasks.find((task) => task.id === selectedTaskId), [tasks, selectedTaskId]);
 
   const counts = useMemo(() => {
+    const attentionCounts = getAttentionCounts(taskAttention);
     return {
       active: tasks.filter((task) => task.activeSessionId).length,
       dirty: tasks.filter((task) => task.isDirty).length,
       review: tasks.filter((task) => task.status === "review").length,
+      needsInput: attentionCounts.needsInput,
+      finished: attentionCounts.finished,
     };
-  }, [tasks]);
+  }, [taskAttention, tasks]);
 
   const refresh = useCallback(async (preferredRepoId?: number) => {
     setLoading(true);
@@ -126,14 +136,43 @@ export function useApp() {
     refresh();
   }, [refresh]);
 
-  useSessionEvents({ tasksRef, setTasks, setMessage });
-  const { startSession, stopSession, resumeSession, onSessionExit } = useSessionCommands({
+  useSessionEvents({ tasksRef, setTasks, setMessage, setTaskAttention });
+  const sessionCommands = useSessionCommands({
     agentProfiles,
     selectedAgentProfileId,
     setMessage,
     setSelectedTaskId,
     setTasks,
   });
+
+  const startSession = async (task: TaskSummary) => {
+    setTaskAttention((current) => clearTaskAttention(current, task.id));
+    await sessionCommands.startSession(task);
+  };
+
+  const resumeSession = async (task: TaskSummary) => {
+    setTaskAttention((current) => clearTaskAttention(current, task.id));
+    await sessionCommands.resumeSession(task);
+  };
+
+  const stopSession = async (sessionId: string) => {
+    const task = tasksRef.current.find((task) => task.activeSessionId === sessionId);
+    if (task) {
+      setTaskAttention((current) => clearTaskAttention(current, task.id));
+    }
+    await sessionCommands.stopSession(sessionId);
+  };
+
+  const onSessionExit = useCallback(
+    (sessionId: string) => {
+      const task = tasksRef.current.find((task) => task.activeSessionId === sessionId);
+      if (task) {
+        setTaskAttention((current) => clearTaskAttention(current, task.id));
+      }
+      sessionCommands.onSessionExit(sessionId);
+    },
+    [sessionCommands],
+  );
 
   const addProject = async () => {
     setMessage(null);
@@ -176,6 +215,7 @@ export function useApp() {
         id: Date.now(),
         repoId: selectedRepoId,
         title: getGeneratedTaskTitle(),
+        prompt: newTaskPrompt.trim() || null,
         status: "planned",
         prUrl: null,
         agentProfileId: newTaskAgentProfileId,
@@ -206,6 +246,7 @@ export function useApp() {
       const task = await api.createTask({
         repoId: selectedRepoId,
         title: getGeneratedTaskTitle(),
+        prompt: newTaskPrompt.trim() || null,
         agentProfileId: newTaskAgentProfileId,
         hasWorktree: newTaskHasWorktree,
         branchName: newTaskHasWorktree ? newTaskBranchName.trim() : null,
@@ -229,12 +270,18 @@ export function useApp() {
       setTasks((current) =>
         current.map((item) => (item.id === task.id ? { ...item, status, updatedAt } : item)),
       );
+      if (status === "done") {
+        setTaskAttention((current) => clearTaskAttention(current, task.id));
+      }
       return;
     }
 
     try {
       const updated = await api.updateTaskMetadata({ taskId: task.id, status });
       setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      if (status === "done") {
+        setTaskAttention((current) => clearTaskAttention(current, task.id));
+      }
     } catch (error) {
       setMessage(String(error));
     }
@@ -255,6 +302,7 @@ export function useApp() {
     if (demoMode) {
       setTasks((current) => current.filter((item) => item.id !== task.id));
       setSelectedTaskId((current) => (current === task.id ? undefined : current));
+      setTaskAttention((current) => clearTaskAttention(current, task.id));
       setConfirmingDeleteTaskId(undefined);
       setMessage(`Deleted ${task.title}`);
       setBusy(false);
@@ -265,6 +313,7 @@ export function useApp() {
       await api.deleteTask(task.id);
       setTasks((current) => current.filter((item) => item.id !== task.id));
       setSelectedTaskId((current) => (current === task.id ? undefined : current));
+      setTaskAttention((current) => clearTaskAttention(current, task.id));
       setConfirmingDeleteTaskId(undefined);
       setMessage(`Deleted ${task.title}`);
     } catch (error) {
@@ -358,6 +407,8 @@ export function useApp() {
     selectedRepo,
     visibleTasks,
     selectedTask,
+    taskAttention,
+    selectedTaskAttention: selectedTask ? getTaskAttention(taskAttention, selectedTask.id) : undefined,
     counts,
     message,
     setMessage,

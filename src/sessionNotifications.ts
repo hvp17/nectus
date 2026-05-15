@@ -1,9 +1,13 @@
 import { api } from "./api";
 
-export const isTauri = "__TAURI_INTERNALS__" in window;
+export function isTauriRuntime() {
+  return "__TAURI_INTERNALS__" in window;
+}
+
+export const isTauri = isTauriRuntime();
 
 export async function notifySessionEvent(title: string, body: string) {
-  if (!isTauri) return;
+  if (!isTauriRuntime()) return;
 
   try {
     const sent = await api.sendSystemNotification(title, body);

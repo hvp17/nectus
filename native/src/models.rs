@@ -49,6 +49,7 @@ pub struct TaskSummary {
     pub id: i64,
     pub repo_id: i64,
     pub title: String,
+    pub prompt: Option<String>,
     pub status: TaskStatus,
     pub pr_url: Option<String>,
     pub agent_profile_id: Option<i64>,

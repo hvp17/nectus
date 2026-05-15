@@ -24,12 +24,12 @@ pub(super) fn repo_from_row(row: &Row<'_>) -> rusqlite::Result<Repo> {
 }
 
 pub(super) fn task_from_row(row: &Row<'_>) -> rusqlite::Result<Result<TaskSummary, String>> {
-    let status: String = row.get(3)?;
+    let status: String = row.get(4)?;
     let status = match TaskStatus::from_str(&status) {
         Ok(status) => status,
         Err(error) => return Ok(Err(error)),
     };
-    let agent_kind: Option<String> = row.get(7)?;
+    let agent_kind: Option<String> = row.get(8)?;
     let agent_kind = match agent_kind.as_deref().map(AgentKind::from_str).transpose() {
         Ok(value) => value,
         Err(error) => return Ok(Err(error)),
@@ -38,22 +38,23 @@ pub(super) fn task_from_row(row: &Row<'_>) -> rusqlite::Result<Result<TaskSummar
         id: row.get(0)?,
         repo_id: row.get(1)?,
         title: row.get(2)?,
+        prompt: row.get(3)?,
         status,
-        pr_url: row.get(4)?,
-        agent_profile_id: row.get(5)?,
-        agent_name: row.get(6)?,
+        pr_url: row.get(5)?,
+        agent_profile_id: row.get(6)?,
+        agent_name: row.get(7)?,
         agent_kind,
-        has_worktree: row.get(8)?,
-        branch_name: row.get(9)?,
-        worktree_path: row.get(10)?,
+        has_worktree: row.get(9)?,
+        branch_name: row.get(10)?,
+        worktree_path: row.get(11)?,
         is_dirty: false,
-        active_session_id: row.get(11)?,
-        last_session_id: row.get(12)?,
-        last_session_agent: row.get(13)?,
-        last_session_cwd: row.get(14)?,
-        last_session_label: row.get(15)?,
-        created_at: row.get(16)?,
-        updated_at: row.get(17)?,
+        active_session_id: row.get(12)?,
+        last_session_id: row.get(13)?,
+        last_session_agent: row.get(14)?,
+        last_session_cwd: row.get(15)?,
+        last_session_label: row.get(16)?,
+        created_at: row.get(17)?,
+        updated_at: row.get(18)?,
     }))
 }
 

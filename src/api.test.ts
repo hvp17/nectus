@@ -34,4 +34,36 @@ describe("api", () => {
       prUrl: null,
     });
   });
+
+  it("sends a task prompt when creating a task", async () => {
+    mockedInvoke.mockResolvedValueOnce({
+      id: 2,
+      repoId: 1,
+      title: "Refactor auth logic",
+      prompt: "Refactor auth logic and add tests",
+      status: "planned",
+      hasWorktree: false,
+      isDirty: false,
+      createdAt: "2026-05-15T12:00:00.000Z",
+      updatedAt: "2026-05-15T12:01:00.000Z",
+    });
+
+    await api.createTask({
+      repoId: 1,
+      title: "Refactor auth logic",
+      prompt: "Refactor auth logic and add tests",
+      agentProfileId: 1,
+      hasWorktree: false,
+      branchName: null,
+    });
+
+    expect(mockedInvoke).toHaveBeenCalledWith("create_task", {
+      repoId: 1,
+      title: "Refactor auth logic",
+      prompt: "Refactor auth logic and add tests",
+      agentProfileId: 1,
+      hasWorktree: false,
+      branchName: null,
+    });
+  });
 });

@@ -92,12 +92,12 @@ impl SessionManager {
         let cwd_path = PathBuf::from(cwd);
         command.cwd(cwd);
 
-        let child = pair
+        let mut child = pair
             .slave
             .spawn_command(command)
             .map_err(|error| format!("Failed to start {}: {error}", agent.name))?;
         let pid = child.process_id();
-        let writer = pair
+        let mut writer = pair
             .master
             .take_writer()
             .map_err(|error| format!("Failed to open PTY writer: {error}"))?;
@@ -105,6 +105,20 @@ impl SessionManager {
             .master
             .try_clone_reader()
             .map_err(|error| format!("Failed to create PTY reader: {error}"))?;
+
+        if !resume {
+            if let Some(prompt) = task
+                .prompt
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                if let Err(error) = writeln!(writer, "{prompt}") {
+                    let _ = child.kill();
+                    return Err(format!("Failed to send initial prompt: {error}"));
+                }
+            }
+        }
 
         let session = Session {
             id: session_id.clone(),

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { Sidebar } from "./components/Sidebar";
 import { Workspace } from "./components/Workspace";
@@ -19,6 +19,8 @@ function App() {
     setSelectedTaskId,
     selectedRepo,
     selectedTask,
+    taskAttention,
+    selectedTaskAttention,
     counts,
     message,
     setMessage,
@@ -54,8 +56,15 @@ function App() {
     saveAppSettings,
     saveAgentProfile,
   } = useApp();
+  const [detailExpanded, setDetailExpanded] = useState(false);
 
   useAppTheme(settings);
+
+  useEffect(() => {
+    if (!selectedTask) {
+      setDetailExpanded(false);
+    }
+  }, [selectedTask]);
 
   useEffect(() => {
     if (!message) return;
@@ -77,11 +86,13 @@ function App() {
             setCurrentView("dashboard");
             setSelectedRepoId(id);
             setSelectedTaskId(undefined);
+            setDetailExpanded(false);
           }}
           onAddProject={addProject}
           onOpenSettings={() => {
             setCurrentView("settings");
             setSelectedTaskId(undefined);
+            setDetailExpanded(false);
           }}
           settingsActive={currentView === "settings"}
           busy={busy}
@@ -98,39 +109,57 @@ function App() {
               onSaveSettings={saveAppSettings}
               onSaveAgentProfile={saveAgentProfile}
             />
-          ) : selectedTask ? (
-            <TaskDetailDrawer
-              task={selectedTask}
-              onClose={() => setSelectedTaskId(undefined)}
-              onStopSession={stopSession}
-              onResumeSession={resumeSession}
-              onStartSession={startSession}
-              onUpdateStatus={updateStatus}
-              onSessionExit={onSessionExit}
-            />
           ) : (
-            <Workspace
-              selectedRepo={selectedRepo}
-              visibleTasks={visibleTasks}
-              selectedTaskId={selectedTaskId}
-              onSelectTask={setSelectedTaskId}
-              onRefresh={refresh}
-              onCreateTask={() => {
-                if (!newTaskAgentProfileId) {
-                  const defaultAgentProfileId = settings?.defaultAgentProfileId ?? agentProfiles[0]?.id;
-                  if (defaultAgentProfileId) {
-                    setNewTaskAgentProfileId(defaultAgentProfileId);
-                  }
-                }
-                setCreateTaskOpen(true);
-              }}
-              onDeleteTask={requestDeleteTask}
-              onUpdateStatus={updateStatus}
-              counts={counts}
-              busy={busy}
-              loading={loading}
-              confirmingDeleteTaskId={confirmingDeleteTaskId}
-            />
+            <div
+              className="dashboard-layout"
+              data-testid="dashboard-layout"
+              data-detail-open={selectedTask ? "true" : "false"}
+              data-detail-expanded={detailExpanded ? "true" : "false"}
+            >
+              <div className="workspace-frame" aria-hidden={detailExpanded ? "true" : undefined}>
+                <Workspace
+                  selectedRepo={selectedRepo}
+                  visibleTasks={visibleTasks}
+                  selectedTaskId={selectedTaskId}
+                  taskAttention={taskAttention}
+                  onSelectTask={setSelectedTaskId}
+                  onRefresh={refresh}
+                  onCreateTask={() => {
+                    if (!newTaskAgentProfileId) {
+                      const defaultAgentProfileId = settings?.defaultAgentProfileId ?? agentProfiles[0]?.id;
+                      if (defaultAgentProfileId) {
+                        setNewTaskAgentProfileId(defaultAgentProfileId);
+                      }
+                    }
+                    setCreateTaskOpen(true);
+                  }}
+                  onDeleteTask={requestDeleteTask}
+                  onUpdateStatus={updateStatus}
+                  counts={counts}
+                  busy={busy}
+                  loading={loading}
+                  confirmingDeleteTaskId={confirmingDeleteTaskId}
+                />
+              </div>
+
+              {selectedTask && (
+                <TaskDetailDrawer
+                  task={selectedTask}
+                  attention={selectedTaskAttention}
+                  isExpanded={detailExpanded}
+                  onToggleExpanded={() => setDetailExpanded((current) => !current)}
+                  onClose={() => {
+                    setDetailExpanded(false);
+                    setSelectedTaskId(undefined);
+                  }}
+                  onStopSession={stopSession}
+                  onResumeSession={resumeSession}
+                  onStartSession={startSession}
+                  onUpdateStatus={updateStatus}
+                  onSessionExit={onSessionExit}
+                />
+              )}
+            </div>
           )}
 
           {message && <ToastNotification message={message} onDismiss={() => setMessage(null)} />}

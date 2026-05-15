@@ -45,6 +45,7 @@ fn update_app_settings(
 fn create_task(
     repo_id: i64,
     title: String,
+    prompt: Option<String>,
     agent_profile_id: Option<i64>,
     has_worktree: Option<bool>,
     branch_name: Option<String>,
@@ -53,6 +54,7 @@ fn create_task(
     state.db.lock().create_task_record(
         repo_id,
         title,
+        prompt,
         agent_profile_id,
         has_worktree.unwrap_or(false),
         branch_name,
