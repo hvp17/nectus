@@ -16,7 +16,10 @@ interface TaskCardProps {
   onSelect: (id: number) => void;
   onDelete: (task: TaskSummary) => void;
   onDragStart: (taskId: number) => void;
+  onPointerDragMove: (clientX: number, clientY: number) => void;
+  onPointerDragEnd: (taskId: number, clientX: number, clientY: number) => void;
   onDragEnd: () => void;
+  pointerDragEnabled: boolean;
 }
 
 export function TaskCard({
@@ -28,15 +31,19 @@ export function TaskCard({
   onSelect,
   onDelete,
   onDragStart,
+  onPointerDragMove,
+  onPointerDragEnd,
   onDragEnd,
+  pointerDragEnabled,
 }: TaskCardProps) {
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const suppressClickRef = useRef(false);
   const deleteDisabled = busy || Boolean(task.activeSessionId);
   const deleteLabel = task.activeSessionId ? "Stop session first" : confirmingDelete ? "Confirm delete" : "Delete task";
 
   useEffect(() => {
     const element = cardRef.current;
-    if (!element || busy) return;
+    if (!element || busy || pointerDragEnabled) return;
 
     return draggable({
       element,
@@ -44,7 +51,117 @@ export function TaskCard({
       onDragStart: () => onDragStart(task.id),
       onDrop: onDragEnd,
     });
-  }, [busy, onDragEnd, onDragStart, task.id]);
+  }, [busy, onDragEnd, onDragStart, pointerDragEnabled, task.id]);
+
+  useEffect(() => {
+    const element = cardRef.current;
+    if (!element || busy || !pointerDragEnabled) return;
+
+    let startX = 0;
+    let startY = 0;
+    let pointerId: number | undefined;
+    let dragging = false;
+    let ghost: HTMLElement | null = null;
+    let ghostOffsetX = 0;
+    let ghostOffsetY = 0;
+
+    const getClientPosition = (event: PointerEvent) => ({
+      clientX: Number.isFinite(event.clientX) ? event.clientX : startX,
+      clientY: Number.isFinite(event.clientY) ? event.clientY : startY,
+    });
+
+    const moveGhost = (clientX: number, clientY: number) => {
+      if (!ghost) return;
+      ghost.style.left = `${clientX - ghostOffsetX}px`;
+      ghost.style.top = `${clientY - ghostOffsetY}px`;
+    };
+
+    const removeGhost = () => {
+      ghost?.remove();
+      ghost = null;
+    };
+
+    const createGhost = (clientX: number, clientY: number) => {
+      removeGhost();
+      const rect = element.getBoundingClientRect();
+      ghostOffsetX = clientX - rect.left;
+      ghostOffsetY = clientY - rect.top;
+      ghost = element.cloneNode(true) as HTMLElement;
+      ghost.classList.add("task-drag-ghost");
+      ghost.style.width = `${rect.width}px`;
+      ghost.style.height = `${rect.height}px`;
+      ghost.style.left = `${rect.left}px`;
+      ghost.style.top = `${rect.top}px`;
+      document.body.appendChild(ghost);
+      moveGhost(clientX, clientY);
+    };
+
+    const stopTracking = () => {
+      window.removeEventListener("pointermove", onPointerMove, true);
+      window.removeEventListener("pointerup", onPointerUp, true);
+      window.removeEventListener("pointercancel", onPointerCancel, true);
+    };
+
+    const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) return;
+      const { clientX, clientY } = getClientPosition(event);
+      const deltaX = clientX - startX;
+      const deltaY = clientY - startY;
+      if (!dragging && Math.hypot(deltaX, deltaY) < 6) return;
+
+      if (!dragging) {
+        dragging = true;
+        createGhost(clientX, clientY);
+        onDragStart(task.id);
+      }
+
+      event.preventDefault();
+      moveGhost(clientX, clientY);
+      onPointerDragMove(clientX, clientY);
+    };
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) return;
+      stopTracking();
+
+      if (dragging) {
+        const { clientX, clientY } = getClientPosition(event);
+        event.preventDefault();
+        suppressClickRef.current = true;
+        removeGhost();
+        onPointerDragEnd(task.id, clientX, clientY);
+        window.setTimeout(() => {
+          suppressClickRef.current = false;
+        }, 0);
+      }
+    };
+
+    const onPointerCancel = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) return;
+      stopTracking();
+      removeGhost();
+      onDragEnd();
+    };
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.button > 0 || (event.target as HTMLElement).closest("button")) return;
+      pointerId = event.pointerId;
+      startX = event.clientX;
+      startY = event.clientY;
+      dragging = false;
+      window.addEventListener("pointermove", onPointerMove, true);
+      window.addEventListener("pointerup", onPointerUp, true);
+      window.addEventListener("pointercancel", onPointerCancel, true);
+    };
+
+    element.addEventListener("pointerdown", onPointerDown);
+
+    return () => {
+      element.removeEventListener("pointerdown", onPointerDown);
+      stopTracking();
+      removeGhost();
+    };
+  }, [busy, onDragEnd, onDragStart, onPointerDragEnd, onPointerDragMove, pointerDragEnabled, task.id]);
 
   return (
     <Card
@@ -53,7 +170,14 @@ export function TaskCard({
         isSelected ? "border-primary ring-1 ring-primary/20 shadow-md bg-accent/5" : "hover:bg-accent/5"
       } ${isDragging ? "opacity-50 ring-2 ring-primary/30" : ""}`}
       aria-grabbed={isDragging}
-      onClick={() => onSelect(task.id)}
+      onClick={(event) => {
+        if (suppressClickRef.current) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        onSelect(task.id);
+      }}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {

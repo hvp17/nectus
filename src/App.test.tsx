@@ -25,6 +25,19 @@ vi.mock("./api", () => ({
 
 vi.mock("@atlaskit/pragmatic-drag-and-drop/element/adapter", () => {
   let currentSource: { element: HTMLElement; data: Record<string, unknown> } | null = null;
+  const monitors: Array<{
+    canMonitor?: (payload: { source: { element: HTMLElement; data: Record<string, unknown> } }) => boolean;
+    onDrop?: (payload: {
+      source: { element: HTMLElement; data: Record<string, unknown> };
+      location: {
+        current: {
+          input: { clientX: number; clientY: number };
+          dropTargets: Array<{ element: Element; data: Record<string, unknown> }>;
+        };
+        previous: { dropTargets: Array<{ element: Element; data: Record<string, unknown> }> };
+      };
+    }) => void;
+  }> = [];
 
   return {
     draggable: (args: {
@@ -56,6 +69,7 @@ vi.mock("@atlaskit/pragmatic-drag-and-drop/element/adapter", () => {
     },
     dropTargetForElements: (args: {
       element: Element;
+      getData?: (payload: { source: { element: HTMLElement; data: Record<string, unknown> } }) => Record<string, unknown>;
       canDrop?: (payload: { source: { element: HTMLElement; data: Record<string, unknown> } }) => boolean;
       onDragEnter?: (payload: { source: { element: HTMLElement; data: Record<string, unknown> } }) => void;
       onDragLeave?: (payload: { source: { element: HTMLElement; data: Record<string, unknown> } }) => void;
@@ -79,6 +93,23 @@ vi.mock("@atlaskit/pragmatic-drag-and-drop/element/adapter", () => {
         if (!canDrop() || !currentSource) return;
         event.preventDefault();
         args.onDrop?.({ source: currentSource });
+        const dropTarget = {
+          element: args.element,
+          data: args.getData?.({ source: currentSource }) ?? {},
+        };
+        monitors.forEach((monitor) => {
+          if (monitor.canMonitor?.({ source: currentSource! }) === false) return;
+          monitor.onDrop?.({
+            source: currentSource!,
+            location: {
+              current: {
+                input: { clientX: 0, clientY: 0 },
+                dropTargets: [dropTarget],
+              },
+              previous: { dropTargets: [] },
+            },
+          });
+        });
         currentSource = null;
       };
 
@@ -94,6 +125,25 @@ vi.mock("@atlaskit/pragmatic-drag-and-drop/element/adapter", () => {
         args.element.removeEventListener("drop", drop);
       };
     },
+    monitorForElements: (args: {
+      canMonitor?: (payload: { source: { element: HTMLElement; data: Record<string, unknown> } }) => boolean;
+      onDrop?: (payload: {
+        source: { element: HTMLElement; data: Record<string, unknown> };
+        location: {
+          current: {
+            input: { clientX: number; clientY: number };
+            dropTargets: Array<{ element: Element; data: Record<string, unknown> }>;
+          };
+          previous: { dropTargets: Array<{ element: Element; data: Record<string, unknown> }> };
+        };
+      }) => void;
+    }) => {
+      monitors.push(args);
+      return () => {
+        const index = monitors.indexOf(args);
+        if (index >= 0) monitors.splice(index, 1);
+      };
+    },
   };
 });
 
@@ -103,6 +153,8 @@ describe("App", () => {
   beforeEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();
+    Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
+    window.history.pushState({}, "", "/");
     mockedApi.listRepos.mockResolvedValue([]);
     mockedApi.listAgentProfiles.mockResolvedValue([
       {
@@ -132,6 +184,39 @@ describe("App", () => {
 
     expect(await screen.findByText("No projects yet")).toBeInTheDocument();
     expect(screen.getByText("Operations")).toBeInTheDocument();
+  });
+
+  it("renders browser demo tasks without Tauri data when demo mode is enabled", async () => {
+    window.history.pushState({}, "", "/?demo=1");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Nectus Demo" })).toBeInTheDocument();
+    expect(screen.getByText("Drag this task into Review")).toBeInTheDocument();
+    expect(mockedApi.listRepos).not.toHaveBeenCalled();
+    expect(mockedApi.listTasks).not.toHaveBeenCalled();
+  });
+
+  it("moves demo tasks between columns without calling Tauri metadata APIs", async () => {
+    window.history.pushState({}, "", "/?demo=1");
+
+    render(<App />);
+
+    const taskCard = await screen.findByRole("button", { name: /drag this task into review/i });
+    const reviewColumn = screen.getByRole("region", { name: /review/i });
+    const dataTransfer = {
+      setData: vi.fn(),
+      getData: vi.fn(() => "1001"),
+      effectAllowed: "",
+      dropEffect: "",
+    };
+
+    fireEvent.dragStart(taskCard, { dataTransfer });
+    fireEvent.dragEnter(reviewColumn, { dataTransfer });
+    fireEvent.drop(reviewColumn, { dataTransfer });
+
+    expect(mockedApi.updateTaskMetadata).not.toHaveBeenCalled();
+    expect(within(reviewColumn).getByText("Drag this task into Review")).toBeInTheDocument();
   });
 
   it("opens a task modal and creates a task with an optional title, required agent, prompt, and worktree choice", async () => {
@@ -362,6 +447,96 @@ describe("App", () => {
       expect(mockedApi.updateTaskMetadata).toHaveBeenCalledWith({ taskId: 21, status: "review" });
     });
     expect(within(reviewColumn).getByText("Wire task drag and drop")).toBeInTheDocument();
+  });
+
+  it("moves a task with the pointer fallback in the Tauri webview", async () => {
+    Object.defineProperty(window, "__TAURI_INTERNALS__", {
+      configurable: true,
+      value: {},
+    });
+    mockedApi.listRepos.mockResolvedValue([
+      {
+        id: 7,
+        name: "nectus-desktop",
+        path: "/tmp/nectus-desktop",
+        defaultWorktreeRoot: "/tmp/nectus-desktop-worktrees",
+        createdAt: "2026-05-14T00:00:00.000Z",
+      },
+    ]);
+    mockedApi.listTasks.mockResolvedValue([
+      {
+        id: 21,
+        repoId: 7,
+        title: "Wire task pointer drag",
+        status: "done",
+        prUrl: null,
+        agentProfileId: 1,
+        agentName: "Codex",
+        hasWorktree: false,
+        branchName: null,
+        worktreePath: null,
+        isDirty: false,
+        activeSessionId: null,
+        lastSessionId: null,
+        lastSessionAgent: null,
+        lastSessionCwd: null,
+        lastSessionLabel: null,
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+      },
+    ]);
+    mockedApi.updateTaskMetadata.mockResolvedValue({
+      id: 21,
+      repoId: 7,
+      title: "Wire task pointer drag",
+      status: "review",
+      prUrl: null,
+      agentProfileId: 1,
+      agentName: "Codex",
+      hasWorktree: false,
+      branchName: null,
+      worktreePath: null,
+      isDirty: false,
+      activeSessionId: null,
+      lastSessionId: null,
+      lastSessionAgent: null,
+      lastSessionCwd: null,
+      lastSessionLabel: null,
+      createdAt: "2026-05-14T00:00:00.000Z",
+      updatedAt: "2026-05-14T00:01:00.000Z",
+    });
+
+    render(<App />);
+
+    const taskCard = await screen.findByRole("button", { name: /wire task pointer drag/i });
+    const reviewColumn = screen.getByRole("region", { name: /review/i });
+    const originalElementsFromPoint = document.elementsFromPoint;
+    Object.defineProperty(document, "elementsFromPoint", {
+      configurable: true,
+      value: vi.fn(() => [reviewColumn]),
+    });
+
+    fireEvent.pointerDown(taskCard, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 40, clientY: 10 });
+
+    expect(document.querySelector(".task-drag-ghost")).toBeInstanceOf(HTMLElement);
+
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 40, clientY: 10 });
+
+    expect(document.querySelector(".task-drag-ghost")).toBeNull();
+
+    await waitFor(() => {
+      expect(mockedApi.updateTaskMetadata).toHaveBeenCalledWith({ taskId: 21, status: "review" });
+    });
+
+    if (originalElementsFromPoint) {
+      Object.defineProperty(document, "elementsFromPoint", {
+        configurable: true,
+        value: originalElementsFromPoint,
+      });
+    } else {
+      Reflect.deleteProperty(document, "elementsFromPoint");
+    }
   });
 
   it("shows drop target feedback while a task is dragged over another status column", async () => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { dropTargetForElements, monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { RefreshCw, Plus, Activity, GitBranch, CheckCircle2 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -15,6 +15,14 @@ const statusLabels: Record<TaskStatus, string> = {
 };
 
 const statusOrder: TaskStatus[] = ["planned", "in_progress", "review", "done"];
+
+function getStatusFromPoint(clientX: number, clientY: number): TaskStatus | undefined {
+  if (!document.elementsFromPoint) return undefined;
+  return document
+    .elementsFromPoint(clientX, clientY)
+    .map((element) => element.closest<HTMLElement>("[data-task-status]"))
+    .find((element): element is HTMLElement => Boolean(element))?.dataset.taskStatus as TaskStatus | undefined;
+}
 
 interface WorkspaceProps {
   selectedRepo?: Repo;
@@ -49,6 +57,9 @@ export function Workspace({
   const [dropTargetStatus, setDropTargetStatus] = useState<TaskStatus | undefined>();
   const tasksRef = useRef(visibleTasks);
   const busyRef = useRef(busy);
+  const lastNativeDragStatusRef = useRef<TaskStatus | undefined>(undefined);
+  const lastPointerStatusRef = useRef<TaskStatus | undefined>(undefined);
+  const pointerDragEnabled = "__TAURI_INTERNALS__" in window;
 
   const draggingTask = visibleTasks.find((task) => task.id === draggingTaskId);
 
@@ -63,20 +74,114 @@ export function Workspace({
   const getTaskById = useCallback((taskId: number) => tasksRef.current.find((task) => task.id === taskId), []);
 
   const startTaskDrag = useCallback((taskId: number) => {
+    const task = getTaskById(taskId);
+    console.debug("[task-dnd] drag start", {
+      taskId,
+      title: task?.title,
+      fromStatus: task?.status,
+    });
     setDraggingTaskId(taskId);
-  }, []);
+  }, [getTaskById]);
 
   const clearTaskDrag = useCallback(() => {
     setDraggingTaskId(undefined);
     setDropTargetStatus(undefined);
+    lastNativeDragStatusRef.current = undefined;
+    lastPointerStatusRef.current = undefined;
+  }, []);
+
+  const markNativeDragStatus = useCallback((status: TaskStatus) => {
+    lastNativeDragStatusRef.current = status;
+    setDropTargetStatus(status);
+    console.debug("[task-dnd] native drag over column", { targetStatus: status });
+  }, []);
+
+  const markPointerDragPosition = useCallback((clientX: number, clientY: number) => {
+    const status = getStatusFromPoint(clientX, clientY);
+    if (status === lastPointerStatusRef.current) return;
+    lastPointerStatusRef.current = status;
+    setDropTargetStatus(status);
+    console.debug("[task-dnd] pointer over column", { targetStatus: status, clientX, clientY });
   }, []);
 
   const moveDroppedTask = useCallback((taskId: number, status: TaskStatus) => {
     const task = getTaskById(taskId);
+    console.debug("[task-dnd] move requested", {
+      taskId,
+      title: task?.title,
+      fromStatus: task?.status,
+      toStatus: status,
+      busy: busyRef.current,
+      foundTask: Boolean(task),
+    });
     clearTaskDrag();
-    if (!task || task.status === status || busyRef.current) return;
+    if (!task) {
+      console.warn("[task-dnd] move ignored: task not found", { taskId, toStatus: status });
+      return;
+    }
+    if (task.status === status) {
+      console.debug("[task-dnd] move ignored: same status", { taskId, status });
+      return;
+    }
+    if (busyRef.current) {
+      console.warn("[task-dnd] move ignored: app busy", { taskId, toStatus: status });
+      return;
+    }
     onUpdateStatus(task, status);
   }, [clearTaskDrag, getTaskById, onUpdateStatus]);
+
+  const movePointerDroppedTask = useCallback((taskId: number, clientX: number, clientY: number) => {
+    const status = getStatusFromPoint(clientX, clientY);
+    console.debug("[task-dnd] pointer drop", { taskId, targetStatus: status, clientX, clientY });
+    lastPointerStatusRef.current = undefined;
+    if (!status) {
+      clearTaskDrag();
+      return;
+    }
+    moveDroppedTask(taskId, status);
+  }, [clearTaskDrag, moveDroppedTask]);
+
+  useEffect(() => {
+    return monitorForElements({
+      canMonitor: ({ source }) => source.data.type === "task",
+      onDropTargetChange: ({ source, location }) => {
+        console.debug("[task-dnd] monitor target change", {
+          sourceData: source.data,
+          currentTargets: location.current.dropTargets.map((target) => target.data),
+          previousTargets: location.previous.dropTargets.map((target) => target.data),
+        });
+      },
+      onDrop: ({ source, location }) => {
+        const destination = location.current.dropTargets[0];
+        const taskId = Number(source.data.taskId);
+        const fallbackStatus = !destination && location.current.input
+          ? getStatusFromPoint(location.current.input.clientX, location.current.input.clientY)
+          : undefined;
+        const nativeStatus = lastNativeDragStatusRef.current;
+        const destinationStatus = destination?.data.status ?? nativeStatus ?? fallbackStatus;
+
+        console.debug("[task-dnd] monitor drop", {
+          sourceData: source.data,
+          destinationData: destination?.data,
+          nativeStatus,
+          fallbackStatus,
+          input: location.current.input,
+          dropTargetCount: location.current.dropTargets.length,
+        });
+
+        if (!Number.isFinite(taskId) || !statusOrder.includes(destinationStatus as TaskStatus)) {
+          console.warn("[task-dnd] monitor drop ignored: invalid destination", {
+            sourceData: source.data,
+            destinationData: destination?.data,
+          });
+          clearTaskDrag();
+          return;
+        }
+
+        moveDroppedTask(taskId, destinationStatus as TaskStatus);
+      },
+    });
+  }, [clearTaskDrag, moveDroppedTask]);
 
   return (
     <section className="workspace p-10 overflow-auto max-w-[1400px] mx-auto w-full">
@@ -121,8 +226,8 @@ export function Workspace({
               busyRef={busyRef}
               isDropAvailable={acceptsDraggedTask}
               isDropTarget={acceptsDraggedTask && dropTargetStatus === status}
+              onNativeDragStatus={markNativeDragStatus}
               onDropTargetChange={setDropTargetStatus}
-              onDropTask={moveDroppedTask}
             >
               <div className="column-heading px-1 mb-1">
                 <span className="text-xs font-bold uppercase tracking-wider">{statusLabels[status]}</span>
@@ -142,7 +247,10 @@ export function Workspace({
                     onSelect={onSelectTask}
                     onDelete={onDeleteTask}
                     onDragStart={startTaskDrag}
+                    onPointerDragMove={markPointerDragPosition}
+                    onPointerDragEnd={movePointerDroppedTask}
                     onDragEnd={clearTaskDrag}
+                    pointerDragEnabled={pointerDragEnabled}
                   />
                 ))}
               </div>
@@ -160,8 +268,8 @@ function StatusColumn({
   busyRef,
   isDropAvailable,
   isDropTarget,
+  onNativeDragStatus,
   onDropTargetChange,
-  onDropTask,
   children,
 }: {
   status: TaskStatus;
@@ -169,8 +277,8 @@ function StatusColumn({
   busyRef: React.MutableRefObject<boolean>;
   isDropAvailable: boolean;
   isDropTarget: boolean;
+  onNativeDragStatus: (status: TaskStatus) => void;
   onDropTargetChange: (status: TaskStatus | undefined) => void;
-  onDropTask: (taskId: number, status: TaskStatus) => void;
   children: React.ReactNode;
 }) {
   const columnRef = useRef<HTMLDivElement | null>(null);
@@ -186,20 +294,44 @@ function StatusColumn({
 
     return dropTargetForElements({
       element,
+      getData: () => ({ type: "status-column", status }),
+      getIsSticky: () => true,
       canDrop: ({ source }) => {
         const task = getTask(source);
-        return Boolean(task && task.status !== status && !busyRef.current);
+        const allowed = Boolean(task && task.status !== status && !busyRef.current);
+        console.debug(`[task-dnd] canDrop ${allowed ? "accepted" : "rejected"}`, {
+          targetStatus: status,
+          sourceData: source.data,
+          taskStatus: task?.status,
+          busy: busyRef.current,
+          foundTask: Boolean(task),
+        });
+        return allowed;
       },
       getDropEffect: () => "move",
-      onDragEnter: () => onDropTargetChange(status),
+      onDragEnter: ({ source }) => {
+        const task = getTask(source);
+        console.debug("[task-dnd] drag enter column", {
+          targetStatus: status,
+          taskId: task?.id,
+          fromStatus: task?.status,
+        });
+        onDropTargetChange(status);
+      },
       onDragLeave: () => onDropTargetChange(undefined),
       onDrop: ({ source }) => {
         const task = getTask(source);
+        console.debug("[task-dnd] drop on column", {
+          targetStatus: status,
+          sourceData: source.data,
+          taskId: task?.id,
+          fromStatus: task?.status,
+          foundTask: Boolean(task),
+        });
         onDropTargetChange(undefined);
-        if (task) onDropTask(task.id, status);
       },
     });
-  }, [busyRef, getTaskById, onDropTargetChange, onDropTask, status]);
+  }, [busyRef, getTaskById, onDropTargetChange, status]);
 
   return (
     <div
@@ -209,8 +341,17 @@ function StatusColumn({
       }`}
       role="region"
       aria-label={`${statusLabels[status]} tasks`}
+      data-task-status={status}
       data-drop-available={isDropAvailable ? "true" : undefined}
       data-drop-target={isDropTarget ? "true" : undefined}
+      onDragEnterCapture={(event) => {
+        event.preventDefault();
+        onNativeDragStatus(status);
+      }}
+      onDragOverCapture={(event) => {
+        event.preventDefault();
+        onNativeDragStatus(status);
+      }}
     >
       {children}
     </div>

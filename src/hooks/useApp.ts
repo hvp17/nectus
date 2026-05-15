@@ -13,6 +13,97 @@ import type {
 } from "../types";
 
 const isTauri = "__TAURI_INTERNALS__" in window;
+const demoCreatedAt = "2026-05-15T12:00:00.000Z";
+const demoRepo: Repo = {
+  id: 100,
+  name: "Nectus Demo",
+  path: "/demo/nectus",
+  defaultWorktreeRoot: "/demo/nectus-worktrees",
+  createdAt: demoCreatedAt,
+};
+const demoAgentProfiles: AgentProfile[] = [
+  {
+    id: 100,
+    name: "Codex",
+    command: "codex",
+    args: [],
+    env: {},
+    createdAt: demoCreatedAt,
+    updatedAt: demoCreatedAt,
+  },
+  {
+    id: 101,
+    name: "Claude",
+    command: "claude",
+    args: [],
+    env: {},
+    createdAt: demoCreatedAt,
+    updatedAt: demoCreatedAt,
+  },
+];
+const demoTasks: TaskSummary[] = [
+  {
+    id: 1001,
+    repoId: demoRepo.id,
+    title: "Drag this task into Review",
+    status: "planned",
+    prUrl: null,
+    agentProfileId: 100,
+    agentName: "Codex",
+    hasWorktree: true,
+    branchName: "demo/drag-task",
+    worktreePath: "/demo/nectus-worktrees/demo-drag-task",
+    isDirty: false,
+    activeSessionId: null,
+    lastSessionId: null,
+    lastSessionAgent: null,
+    lastSessionCwd: null,
+    lastSessionLabel: null,
+    createdAt: demoCreatedAt,
+    updatedAt: demoCreatedAt,
+  },
+  {
+    id: 1002,
+    repoId: demoRepo.id,
+    title: "Inspect drop target feedback",
+    status: "in_progress",
+    prUrl: null,
+    agentProfileId: 101,
+    agentName: "Claude",
+    hasWorktree: false,
+    branchName: null,
+    worktreePath: null,
+    isDirty: false,
+    activeSessionId: null,
+    lastSessionId: null,
+    lastSessionAgent: null,
+    lastSessionCwd: null,
+    lastSessionLabel: null,
+    createdAt: demoCreatedAt,
+    updatedAt: demoCreatedAt,
+  },
+  {
+    id: 1003,
+    repoId: demoRepo.id,
+    title: "Finished demo task",
+    status: "done",
+    prUrl: null,
+    agentProfileId: 100,
+    agentName: "Codex",
+    hasWorktree: true,
+    branchName: "demo/done-task",
+    worktreePath: "/demo/nectus-worktrees/demo-done-task",
+    isDirty: true,
+    activeSessionId: null,
+    lastSessionId: null,
+    lastSessionAgent: null,
+    lastSessionCwd: null,
+    lastSessionLabel: null,
+    createdAt: demoCreatedAt,
+    updatedAt: demoCreatedAt,
+  },
+];
+
 async function notifySessionEvent(title: string, body: string) {
   if (!isTauri) return;
 
@@ -27,6 +118,7 @@ async function notifySessionEvent(title: string, body: string) {
 }
 
 export function useApp() {
+  const demoMode = useMemo(() => new URLSearchParams(window.location.search).get("demo") === "1", []);
   const [repos, setRepos] = useState<Repo[]>([]);
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
@@ -79,6 +171,19 @@ export function useApp() {
 
   const refresh = useCallback(async (preferredRepoId?: number) => {
     setLoading(true);
+    if (demoMode) {
+      const nextRepoId = preferredRepoId ?? selectedRepoIdRef.current ?? demoRepo.id;
+      selectedRepoIdRef.current = nextRepoId;
+      selectedAgentProfileIdRef.current = selectedAgentProfileIdRef.current ?? demoAgentProfiles[0].id;
+      setRepos([demoRepo]);
+      setAgentProfiles(demoAgentProfiles);
+      setSelectedRepoId(nextRepoId);
+      setSelectedAgentProfileId(selectedAgentProfileIdRef.current);
+      setTasks((current) => (current.length ? current : demoTasks));
+      setLoading(false);
+      return;
+    }
+
     try {
       const [repoResult, profileResult] = await Promise.all([api.listRepos(), api.listAgentProfiles()]);
       setRepos(repoResult);
@@ -100,7 +205,7 @@ export function useApp() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [demoMode]);
 
   useEffect(() => {
     refresh();
@@ -160,6 +265,11 @@ export function useApp() {
 
   const addProject = async () => {
     setMessage(null);
+    if (demoMode) {
+      setMessage("Demo mode uses fixture data. Remove ?demo=1 to add local projects.");
+      return;
+    }
+
     try {
       const selected = await api.pickRepositoryFolder();
       if (selected) {
@@ -214,6 +324,37 @@ export function useApp() {
     }
     setBusy(true);
     setMessage(null);
+    if (demoMode) {
+      const now = new Date().toISOString();
+      const task: TaskSummary = {
+        id: Date.now(),
+        repoId: selectedRepoId,
+        title: getGeneratedTaskTitle(),
+        status: "planned",
+        prUrl: null,
+        agentProfileId: newTaskAgentProfileId,
+        agentName: demoAgentProfiles.find((profile) => profile.id === newTaskAgentProfileId)?.name ?? null,
+        hasWorktree: newTaskHasWorktree,
+        branchName: newTaskHasWorktree ? newTaskBranchName.trim() : null,
+        worktreePath: newTaskHasWorktree ? `${demoRepo.defaultWorktreeRoot}/${newTaskBranchName.trim()}` : null,
+        isDirty: false,
+        activeSessionId: null,
+        lastSessionId: null,
+        lastSessionAgent: null,
+        lastSessionCwd: null,
+        lastSessionLabel: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      setTasks((current) => [...current, task]);
+      resetCreateTaskForm();
+      setCreateTaskOpen(false);
+      setSelectedTaskId(task.id);
+      setMessage(`Created ${task.title}`);
+      setBusy(false);
+      return;
+    }
+
     try {
       const task = await api.createTask({
         repoId: selectedRepoId,
@@ -236,10 +377,37 @@ export function useApp() {
 
   const updateStatus = async (task: TaskSummary, status: TaskStatus) => {
     setMessage(null);
+    console.debug("[task-dnd] updateStatus called", {
+      taskId: task.id,
+      title: task.title,
+      fromStatus: task.status,
+      toStatus: status,
+      demoMode,
+    });
+    if (demoMode) {
+      const updatedAt = new Date().toISOString();
+      setTasks((current) =>
+        current.map((item) => (item.id === task.id ? { ...item, status, updatedAt } : item)),
+      );
+      console.debug("[task-dnd] demo status updated", {
+        taskId: task.id,
+        status,
+        updatedAt,
+      });
+      return;
+    }
+
     try {
       const updated = await api.updateTaskMetadata({ taskId: task.id, status });
+      console.debug("[task-dnd] applying updated task", {
+        taskId: updated.id,
+        title: updated.title,
+        status: updated.status,
+        updatedAt: updated.updatedAt,
+      });
       setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     } catch (error) {
+      console.error("[task-dnd] updateStatus failed", error);
       setMessage(String(error));
     }
   };
@@ -256,6 +424,15 @@ export function useApp() {
     }
 
     setBusy(true);
+    if (demoMode) {
+      setTasks((current) => current.filter((item) => item.id !== task.id));
+      setSelectedTaskId((current) => (current === task.id ? undefined : current));
+      setConfirmingDeleteTaskId(undefined);
+      setMessage(`Deleted ${task.title}`);
+      setBusy(false);
+      return;
+    }
+
     try {
       await api.deleteTask(task.id);
       setTasks((current) => current.filter((item) => item.id !== task.id));
