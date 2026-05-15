@@ -158,7 +158,7 @@ function ToastNotification({ message, onDismiss }: { message: string; onDismiss:
       <Alert className="nectus-toast">
         <Icon />
         <AlertTitle>{toast.title}</AlertTitle>
-        <AlertDescription>{toast.body}</AlertDescription>
+        <AlertDescription className="toast-body">{toast.body}</AlertDescription>
         <AlertAction>
           <Button
             type="button"
