@@ -14,6 +14,8 @@ The app is local-first. Do not add GitHub OAuth/API sync unless explicitly reque
 
 ## Development Flow
 
+Use Conventional Commits for all commit messages.
+
 Install dependencies:
 
 ```bash

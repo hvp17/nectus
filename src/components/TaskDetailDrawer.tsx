@@ -1,4 +1,4 @@
-import { X, Square, RotateCcw, Play, ExternalLink, TerminalSquare } from "lucide-react";
+import { ArrowLeft, Square, RotateCcw, Play, ExternalLink, TerminalSquare } from "lucide-react";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { TerminalPane } from "../TerminalPane";
@@ -35,18 +35,23 @@ export function TaskDetailDrawer({
 
   return (
     <aside className="detail-pane flex flex-col animate-in slide-in-from-right duration-300 ease-out">
-      <div className="flex items-center justify-between p-6 border-b">
-          <div className="min-w-0">
-            <p className="eyebrow">Task Detail</p>
-            <h3 className="text-xl font-bold truncate leading-tight">{task.title}</h3>
-          </div>
-          <Button variant="ghost" size="icon" onClick={onClose} className="shrink-0 h-8 w-8 ml-4">
-            <X size={18} />
+      <div className="flex items-start justify-between gap-4 p-6 border-b">
+        <div className="min-w-0">
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            className="-ml-3 mb-3 h-8 gap-2 px-3 text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft size={16} />
+            Back to dashboard
           </Button>
+          <p className="eyebrow">Task Detail</p>
+          <h3 className="text-xl font-bold truncate leading-tight">{task.title}</h3>
         </div>
+      </div>
 
-        <div className="flex-1 overflow-y-auto">
-          <div className="px-6 pb-6 border-b">
+        <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+          <div className="shrink-0 px-6 pb-6 border-b">
              <div className="flex gap-2 mb-6">
                 {task.activeSessionId ? (
                   <Button variant="destructive" className="w-full gap-2" onClick={() => onStopSession(task.activeSessionId!)}>
@@ -108,8 +113,8 @@ export function TaskDetailDrawer({
              </dl>
           </div>
 
-          <div className="flex flex-col h-[400px]">
-             <div className="flex items-center gap-2 px-6 py-4 border-b text-[11px] font-bold uppercase tracking-widest opacity-60">
+          <div className="flex min-h-0 flex-1 flex-col">
+             <div className="flex shrink-0 items-center gap-2 px-6 py-4 border-b text-[11px] font-bold uppercase tracking-widest opacity-60">
                 <TerminalSquare size={14} />
                 Agent Terminal
              </div>

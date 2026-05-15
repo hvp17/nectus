@@ -79,7 +79,7 @@ function App() {
 
   return (
     <TooltipProvider>
-      <main className={`app-shell bg-background text-foreground ${selectedTask ? "detail-open" : ""}`}>
+      <main className="app-shell bg-background text-foreground">
         <Sidebar
           repos={repos}
           selectedRepoId={selectedRepoId}
@@ -92,33 +92,35 @@ function App() {
           loading={loading}
         />
 
-        <div className="relative flex flex-col flex-1 min-w-0 overflow-hidden">
-          <Workspace
-            selectedRepo={selectedRepo}
-            visibleTasks={visibleTasks}
-            selectedTaskId={selectedTaskId}
-            onSelectTask={setSelectedTaskId}
-            onRefresh={refresh}
-            onCreateTask={() => setCreateTaskOpen(true)}
-            onDeleteTask={requestDeleteTask}
-            counts={counts}
-            busy={busy}
-            loading={loading}
-            confirmingDeleteTaskId={confirmingDeleteTaskId}
-          />
+        <div className="content-shell">
+          {selectedTask ? (
+            <TaskDetailDrawer
+              task={selectedTask}
+              onClose={() => setSelectedTaskId(undefined)}
+              onStopSession={stopSession}
+              onResumeSession={resumeSession}
+              onStartSession={startSession}
+              onUpdateStatus={updateStatus}
+              onSessionExit={onSessionExit}
+            />
+          ) : (
+            <Workspace
+              selectedRepo={selectedRepo}
+              visibleTasks={visibleTasks}
+              selectedTaskId={selectedTaskId}
+              onSelectTask={setSelectedTaskId}
+              onRefresh={refresh}
+              onCreateTask={() => setCreateTaskOpen(true)}
+              onDeleteTask={requestDeleteTask}
+              counts={counts}
+              busy={busy}
+              loading={loading}
+              confirmingDeleteTaskId={confirmingDeleteTaskId}
+            />
+          )}
 
           {message && <ToastNotification message={message} onDismiss={() => setMessage(null)} />}
         </div>
-
-        <TaskDetailDrawer
-          task={selectedTask}
-          onClose={() => setSelectedTaskId(undefined)}
-          onStopSession={stopSession}
-          onResumeSession={resumeSession}
-          onStartSession={startSession}
-          onUpdateStatus={updateStatus}
-          onSessionExit={onSessionExit}
-        />
 
         {createTaskOpen && (
           <CreateTaskModal
