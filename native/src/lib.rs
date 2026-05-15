@@ -5,8 +5,8 @@ mod sessions;
 
 use crate::db::Database;
 use crate::models::{
-    AgentProfile, AgentProfileInput, AppResult, Repo, Session, SessionExitedEvent,
-    SessionOutputSnapshot, TaskStatus, TaskSummary,
+    AgentKind, AgentProfile, AgentProfileInput, AppResult, AppSettings, AppSettingsInput, Repo,
+    Session, SessionExitedEvent, SessionOutputSnapshot, TaskStatus, TaskSummary,
 };
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
@@ -26,6 +26,19 @@ fn add_repo(path: String, state: State<'_, AppState>) -> AppResult<Repo> {
 #[tauri::command]
 fn list_repos(state: State<'_, AppState>) -> AppResult<Vec<Repo>> {
     state.db.lock().list_repos()
+}
+
+#[tauri::command]
+fn get_app_settings(state: State<'_, AppState>) -> AppResult<AppSettings> {
+    state.db.lock().get_app_settings()
+}
+
+#[tauri::command]
+fn update_app_settings(
+    settings: AppSettingsInput,
+    state: State<'_, AppState>,
+) -> AppResult<AppSettings> {
+    state.db.lock().update_app_settings(settings)
 }
 
 #[tauri::command]
@@ -129,6 +142,9 @@ fn resume_session(
         let agent = db
             .agent_profile_by_id(agent_profile_id)?
             .ok_or_else(|| "Agent profile not found".to_string())?;
+        if !matches!(agent.agent_kind, AgentKind::Codex | AgentKind::Claude) {
+            return Err("Agent profile does not support resume".to_string());
+        }
         (task, repo, agent)
     };
 
@@ -210,6 +226,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             add_repo,
             list_repos,
+            get_app_settings,
+            update_app_settings,
             create_task,
             list_tasks,
             update_task_metadata,

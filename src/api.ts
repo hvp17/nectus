@@ -1,7 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
-import type { AgentProfile, Repo, Session, SessionOutputSnapshot, TaskStatus, TaskSummary } from "./types";
+import type {
+  AgentProfile,
+  AppSettings,
+  AppSettingsInput,
+  Repo,
+  Session,
+  SessionOutputSnapshot,
+  TaskStatus,
+  TaskSummary,
+} from "./types";
 
 const isTauri = "__TAURI_INTERNALS__" in window;
 const notificationBodyLimit = 240;
@@ -10,7 +19,9 @@ const demoProfiles: AgentProfile[] = [
   {
     id: 1,
     name: "Codex",
+    agentKind: "codex",
     command: "codex",
+    model: null,
     args: [],
     env: {},
     createdAt: new Date().toISOString(),
@@ -19,7 +30,9 @@ const demoProfiles: AgentProfile[] = [
   {
     id: 2,
     name: "Claude",
+    agentKind: "claude",
     command: "claude",
+    model: null,
     args: [],
     env: {},
     createdAt: new Date().toISOString(),
@@ -84,8 +97,26 @@ export const api = {
     if (!isTauri) return demoProfiles;
     return invoke("list_agent_profiles");
   },
-  async upsertAgentProfile(profile: Partial<AgentProfile> & Pick<AgentProfile, "name" | "command">): Promise<AgentProfile> {
+  async upsertAgentProfile(
+    profile: Partial<AgentProfile> & Pick<AgentProfile, "name" | "agentKind" | "command">,
+  ): Promise<AgentProfile> {
     return invoke("upsert_agent_profile", { profile });
+  },
+  async getAppSettings(): Promise<AppSettings> {
+    if (!isTauri) {
+      return {
+        defaultAgentProfileId: demoProfiles[0]?.id ?? null,
+        defaultWorktreeRootPattern: "../{repoName}-worktrees",
+        defaultBranchPrefix: null,
+        theme: "system",
+        density: "comfortable",
+        updatedAt: new Date().toISOString(),
+      };
+    }
+    return invoke("get_app_settings");
+  },
+  async updateAppSettings(settings: AppSettingsInput): Promise<AppSettings> {
+    return invoke("update_app_settings", { settings });
   },
   async startSession(taskId: number, agentProfileId: number): Promise<Session> {
     return invoke("start_session", { taskId, agentProfileId });

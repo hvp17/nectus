@@ -1,5 +1,8 @@
 export type TaskStatus = "planned" | "in_progress" | "review" | "done";
 export type SessionState = "running" | "stopped";
+export type AgentKind = "codex" | "claude" | "gemini" | "custom";
+export type ThemeMode = "system" | "light" | "dark";
+export type DensityMode = "comfortable" | "compact";
 
 export interface Repo {
   id: number;
@@ -17,6 +20,7 @@ export interface TaskSummary {
   prUrl?: string | null;
   agentProfileId?: number | null;
   agentName?: string | null;
+  agentKind?: AgentKind | null;
   hasWorktree: boolean;
   branchName?: string | null;
   worktreePath?: string | null;
@@ -33,11 +37,30 @@ export interface TaskSummary {
 export interface AgentProfile {
   id: number;
   name: string;
+  agentKind: AgentKind;
   command: string;
+  model?: string | null;
   args: string[];
   env: Record<string, string>;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AppSettings {
+  defaultAgentProfileId?: number | null;
+  defaultWorktreeRootPattern: string;
+  defaultBranchPrefix?: string | null;
+  theme: ThemeMode;
+  density: DensityMode;
+  updatedAt: string;
+}
+
+export interface AppSettingsInput {
+  defaultAgentProfileId?: number | null;
+  defaultWorktreeRootPattern: string;
+  defaultBranchPrefix?: string | null;
+  theme: ThemeMode;
+  density: DensityMode;
 }
 
 export interface Session {

@@ -20,6 +20,9 @@ vi.mock("./api", () => ({
     sendSessionInput: vi.fn(),
     sessionOutputSnapshot: vi.fn(),
     sendSystemNotification: vi.fn(),
+    getAppSettings: vi.fn(),
+    updateAppSettings: vi.fn(),
+    upsertAgentProfile: vi.fn(),
   },
 }));
 
@@ -93,7 +96,9 @@ describe("App", () => {
       {
         id: 1,
         name: "Codex",
+        agentKind: "codex",
         command: "codex",
+        model: null,
         args: [],
         env: {},
         createdAt: "2026-05-14T00:00:00.000Z",
@@ -102,7 +107,9 @@ describe("App", () => {
       {
         id: 2,
         name: "Claude",
+        agentKind: "claude",
         command: "claude",
+        model: null,
         args: [],
         env: {},
         createdAt: "2026-05-14T00:00:00.000Z",
@@ -110,6 +117,18 @@ describe("App", () => {
       },
     ]);
     mockedApi.listTasks.mockResolvedValue([]);
+    mockedApi.getAppSettings.mockResolvedValue({
+      defaultAgentProfileId: 1,
+      defaultWorktreeRootPattern: "../{repoName}-worktrees",
+      defaultBranchPrefix: null,
+      theme: "system",
+      density: "comfortable",
+      updatedAt: "2026-05-14T00:00:00.000Z",
+    });
+    mockedApi.updateAppSettings.mockImplementation(async (settings) => ({
+      ...settings,
+      updatedAt: "2026-05-14T00:01:00.000Z",
+    }));
   });
 
   it("renders the empty repo state", async () => {
@@ -128,6 +147,31 @@ describe("App", () => {
     expect(screen.getByText("Drag this task into Review")).toBeInTheDocument();
     expect(mockedApi.listRepos).not.toHaveBeenCalled();
     expect(mockedApi.listTasks).not.toHaveBeenCalled();
+  });
+
+  it("opens settings and saves appearance preferences", async () => {
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /settings/i }));
+
+    expect(screen.getByRole("heading", { name: /settings/i })).toBeInTheDocument();
+    expect(screen.getByText("Agent Profiles")).toBeInTheDocument();
+    expect(screen.getByText("Projects & Worktrees")).toBeInTheDocument();
+    expect(screen.getByText("Appearance")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("radio", { name: /dark/i }));
+    fireEvent.click(screen.getByRole("radio", { name: /compact/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.updateAppSettings).toHaveBeenCalledWith({
+        defaultAgentProfileId: 1,
+        defaultWorktreeRootPattern: "../{repoName}-worktrees",
+        defaultBranchPrefix: null,
+        theme: "dark",
+        density: "compact",
+      });
+    });
   });
 
   it("moves demo tasks between columns without calling Tauri metadata APIs", async () => {

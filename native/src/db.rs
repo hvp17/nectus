@@ -1,5 +1,8 @@
 use crate::git_ops;
-use crate::models::{AgentProfile, AgentProfileInput, Repo, TaskStatus, TaskSummary};
+use crate::models::{
+    AgentKind, AgentProfile, AgentProfileInput, AppSettings, AppSettingsInput, DensityMode, Repo,
+    TaskStatus, TaskSummary, ThemeMode,
+};
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::BTreeMap;
@@ -21,6 +24,7 @@ impl Database {
         let db = Self { conn };
         db.migrate()?;
         db.seed_agent_profiles()?;
+        db.seed_app_settings()?;
         Ok(db)
     }
 
@@ -31,6 +35,7 @@ impl Database {
         };
         db.migrate()?;
         db.seed_agent_profiles()?;
+        db.seed_app_settings()?;
         Ok(db)
     }
 
@@ -51,10 +56,22 @@ impl Database {
                 CREATE TABLE IF NOT EXISTS agent_profiles (
                   id INTEGER PRIMARY KEY AUTOINCREMENT,
                   name TEXT NOT NULL UNIQUE,
+                  agent_kind TEXT NOT NULL DEFAULT 'custom',
                   command TEXT NOT NULL,
+                  model TEXT,
                   args_json TEXT NOT NULL,
                   env_json TEXT NOT NULL,
                   created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS app_settings (
+                  id INTEGER PRIMARY KEY CHECK (id = 1),
+                  default_agent_profile_id INTEGER REFERENCES agent_profiles(id) ON DELETE SET NULL,
+                  default_worktree_root_pattern TEXT NOT NULL,
+                  default_branch_prefix TEXT,
+                  theme TEXT NOT NULL,
+                  density TEXT NOT NULL,
                   updated_at TEXT NOT NULL
                 );
 
@@ -97,6 +114,12 @@ impl Database {
         self.add_missing_column("tasks", "last_session_agent", "TEXT")?;
         self.add_missing_column("tasks", "last_session_cwd", "TEXT")?;
         self.add_missing_column("tasks", "last_session_label", "TEXT")?;
+        self.add_missing_column(
+            "agent_profiles",
+            "agent_kind",
+            "TEXT NOT NULL DEFAULT 'custom'",
+        )?;
+        self.add_missing_column("agent_profiles", "model", "TEXT")?;
         self.migrate_legacy_worktrees()
     }
 
@@ -182,17 +205,55 @@ impl Database {
 
     fn seed_agent_profiles(&self) -> Result<(), String> {
         let now = now();
-        for (name, command) in [("Codex", "codex"), ("Claude", "claude")] {
+        for (name, kind, command) in [
+            ("Codex", AgentKind::Codex, "codex"),
+            ("Claude", AgentKind::Claude, "claude"),
+            ("Gemini", AgentKind::Gemini, "gemini"),
+        ] {
             self.conn
                 .execute(
                     "
-                    INSERT OR IGNORE INTO agent_profiles (name, command, args_json, env_json, created_at, updated_at)
-                    VALUES (?1, ?2, '[]', '{}', ?3, ?3)
+                    INSERT INTO agent_profiles (name, agent_kind, command, model, args_json, env_json, created_at, updated_at)
+                    VALUES (?1, ?2, ?3, NULL, '[]', '{}', ?4, ?4)
+                    ON CONFLICT(name) DO UPDATE SET
+                      agent_kind = excluded.agent_kind,
+                      updated_at = excluded.updated_at
                     ",
-                    params![name, command, now],
+                    params![name, kind.as_str(), command, now],
                 )
                 .map_err(|error| format!("Failed to seed agent profiles: {error}"))?;
         }
+        Ok(())
+    }
+
+    fn seed_app_settings(&self) -> Result<(), String> {
+        let default_agent_profile_id = self
+            .agent_profile_by_name("Codex")?
+            .map(|profile| profile.id)
+            .or_else(|| {
+                self.list_agent_profiles()
+                    .ok()?
+                    .first()
+                    .map(|profile| profile.id)
+            });
+        let now = now();
+
+        self.conn
+            .execute(
+                "
+                INSERT OR IGNORE INTO app_settings
+                  (id, default_agent_profile_id, default_worktree_root_pattern, default_branch_prefix, theme, density, updated_at)
+                VALUES (1, ?1, ?2, NULL, ?3, ?4, ?5)
+                ",
+                params![
+                    default_agent_profile_id,
+                    "../{repoName}-worktrees",
+                    ThemeMode::System.as_str(),
+                    DensityMode::Comfortable.as_str(),
+                    now
+                ],
+            )
+            .map_err(|error| format!("Failed to seed app settings: {error}"))?;
         Ok(())
     }
 
@@ -205,9 +266,13 @@ impl Database {
             .and_then(|value| value.to_str())
             .unwrap_or("Repository")
             .to_string();
-        let default_root = git_ops::default_worktree_root(&repo_path)
-            .to_string_lossy()
-            .to_string();
+        let settings = self.get_app_settings()?;
+        let default_root = git_ops::default_worktree_root_with_pattern(
+            &repo_path,
+            &settings.default_worktree_root_pattern,
+        )
+        .to_string_lossy()
+        .to_string();
         let created_at = now();
 
         self.conn
@@ -239,6 +304,87 @@ impl Database {
                 .map_err(|error| error.to_string())?,
         );
         result
+    }
+
+    pub fn get_app_settings(&self) -> Result<AppSettings, String> {
+        self.conn
+            .query_row(
+                "
+                SELECT default_agent_profile_id, default_worktree_root_pattern, default_branch_prefix, theme, density, updated_at
+                FROM app_settings
+                WHERE id = 1
+                ",
+                [],
+                app_settings_from_row,
+            )
+            .optional()
+            .map_err(|error| error.to_string())?
+            .transpose()?
+            .ok_or_else(|| "App settings were not initialized".to_string())
+    }
+
+    pub fn update_app_settings(&self, settings: AppSettingsInput) -> Result<AppSettings, String> {
+        if settings.default_worktree_root_pattern.trim().is_empty() {
+            return Err("Worktree root pattern is required".into());
+        }
+        if !settings
+            .default_worktree_root_pattern
+            .contains("{repoName}")
+        {
+            return Err("Worktree root pattern must include {repoName}".into());
+        }
+        if let Some(profile_id) = settings.default_agent_profile_id {
+            self.agent_profile_by_id(profile_id)?
+                .ok_or_else(|| "Default agent profile not found".to_string())?;
+        }
+
+        let default_branch_prefix = settings
+            .default_branch_prefix
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let pattern = settings.default_worktree_root_pattern.trim().to_string();
+        let updated_at = now();
+        self.conn
+            .execute(
+                "
+                UPDATE app_settings
+                SET default_agent_profile_id = ?1,
+                    default_worktree_root_pattern = ?2,
+                    default_branch_prefix = ?3,
+                    theme = ?4,
+                    density = ?5,
+                    updated_at = ?6
+                WHERE id = 1
+                ",
+                params![
+                    settings.default_agent_profile_id,
+                    pattern,
+                    default_branch_prefix,
+                    settings.theme.as_str(),
+                    settings.density.as_str(),
+                    updated_at
+                ],
+            )
+            .map_err(|error| format!("Failed to update app settings: {error}"))?;
+        self.refresh_repo_worktree_roots(&pattern)?;
+        self.get_app_settings()
+    }
+
+    fn refresh_repo_worktree_roots(&self, pattern: &str) -> Result<(), String> {
+        let repos = self.list_repos()?;
+        for repo in repos {
+            let repo_path = PathBuf::from(&repo.path);
+            let default_root = git_ops::default_worktree_root_with_pattern(&repo_path, pattern)
+                .to_string_lossy()
+                .to_string();
+            self.conn
+                .execute(
+                    "UPDATE repos SET default_worktree_root = ?1 WHERE id = ?2",
+                    params![default_root, repo.id],
+                )
+                .map_err(|error| format!("Failed to refresh repository worktree root: {error}"))?;
+        }
+        Ok(())
     }
 
     pub fn repo_by_id(&self, id: i64) -> Result<Option<Repo>, String> {
@@ -328,7 +474,7 @@ impl Database {
 
     pub fn list_tasks(&self, repo_id: Option<i64>) -> Result<Vec<TaskSummary>, String> {
         let sql = "
-            SELECT t.id, t.repo_id, t.title, t.status, t.pr_url, t.agent_profile_id, a.name,
+            SELECT t.id, t.repo_id, t.title, t.status, t.pr_url, t.agent_profile_id, a.name, a.agent_kind,
                    t.has_worktree, t.branch_name, t.worktree_path, t.active_session_id,
                    t.last_session_id, t.last_session_agent, t.last_session_cwd, t.last_session_label,
                    t.created_at, t.updated_at
@@ -366,7 +512,7 @@ impl Database {
             .conn
             .query_row(
                 "
-                SELECT t.id, t.repo_id, t.title, t.status, t.pr_url, t.agent_profile_id, a.name,
+                SELECT t.id, t.repo_id, t.title, t.status, t.pr_url, t.agent_profile_id, a.name, a.agent_kind,
                        t.has_worktree, t.branch_name, t.worktree_path, t.active_session_id,
                        t.last_session_id, t.last_session_agent, t.last_session_cwd, t.last_session_label,
                        t.created_at, t.updated_at
@@ -447,7 +593,10 @@ impl Database {
             let repo = self
                 .repo_by_id(existing.repo_id)?
                 .ok_or_else(|| "Repository not found".to_string())?;
-            git_ops::remove_worktree(PathBuf::from(&repo.path).as_path(), Path::new(&worktree_path))?;
+            git_ops::remove_worktree(
+                PathBuf::from(&repo.path).as_path(),
+                Path::new(&worktree_path),
+            )?;
         }
 
         self.conn
@@ -510,7 +659,7 @@ impl Database {
     pub fn list_agent_profiles(&self) -> Result<Vec<AgentProfile>, String> {
         let mut stmt = self
             .conn
-            .prepare("SELECT id, name, command, args_json, env_json, created_at, updated_at FROM agent_profiles ORDER BY id")
+            .prepare("SELECT id, name, agent_kind, command, model, args_json, env_json, created_at, updated_at FROM agent_profiles ORDER BY id")
             .map_err(|error| error.to_string())?;
         let result = rows(
             stmt.query_map([], agent_from_row)
@@ -522,7 +671,7 @@ impl Database {
     pub fn agent_profile_by_id(&self, id: i64) -> Result<Option<AgentProfile>, String> {
         self.conn
             .query_row(
-                "SELECT id, name, command, args_json, env_json, created_at, updated_at FROM agent_profiles WHERE id = ?1",
+                "SELECT id, name, agent_kind, command, model, args_json, env_json, created_at, updated_at FROM agent_profiles WHERE id = ?1",
                 params![id],
                 agent_from_row,
             )
@@ -539,6 +688,10 @@ impl Database {
         }
 
         let now = now();
+        let model = profile
+            .model
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
         let args_json = serde_json::to_string(&profile.args).map_err(|error| error.to_string())?;
         let env_json = serde_json::to_string(&profile.env).map_err(|error| error.to_string())?;
 
@@ -547,10 +700,19 @@ impl Database {
                 .execute(
                     "
                     UPDATE agent_profiles
-                    SET name = ?1, command = ?2, args_json = ?3, env_json = ?4, updated_at = ?5
-                    WHERE id = ?6
+                    SET name = ?1, agent_kind = ?2, command = ?3, model = ?4, args_json = ?5, env_json = ?6, updated_at = ?7
+                    WHERE id = ?8
                     ",
-                    params![profile.name, profile.command, args_json, env_json, now, id],
+                    params![
+                        profile.name,
+                        profile.agent_kind.as_str(),
+                        profile.command,
+                        model,
+                        args_json,
+                        env_json,
+                        now,
+                        id
+                    ],
                 )
                 .map_err(|error| format!("Failed to update agent profile: {error}"))?;
             self.agent_profile_by_id(id)?
@@ -559,15 +721,25 @@ impl Database {
             self.conn
                 .execute(
                     "
-                    INSERT INTO agent_profiles (name, command, args_json, env_json, created_at, updated_at)
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?5)
+                    INSERT INTO agent_profiles (name, agent_kind, command, model, args_json, env_json, created_at, updated_at)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
                     ON CONFLICT(name) DO UPDATE SET
+                      agent_kind = excluded.agent_kind,
                       command = excluded.command,
+                      model = excluded.model,
                       args_json = excluded.args_json,
                       env_json = excluded.env_json,
                       updated_at = excluded.updated_at
                     ",
-                    params![profile.name, profile.command, args_json, env_json, now],
+                    params![
+                        profile.name,
+                        profile.agent_kind.as_str(),
+                        profile.command,
+                        model,
+                        args_json,
+                        env_json,
+                        now
+                    ],
                 )
                 .map_err(|error| format!("Failed to save agent profile: {error}"))?;
 
@@ -589,7 +761,7 @@ impl Database {
     fn agent_profile_by_name(&self, name: &str) -> Result<Option<AgentProfile>, String> {
         self.conn
             .query_row(
-                "SELECT id, name, command, args_json, env_json, created_at, updated_at FROM agent_profiles WHERE name = ?1",
+                "SELECT id, name, agent_kind, command, model, args_json, env_json, created_at, updated_at FROM agent_profiles WHERE name = ?1",
                 params![name],
                 agent_from_row,
             )
@@ -627,6 +799,11 @@ fn task_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Result<TaskSummary
         Ok(status) => status,
         Err(error) => return Ok(Err(error)),
     };
+    let agent_kind: Option<String> = row.get(7)?;
+    let agent_kind = match agent_kind.as_deref().map(AgentKind::from_str).transpose() {
+        Ok(value) => value,
+        Err(error) => return Ok(Err(error)),
+    };
     Ok(Ok(TaskSummary {
         id: row.get(0)?,
         repo_id: row.get(1)?,
@@ -635,32 +812,68 @@ fn task_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Result<TaskSummary
         pr_url: row.get(4)?,
         agent_profile_id: row.get(5)?,
         agent_name: row.get(6)?,
-        has_worktree: row.get(7)?,
-        branch_name: row.get(8)?,
-        worktree_path: row.get(9)?,
+        agent_kind,
+        has_worktree: row.get(8)?,
+        branch_name: row.get(9)?,
+        worktree_path: row.get(10)?,
         is_dirty: false,
-        active_session_id: row.get(10)?,
-        last_session_id: row.get(11)?,
-        last_session_agent: row.get(12)?,
-        last_session_cwd: row.get(13)?,
-        last_session_label: row.get(14)?,
-        created_at: row.get(15)?,
-        updated_at: row.get(16)?,
+        active_session_id: row.get(11)?,
+        last_session_id: row.get(12)?,
+        last_session_agent: row.get(13)?,
+        last_session_cwd: row.get(14)?,
+        last_session_label: row.get(15)?,
+        created_at: row.get(16)?,
+        updated_at: row.get(17)?,
     }))
 }
 
 fn agent_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentProfile> {
-    let args_json: String = row.get(3)?;
-    let env_json: String = row.get(4)?;
+    let agent_kind: String = row.get(2)?;
+    let agent_kind = match AgentKind::from_str(&agent_kind) {
+        Ok(kind) => kind,
+        Err(error) => {
+            return Err(rusqlite::Error::FromSqlConversionFailure(
+                2,
+                rusqlite::types::Type::Text,
+                Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, error)),
+            ));
+        }
+    };
+    let args_json: String = row.get(5)?;
+    let env_json: String = row.get(6)?;
     Ok(AgentProfile {
         id: row.get(0)?,
         name: row.get(1)?,
-        command: row.get(2)?,
+        agent_kind,
+        command: row.get(3)?,
+        model: row.get(4)?,
         args: serde_json::from_str(&args_json).unwrap_or_default(),
         env: serde_json::from_str::<BTreeMap<String, String>>(&env_json).unwrap_or_default(),
-        created_at: row.get(5)?,
-        updated_at: row.get(6)?,
+        created_at: row.get(7)?,
+        updated_at: row.get(8)?,
     })
+}
+
+fn app_settings_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Result<AppSettings, String>> {
+    let theme: String = row.get(3)?;
+    let density: String = row.get(4)?;
+    let theme = match ThemeMode::from_str(&theme) {
+        Ok(value) => value,
+        Err(error) => return Ok(Err(error)),
+    };
+    let density = match DensityMode::from_str(&density) {
+        Ok(value) => value,
+        Err(error) => return Ok(Err(error)),
+    };
+
+    Ok(Ok(AppSettings {
+        default_agent_profile_id: row.get(0)?,
+        default_worktree_root_pattern: row.get(1)?,
+        default_branch_prefix: row.get(2)?,
+        theme,
+        density,
+        updated_at: row.get(5)?,
+    }))
 }
 
 #[cfg(test)]
@@ -673,9 +886,96 @@ mod tests {
         let db = Database::open_in_memory().unwrap();
         let profiles = db.list_agent_profiles().unwrap();
 
-        assert_eq!(profiles.len(), 2);
+        assert_eq!(profiles.len(), 3);
         assert_eq!(profiles[0].command, "codex");
         assert_eq!(profiles[1].command, "claude");
+        assert_eq!(profiles[2].command, "gemini");
+        assert_eq!(profiles[0].agent_kind, AgentKind::Codex);
+        assert_eq!(profiles[1].agent_kind, AgentKind::Claude);
+        assert_eq!(profiles[2].agent_kind, AgentKind::Gemini);
+    }
+
+    #[test]
+    fn seeds_and_updates_global_app_settings() {
+        let db = Database::open_in_memory().unwrap();
+        let profiles = db.list_agent_profiles().unwrap();
+
+        let settings = db.get_app_settings().unwrap();
+        assert_eq!(
+            settings.default_agent_profile_id,
+            profiles.first().map(|profile| profile.id)
+        );
+        assert_eq!(
+            settings.default_worktree_root_pattern,
+            "../{repoName}-worktrees"
+        );
+        assert_eq!(settings.default_branch_prefix, None);
+        assert_eq!(settings.theme, ThemeMode::System);
+        assert_eq!(settings.density, DensityMode::Comfortable);
+
+        let updated = db
+            .update_app_settings(AppSettingsInput {
+                default_agent_profile_id: Some(profiles[1].id),
+                default_worktree_root_pattern: "../worktrees/{repoName}".to_string(),
+                default_branch_prefix: Some("feat/".to_string()),
+                theme: ThemeMode::Dark,
+                density: DensityMode::Compact,
+            })
+            .unwrap();
+
+        assert_eq!(updated.default_agent_profile_id, Some(profiles[1].id));
+        assert_eq!(
+            updated.default_worktree_root_pattern,
+            "../worktrees/{repoName}"
+        );
+        assert_eq!(updated.default_branch_prefix.as_deref(), Some("feat/"));
+        assert_eq!(updated.theme, ThemeMode::Dark);
+        assert_eq!(updated.density, DensityMode::Compact);
+    }
+
+    #[test]
+    fn updated_worktree_root_pattern_applies_to_existing_and_new_repos() {
+        let db = Database::open_in_memory().unwrap();
+        let first_repo_dir = tempdir().unwrap();
+        let second_repo_dir = tempdir().unwrap();
+        for repo_dir in [&first_repo_dir, &second_repo_dir] {
+            std::process::Command::new("git")
+                .arg("init")
+                .arg(repo_dir.path())
+                .output()
+                .unwrap();
+        }
+        let first = db
+            .add_repo(first_repo_dir.path().to_string_lossy().to_string())
+            .unwrap();
+        let first_repo_name = first_repo_dir.path().file_name().unwrap().to_str().unwrap();
+
+        db.update_app_settings(AppSettingsInput {
+            default_agent_profile_id: None,
+            default_worktree_root_pattern: "../global-worktrees/{repoName}".to_string(),
+            default_branch_prefix: None,
+            theme: ThemeMode::System,
+            density: DensityMode::Comfortable,
+        })
+        .unwrap();
+
+        let refreshed_first = db.repo_by_id(first.id).unwrap().unwrap();
+        assert!(refreshed_first
+            .default_worktree_root
+            .ends_with(&format!("global-worktrees/{first_repo_name}")));
+
+        let second = db
+            .add_repo(second_repo_dir.path().to_string_lossy().to_string())
+            .unwrap();
+        let second_repo_name = second_repo_dir
+            .path()
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(second
+            .default_worktree_root
+            .ends_with(&format!("global-worktrees/{second_repo_name}")));
     }
 
     #[test]
@@ -688,13 +988,17 @@ mod tests {
             .upsert_agent_profile(AgentProfileInput {
                 id: None,
                 name: "Custom".to_string(),
+                agent_kind: AgentKind::Custom,
                 command: "custom-agent".to_string(),
+                model: Some("custom-fast".to_string()),
                 args: vec!["--resume".to_string()],
                 env,
             })
             .unwrap();
 
         assert_eq!(profile.name, "Custom");
+        assert_eq!(profile.agent_kind, AgentKind::Custom);
+        assert_eq!(profile.model.as_deref(), Some("custom-fast"));
         assert_eq!(profile.args, vec!["--resume"]);
         assert_eq!(profile.env.get("MODEL").unwrap(), "fast");
     }
@@ -764,7 +1068,9 @@ mod tests {
             .upsert_agent_profile(AgentProfileInput {
                 id: None,
                 name: "Custom".to_string(),
+                agent_kind: AgentKind::Custom,
                 command: "custom-agent".to_string(),
+                model: None,
                 args: vec![],
                 env: BTreeMap::new(),
             })
@@ -774,7 +1080,9 @@ mod tests {
             .upsert_agent_profile(AgentProfileInput {
                 id: None,
                 name: "Codex".to_string(),
+                agent_kind: AgentKind::Codex,
                 command: "codex-next".to_string(),
+                model: Some("gpt-5.3-codex".to_string()),
                 args: vec!["--fast".to_string()],
                 env: BTreeMap::new(),
             })
@@ -782,7 +1090,9 @@ mod tests {
 
         assert_ne!(codex.id, custom.id);
         assert_eq!(codex.name, "Codex");
+        assert_eq!(codex.agent_kind, AgentKind::Codex);
         assert_eq!(codex.command, "codex-next");
+        assert_eq!(codex.model.as_deref(), Some("gpt-5.3-codex"));
     }
 
     #[test]

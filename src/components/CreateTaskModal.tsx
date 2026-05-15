@@ -18,6 +18,7 @@ interface CreateTaskModalProps {
   setNewTaskBranchName: (val: string) => void;
   newTaskHasWorktree: boolean;
   setNewTaskHasWorktree: (val: boolean) => void;
+  defaultBranchPrefix?: string | null;
   newTaskAgentProfileId: number | undefined;
   setNewTaskAgentProfileId: (val: number) => void;
 }
@@ -35,6 +36,7 @@ export function CreateTaskModal({
   setNewTaskBranchName,
   newTaskHasWorktree,
   setNewTaskHasWorktree,
+  defaultBranchPrefix,
   newTaskAgentProfileId,
   setNewTaskAgentProfileId,
 }: CreateTaskModalProps) {
@@ -140,7 +142,17 @@ export function CreateTaskModal({
                     : "border-border hover:bg-accent/50"
                 }`}
               >
-                <input type="radio" className="sr-only" checked={newTaskHasWorktree} onChange={() => setNewTaskHasWorktree(true)} />
+                <input
+                  type="radio"
+                  className="sr-only"
+                  checked={newTaskHasWorktree}
+                  onChange={() => {
+                    setNewTaskHasWorktree(true);
+                    if (!newTaskBranchName.trim() && defaultBranchPrefix) {
+                      setNewTaskBranchName(defaultBranchPrefix);
+                    }
+                  }}
+                />
                 <span className="text-sm font-semibold">New Worktree</span>
               </label>
             </div>
@@ -151,7 +163,7 @@ export function CreateTaskModal({
               <Label htmlFor="new-task-branch" className="text-xs font-bold uppercase tracking-wider opacity-60">Branch Name</Label>
               <Input
                 id="new-task-branch"
-                placeholder="feat/refactor-auth"
+                placeholder={`${defaultBranchPrefix ?? "feat/"}refactor-auth`}
                 value={newTaskBranchName}
                 onChange={(e) => setNewTaskBranchName(e.target.value)}
                 className="h-10 font-mono text-xs"

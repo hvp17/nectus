@@ -7,6 +7,7 @@ import { Sidebar } from "./components/Sidebar";
 import { Workspace } from "./components/Workspace";
 import { TaskDetailDrawer } from "./components/TaskDetailDrawer";
 import { CreateTaskModal } from "./components/CreateTaskModal";
+import { SettingsPage } from "./components/SettingsPage";
 import { useApp } from "./hooks/useApp";
 
 function getToastContent(message: string) {
@@ -65,6 +66,11 @@ function App() {
     resumeSession,
     onSessionExit,
     agentProfiles,
+    settings,
+    currentView,
+    setCurrentView,
+    saveAppSettings,
+    saveAgentProfile,
   } = useApp();
 
   useEffect(() => {
@@ -77,23 +83,50 @@ function App() {
     return () => window.clearTimeout(timeout);
   }, [message, setMessage]);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    const applyTheme = () => {
+      const prefersDark =
+        typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      root.classList.toggle("dark", settings?.theme === "dark" || (settings?.theme === "system" && prefersDark));
+    };
+
+    applyTheme();
+    root.dataset.density = settings?.density ?? "comfortable";
+  }, [settings?.theme, settings?.density]);
+
   return (
     <TooltipProvider>
-      <main className="app-shell bg-background text-foreground">
+      <main className={`app-shell bg-background text-foreground density-${settings?.density ?? "comfortable"}`}>
         <Sidebar
           repos={repos}
           selectedRepoId={selectedRepoId}
           onSelectRepo={(id) => {
+            setCurrentView("dashboard");
             setSelectedRepoId(id);
             setSelectedTaskId(undefined);
           }}
           onAddProject={addProject}
+          onOpenSettings={() => {
+            setCurrentView("settings");
+            setSelectedTaskId(undefined);
+          }}
+          settingsActive={currentView === "settings"}
           busy={busy}
           loading={loading}
         />
 
         <div className="content-shell">
-          {selectedTask ? (
+          {currentView === "settings" ? (
+            <SettingsPage
+              settings={settings}
+              agentProfiles={agentProfiles}
+              busy={busy}
+              onBack={() => setCurrentView("dashboard")}
+              onSaveSettings={saveAppSettings}
+              onSaveAgentProfile={saveAgentProfile}
+            />
+          ) : selectedTask ? (
             <TaskDetailDrawer
               task={selectedTask}
               onClose={() => setSelectedTaskId(undefined)}
@@ -110,7 +143,15 @@ function App() {
               selectedTaskId={selectedTaskId}
               onSelectTask={setSelectedTaskId}
               onRefresh={refresh}
-              onCreateTask={() => setCreateTaskOpen(true)}
+              onCreateTask={() => {
+                if (!newTaskAgentProfileId) {
+                  const defaultAgentProfileId = settings?.defaultAgentProfileId ?? agentProfiles[0]?.id;
+                  if (defaultAgentProfileId) {
+                    setNewTaskAgentProfileId(defaultAgentProfileId);
+                  }
+                }
+                setCreateTaskOpen(true);
+              }}
               onDeleteTask={requestDeleteTask}
               onUpdateStatus={updateStatus}
               counts={counts}
@@ -140,6 +181,7 @@ function App() {
             setNewTaskBranchName={setNewTaskBranchName}
             newTaskHasWorktree={newTaskHasWorktree}
             setNewTaskHasWorktree={setNewTaskHasWorktree}
+            defaultBranchPrefix={settings?.defaultBranchPrefix}
             newTaskAgentProfileId={newTaskAgentProfileId}
             setNewTaskAgentProfileId={setNewTaskAgentProfileId}
           />

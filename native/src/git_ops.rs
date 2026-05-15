@@ -26,13 +26,32 @@ pub fn validate_repo_path(path: &Path) -> Result<(), String> {
     }
 }
 
-pub fn default_worktree_root(repo_path: &Path) -> PathBuf {
+pub fn default_worktree_root_with_pattern(repo_path: &Path, pattern: &str) -> PathBuf {
     let repo_name = repo_path
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("repo");
-    let parent = repo_path.parent().unwrap_or_else(|| Path::new("."));
-    parent.join(format!("{repo_name}-worktrees"))
+    let value = pattern.replace("{repoName}", repo_name);
+    let path = PathBuf::from(value);
+    if path.is_absolute() {
+        normalize_path(path)
+    } else {
+        normalize_path(repo_path.join(path))
+    }
+}
+
+fn normalize_path(path: PathBuf) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            _ => normalized.push(component.as_os_str()),
+        }
+    }
+    normalized
 }
 
 pub fn validate_branch_name(branch_name: &str) -> Result<(), String> {
@@ -153,9 +172,18 @@ mod tests {
 
     #[test]
     fn derives_sibling_worktree_root_from_repo_path() {
-        let root = default_worktree_root(Path::new("/tmp/nectus"));
+        let root =
+            default_worktree_root_with_pattern(Path::new("/tmp/nectus"), "../{repoName}-worktrees");
 
         assert_eq!(root, PathBuf::from("/tmp/nectus-worktrees"));
+    }
+
+    #[test]
+    fn derives_worktree_root_from_pattern() {
+        let root =
+            default_worktree_root_with_pattern(Path::new("/tmp/nectus"), "../worktrees/{repoName}");
+
+        assert_eq!(root, PathBuf::from("/tmp/worktrees/nectus"));
     }
 
     #[test]

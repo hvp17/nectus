@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { api } from "../api";
 import type {
   AgentProfile,
+  AppSettings,
+  AppSettingsInput,
   Repo,
   Session,
   SessionExitedEvent,
@@ -25,7 +27,9 @@ const demoAgentProfiles: AgentProfile[] = [
   {
     id: 100,
     name: "Codex",
+    agentKind: "codex",
     command: "codex",
+    model: null,
     args: [],
     env: {},
     createdAt: demoCreatedAt,
@@ -34,13 +38,34 @@ const demoAgentProfiles: AgentProfile[] = [
   {
     id: 101,
     name: "Claude",
+    agentKind: "claude",
     command: "claude",
+    model: null,
+    args: [],
+    env: {},
+    createdAt: demoCreatedAt,
+    updatedAt: demoCreatedAt,
+  },
+  {
+    id: 102,
+    name: "Gemini",
+    agentKind: "gemini",
+    command: "gemini",
+    model: null,
     args: [],
     env: {},
     createdAt: demoCreatedAt,
     updatedAt: demoCreatedAt,
   },
 ];
+const defaultDemoSettings: AppSettings = {
+  defaultAgentProfileId: demoAgentProfiles[0].id,
+  defaultWorktreeRootPattern: "../{repoName}-worktrees",
+  defaultBranchPrefix: null,
+  theme: "system",
+  density: "comfortable",
+  updatedAt: demoCreatedAt,
+};
 const demoTasks: TaskSummary[] = [
   {
     id: 1001,
@@ -50,6 +75,7 @@ const demoTasks: TaskSummary[] = [
     prUrl: null,
     agentProfileId: 100,
     agentName: "Codex",
+    agentKind: "codex",
     hasWorktree: true,
     branchName: "demo/drag-task",
     worktreePath: "/demo/nectus-worktrees/demo-drag-task",
@@ -70,6 +96,7 @@ const demoTasks: TaskSummary[] = [
     prUrl: null,
     agentProfileId: 101,
     agentName: "Claude",
+    agentKind: "claude",
     hasWorktree: false,
     branchName: null,
     worktreePath: null,
@@ -90,6 +117,7 @@ const demoTasks: TaskSummary[] = [
     prUrl: null,
     agentProfileId: 100,
     agentName: "Codex",
+    agentKind: "codex",
     hasWorktree: true,
     branchName: "demo/done-task",
     worktreePath: "/demo/nectus-worktrees/demo-done-task",
@@ -122,6 +150,8 @@ export function useApp() {
   const [repos, setRepos] = useState<Repo[]>([]);
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
+  const [settings, setSettings] = useState<AppSettings | undefined>();
+  const [currentView, setCurrentView] = useState<"dashboard" | "settings">("dashboard");
   const [selectedRepoId, setSelectedRepoId] = useState<number | undefined>();
   const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>();
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
@@ -177,6 +207,7 @@ export function useApp() {
       selectedAgentProfileIdRef.current = selectedAgentProfileIdRef.current ?? demoAgentProfiles[0].id;
       setRepos([demoRepo]);
       setAgentProfiles(demoAgentProfiles);
+      setSettings((current) => current ?? defaultDemoSettings);
       setSelectedRepoId(nextRepoId);
       setSelectedAgentProfileId(selectedAgentProfileIdRef.current);
       setTasks((current) => (current.length ? current : demoTasks));
@@ -185,13 +216,20 @@ export function useApp() {
     }
 
     try {
-      const [repoResult, profileResult] = await Promise.all([api.listRepos(), api.listAgentProfiles()]);
+      const [repoResult, profileResult, settingsResult] = await Promise.all([
+        api.listRepos(),
+        api.listAgentProfiles(),
+        api.getAppSettings(),
+      ]);
       setRepos(repoResult);
       setAgentProfiles(profileResult);
+      setSettings(settingsResult);
       
-      if (!selectedAgentProfileIdRef.current && profileResult[0]) {
-        selectedAgentProfileIdRef.current = profileResult[0].id;
-        setSelectedAgentProfileId(profileResult[0].id);
+      const nextAgentProfileId =
+        selectedAgentProfileIdRef.current ?? settingsResult.defaultAgentProfileId ?? profileResult[0]?.id;
+      if (!selectedAgentProfileIdRef.current && nextAgentProfileId) {
+        selectedAgentProfileIdRef.current = nextAgentProfileId;
+        setSelectedAgentProfileId(nextAgentProfileId);
       }
       
       const nextRepoId = preferredRepoId ?? selectedRepoIdRef.current ?? repoResult[0]?.id;
@@ -291,7 +329,7 @@ export function useApp() {
     setNewTaskPrompt("");
     setNewTaskBranchName("");
     setNewTaskHasWorktree(false);
-    setNewTaskAgentProfileId(undefined);
+    setNewTaskAgentProfileId(settings?.defaultAgentProfileId ?? selectedAgentProfileIdRef.current);
   };
 
   const closeCreateTaskModal = () => {
@@ -334,6 +372,7 @@ export function useApp() {
         prUrl: null,
         agentProfileId: newTaskAgentProfileId,
         agentName: demoAgentProfiles.find((profile) => profile.id === newTaskAgentProfileId)?.name ?? null,
+        agentKind: demoAgentProfiles.find((profile) => profile.id === newTaskAgentProfileId)?.agentKind ?? null,
         hasWorktree: newTaskHasWorktree,
         branchName: newTaskHasWorktree ? newTaskBranchName.trim() : null,
         worktreePath: newTaskHasWorktree ? `${demoRepo.defaultWorktreeRoot}/${newTaskBranchName.trim()}` : null,
@@ -481,10 +520,83 @@ export function useApp() {
     );
   }, []);
 
+  const saveAppSettings = async (input: AppSettingsInput) => {
+    setBusy(true);
+    setMessage(null);
+    if (demoMode) {
+      const updated = { ...input, updatedAt: new Date().toISOString() };
+      setSettings(updated);
+      setSelectedAgentProfileId(input.defaultAgentProfileId ?? undefined);
+      selectedAgentProfileIdRef.current = input.defaultAgentProfileId ?? undefined;
+      setMessage("Settings saved");
+      setBusy(false);
+      return updated;
+    }
+
+    try {
+      const updated = await api.updateAppSettings(input);
+      setSettings(updated);
+      setSelectedAgentProfileId(updated.defaultAgentProfileId ?? undefined);
+      selectedAgentProfileIdRef.current = updated.defaultAgentProfileId ?? undefined;
+      setMessage("Settings saved");
+      await refresh(selectedRepoIdRef.current);
+      return updated;
+    } catch (error) {
+      setMessage(String(error));
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveAgentProfile = async (profile: Partial<AgentProfile> & Pick<AgentProfile, "name" | "agentKind" | "command">) => {
+    setBusy(true);
+    setMessage(null);
+    if (demoMode) {
+      const now = new Date().toISOString();
+      const saved: AgentProfile = {
+        id: profile.id ?? Date.now(),
+        name: profile.name,
+        agentKind: profile.agentKind,
+        command: profile.command,
+        model: profile.model ?? null,
+        args: profile.args ?? [],
+        env: profile.env ?? {},
+        createdAt: profile.createdAt ?? now,
+        updatedAt: now,
+      };
+      setAgentProfiles((current) => {
+        const exists = current.some((item) => item.id === saved.id);
+        return exists ? current.map((item) => (item.id === saved.id ? saved : item)) : [...current, saved];
+      });
+      setMessage(`Saved ${saved.name}`);
+      setBusy(false);
+      return saved;
+    }
+
+    try {
+      const saved = await api.upsertAgentProfile(profile);
+      setAgentProfiles((current) => {
+        const exists = current.some((item) => item.id === saved.id);
+        return exists ? current.map((item) => (item.id === saved.id ? saved : item)) : [...current, saved];
+      });
+      setMessage(`Saved ${saved.name}`);
+      return saved;
+    } catch (error) {
+      setMessage(String(error));
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return {
     repos,
     tasks,
     agentProfiles,
+    settings,
+    currentView,
+    setCurrentView,
     selectedRepoId,
     setSelectedRepoId,
     selectedTaskId,
@@ -522,5 +634,7 @@ export function useApp() {
     onSessionExit,
     selectedAgentProfileId,
     setSelectedAgentProfileId,
+    saveAppSettings,
+    saveAgentProfile,
   };
 }

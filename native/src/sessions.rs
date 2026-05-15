@@ -1,7 +1,7 @@
 use crate::db::Database;
 use crate::models::{
-    AgentProfile, Repo, Session, SessionExitedEvent, SessionIdleEvent, SessionNeedsInputEvent,
-    SessionOutputEvent, SessionOutputSnapshot, SessionState, TaskSummary,
+    AgentKind, AgentProfile, Repo, Session, SessionExitedEvent, SessionIdleEvent,
+    SessionNeedsInputEvent, SessionOutputEvent, SessionOutputSnapshot, SessionState, TaskSummary,
 };
 use chrono::Utc;
 use parking_lot::Mutex;
@@ -127,7 +127,7 @@ impl SessionManager {
             session.id.clone(),
             RunningSession {
                 session: session.clone(),
-                agent_command: agent.command.clone(),
+                agent_command: agent.agent_kind.as_str().to_string(),
                 cwd: cwd_path.clone(),
                 master: pair.master,
                 writer,
@@ -139,7 +139,7 @@ impl SessionManager {
             },
         );
 
-        if is_codex_command(&agent.command) {
+        if agent.agent_kind == AgentKind::Codex {
             spawn_codex_event_watcher(
                 app.clone(),
                 self.sessions.clone(),
@@ -156,7 +156,7 @@ impl SessionManager {
             let sessions = self.sessions.clone();
             let task_id = task.id;
             let session_id = session_id.clone();
-            let agent_command = agent.command.clone();
+            let agent_command = agent.agent_kind.as_str().to_string();
             let cwd = cwd_path;
             let started_at = started_at.clone();
             move || {
@@ -184,7 +184,7 @@ impl SessionManager {
                     }
                 }
                 if sessions.lock().remove(&session_id).is_some() {
-                    if is_codex_command(&agent_command) {
+                    if agent_command == AgentKind::Codex.as_str() {
                         if let Some(metadata) = latest_codex_session_metadata(&cwd, &started_at) {
                             let _ = db.lock().set_last_session(
                                 task_id,
@@ -231,7 +231,7 @@ impl SessionManager {
         let stopped_at = Utc::now().to_rfc3339();
         running.session.state = SessionState::Stopped;
         running.session.stopped_at = Some(stopped_at);
-        if is_codex_command(&running.agent_command) {
+        if running.agent_command == AgentKind::Codex.as_str() {
             if let Some(metadata) =
                 latest_codex_session_metadata(&running.cwd, &running.session.started_at)
             {
@@ -401,16 +401,28 @@ fn configure_agent_command(
     session_id: &str,
     resume: bool,
 ) {
-    if resume && is_codex_command(&agent.command) {
+    if should_pass_model(agent.agent_kind, resume) {
+        if let Some(model) = agent
+            .model
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            command.arg("--model");
+            command.arg(model);
+        }
+    }
+
+    if resume && agent.agent_kind == AgentKind::Codex {
         command.arg("resume");
     }
     for arg in &agent.args {
         command.arg(arg);
     }
-    if resume && is_codex_command(&agent.command) {
+    if resume && agent.agent_kind == AgentKind::Codex {
         command.arg(session_id);
     }
-    if is_claude_command(&agent.command) {
+    if agent.agent_kind == AgentKind::Claude {
         if resume {
             command.arg("--resume");
             command.arg(session_id);
@@ -421,18 +433,11 @@ fn configure_agent_command(
     }
 }
 
-fn is_codex_command(command: &str) -> bool {
-    Path::new(command)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .is_some_and(|name| name == "codex")
-}
-
-fn is_claude_command(command: &str) -> bool {
-    Path::new(command)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .is_some_and(|name| name == "claude")
+fn should_pass_model(agent_kind: AgentKind, resume: bool) -> bool {
+    matches!(
+        agent_kind,
+        AgentKind::Codex | AgentKind::Claude | AgentKind::Gemini
+    ) && !(resume && agent_kind == AgentKind::Codex)
 }
 
 #[derive(Debug, Clone)]

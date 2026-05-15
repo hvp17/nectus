@@ -53,6 +53,7 @@ pub struct TaskSummary {
     pub pr_url: Option<String>,
     pub agent_profile_id: Option<i64>,
     pub agent_name: Option<String>,
+    pub agent_kind: Option<AgentKind>,
     pub has_worktree: bool,
     pub branch_name: Option<String>,
     pub worktree_path: Option<String>,
@@ -66,12 +67,44 @@ pub struct TaskSummary {
     pub updated_at: String,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentKind {
+    Codex,
+    Claude,
+    Gemini,
+    Custom,
+}
+
+impl AgentKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AgentKind::Codex => "codex",
+            AgentKind::Claude => "claude",
+            AgentKind::Gemini => "gemini",
+            AgentKind::Custom => "custom",
+        }
+    }
+
+    pub fn from_str(value: &str) -> Result<Self, String> {
+        match value {
+            "codex" => Ok(AgentKind::Codex),
+            "claude" => Ok(AgentKind::Claude),
+            "gemini" => Ok(AgentKind::Gemini),
+            "custom" => Ok(AgentKind::Custom),
+            _ => Err(format!("Unknown agent kind: {value}")),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentProfile {
     pub id: i64,
     pub name: String,
+    pub agent_kind: AgentKind,
     pub command: String,
+    pub model: Option<String>,
     pub args: Vec<String>,
     pub env: BTreeMap<String, String>,
     pub created_at: String,
@@ -83,11 +116,85 @@ pub struct AgentProfile {
 pub struct AgentProfileInput {
     pub id: Option<i64>,
     pub name: String,
+    pub agent_kind: AgentKind,
     pub command: String,
+    pub model: Option<String>,
     #[serde(default)]
     pub args: Vec<String>,
     #[serde(default)]
     pub env: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ThemeMode {
+    System,
+    Light,
+    Dark,
+}
+
+impl ThemeMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ThemeMode::System => "system",
+            ThemeMode::Light => "light",
+            ThemeMode::Dark => "dark",
+        }
+    }
+
+    pub fn from_str(value: &str) -> Result<Self, String> {
+        match value {
+            "system" => Ok(ThemeMode::System),
+            "light" => Ok(ThemeMode::Light),
+            "dark" => Ok(ThemeMode::Dark),
+            _ => Err(format!("Unknown theme mode: {value}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DensityMode {
+    Comfortable,
+    Compact,
+}
+
+impl DensityMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DensityMode::Comfortable => "comfortable",
+            DensityMode::Compact => "compact",
+        }
+    }
+
+    pub fn from_str(value: &str) -> Result<Self, String> {
+        match value {
+            "comfortable" => Ok(DensityMode::Comfortable),
+            "compact" => Ok(DensityMode::Compact),
+            _ => Err(format!("Unknown density mode: {value}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSettings {
+    pub default_agent_profile_id: Option<i64>,
+    pub default_worktree_root_pattern: String,
+    pub default_branch_prefix: Option<String>,
+    pub theme: ThemeMode,
+    pub density: DensityMode,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSettingsInput {
+    pub default_agent_profile_id: Option<i64>,
+    pub default_worktree_root_pattern: String,
+    pub default_branch_prefix: Option<String>,
+    pub theme: ThemeMode,
+    pub density: DensityMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

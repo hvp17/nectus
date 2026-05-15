@@ -32,6 +32,7 @@ export function TaskDetailDrawer({
   onSessionExit,
 }: TaskDetailDrawerProps) {
   if (!task) return null;
+  const canResumeSession = task.agentKind === "codex" || task.agentKind === "claude";
 
   return (
     <aside className="detail-pane flex flex-col animate-in slide-in-from-right duration-300 ease-out">
@@ -60,7 +61,7 @@ export function TaskDetailDrawer({
                   </Button>
                 ) : (
                   <>
-                    {task.lastSessionId && (
+                    {task.lastSessionId && canResumeSession && (
                       <Button variant="outline" className="flex-1 gap-2" onClick={() => onResumeSession(task)}>
                         <RotateCcw size={14} />
                         Resume
