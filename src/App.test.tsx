@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { api } from "./api";
@@ -425,36 +425,8 @@ describe("App", () => {
     expect(toastBody).toHaveClass("toast-body");
   });
 
-  it("automatically dismisses alerts after a short delay", async () => {
-    mockedApi.listRepos.mockResolvedValue([
-      {
-        id: 7,
-        name: "nectus-desktop",
-        path: "/tmp/nectus-desktop",
-        defaultWorktreeRoot: "/tmp/nectus-desktop-worktrees",
-        createdAt: "2026-05-14T00:00:00.000Z",
-      },
-    ]);
-    mockedApi.createTask.mockResolvedValue({
-      id: 11,
-      repoId: 7,
-      title: "Review modal task flow",
-      status: "planned",
-      prUrl: null,
-      agentProfileId: 2,
-      agentName: "Claude",
-      hasWorktree: false,
-      branchName: null,
-      worktreePath: null,
-      isDirty: false,
-      activeSessionId: null,
-      lastSessionId: null,
-      lastSessionAgent: null,
-      lastSessionCwd: null,
-      lastSessionLabel: null,
-      createdAt: "2026-05-14T00:00:00.000Z",
-      updatedAt: "2026-05-14T00:00:00.000Z",
-    });
+  it("automatically dismisses alerts after 5 seconds", async () => {
+    window.history.pushState({}, "", "/?demo=1");
 
     render(<App />);
 
@@ -464,16 +436,20 @@ describe("App", () => {
     });
     fireEvent.click(screen.getByRole("radio", { name: /claude/i }));
     fireEvent.click(screen.getByRole("radio", { name: /direct edit/i }));
+    vi.useFakeTimers();
     fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
 
-    expect(await screen.findByText("Created Review modal task flow")).toBeInTheDocument();
+    expect(screen.getByText("Created Review modal task flow")).toBeInTheDocument();
 
-    await waitFor(
-      () => {
-        expect(screen.queryByText("Created Review modal task flow")).not.toBeInTheDocument();
-      },
-      { timeout: 3500 },
-    );
+    act(() => {
+      vi.advanceTimersByTime(4999);
+    });
+    expect(screen.getByText("Created Review modal task flow")).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(screen.queryByText("Created Review modal task flow")).not.toBeInTheDocument();
   });
 
   it("moves a task to a new status column when dropped there", async () => {
