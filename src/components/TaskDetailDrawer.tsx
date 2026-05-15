@@ -11,10 +11,13 @@ import {
   CircleCheckBig,
   GitBranch,
 } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { truncateFinishedAttentionPreview } from "./attentionPreview";
 import { TerminalPane } from "../TerminalPane";
+import { cn } from "../lib/utils";
 import { formatAttentionReason, type TaskAttention } from "../sessionAttention";
 import { TaskSummary, TaskStatus } from "../types";
 
@@ -81,11 +84,19 @@ export function TaskDetailDrawer({
           <p className="eyebrow">Task Detail</p>
           <h3 className="text-xl font-bold truncate leading-tight">{task.title}</h3>
           <div className="detail-status-row">
-            <span className="detail-status-chip" data-status={task.status}>
+            <Badge variant="outline" data-status={task.status}>
               {statusLabels[task.status]}
-            </span>
-            {task.activeSessionId && <span className="detail-status-chip live">Running</span>}
-            {task.isDirty && <span className="detail-status-chip dirty">Dirty worktree</span>}
+            </Badge>
+            {task.activeSessionId && (
+              <Badge variant="outline" className="border-primary/40 text-primary">
+                Running
+              </Badge>
+            )}
+            {task.isDirty && (
+              <Badge variant="outline" className="text-indigo-500">
+                Dirty worktree
+              </Badge>
+            )}
           </div>
         </div>
         <Button
@@ -126,21 +137,25 @@ export function TaskDetailDrawer({
              </div>
 
              {attention && (
-               <div className="attention-panel" data-kind={attention.kind}>
-                 <div className="attention-panel-icon">
-                   {attention.kind === "needs_input" ? <AlertTriangle size={16} /> : <CircleCheckBig size={16} />}
-                 </div>
-                 <div>
-                   <strong>
-                     {attention.kind === "needs_input"
-                       ? formatAttentionReason(attention.reason)
-                       : "Agent finished"}
-                   </strong>
-                   {attentionDetail && (
-                     <p title={isAttentionDetailTruncated ? attentionDetail : undefined}>{displayedAttentionDetail}</p>
-                   )}
-                 </div>
-               </div>
+               <Alert
+                 className={cn(
+                   "mb-6 border-primary/25 bg-primary/5 px-3 py-3",
+                   attention.kind === "needs_input" && "border-amber-500/35 bg-amber-500/10",
+                 )}
+               >
+                 {attention.kind === "needs_input" ? <AlertTriangle size={16} /> : <CircleCheckBig size={16} />}
+                 <AlertTitle className="font-bold">
+                   {attention.kind === "needs_input" ? formatAttentionReason(attention.reason) : "Agent finished"}
+                 </AlertTitle>
+                 {attentionDetail && (
+                   <AlertDescription
+                     className="[overflow-wrap:anywhere]"
+                     title={isAttentionDetailTruncated ? attentionDetail : undefined}
+                   >
+                     {displayedAttentionDetail}
+                   </AlertDescription>
+                 )}
+               </Alert>
              )}
 
              <dl className="grid grid-cols-[80px_1fr] gap-x-4 gap-y-3 text-sm">

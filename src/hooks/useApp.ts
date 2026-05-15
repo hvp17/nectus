@@ -33,7 +33,6 @@ export function useApp() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [confirmingDeleteTaskId, setConfirmingDeleteTaskId] = useState<number | undefined>();
   const taskForm = useCreateTaskForm(settings?.defaultAgentProfileId ?? selectedAgentProfileId);
   const {
     createTaskOpen,
@@ -310,17 +309,12 @@ export function useApp() {
       setMessage("Stop the running session before deleting this task.");
       return;
     }
-    if (confirmingDeleteTaskId !== task.id) {
-      setConfirmingDeleteTaskId(task.id);
-      return;
-    }
 
     setBusy(true);
     if (demoMode) {
       setTasks((current) => current.filter((item) => item.id !== task.id));
       setSelectedTaskId((current) => (current === task.id ? undefined : current));
       setTaskAttention((current) => clearTaskAttention(current, task.id));
-      setConfirmingDeleteTaskId(undefined);
       setMessage(`Deleted ${task.title}`);
       setBusy(false);
       return;
@@ -331,7 +325,6 @@ export function useApp() {
       setTasks((current) => current.filter((item) => item.id !== task.id));
       setSelectedTaskId((current) => (current === task.id ? undefined : current));
       setTaskAttention((current) => clearTaskAttention(current, task.id));
-      setConfirmingDeleteTaskId(undefined);
       setMessage(`Deleted ${task.title}`);
     } catch (error) {
       setMessage(String(error));
@@ -449,7 +442,6 @@ export function useApp() {
     closeCreateTaskModal,
     updateStatus,
     requestDeleteTask,
-    confirmingDeleteTaskId,
     startSession,
     stopSession,
     resumeSession,

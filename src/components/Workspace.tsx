@@ -68,7 +68,6 @@ interface WorkspaceProps {
   counts: { active: number; dirty: number; review: number; needsInput: number; finished: number };
   busy: boolean;
   loading: boolean;
-  confirmingDeleteTaskId?: number;
 }
 
 export function Workspace({
@@ -84,7 +83,6 @@ export function Workspace({
   counts,
   busy,
   loading,
-  confirmingDeleteTaskId,
 }: WorkspaceProps) {
   const [draggingTaskId, setDraggingTaskId] = useState<number | undefined>();
   const [dropTargetStatus, setDropTargetStatus] = useState<TaskStatus | undefined>();
@@ -209,7 +207,6 @@ export function Workspace({
                     attention={getTaskAttention(taskAttention, task.id)}
                     isSelected={selectedTaskId === task.id}
                     busy={busy}
-                    confirmingDelete={confirmingDeleteTaskId === task.id}
                     isDragging={draggingTaskId === task.id}
                     onSelect={onSelectTask}
                     onDelete={onDeleteTask}

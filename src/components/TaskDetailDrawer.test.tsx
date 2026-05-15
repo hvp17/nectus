@@ -40,6 +40,7 @@ function renderTaskDetailDrawer(attention?: TaskAttention) {
       onStartSession={vi.fn()}
       onUpdateStatus={vi.fn()}
       onSessionExit={vi.fn()}
+      onSessionInput={vi.fn()}
     />,
   );
 }

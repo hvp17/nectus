@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Plus, Save } from "lucide-react";
+import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
+import { Card, CardContent, CardHeader } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Textarea } from "./ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import type { AgentKind, AgentProfile, AppSettings, AppSettingsInput } from "../types";
 
 const fallbackSettings: AppSettings = {
@@ -27,6 +32,10 @@ const modelPresets: Record<AgentKind, string[]> = {
   gemini: ["gemini-pro", "gemini-flash"],
   custom: [],
 };
+
+const noDefaultProfileValue = "__none";
+const cliDefaultModelValue = "__cli-default";
+const customModelValue = "__custom";
 
 interface ProfileDraft {
   id?: number;
@@ -105,7 +114,7 @@ export function SettingsPage({
   };
 
   const saveProfile = async (draft: ProfileDraft) => {
-    const model = draft.model === "__custom" ? draft.customModel.trim() : draft.model;
+    const model = draft.model === customModelValue ? draft.customModel.trim() : draft.model;
     await onSaveAgentProfile({
       id: draft.id,
       name: draft.name.trim(),
@@ -145,24 +154,27 @@ export function SettingsPage({
           <div className="settings-section-content">
             <div className="settings-field">
               <Label htmlFor="default-agent-profile">Default agent</Label>
-              <select
-                id="default-agent-profile"
-                className="settings-select"
-                value={settingsDraft.defaultAgentProfileId ?? ""}
-                onChange={(event) =>
+              <Select
+                value={settingsDraft.defaultAgentProfileId?.toString() ?? noDefaultProfileValue}
+                onValueChange={(value) =>
                   setSettingsDraft((current) => ({
                     ...current,
-                    defaultAgentProfileId: event.target.value ? Number(event.target.value) : null,
+                    defaultAgentProfileId: value === noDefaultProfileValue ? null : Number(value),
                   }))
                 }
               >
-                <option value="">No default</option>
-                {defaultProfileOptions.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="default-agent-profile" className="h-9 w-full justify-between">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectItem value={noDefaultProfileValue}>No default</SelectItem>
+                  {defaultProfileOptions.map((profile) => (
+                    <SelectItem key={profile.id} value={profile.id!.toString()}>
+                      {profile.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="profile-list">
@@ -225,7 +237,7 @@ export function SettingsPage({
             <h3>Appearance</h3>
           </div>
           <div className="settings-grid">
-            <RadioGroup
+            <SegmentedRadioGroup
               label="Theme"
               name="theme"
               value={settingsDraft.theme}
@@ -236,7 +248,7 @@ export function SettingsPage({
               ]}
               onChange={(theme) => setSettingsDraft((current) => ({ ...current, theme }))}
             />
-            <RadioGroup
+            <SegmentedRadioGroup
               label="Density"
               name="density"
               value={settingsDraft.density}
@@ -277,12 +289,12 @@ function ProfileEditor({
   onSave: () => void;
 }) {
   const presets = modelPresets[profile.agentKind];
-  const modelValue = profile.model && presets.includes(profile.model) ? profile.model : profile.model ? "__custom" : "";
+  const modelValue = profile.model && presets.includes(profile.model) ? profile.model : profile.model ? customModelValue : cliDefaultModelValue;
 
   return (
-    <div className="profile-editor">
-      <div className="profile-editor-header">
-        <div className="profile-kind-mark">{agentKindLabels[profile.agentKind].slice(0, 1)}</div>
+    <Card size="sm" className="profile-editor bg-muted/40 shadow-none">
+      <CardHeader className="profile-editor-header p-0">
+        <Badge className="profile-kind-mark rounded-md">{agentKindLabels[profile.agentKind].slice(0, 1)}</Badge>
         <div className="profile-title-fields">
           <Input
             aria-label="Profile name"
@@ -290,49 +302,55 @@ function ProfileEditor({
             onChange={(event) => onChange({ name: event.target.value })}
             className="profile-name-input"
           />
-          <select
-            aria-label="Agent kind"
-            className="settings-select"
-            value={profile.agentKind}
-            onChange={(event) => onChange({ agentKind: event.target.value as AgentKind })}
-          >
-            {Object.entries(agentKindLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+          <Select value={profile.agentKind} onValueChange={(value) => onChange({ agentKind: value as AgentKind })}>
+            <SelectTrigger aria-label="Agent kind" className="h-8 w-full justify-between">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper">
+              {Object.entries(agentKindLabels).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <Button type="button" size="sm" className="gap-2" onClick={onSave} disabled={busy || !profile.name.trim() || !profile.command.trim()}>
           <Check size={14} />
           Save
         </Button>
-      </div>
+      </CardHeader>
 
-      <div className="profile-editor-grid">
+      <CardContent className="profile-editor-grid p-0">
         <div className="settings-field">
           <Label>Command</Label>
           <Input value={profile.command} onChange={(event) => onChange({ command: event.target.value })} className="font-mono" />
         </div>
         <div className="settings-field">
           <Label>Model</Label>
-          <select
-            className="settings-select"
+          <Select
             value={modelValue}
-            onChange={(event) => {
-              const value = event.target.value;
-              onChange({ model: value, customModel: value === "__custom" ? profile.customModel : "" });
+            onValueChange={(value) => {
+              onChange({
+                model: value === cliDefaultModelValue ? "" : value,
+                customModel: value === customModelValue ? profile.customModel : "",
+              });
             }}
           >
-            <option value="">CLI default</option>
-            {presets.map((preset) => (
-              <option key={preset} value={preset}>
-                {preset}
-              </option>
-            ))}
-            <option value="__custom">Custom...</option>
-          </select>
-          {modelValue === "__custom" && (
+            <SelectTrigger className="h-8 w-full justify-between">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper">
+              <SelectItem value={cliDefaultModelValue}>CLI default</SelectItem>
+              {presets.map((preset) => (
+                <SelectItem key={preset} value={preset}>
+                  {preset}
+                </SelectItem>
+              ))}
+              <SelectItem value={customModelValue}>Custom...</SelectItem>
+            </SelectContent>
+          </Select>
+          {modelValue === customModelValue && (
             <Input
               aria-label="Custom model"
               value={profile.customModel}
@@ -344,28 +362,28 @@ function ProfileEditor({
         </div>
         <div className="settings-field">
           <Label>Args</Label>
-          <textarea
+          <Textarea
             value={profile.argsText}
             onChange={(event) => onChange({ argsText: event.target.value })}
             placeholder="One CLI argument per line"
-            className="settings-textarea font-mono"
+            className="min-h-[82px] resize-y font-mono"
           />
         </div>
         <div className="settings-field">
           <Label>Environment</Label>
-          <textarea
+          <Textarea
             value={profile.envText}
             onChange={(event) => onChange({ envText: event.target.value })}
             placeholder="KEY=value"
-            className="settings-textarea font-mono"
+            className="min-h-[82px] resize-y font-mono"
           />
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
-function RadioGroup<T extends string>({
+function SegmentedRadioGroup<T extends string>({
   label,
   name,
   value,
@@ -381,20 +399,26 @@ function RadioGroup<T extends string>({
   return (
     <fieldset className="settings-field">
       <legend className="settings-label">{label}</legend>
-      <div className="segmented-options">
+      <ToggleGroup
+        type="single"
+        value={value}
+        onValueChange={(nextValue) => {
+          if (nextValue) onChange(nextValue as T);
+        }}
+        variant="outline"
+        className="flex-wrap"
+      >
         {options.map(([optionValue, optionLabel]) => (
-          <label key={optionValue} className={value === optionValue ? "segmented-option selected" : "segmented-option"}>
-            <input
-              type="radio"
-              name={name}
-              value={optionValue}
-              checked={value === optionValue}
-              onChange={() => onChange(optionValue)}
-            />
-            <span>{optionLabel}</span>
-          </label>
+          <ToggleGroupItem
+            key={optionValue}
+            value={optionValue}
+            aria-label={`${name} ${optionLabel}`}
+            className="min-h-8 px-3"
+          >
+            {optionLabel}
+          </ToggleGroupItem>
         ))}
-      </div>
+      </ToggleGroup>
     </fieldset>
   );
 }
@@ -417,7 +441,7 @@ function toProfileDraft(profile: AgentProfile): ProfileDraft {
     name: profile.name,
     agentKind: profile.agentKind,
     command: profile.command,
-    model: model && presets.includes(model) ? model : model ? "__custom" : "",
+    model: model && presets.includes(model) ? model : model ? customModelValue : "",
     customModel: model && presets.includes(model) ? "" : model,
     argsText: profile.args.join("\n"),
     envText: Object.entries(profile.env)
@@ -430,10 +454,10 @@ function toProfileDraft(profile: AgentProfile): ProfileDraft {
 function normalizeProfileKindChange(profile: ProfileDraft): ProfileDraft {
   if (profile.agentKind === "custom") return profile;
   const presets = modelPresets[profile.agentKind];
-  if (!profile.model || profile.model === "__custom" || presets.includes(profile.model)) return profile;
+  if (!profile.model || profile.model === customModelValue || presets.includes(profile.model)) return profile;
   return {
     ...profile,
-    model: "__custom",
+    model: customModelValue,
     customModel: profile.model,
   };
 }

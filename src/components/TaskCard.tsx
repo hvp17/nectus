@@ -1,5 +1,17 @@
 import { useEffect, useRef } from "react";
 import { GitBranch, Bot, Trash2, AlertTriangle, CircleCheckBig, Radio } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "./ui/alert-dialog";
 import { Badge } from "./ui/badge";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
@@ -15,7 +27,6 @@ interface TaskCardProps {
   attention?: TaskAttention;
   isSelected: boolean;
   busy: boolean;
-  confirmingDelete: boolean;
   isDragging?: boolean;
   onSelect: (id: number) => void;
   onDelete: (task: TaskSummary) => void;
@@ -30,7 +41,6 @@ export function TaskCard({
   attention,
   isSelected,
   busy,
-  confirmingDelete,
   isDragging = false,
   onSelect,
   onDelete,
@@ -42,7 +52,7 @@ export function TaskCard({
   const cardRef = useRef<HTMLDivElement | null>(null);
   const suppressClickRef = useRef(false);
   const deleteDisabled = busy || Boolean(task.activeSessionId);
-  const deleteLabel = task.activeSessionId ? "Stop session first" : confirmingDelete ? "Confirm delete" : "Delete task";
+  const deleteLabel = task.activeSessionId ? "Stop session first" : "Delete task";
   const cardState = attention?.kind ?? (task.activeSessionId ? "running" : task.isDirty ? "dirty" : "normal");
   const attentionDetail = attention?.prompt ?? attention?.message;
   const displayedAttentionDetail =
@@ -210,26 +220,44 @@ export function TaskCard({
             </Badge>
           )}
           
-          <div className={`transition-opacity ${confirmingDelete ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
-            <Tooltip open={confirmingDelete || undefined}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`h-7 w-7 text-destructive hover:bg-destructive/10 ${confirmingDelete ? "bg-destructive/10" : ""}`}
-                  disabled={deleteDisabled}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(task);
-                  }}
-                >
-                  <Trash2 size={14} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
-                {deleteLabel}
-              </TooltipContent>
-            </Tooltip>
+          <div className="opacity-0 transition-opacity group-hover:opacity-100">
+            <AlertDialog>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                      disabled={deleteDisabled}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </AlertDialogTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  {deleteLabel}
+                </TooltipContent>
+              </Tooltip>
+              <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                <AlertDialogHeader>
+                  <AlertDialogMedia className="bg-destructive/10 text-destructive">
+                    <Trash2 size={16} />
+                  </AlertDialogMedia>
+                  <AlertDialogTitle>Delete task?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This removes "{task.title}" from Nectus. It does not delete files from disk.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction variant="destructive" onClick={() => onDelete(task)}>
+                    Delete Task
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div>
       </div>

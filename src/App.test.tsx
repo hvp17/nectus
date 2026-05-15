@@ -382,7 +382,7 @@ describe("App", () => {
     });
   });
 
-  it("dismisses the alert when the close button is clicked", async () => {
+  it("dismisses the toast when the close button is clicked", async () => {
     mockedApi.listRepos.mockResolvedValue([
       {
         id: 7,
@@ -425,14 +425,14 @@ describe("App", () => {
 
     expect(await screen.findByText("Created Review modal task flow")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /dismiss notification/i }));
+    fireEvent.click(screen.getByRole("button", { name: /close toast/i }));
 
     await waitFor(() => {
       expect(screen.queryByText("Created Review modal task flow")).not.toBeInTheDocument();
     });
   });
 
-  it("renders notification text in the clamped toast body", async () => {
+  it("renders notification text in a sonner toast", async () => {
     const longTaskTitle =
       "Review a long running agent summary that explains the final state, the important changed files, and the next manual verification steps";
 
@@ -478,7 +478,7 @@ describe("App", () => {
 
     const toastBody = await screen.findByText(`Created ${longTaskTitle}`);
 
-    expect(toastBody).toHaveClass("toast-body");
+    expect(toastBody.closest("[data-sonner-toast]")).toHaveClass("cn-toast");
   });
 
   it("automatically dismisses alerts after 5 seconds", async () => {
@@ -495,15 +495,21 @@ describe("App", () => {
     vi.useFakeTimers();
     fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
 
-    expect(screen.getByText("Created Review modal task flow")).toBeInTheDocument();
-
-    act(() => {
-      vi.advanceTimersByTime(4999);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
     });
     expect(screen.getByText("Created Review modal task flow")).toBeInTheDocument();
 
-    act(() => {
-      vi.advanceTimersByTime(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4999);
+    });
+    expect(screen.getByText("Created Review modal task flow")).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
     });
     expect(screen.queryByText("Created Review modal task flow")).not.toBeInTheDocument();
   });

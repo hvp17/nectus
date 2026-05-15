@@ -1,13 +1,31 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { Sidebar } from "./components/Sidebar";
 import { Workspace } from "./components/Workspace";
 import { TaskDetailDrawer } from "./components/TaskDetailDrawer";
 import { CreateTaskModal } from "./components/CreateTaskModal";
 import { SettingsPage } from "./components/SettingsPage";
-import { ToastNotification } from "./ToastNotification";
 import { useApp } from "./hooks/useApp";
 import { useAppTheme } from "./hooks/useAppTheme";
+
+function getToastContent(message: string) {
+  const separator = message.indexOf(": ");
+  if (separator > 0) {
+    return {
+      title: message.slice(0, separator),
+      body: message.slice(separator + 2),
+      kind: "success" as const,
+    };
+  }
+
+  return {
+    title: "Nectus",
+    body: message,
+    kind: "info" as const,
+  };
+}
 
 function App() {
   const {
@@ -44,7 +62,6 @@ function App() {
     closeCreateTaskModal,
     updateStatus,
     requestDeleteTask,
-    confirmingDeleteTaskId,
     startSession,
     stopSession,
     resumeSession,
@@ -70,11 +87,12 @@ function App() {
   useEffect(() => {
     if (!message) return;
 
-    const timeout = window.setTimeout(() => {
-      setMessage(null);
-    }, 5000);
-
-    return () => window.clearTimeout(timeout);
+    const content = getToastContent(message);
+    toast[content.kind](content.title, {
+      description: content.body,
+      duration: 5000,
+    });
+    setMessage(null);
   }, [message, setMessage]);
 
   return (
@@ -139,7 +157,6 @@ function App() {
                   counts={counts}
                   busy={busy}
                   loading={loading}
-                  confirmingDeleteTaskId={confirmingDeleteTaskId}
                 />
               </div>
 
@@ -164,7 +181,7 @@ function App() {
             </div>
           )}
 
-          {message && <ToastNotification message={message} onDismiss={() => setMessage(null)} />}
+          <Toaster closeButton theme={settings?.theme ?? "system"} />
         </div>
 
         {createTaskOpen && (

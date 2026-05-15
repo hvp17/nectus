@@ -36,7 +36,6 @@ function renderTaskCard(attention?: TaskAttention) {
         attention={attention}
         isSelected={false}
         busy={false}
-        confirmingDelete={false}
         onSelect={vi.fn()}
         onDelete={vi.fn()}
         onDragStart={vi.fn()}
