@@ -4,6 +4,7 @@ import { Badge } from "./ui/badge";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { truncateFinishedAttentionPreview } from "./attentionPreview";
 import { formatAttentionReason, type TaskAttention } from "../sessionAttention";
 import { TaskSummary } from "../types";
 
@@ -43,6 +44,12 @@ export function TaskCard({
   const deleteDisabled = busy || Boolean(task.activeSessionId);
   const deleteLabel = task.activeSessionId ? "Stop session first" : confirmingDelete ? "Confirm delete" : "Delete task";
   const cardState = attention?.kind ?? (task.activeSessionId ? "running" : task.isDirty ? "dirty" : "normal");
+  const attentionDetail = attention?.prompt ?? attention?.message;
+  const displayedAttentionDetail =
+    attention?.kind === "idle" && attentionDetail ? truncateFinishedAttentionPreview(attentionDetail) : attentionDetail;
+  const isAttentionDetailTruncated = Boolean(
+    attentionDetail && displayedAttentionDetail && displayedAttentionDetail !== attentionDetail,
+  );
 
   useEffect(() => {
     const element = cardRef.current;
@@ -231,8 +238,10 @@ export function TaskCard({
         {attention && (
           <div className="task-attention-line">
             {attention.kind === "needs_input" ? formatAttentionReason(attention.reason) : "Agent finished"}
-            {(attention.prompt || attention.message) && (
-              <span className="task-attention-detail">{attention.prompt ?? attention.message}</span>
+            {attentionDetail && (
+              <span className="task-attention-detail" title={isAttentionDetailTruncated ? attentionDetail : undefined}>
+                {displayedAttentionDetail}
+              </span>
             )}
           </div>
         )}

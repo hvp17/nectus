@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { truncateFinishedAttentionPreview } from "./attentionPreview";
 import { TerminalPane } from "../TerminalPane";
 import { formatAttentionReason, type TaskAttention } from "../sessionAttention";
 import { TaskSummary, TaskStatus } from "../types";
@@ -52,6 +53,12 @@ export function TaskDetailDrawer({
 }: TaskDetailDrawerProps) {
   if (!task) return null;
   const canResumeSession = task.agentKind === "codex" || task.agentKind === "claude";
+  const attentionDetail = attention?.prompt ?? attention?.message;
+  const displayedAttentionDetail =
+    attention?.kind === "idle" && attentionDetail ? truncateFinishedAttentionPreview(attentionDetail) : attentionDetail;
+  const isAttentionDetailTruncated = Boolean(
+    attentionDetail && displayedAttentionDetail && displayedAttentionDetail !== attentionDetail,
+  );
 
   return (
     <aside
@@ -127,7 +134,9 @@ export function TaskDetailDrawer({
                        ? formatAttentionReason(attention.reason)
                        : "Agent finished"}
                    </strong>
-                   {(attention.prompt || attention.message) && <p>{attention.prompt ?? attention.message}</p>}
+                   {attentionDetail && (
+                     <p title={isAttentionDetailTruncated ? attentionDetail : undefined}>{displayedAttentionDetail}</p>
+                   )}
                  </div>
                </div>
              )}
