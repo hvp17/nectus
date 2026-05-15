@@ -6,6 +6,8 @@ import { Button } from "./ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { TaskSummary } from "../types";
 
+const DRAG_START_THRESHOLD_PX = 3;
+
 interface TaskCardProps {
   task: TaskSummary;
   isSelected: boolean;
@@ -57,8 +59,7 @@ export function TaskCard({
 
     const moveGhost = (clientX: number, clientY: number) => {
       if (!ghost) return;
-      ghost.style.left = `${clientX - ghostOffsetX}px`;
-      ghost.style.top = `${clientY - ghostOffsetY}px`;
+      ghost.style.transform = `translate3d(${clientX - ghostOffsetX}px, ${clientY - ghostOffsetY}px, 0) rotate(1deg) scale(0.98)`;
     };
 
     const removeGhost = () => {
@@ -75,8 +76,10 @@ export function TaskCard({
       ghost.classList.add("task-drag-ghost");
       ghost.style.width = `${rect.width}px`;
       ghost.style.height = `${rect.height}px`;
-      ghost.style.left = `${rect.left}px`;
-      ghost.style.top = `${rect.top}px`;
+      ghost.style.left = "0";
+      ghost.style.top = "0";
+      ghost.style.transition = "none";
+      ghost.style.animation = "none";
       document.body.appendChild(ghost);
       moveGhost(clientX, clientY);
     };
@@ -92,7 +95,7 @@ export function TaskCard({
       const { clientX, clientY } = getClientPosition(event);
       const deltaX = clientX - startX;
       const deltaY = clientY - startY;
-      if (!dragging && Math.hypot(deltaX, deltaY) < 6) return;
+      if (!dragging && Math.hypot(deltaX, deltaY) < DRAG_START_THRESHOLD_PX) return;
 
       if (!dragging) {
         dragging = true;

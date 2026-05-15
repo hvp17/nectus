@@ -43,12 +43,43 @@ function mockElementsFromPoint(elements: Element[]) {
   };
 }
 
+function dispatchPointerEvent(
+  target: Element | Node | Window | Document,
+  type: string,
+  init: { pointerId: number; button?: number; clientX: number; clientY: number },
+) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    pointerId: { value: init.pointerId },
+    button: { value: init.button ?? 0 },
+    clientX: { value: init.clientX },
+    clientY: { value: init.clientY },
+  });
+  fireEvent(target, event);
+}
+
 function pointerDrag(taskCard: HTMLElement, target: Element) {
   const restoreElementsFromPoint = mockElementsFromPoint([target]);
-  fireEvent.pointerDown(taskCard, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
-  fireEvent.pointerMove(window, { pointerId: 1, clientX: 40, clientY: 10 });
-  fireEvent.pointerUp(window, { pointerId: 1, clientX: 40, clientY: 10 });
+  dispatchPointerEvent(taskCard, "pointerdown", { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+  dispatchPointerEvent(window, "pointermove", { pointerId: 1, clientX: 40, clientY: 10 });
+  dispatchPointerEvent(window, "pointerup", { pointerId: 1, clientX: 40, clientY: 10 });
   restoreElementsFromPoint();
+}
+
+function mockElementRect(element: Element, rect: Partial<DOMRect>) {
+  const fullRect = {
+    x: rect.left ?? 0,
+    y: rect.top ?? 0,
+    width: rect.width ?? 100,
+    height: rect.height ?? 100,
+    top: rect.top ?? 0,
+    right: rect.right ?? (rect.left ?? 0) + (rect.width ?? 100),
+    bottom: rect.bottom ?? (rect.top ?? 0) + (rect.height ?? 100),
+    left: rect.left ?? 0,
+    toJSON: () => ({}),
+  } as DOMRect;
+  const spy = vi.spyOn(element, "getBoundingClientRect").mockReturnValue(fullRect);
+  return () => spy.mockRestore();
 }
 
 describe("App", () => {
@@ -396,12 +427,12 @@ describe("App", () => {
     const reviewColumn = screen.getByRole("region", { name: /review/i });
     const restoreElementsFromPoint = mockElementsFromPoint([reviewColumn]);
 
-    fireEvent.pointerDown(taskCard, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
-    fireEvent.pointerMove(window, { pointerId: 1, clientX: 40, clientY: 10 });
+    dispatchPointerEvent(taskCard, "pointerdown", { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    dispatchPointerEvent(window, "pointermove", { pointerId: 1, clientX: 40, clientY: 10 });
 
     expect(document.querySelector(".task-drag-ghost")).toBeInstanceOf(HTMLElement);
 
-    fireEvent.pointerUp(window, { pointerId: 1, clientX: 40, clientY: 10 });
+    dispatchPointerEvent(window, "pointerup", { pointerId: 1, clientX: 40, clientY: 10 });
 
     expect(document.querySelector(".task-drag-ghost")).toBeNull();
 
@@ -410,6 +441,149 @@ describe("App", () => {
     });
 
     restoreElementsFromPoint();
+  });
+
+  it("starts native pointer drag after a short pointer movement", async () => {
+    mockedApi.listRepos.mockResolvedValue([
+      {
+        id: 7,
+        name: "nectus-desktop",
+        path: "/tmp/nectus-desktop",
+        defaultWorktreeRoot: "/tmp/nectus-desktop-worktrees",
+        createdAt: "2026-05-14T00:00:00.000Z",
+      },
+    ]);
+    mockedApi.listTasks.mockResolvedValue([
+      {
+        id: 21,
+        repoId: 7,
+        title: "Wire task pointer drag",
+        status: "done",
+        prUrl: null,
+        agentProfileId: 1,
+        agentName: "Codex",
+        hasWorktree: false,
+        branchName: null,
+        worktreePath: null,
+        isDirty: false,
+        activeSessionId: null,
+        lastSessionId: null,
+        lastSessionAgent: null,
+        lastSessionCwd: null,
+        lastSessionLabel: null,
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+      },
+    ]);
+
+    render(<App />);
+
+    const taskCard = await screen.findByRole("button", { name: /wire task pointer drag/i });
+    const restoreCardRect = mockElementRect(taskCard, { left: 10, top: 20, width: 220, height: 90 });
+
+    dispatchPointerEvent(taskCard, "pointerdown", { pointerId: 1, button: 0, clientX: 10, clientY: 20 });
+    dispatchPointerEvent(window, "pointermove", { pointerId: 1, clientX: 13, clientY: 20 });
+
+    const ghost = document.querySelector<HTMLElement>(".task-drag-ghost");
+    expect(ghost).toBeInstanceOf(HTMLElement);
+    expect(ghost?.style.transform).toContain("translate3d(");
+    expect(ghost?.style.transition).toBe("none");
+    expect(ghost?.style.animation).toBe("none");
+
+    dispatchPointerEvent(window, "pointercancel", { pointerId: 1, clientX: 13, clientY: 20 });
+    restoreCardRect();
+  });
+
+  it("uses cached column bounds to detect the drop target while pointer dragging", async () => {
+    mockedApi.listRepos.mockResolvedValue([
+      {
+        id: 7,
+        name: "nectus-desktop",
+        path: "/tmp/nectus-desktop",
+        defaultWorktreeRoot: "/tmp/nectus-desktop-worktrees",
+        createdAt: "2026-05-14T00:00:00.000Z",
+      },
+    ]);
+    mockedApi.listTasks.mockResolvedValue([
+      {
+        id: 21,
+        repoId: 7,
+        title: "Wire task drag and drop",
+        status: "planned",
+        prUrl: null,
+        agentProfileId: 1,
+        agentName: "Codex",
+        hasWorktree: false,
+        branchName: null,
+        worktreePath: null,
+        isDirty: false,
+        activeSessionId: null,
+        lastSessionId: null,
+        lastSessionAgent: null,
+        lastSessionCwd: null,
+        lastSessionLabel: null,
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+      },
+    ]);
+    mockedApi.updateTaskMetadata.mockResolvedValue({
+      id: 21,
+      repoId: 7,
+      title: "Wire task drag and drop",
+      status: "review",
+      prUrl: null,
+      agentProfileId: 1,
+      agentName: "Codex",
+      hasWorktree: false,
+      branchName: null,
+      worktreePath: null,
+      isDirty: false,
+      activeSessionId: null,
+      lastSessionId: null,
+      lastSessionAgent: null,
+      lastSessionCwd: null,
+      lastSessionLabel: null,
+      createdAt: "2026-05-14T00:00:00.000Z",
+      updatedAt: "2026-05-14T00:01:00.000Z",
+    });
+
+    render(<App />);
+
+    const taskCard = await screen.findByRole("button", { name: /wire task drag and drop/i });
+    const plannedColumn = screen.getByRole("region", { name: /planned/i });
+    const inProgressColumn = screen.getByRole("region", { name: /in progress/i });
+    const reviewColumn = screen.getByRole("region", { name: /review/i });
+    const doneColumn = screen.getByRole("region", { name: /done/i });
+    const restoreRects = [
+      mockElementRect(plannedColumn, { left: 0, top: 0, right: 100, bottom: 500 }),
+      mockElementRect(inProgressColumn, { left: 110, top: 0, right: 210, bottom: 500 }),
+      mockElementRect(reviewColumn, { left: 220, top: 0, right: 320, bottom: 500 }),
+      mockElementRect(doneColumn, { left: 330, top: 0, right: 430, bottom: 500 }),
+      mockElementRect(taskCard, { left: 10, top: 20, width: 220, height: 90 }),
+    ];
+    const restoreElementsFromPoint = mockElementsFromPoint([]);
+
+    dispatchPointerEvent(taskCard, "pointerdown", { pointerId: 1, button: 0, clientX: 20, clientY: 30 });
+    dispatchPointerEvent(window, "pointermove", { pointerId: 1, clientX: 23, clientY: 30 });
+    dispatchPointerEvent(window, "pointermove", { pointerId: 1, clientX: 230, clientY: 30 });
+
+    expect(document.querySelector(".task-drag-ghost")).toBeInstanceOf(HTMLElement);
+    await waitFor(() => {
+      expect(taskCard).toHaveAttribute("aria-grabbed", "true");
+    });
+    expect(reviewColumn).toHaveAttribute("data-drop-available", "true");
+    await waitFor(() => {
+      expect(reviewColumn).toHaveAttribute("data-drop-target", "true");
+    });
+
+    dispatchPointerEvent(window, "pointerup", { pointerId: 1, clientX: 230, clientY: 30 });
+
+    await waitFor(() => {
+      expect(mockedApi.updateTaskMetadata).toHaveBeenCalledWith({ taskId: 21, status: "review" });
+    });
+
+    restoreElementsFromPoint();
+    restoreRects.forEach((restore) => restore());
   });
 
   it("shows drop target feedback while a task is dragged over another status column", async () => {
@@ -451,13 +625,13 @@ describe("App", () => {
     const reviewColumn = screen.getByRole("region", { name: /review/i });
     const restoreElementsFromPoint = mockElementsFromPoint([reviewColumn]);
 
-    fireEvent.pointerDown(taskCard, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
-    fireEvent.pointerMove(window, { pointerId: 1, clientX: 40, clientY: 10 });
+    dispatchPointerEvent(taskCard, "pointerdown", { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    dispatchPointerEvent(window, "pointermove", { pointerId: 1, clientX: 40, clientY: 10 });
 
     expect(reviewColumn).toHaveAttribute("data-drop-available", "true");
     expect(reviewColumn).toHaveAttribute("data-drop-target", "true");
 
-    fireEvent.pointerCancel(window, { pointerId: 1, clientX: 40, clientY: 10 });
+    dispatchPointerEvent(window, "pointercancel", { pointerId: 1, clientX: 40, clientY: 10 });
     restoreElementsFromPoint();
   });
 });

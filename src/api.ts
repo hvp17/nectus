@@ -75,20 +75,7 @@ export const api = {
       status: input.status ?? null,
       prUrl: input.prUrl ?? null,
     };
-    console.debug("[task-dnd] invoke update_task_metadata", payload);
-    try {
-      const updated = await invoke<TaskSummary>("update_task_metadata", payload);
-      console.debug("[task-dnd] update_task_metadata response", {
-        id: updated.id,
-        title: updated.title,
-        status: updated.status,
-        updatedAt: updated.updatedAt,
-      });
-      return updated;
-    } catch (error) {
-      console.error("[task-dnd] update_task_metadata failed", error);
-      throw error;
-    }
+    return invoke<TaskSummary>("update_task_metadata", payload);
   },
   async deleteTask(taskId: number): Promise<void> {
     return invoke("delete_task", { taskId });

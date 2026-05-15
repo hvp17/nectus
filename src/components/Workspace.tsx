@@ -15,6 +15,37 @@ const statusLabels: Record<TaskStatus, string> = {
 
 const statusOrder: TaskStatus[] = ["planned", "in_progress", "review", "done"];
 
+interface StatusHitbox {
+  status: TaskStatus;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+function getStatusHitboxes(): StatusHitbox[] {
+  return Array.from(document.querySelectorAll<HTMLElement>("[data-task-status]")).map((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      status: element.dataset.taskStatus as TaskStatus,
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+    };
+  });
+}
+
+function getStatusFromHitboxes(hitboxes: StatusHitbox[], clientX: number, clientY: number): TaskStatus | undefined {
+  return hitboxes.find(
+    (hitbox) =>
+      clientX >= hitbox.left &&
+      clientX <= hitbox.right &&
+      clientY >= hitbox.top &&
+      clientY <= hitbox.bottom,
+  )?.status;
+}
+
 function getStatusFromPoint(clientX: number, clientY: number): TaskStatus | undefined {
   if (!document.elementsFromPoint) return undefined;
   return document
@@ -57,6 +88,7 @@ export function Workspace({
   const tasksRef = useRef(visibleTasks);
   const busyRef = useRef(busy);
   const lastPointerStatusRef = useRef<TaskStatus | undefined>(undefined);
+  const statusHitboxesRef = useRef<StatusHitbox[]>([]);
 
   const draggingTask = visibleTasks.find((task) => task.id === draggingTaskId);
 
@@ -71,58 +103,43 @@ export function Workspace({
   const getTaskById = useCallback((taskId: number) => tasksRef.current.find((task) => task.id === taskId), []);
 
   const startTaskDrag = useCallback((taskId: number) => {
-    const task = getTaskById(taskId);
-    console.debug("[task-dnd] drag start", {
-      taskId,
-      title: task?.title,
-      fromStatus: task?.status,
-    });
+    statusHitboxesRef.current = getStatusHitboxes();
     setDraggingTaskId(taskId);
-  }, [getTaskById]);
+  }, []);
 
   const clearTaskDrag = useCallback(() => {
     setDraggingTaskId(undefined);
     setDropTargetStatus(undefined);
     lastPointerStatusRef.current = undefined;
+    statusHitboxesRef.current = [];
   }, []);
 
   const markPointerDragPosition = useCallback((clientX: number, clientY: number) => {
-    const status = getStatusFromPoint(clientX, clientY);
+    const status =
+      getStatusFromHitboxes(statusHitboxesRef.current, clientX, clientY) ?? getStatusFromPoint(clientX, clientY);
     if (status === lastPointerStatusRef.current) return;
     lastPointerStatusRef.current = status;
     setDropTargetStatus(status);
-    console.debug("[task-dnd] pointer over column", { targetStatus: status, clientX, clientY });
   }, []);
 
   const moveDroppedTask = useCallback((taskId: number, status: TaskStatus) => {
     const task = getTaskById(taskId);
-    console.debug("[task-dnd] move requested", {
-      taskId,
-      title: task?.title,
-      fromStatus: task?.status,
-      toStatus: status,
-      busy: busyRef.current,
-      foundTask: Boolean(task),
-    });
     clearTaskDrag();
     if (!task) {
-      console.warn("[task-dnd] move ignored: task not found", { taskId, toStatus: status });
       return;
     }
     if (task.status === status) {
-      console.debug("[task-dnd] move ignored: same status", { taskId, status });
       return;
     }
     if (busyRef.current) {
-      console.warn("[task-dnd] move ignored: app busy", { taskId, toStatus: status });
       return;
     }
     onUpdateStatus(task, status);
   }, [clearTaskDrag, getTaskById, onUpdateStatus]);
 
   const movePointerDroppedTask = useCallback((taskId: number, clientX: number, clientY: number) => {
-    const status = getStatusFromPoint(clientX, clientY);
-    console.debug("[task-dnd] pointer drop", { taskId, targetStatus: status, clientX, clientY });
+    const status =
+      getStatusFromHitboxes(statusHitboxesRef.current, clientX, clientY) ?? getStatusFromPoint(clientX, clientY);
     lastPointerStatusRef.current = undefined;
     if (!status) {
       clearTaskDrag();

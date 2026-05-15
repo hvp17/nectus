@@ -377,37 +377,18 @@ export function useApp() {
 
   const updateStatus = async (task: TaskSummary, status: TaskStatus) => {
     setMessage(null);
-    console.debug("[task-dnd] updateStatus called", {
-      taskId: task.id,
-      title: task.title,
-      fromStatus: task.status,
-      toStatus: status,
-      demoMode,
-    });
     if (demoMode) {
       const updatedAt = new Date().toISOString();
       setTasks((current) =>
         current.map((item) => (item.id === task.id ? { ...item, status, updatedAt } : item)),
       );
-      console.debug("[task-dnd] demo status updated", {
-        taskId: task.id,
-        status,
-        updatedAt,
-      });
       return;
     }
 
     try {
       const updated = await api.updateTaskMetadata({ taskId: task.id, status });
-      console.debug("[task-dnd] applying updated task", {
-        taskId: updated.id,
-        title: updated.title,
-        status: updated.status,
-        updatedAt: updated.updatedAt,
-      });
       setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     } catch (error) {
-      console.error("[task-dnd] updateStatus failed", error);
       setMessage(String(error));
     }
   };
