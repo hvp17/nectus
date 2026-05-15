@@ -71,7 +71,7 @@ function App() {
 
     const timeout = window.setTimeout(() => {
       setMessage(null);
-    }, 2500);
+    }, 5000);
 
     return () => window.clearTimeout(timeout);
   }, [message, setMessage]);
