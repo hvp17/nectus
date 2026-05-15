@@ -9,6 +9,7 @@ import type { SessionExitedEvent, SessionOutputEvent } from "./types";
 interface TerminalPaneProps {
   sessionId?: string | null;
   onSessionExit: (sessionId: string) => void;
+  onSessionInput: (sessionId: string) => void;
 }
 
 interface CachedTerminal {
@@ -21,17 +22,22 @@ interface CachedTerminal {
   pendingOutput: SessionOutputEvent[];
 }
 
-export function TerminalPane({ sessionId, onSessionExit }: TerminalPaneProps) {
+export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: TerminalPaneProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const terminalsRef = useRef(new Map<string, CachedTerminal>());
   const sessionIdRef = useRef<string | null | undefined>(sessionId);
   const onSessionExitRef = useRef(onSessionExit);
+  const onSessionInputRef = useRef(onSessionInput);
   const textEncoderRef = useRef(new TextEncoder());
   const textDecoderRef = useRef(new TextDecoder());
 
   useEffect(() => {
     onSessionExitRef.current = onSessionExit;
   }, [onSessionExit]);
+
+  useEffect(() => {
+    onSessionInputRef.current = onSessionInput;
+  }, [onSessionInput]);
 
   useEffect(() => {
     sessionIdRef.current = sessionId;
@@ -162,6 +168,7 @@ export function TerminalPane({ sessionId, onSessionExit }: TerminalPaneProps) {
 
     const dataDisposable = terminal.onData((data) => {
       if (sessionIdRef.current === sessionId) {
+        onSessionInputRef.current(sessionId);
         api.sendSessionInput(sessionId, data).catch((error) => terminal.writeln(`\r\n${String(error)}`));
       }
     });

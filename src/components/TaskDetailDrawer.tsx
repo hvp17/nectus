@@ -29,6 +29,7 @@ interface TaskDetailDrawerProps {
   onStartSession: (task: TaskSummary) => void;
   onUpdateStatus: (task: TaskSummary, status: TaskStatus) => void;
   onSessionExit: (sessionId: string) => void;
+  onSessionInput: (sessionId: string) => void;
 }
 
 const statusOrder: TaskStatus[] = ["planned", "in_progress", "review", "done"];
@@ -50,6 +51,7 @@ export function TaskDetailDrawer({
   onStartSession,
   onUpdateStatus,
   onSessionExit,
+  onSessionInput,
 }: TaskDetailDrawerProps) {
   if (!task) return null;
   const canResumeSession = task.agentKind === "codex" || task.agentKind === "claude";
@@ -196,7 +198,11 @@ export function TaskDetailDrawer({
                 Agent Terminal
              </div>
              <div className="flex-1 min-h-0 bg-[#0A0A0A]">
-                <TerminalPane sessionId={task.activeSessionId} onSessionExit={onSessionExit} />
+                <TerminalPane
+                  sessionId={task.activeSessionId}
+                  onSessionExit={onSessionExit}
+                  onSessionInput={onSessionInput}
+                />
              </div>
           </div>
         </div>

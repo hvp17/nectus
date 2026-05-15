@@ -49,6 +49,7 @@ function App() {
     stopSession,
     resumeSession,
     onSessionExit,
+    onSessionInput,
     agentProfiles,
     settings,
     currentView,
@@ -157,6 +158,7 @@ function App() {
                   onStartSession={startSession}
                   onUpdateStatus={updateStatus}
                   onSessionExit={onSessionExit}
+                  onSessionInput={onSessionInput}
                 />
               )}
             </div>
