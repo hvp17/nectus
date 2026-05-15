@@ -112,6 +112,7 @@ function App() {
               onRefresh={refresh}
               onCreateTask={() => setCreateTaskOpen(true)}
               onDeleteTask={requestDeleteTask}
+              onUpdateStatus={updateStatus}
               counts={counts}
               busy={busy}
               loading={loading}

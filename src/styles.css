@@ -293,6 +293,20 @@ textarea {
   background: var(--muted);
 }
 
+.status-column.drop-available,
+.status-column[data-drop-available="true"] {
+  background: color-mix(in srgb, var(--primary) 6%, var(--muted));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 24%, transparent);
+}
+
+.status-column.drop-target,
+.status-column[data-drop-target="true"] {
+  background: color-mix(in srgb, var(--primary) 18%, var(--muted));
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--primary) 65%, transparent),
+    0 10px 28px color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
 .column-heading,
 .card-row,
 .branch-line,

@@ -1,3 +1,5 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { RefreshCw, Plus, Activity, GitBranch, CheckCircle2 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -22,6 +24,7 @@ interface WorkspaceProps {
   onRefresh: () => void;
   onCreateTask: () => void;
   onDeleteTask: (task: TaskSummary) => void;
+  onUpdateStatus: (task: TaskSummary, status: TaskStatus) => void;
   counts: { active: number; dirty: number; review: number };
   busy: boolean;
   loading: boolean;
@@ -36,11 +39,45 @@ export function Workspace({
   onRefresh,
   onCreateTask,
   onDeleteTask,
+  onUpdateStatus,
   counts,
   busy,
   loading,
   confirmingDeleteTaskId,
 }: WorkspaceProps) {
+  const [draggingTaskId, setDraggingTaskId] = useState<number | undefined>();
+  const [dropTargetStatus, setDropTargetStatus] = useState<TaskStatus | undefined>();
+  const tasksRef = useRef(visibleTasks);
+  const busyRef = useRef(busy);
+
+  const draggingTask = visibleTasks.find((task) => task.id === draggingTaskId);
+
+  useEffect(() => {
+    tasksRef.current = visibleTasks;
+  }, [visibleTasks]);
+
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
+
+  const getTaskById = useCallback((taskId: number) => tasksRef.current.find((task) => task.id === taskId), []);
+
+  const startTaskDrag = useCallback((taskId: number) => {
+    setDraggingTaskId(taskId);
+  }, []);
+
+  const clearTaskDrag = useCallback(() => {
+    setDraggingTaskId(undefined);
+    setDropTargetStatus(undefined);
+  }, []);
+
+  const moveDroppedTask = useCallback((taskId: number, status: TaskStatus) => {
+    const task = getTaskById(taskId);
+    clearTaskDrag();
+    if (!task || task.status === status || busyRef.current) return;
+    onUpdateStatus(task, status);
+  }, [clearTaskDrag, getTaskById, onUpdateStatus]);
+
   return (
     <section className="workspace p-10 overflow-auto max-w-[1400px] mx-auto w-full">
       <header className="topbar">
@@ -75,8 +112,18 @@ export function Workspace({
       <div className="columns overflow-x-auto pb-4">
         {statusOrder.map((status) => {
           const tasksInColumn = visibleTasks.filter((t) => t.status === status);
+          const acceptsDraggedTask = Boolean(draggingTask && draggingTask.status !== status);
           return (
-            <div className="status-column min-h-[500px] flex flex-col gap-3 rounded-xl bg-muted/30 p-3" key={status}>
+            <StatusColumn
+              key={status}
+              status={status}
+              getTaskById={getTaskById}
+              busyRef={busyRef}
+              isDropAvailable={acceptsDraggedTask}
+              isDropTarget={acceptsDraggedTask && dropTargetStatus === status}
+              onDropTargetChange={setDropTargetStatus}
+              onDropTask={moveDroppedTask}
+            >
               <div className="column-heading px-1 mb-1">
                 <span className="text-xs font-bold uppercase tracking-wider">{statusLabels[status]}</span>
                 <Badge variant="secondary" className="text-[10px] h-5 min-w-5 justify-center font-bold">
@@ -91,16 +138,82 @@ export function Workspace({
                     isSelected={selectedTaskId === task.id}
                     busy={busy}
                     confirmingDelete={confirmingDeleteTaskId === task.id}
+                    isDragging={draggingTaskId === task.id}
                     onSelect={onSelectTask}
                     onDelete={onDeleteTask}
+                    onDragStart={startTaskDrag}
+                    onDragEnd={clearTaskDrag}
                   />
                 ))}
               </div>
-            </div>
+            </StatusColumn>
           );
         })}
       </div>
     </section>
+  );
+}
+
+function StatusColumn({
+  status,
+  getTaskById,
+  busyRef,
+  isDropAvailable,
+  isDropTarget,
+  onDropTargetChange,
+  onDropTask,
+  children,
+}: {
+  status: TaskStatus;
+  getTaskById: (taskId: number) => TaskSummary | undefined;
+  busyRef: React.MutableRefObject<boolean>;
+  isDropAvailable: boolean;
+  isDropTarget: boolean;
+  onDropTargetChange: (status: TaskStatus | undefined) => void;
+  onDropTask: (taskId: number, status: TaskStatus) => void;
+  children: React.ReactNode;
+}) {
+  const columnRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const element = columnRef.current;
+    if (!element) return;
+
+    const getTask = (source: { data: Record<string, unknown> }) => {
+      const taskId = Number(source.data.taskId);
+      return source.data.type === "task" && Number.isFinite(taskId) ? getTaskById(taskId) : undefined;
+    };
+
+    return dropTargetForElements({
+      element,
+      canDrop: ({ source }) => {
+        const task = getTask(source);
+        return Boolean(task && task.status !== status && !busyRef.current);
+      },
+      getDropEffect: () => "move",
+      onDragEnter: () => onDropTargetChange(status),
+      onDragLeave: () => onDropTargetChange(undefined),
+      onDrop: ({ source }) => {
+        const task = getTask(source);
+        onDropTargetChange(undefined);
+        if (task) onDropTask(task.id, status);
+      },
+    });
+  }, [busyRef, getTaskById, onDropTargetChange, onDropTask, status]);
+
+  return (
+    <div
+      ref={columnRef}
+      className={`status-column min-h-[500px] flex flex-col gap-3 rounded-xl bg-muted/30 p-3 transition-colors ${
+        isDropTarget ? "drop-target" : isDropAvailable ? "drop-available" : ""
+      }`}
+      role="region"
+      aria-label={`${statusLabels[status]} tasks`}
+      data-drop-available={isDropAvailable ? "true" : undefined}
+      data-drop-target={isDropTarget ? "true" : undefined}
+    >
+      {children}
+    </div>
   );
 }
 

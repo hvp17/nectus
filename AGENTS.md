@@ -36,6 +36,8 @@ http://127.0.0.1:1420/
 
 Use this when working on layout, React state, styling, and non-Tauri UI behavior. In browser-only mode, Tauri commands are unavailable, so repo/worktree operations will only work inside the Tauri app.
 
+Do not start a dev server after making changes unless the user explicitly asks you to run one. The user decides when to launch `pnpm dev`, `pnpm desktop:dev`, or any other long-running local server.
+
 Run the full desktop app locally:
 
 ```bash

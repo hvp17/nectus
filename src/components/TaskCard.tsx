@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { GitBranch, Bot, Trash2 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Card } from "./ui/card";
@@ -10,19 +12,47 @@ interface TaskCardProps {
   isSelected: boolean;
   busy: boolean;
   confirmingDelete: boolean;
+  isDragging?: boolean;
   onSelect: (id: number) => void;
   onDelete: (task: TaskSummary) => void;
+  onDragStart: (taskId: number) => void;
+  onDragEnd: () => void;
 }
 
-export function TaskCard({ task, isSelected, busy, confirmingDelete, onSelect, onDelete }: TaskCardProps) {
+export function TaskCard({
+  task,
+  isSelected,
+  busy,
+  confirmingDelete,
+  isDragging = false,
+  onSelect,
+  onDelete,
+  onDragStart,
+  onDragEnd,
+}: TaskCardProps) {
+  const cardRef = useRef<HTMLDivElement | null>(null);
   const deleteDisabled = busy || Boolean(task.activeSessionId);
   const deleteLabel = task.activeSessionId ? "Stop session first" : confirmingDelete ? "Confirm delete" : "Delete task";
 
+  useEffect(() => {
+    const element = cardRef.current;
+    if (!element || busy) return;
+
+    return draggable({
+      element,
+      getInitialData: () => ({ type: "task", taskId: task.id }),
+      onDragStart: () => onDragStart(task.id),
+      onDrop: onDragEnd,
+    });
+  }, [busy, onDragEnd, onDragStart, task.id]);
+
   return (
     <Card
-      className={`group relative flex flex-col gap-3 p-4 text-left cursor-pointer transition-all hover:border-primary/50 ${
+      ref={cardRef}
+      className={`group relative flex flex-col gap-3 p-4 text-left cursor-grab transition-all hover:border-primary/50 active:cursor-grabbing ${
         isSelected ? "border-primary ring-1 ring-primary/20 shadow-md bg-accent/5" : "hover:bg-accent/5"
-      }`}
+      } ${isDragging ? "opacity-50 ring-2 ring-primary/30" : ""}`}
+      aria-grabbed={isDragging}
       onClick={() => onSelect(task.id)}
       role="button"
       tabIndex={0}
