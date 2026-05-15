@@ -269,6 +269,63 @@ describe("App", () => {
     });
   });
 
+  it("automatically starts the selected agent after creating a task with instructions", async () => {
+    mockedApi.listRepos.mockResolvedValue([
+      {
+        id: 7,
+        name: "nectus-desktop",
+        path: "/tmp/nectus-desktop",
+        defaultWorktreeRoot: "/tmp/nectus-desktop-worktrees",
+        createdAt: "2026-05-14T00:00:00.000Z",
+      },
+    ]);
+    mockedApi.createTask.mockResolvedValue({
+      id: 11,
+      repoId: 7,
+      title: "Review modal task flow",
+      prompt: "Review modal task flow",
+      status: "planned",
+      prUrl: null,
+      agentProfileId: 2,
+      agentName: "Claude",
+      hasWorktree: false,
+      branchName: null,
+      worktreePath: null,
+      isDirty: false,
+      activeSessionId: null,
+      lastSessionId: null,
+      lastSessionAgent: null,
+      lastSessionCwd: null,
+      lastSessionLabel: null,
+      createdAt: "2026-05-14T00:00:00.000Z",
+      updatedAt: "2026-05-14T00:00:00.000Z",
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+    fireEvent.change(screen.getByLabelText(/instructions/i), {
+      target: { value: "Review modal task flow" },
+    });
+    fireEvent.click(screen.getByRole("radio", { name: /claude/i }));
+    fireEvent.click(screen.getByRole("radio", { name: /direct edit/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.createTask).toHaveBeenCalledWith({
+        repoId: 7,
+        title: "Review modal task flow",
+        prompt: "Review modal task flow",
+        agentProfileId: 2,
+        hasWorktree: false,
+        branchName: null,
+      });
+    });
+    await waitFor(() => {
+      expect(mockedApi.startSession).toHaveBeenCalledWith(11, 2);
+    });
+  });
+
   it("dismisses the alert when the close button is clicked", async () => {
     mockedApi.listRepos.mockResolvedValue([
       {

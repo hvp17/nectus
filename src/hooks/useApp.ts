@@ -254,8 +254,18 @@ export function useApp() {
       resetCreateTaskForm();
       setCreateTaskOpen(false);
       setSelectedTaskId(task.id);
+      let startError: string | null = null;
+      try {
+        await api.startSession(task.id, newTaskAgentProfileId);
+      } catch (error) {
+        startError = String(error);
+      }
       await refresh(selectedRepoId);
-      setMessage(newTaskHasWorktree ? `Created ${task.branchName}` : `Created ${task.title}`);
+      if (startError) {
+        setMessage(`Created ${task.title}, but failed to start session: ${startError}`);
+      } else {
+        setMessage(newTaskHasWorktree ? `Created ${task.branchName}` : `Created ${task.title}`);
+      }
     } catch (error) {
       setMessage(String(error));
     } finally {
