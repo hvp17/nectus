@@ -40,8 +40,7 @@ export function CreateTaskModal({
   newTaskAgentProfileId,
   setNewTaskAgentProfileId,
 }: CreateTaskModalProps) {
-  const submitDisabled =
-    busy || !newTaskAgentProfileId || !newTaskPrompt.trim() || (newTaskHasWorktree && !newTaskBranchName.trim());
+  const submitDisabled = busy || !newTaskAgentProfileId || (newTaskHasWorktree && !newTaskBranchName.trim());
 
   return (
     <div className="modal-backdrop z-[100]" onMouseDown={onClose}>
@@ -112,12 +111,12 @@ export function CreateTaskModal({
           </div>
 
           <div className="field">
-            <Label htmlFor="new-task-prompt" className="text-xs font-bold uppercase tracking-wider opacity-60">Instructions</Label>
+            <Label htmlFor="new-task-prompt" className="text-xs font-bold uppercase tracking-wider opacity-60">Instructions (Optional)</Label>
             <textarea
               id="new-task-prompt"
               value={newTaskPrompt}
               onChange={(e) => setNewTaskPrompt(e.target.value)}
-              placeholder="What should the agent accomplish?"
+              placeholder="What should the agent know before starting?"
               rows={4}
               className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 min-h-[120px] resize-none"
             />

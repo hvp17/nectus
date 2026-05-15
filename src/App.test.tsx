@@ -213,7 +213,7 @@ describe("App", () => {
     });
   });
 
-  it("opens a task modal and creates a task with an optional title, required agent, prompt, and worktree choice", async () => {
+  it("opens a task modal and creates a task with an optional title, selected agent, prompt, and worktree choice", async () => {
     mockedApi.listRepos.mockResolvedValue([
       {
         id: 7,
@@ -263,6 +263,62 @@ describe("App", () => {
         title: "Review modal task flow",
         prompt: "Review modal task flow",
         agentProfileId: 2,
+        hasWorktree: false,
+        branchName: null,
+      });
+    });
+  });
+
+  it("creates a task when instructions are blank", async () => {
+    mockedApi.listRepos.mockResolvedValue([
+      {
+        id: 7,
+        name: "nectus-desktop",
+        path: "/tmp/nectus-desktop",
+        defaultWorktreeRoot: "/tmp/nectus-desktop-worktrees",
+        createdAt: "2026-05-14T00:00:00.000Z",
+      },
+    ]);
+    mockedApi.createTask.mockResolvedValue({
+      id: 12,
+      repoId: 7,
+      title: "Create title-only task",
+      prompt: null,
+      status: "planned",
+      prUrl: null,
+      agentProfileId: 1,
+      agentName: "Codex",
+      hasWorktree: false,
+      branchName: null,
+      worktreePath: null,
+      isDirty: false,
+      activeSessionId: null,
+      lastSessionId: null,
+      lastSessionAgent: null,
+      lastSessionCwd: null,
+      lastSessionLabel: null,
+      createdAt: "2026-05-14T00:00:00.000Z",
+      updatedAt: "2026-05-14T00:00:00.000Z",
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+    fireEvent.change(screen.getByLabelText(/title/i), {
+      target: { value: "Create title-only task" },
+    });
+
+    const createButton = screen.getByRole("button", { name: /^create task$/i });
+    expect(createButton).toBeEnabled();
+
+    fireEvent.click(createButton);
+
+    await waitFor(() => {
+      expect(mockedApi.createTask).toHaveBeenCalledWith({
+        repoId: 7,
+        title: "Create title-only task",
+        prompt: null,
+        agentProfileId: 1,
         hasWorktree: false,
         branchName: null,
       });
