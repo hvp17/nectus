@@ -23,131 +23,33 @@ vi.mock("./api", () => ({
   },
 }));
 
-vi.mock("@atlaskit/pragmatic-drag-and-drop/element/adapter", () => {
-  let currentSource: { element: HTMLElement; data: Record<string, unknown> } | null = null;
-  const monitors: Array<{
-    canMonitor?: (payload: { source: { element: HTMLElement; data: Record<string, unknown> } }) => boolean;
-    onDrop?: (payload: {
-      source: { element: HTMLElement; data: Record<string, unknown> };
-      location: {
-        current: {
-          input: { clientX: number; clientY: number };
-          dropTargets: Array<{ element: Element; data: Record<string, unknown> }>;
-        };
-        previous: { dropTargets: Array<{ element: Element; data: Record<string, unknown> }> };
-      };
-    }) => void;
-  }> = [];
-
-  return {
-    draggable: (args: {
-      element: HTMLElement;
-      getInitialData?: () => Record<string, unknown>;
-      onDragStart?: () => void;
-      onDrop?: () => void;
-    }) => {
-      const dragStart = () => {
-        currentSource = {
-          element: args.element,
-          data: args.getInitialData?.() ?? {},
-        };
-        args.onDragStart?.();
-      };
-      const dragEnd = () => {
-        currentSource = null;
-        args.onDrop?.();
-      };
-
-      args.element.setAttribute("draggable", "true");
-      args.element.addEventListener("dragstart", dragStart);
-      args.element.addEventListener("dragend", dragEnd);
-
-      return () => {
-        args.element.removeEventListener("dragstart", dragStart);
-        args.element.removeEventListener("dragend", dragEnd);
-      };
-    },
-    dropTargetForElements: (args: {
-      element: Element;
-      getData?: (payload: { source: { element: HTMLElement; data: Record<string, unknown> } }) => Record<string, unknown>;
-      canDrop?: (payload: { source: { element: HTMLElement; data: Record<string, unknown> } }) => boolean;
-      onDragEnter?: (payload: { source: { element: HTMLElement; data: Record<string, unknown> } }) => void;
-      onDragLeave?: (payload: { source: { element: HTMLElement; data: Record<string, unknown> } }) => void;
-      onDrop?: (payload: { source: { element: HTMLElement; data: Record<string, unknown> } }) => void;
-    }) => {
-      const canDrop = () => currentSource && (args.canDrop?.({ source: currentSource }) ?? true);
-      const dragEnter = (event: Event) => {
-        if (!canDrop() || !currentSource) return;
-        event.preventDefault();
-        args.onDragEnter?.({ source: currentSource });
-      };
-      const dragOver = (event: Event) => {
-        if (!canDrop()) return;
-        event.preventDefault();
-      };
-      const dragLeave = () => {
-        if (!currentSource) return;
-        args.onDragLeave?.({ source: currentSource });
-      };
-      const drop = (event: Event) => {
-        if (!canDrop() || !currentSource) return;
-        event.preventDefault();
-        args.onDrop?.({ source: currentSource });
-        const dropTarget = {
-          element: args.element,
-          data: args.getData?.({ source: currentSource }) ?? {},
-        };
-        monitors.forEach((monitor) => {
-          if (monitor.canMonitor?.({ source: currentSource! }) === false) return;
-          monitor.onDrop?.({
-            source: currentSource!,
-            location: {
-              current: {
-                input: { clientX: 0, clientY: 0 },
-                dropTargets: [dropTarget],
-              },
-              previous: { dropTargets: [] },
-            },
-          });
-        });
-        currentSource = null;
-      };
-
-      args.element.addEventListener("dragenter", dragEnter);
-      args.element.addEventListener("dragover", dragOver);
-      args.element.addEventListener("dragleave", dragLeave);
-      args.element.addEventListener("drop", drop);
-
-      return () => {
-        args.element.removeEventListener("dragenter", dragEnter);
-        args.element.removeEventListener("dragover", dragOver);
-        args.element.removeEventListener("dragleave", dragLeave);
-        args.element.removeEventListener("drop", drop);
-      };
-    },
-    monitorForElements: (args: {
-      canMonitor?: (payload: { source: { element: HTMLElement; data: Record<string, unknown> } }) => boolean;
-      onDrop?: (payload: {
-        source: { element: HTMLElement; data: Record<string, unknown> };
-        location: {
-          current: {
-            input: { clientX: number; clientY: number };
-            dropTargets: Array<{ element: Element; data: Record<string, unknown> }>;
-          };
-          previous: { dropTargets: Array<{ element: Element; data: Record<string, unknown> }> };
-        };
-      }) => void;
-    }) => {
-      monitors.push(args);
-      return () => {
-        const index = monitors.indexOf(args);
-        if (index >= 0) monitors.splice(index, 1);
-      };
-    },
-  };
-});
-
 const mockedApi = vi.mocked(api);
+
+function mockElementsFromPoint(elements: Element[]) {
+  const originalElementsFromPoint = document.elementsFromPoint;
+  Object.defineProperty(document, "elementsFromPoint", {
+    configurable: true,
+    value: vi.fn(() => elements),
+  });
+  return () => {
+    if (originalElementsFromPoint) {
+      Object.defineProperty(document, "elementsFromPoint", {
+        configurable: true,
+        value: originalElementsFromPoint,
+      });
+    } else {
+      Reflect.deleteProperty(document, "elementsFromPoint");
+    }
+  };
+}
+
+function pointerDrag(taskCard: HTMLElement, target: Element) {
+  const restoreElementsFromPoint = mockElementsFromPoint([target]);
+  fireEvent.pointerDown(taskCard, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+  fireEvent.pointerMove(window, { pointerId: 1, clientX: 40, clientY: 10 });
+  fireEvent.pointerUp(window, { pointerId: 1, clientX: 40, clientY: 10 });
+  restoreElementsFromPoint();
+}
 
 describe("App", () => {
   beforeEach(() => {
@@ -204,19 +106,13 @@ describe("App", () => {
 
     const taskCard = await screen.findByRole("button", { name: /drag this task into review/i });
     const reviewColumn = screen.getByRole("region", { name: /review/i });
-    const dataTransfer = {
-      setData: vi.fn(),
-      getData: vi.fn(() => "1001"),
-      effectAllowed: "",
-      dropEffect: "",
-    };
 
-    fireEvent.dragStart(taskCard, { dataTransfer });
-    fireEvent.dragEnter(reviewColumn, { dataTransfer });
-    fireEvent.drop(reviewColumn, { dataTransfer });
+    pointerDrag(taskCard, reviewColumn);
 
     expect(mockedApi.updateTaskMetadata).not.toHaveBeenCalled();
-    expect(within(reviewColumn).getByText("Drag this task into Review")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(within(reviewColumn).getByText("Drag this task into Review")).toBeInTheDocument();
+    });
   });
 
   it("opens a task modal and creates a task with an optional title, required agent, prompt, and worktree choice", async () => {
@@ -432,16 +328,8 @@ describe("App", () => {
 
     const taskCard = await screen.findByRole("button", { name: /wire task drag and drop/i });
     const reviewColumn = screen.getByRole("region", { name: /review/i });
-    const dataTransfer = {
-      setData: vi.fn(),
-      getData: vi.fn(() => "21"),
-      effectAllowed: "",
-      dropEffect: "",
-    };
 
-    fireEvent.dragStart(taskCard, { dataTransfer });
-    fireEvent.dragOver(reviewColumn, { dataTransfer });
-    fireEvent.drop(reviewColumn, { dataTransfer });
+    pointerDrag(taskCard, reviewColumn);
 
     await waitFor(() => {
       expect(mockedApi.updateTaskMetadata).toHaveBeenCalledWith({ taskId: 21, status: "review" });
@@ -449,11 +337,7 @@ describe("App", () => {
     expect(within(reviewColumn).getByText("Wire task drag and drop")).toBeInTheDocument();
   });
 
-  it("moves a task with the pointer fallback in the Tauri webview", async () => {
-    Object.defineProperty(window, "__TAURI_INTERNALS__", {
-      configurable: true,
-      value: {},
-    });
+  it("moves a task with native pointer drag feedback", async () => {
     mockedApi.listRepos.mockResolvedValue([
       {
         id: 7,
@@ -510,11 +394,7 @@ describe("App", () => {
 
     const taskCard = await screen.findByRole("button", { name: /wire task pointer drag/i });
     const reviewColumn = screen.getByRole("region", { name: /review/i });
-    const originalElementsFromPoint = document.elementsFromPoint;
-    Object.defineProperty(document, "elementsFromPoint", {
-      configurable: true,
-      value: vi.fn(() => [reviewColumn]),
-    });
+    const restoreElementsFromPoint = mockElementsFromPoint([reviewColumn]);
 
     fireEvent.pointerDown(taskCard, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
     fireEvent.pointerMove(window, { pointerId: 1, clientX: 40, clientY: 10 });
@@ -529,14 +409,7 @@ describe("App", () => {
       expect(mockedApi.updateTaskMetadata).toHaveBeenCalledWith({ taskId: 21, status: "review" });
     });
 
-    if (originalElementsFromPoint) {
-      Object.defineProperty(document, "elementsFromPoint", {
-        configurable: true,
-        value: originalElementsFromPoint,
-      });
-    } else {
-      Reflect.deleteProperty(document, "elementsFromPoint");
-    }
+    restoreElementsFromPoint();
   });
 
   it("shows drop target feedback while a task is dragged over another status column", async () => {
@@ -576,18 +449,15 @@ describe("App", () => {
 
     const taskCard = await screen.findByRole("button", { name: /wire task drag and drop/i });
     const reviewColumn = screen.getByRole("region", { name: /review/i });
-    const dataTransfer = {
-      setData: vi.fn(),
-      getData: vi.fn(() => "21"),
-      effectAllowed: "",
-      dropEffect: "",
-    };
+    const restoreElementsFromPoint = mockElementsFromPoint([reviewColumn]);
 
-    fireEvent.dragStart(taskCard, { dataTransfer });
+    fireEvent.pointerDown(taskCard, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 40, clientY: 10 });
+
     expect(reviewColumn).toHaveAttribute("data-drop-available", "true");
-
-    fireEvent.dragEnter(reviewColumn, { dataTransfer });
-
     expect(reviewColumn).toHaveAttribute("data-drop-target", "true");
+
+    fireEvent.pointerCancel(window, { pointerId: 1, clientX: 40, clientY: 10 });
+    restoreElementsFromPoint();
   });
 });

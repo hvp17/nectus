@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { GitBranch, Bot, Trash2 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Card } from "./ui/card";
@@ -19,7 +18,6 @@ interface TaskCardProps {
   onPointerDragMove: (clientX: number, clientY: number) => void;
   onPointerDragEnd: (taskId: number, clientX: number, clientY: number) => void;
   onDragEnd: () => void;
-  pointerDragEnabled: boolean;
 }
 
 export function TaskCard({
@@ -34,7 +32,6 @@ export function TaskCard({
   onPointerDragMove,
   onPointerDragEnd,
   onDragEnd,
-  pointerDragEnabled,
 }: TaskCardProps) {
   const cardRef = useRef<HTMLDivElement | null>(null);
   const suppressClickRef = useRef(false);
@@ -43,19 +40,7 @@ export function TaskCard({
 
   useEffect(() => {
     const element = cardRef.current;
-    if (!element || busy || pointerDragEnabled) return;
-
-    return draggable({
-      element,
-      getInitialData: () => ({ type: "task", taskId: task.id }),
-      onDragStart: () => onDragStart(task.id),
-      onDrop: onDragEnd,
-    });
-  }, [busy, onDragEnd, onDragStart, pointerDragEnabled, task.id]);
-
-  useEffect(() => {
-    const element = cardRef.current;
-    if (!element || busy || !pointerDragEnabled) return;
+    if (!element || busy) return;
 
     let startX = 0;
     let startY = 0;
@@ -161,7 +146,7 @@ export function TaskCard({
       stopTracking();
       removeGhost();
     };
-  }, [busy, onDragEnd, onDragStart, onPointerDragEnd, onPointerDragMove, pointerDragEnabled, task.id]);
+  }, [busy, onDragEnd, onDragStart, onPointerDragEnd, onPointerDragMove, task.id]);
 
   return (
     <Card
