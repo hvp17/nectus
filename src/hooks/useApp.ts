@@ -174,6 +174,13 @@ export function useApp() {
     [sessionCommands],
   );
 
+  const onSessionInput = useCallback((sessionId: string) => {
+    const task = tasksRef.current.find((task) => task.activeSessionId === sessionId);
+    if (task) {
+      setTaskAttention((current) => clearTaskAttention(current, task.id));
+    }
+  }, []);
+
   const addProject = async () => {
     setMessage(null);
     if (demoMode) {
@@ -447,6 +454,7 @@ export function useApp() {
     stopSession,
     resumeSession,
     onSessionExit,
+    onSessionInput,
     selectedAgentProfileId,
     setSelectedAgentProfileId,
     saveAppSettings,
