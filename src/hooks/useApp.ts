@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { toast } from "sonner";
 import { api } from "../api";
-import { defaultDemoSettings, demoAgentProfiles, demoRepo, demoTasks } from "../demoData";
 import {
   clearTaskAttention,
   getAttentionCounts,
@@ -26,7 +25,6 @@ import type {
 } from "../types";
 
 export function useApp() {
-  const demoMode = useMemo(() => new URLSearchParams(window.location.search).get("demo") === "1", []);
   const [repos, setRepos] = useState<Repo[]>([]);
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
@@ -113,20 +111,6 @@ export function useApp() {
 
   const refresh = useCallback(async (preferredRepoId?: number) => {
     setLoading(true);
-    if (demoMode) {
-      const nextRepoId = preferredRepoId ?? selectedRepoIdRef.current ?? demoRepo.id;
-      selectedRepoIdRef.current = nextRepoId;
-      selectedAgentProfileIdRef.current = selectedAgentProfileIdRef.current ?? demoAgentProfiles[0].id;
-      setRepos([demoRepo]);
-      setAgentProfiles(demoAgentProfiles);
-      setSettings((current) => current ?? defaultDemoSettings);
-      setSelectedRepoId(nextRepoId);
-      setSelectedAgentProfileId(selectedAgentProfileIdRef.current);
-      setTasks((current) => (current.length ? current : demoTasks));
-      setLoading(false);
-      return;
-    }
-
     try {
       const [repoResult, profileResult, settingsResult] = await Promise.all([
         api.listRepos(),
@@ -155,14 +139,14 @@ export function useApp() {
     } finally {
       setLoading(false);
     }
-  }, [demoMode]);
+  }, []);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
   useEffect(() => {
-    if (!selectedTaskId || demoMode) {
+    if (!selectedTaskId) {
       setSelectedReviewLoop(null);
       setSelectedReviewRuns([]);
       return;
@@ -182,7 +166,7 @@ export function useApp() {
     return () => {
       disposed = true;
     };
-  }, [demoMode, selectedTaskId]);
+  }, [selectedTaskId]);
 
   useSessionEvents({ tasksRef, setTasks, setMessage, setTaskAttention });
 
@@ -262,10 +246,6 @@ export function useApp() {
 
   const addProject = async () => {
     setMessage(null);
-    if (demoMode) {
-      setMessage("Demo mode uses fixture data. Remove ?demo=1 to add local projects.");
-      return;
-    }
 
     try {
       const selected = await api.pickRepositoryFolder();
@@ -295,38 +275,6 @@ export function useApp() {
     }
     setBusy(true);
     setMessage(null);
-    if (demoMode) {
-      const now = new Date().toISOString();
-      const task: TaskSummary = {
-        id: Date.now(),
-        repoId: selectedRepoId,
-        title: getGeneratedTaskTitle(),
-        prompt: newTaskPrompt.trim() || null,
-        status: "planned",
-        prUrl: null,
-        agentProfileId: newTaskAgentProfileId,
-        agentName: demoAgentProfiles.find((profile) => profile.id === newTaskAgentProfileId)?.name ?? null,
-        agentKind: demoAgentProfiles.find((profile) => profile.id === newTaskAgentProfileId)?.agentKind ?? null,
-        hasWorktree: newTaskHasWorktree,
-        branchName: newTaskHasWorktree ? newTaskBranchName.trim() : null,
-        worktreePath: newTaskHasWorktree ? `${demoRepo.defaultWorktreeRoot}/${newTaskBranchName.trim()}` : null,
-        isDirty: false,
-        activeSessionId: null,
-        lastSessionId: null,
-        lastSessionAgent: null,
-        lastSessionCwd: null,
-        lastSessionLabel: null,
-        createdAt: now,
-        updatedAt: now,
-      };
-      setTasks((current) => [...current, task]);
-      resetCreateTaskForm();
-      setCreateTaskOpen(false);
-      setSelectedTaskId(task.id);
-      setMessage(`Created ${task.title}`);
-      setBusy(false);
-      return;
-    }
 
     try {
       const task = await api.createTask({
@@ -361,16 +309,6 @@ export function useApp() {
 
   const updateStatus = async (task: TaskSummary, status: TaskStatus) => {
     setMessage(null);
-    if (demoMode) {
-      const updatedAt = new Date().toISOString();
-      setTasks((current) =>
-        current.map((item) => (item.id === task.id ? { ...item, status, updatedAt } : item)),
-      );
-      if (status === "done") {
-        setTaskAttention((current) => clearTaskAttention(current, task.id));
-      }
-      return;
-    }
 
     try {
       const updated = await api.updateTaskMetadata({ taskId: task.id, status });
@@ -385,22 +323,6 @@ export function useApp() {
 
   const startPairLoop = async (task: TaskSummary, reviewerProfileId: number, maxRounds: number) => {
     setMessage(null);
-    if (demoMode) {
-      const now = new Date().toISOString();
-      setSelectedReviewLoop({
-        taskId: task.id,
-        reviewerProfileId,
-        maxRounds,
-        currentRound: 0,
-        status: "running",
-        lastError: null,
-        createdAt: now,
-        updatedAt: now,
-      });
-      setSelectedReviewRuns([]);
-      setMessage("Pair loop: Started");
-      return;
-    }
 
     try {
       const reviewLoop = await api.startPairLoop(task.id, reviewerProfileId, maxRounds);
@@ -415,15 +337,6 @@ export function useApp() {
 
   const stopPairLoop = async (task: TaskSummary) => {
     setMessage(null);
-    if (demoMode) {
-      setSelectedReviewLoop((current) =>
-        current && current.taskId === task.id
-          ? { ...current, status: "stopped", updatedAt: new Date().toISOString() }
-          : current,
-      );
-      setMessage("Pair loop: Stopped");
-      return;
-    }
 
     try {
       const reviewLoop = await api.stopPairLoop(task.id);
@@ -457,9 +370,7 @@ export function useApp() {
 
     const runDelete = async () => {
       try {
-        if (!demoMode) {
-          await api.deleteTask(task.id);
-        }
+        await api.deleteTask(task.id);
         setTasks((current) => current.filter((item) => item.id !== task.id));
         setSelectedTaskId((current) => (current === task.id ? undefined : current));
         setTaskAttention((current) => clearTaskAttention(current, task.id));
@@ -485,15 +396,6 @@ export function useApp() {
   const saveAppSettings = async (input: AppSettingsInput) => {
     setBusy(true);
     setMessage(null);
-    if (demoMode) {
-      const updated = { ...input, updatedAt: new Date().toISOString() };
-      setSettings(updated);
-      setSelectedAgentProfileId(input.defaultAgentProfileId ?? undefined);
-      selectedAgentProfileIdRef.current = input.defaultAgentProfileId ?? undefined;
-      setMessage("Settings saved");
-      setBusy(false);
-      return updated;
-    }
 
     try {
       const updated = await api.updateAppSettings(input);
@@ -514,27 +416,6 @@ export function useApp() {
   const saveAgentProfile = async (profile: Partial<AgentProfile> & Pick<AgentProfile, "name" | "agentKind" | "command">) => {
     setBusy(true);
     setMessage(null);
-    if (demoMode) {
-      const now = new Date().toISOString();
-      const saved: AgentProfile = {
-        id: profile.id ?? Date.now(),
-        name: profile.name,
-        agentKind: profile.agentKind,
-        command: profile.command,
-        model: profile.model ?? null,
-        args: profile.args ?? [],
-        env: profile.env ?? {},
-        createdAt: profile.createdAt ?? now,
-        updatedAt: now,
-      };
-      setAgentProfiles((current) => {
-        const exists = current.some((item) => item.id === saved.id);
-        return exists ? current.map((item) => (item.id === saved.id ? saved : item)) : [...current, saved];
-      });
-      setMessage(`Saved ${saved.name}`);
-      setBusy(false);
-      return saved;
-    }
 
     try {
       const saved = await api.upsertAgentProfile(profile);

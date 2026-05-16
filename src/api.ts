@@ -17,7 +17,7 @@ import type {
 
 const isTauri = "__TAURI_INTERNALS__" in window;
 
-const demoProfiles: AgentProfile[] = [
+const browserFallbackProfiles: AgentProfile[] = [
   {
     id: 1,
     name: "Codex",
@@ -98,7 +98,7 @@ export const api = {
     return invoke("delete_task", { taskId });
   },
   async listAgentProfiles(): Promise<AgentProfile[]> {
-    if (!isTauri) return demoProfiles;
+    if (!isTauri) return browserFallbackProfiles;
     return invoke("list_agent_profiles");
   },
   async upsertAgentProfile(
@@ -123,7 +123,7 @@ export const api = {
   async getAppSettings(): Promise<AppSettings> {
     if (!isTauri) {
       return {
-        defaultAgentProfileId: demoProfiles[0]?.id ?? null,
+        defaultAgentProfileId: browserFallbackProfiles[0]?.id ?? null,
         defaultWorktreeRootPattern: "../{repoName}-worktrees",
         defaultBranchPrefix: null,
         theme: "system",
