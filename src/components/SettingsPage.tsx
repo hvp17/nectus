@@ -1,54 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, Cpu, GitBranch, Palette, Plus, Save, Star, Terminal } from "lucide-react";
-import { AgentLogo, ModelLogo } from "./AgentBrand";
+import { GitBranch, Palette, Plus, Save, Terminal } from "lucide-react";
+import { AgentLogo } from "./AgentBrand";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Card, CardContent, CardHeader } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { Textarea } from "./ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
-import type { AgentKind, AgentProfile, AppSettings, AppSettingsInput } from "../types";
-
-const fallbackSettings: AppSettings = {
-  defaultAgentProfileId: null,
-  defaultWorktreeRootPattern: "../{repoName}-worktrees",
-  defaultBranchPrefix: null,
-  theme: "system",
-  density: "comfortable",
-  updatedAt: new Date(0).toISOString(),
-};
-
-const agentKindLabels: Record<AgentKind, string> = {
-  codex: "Codex",
-  claude: "Claude",
-  gemini: "Gemini",
-  custom: "Custom",
-};
-
-const modelPresets: Record<AgentKind, string[]> = {
-  codex: ["gpt-5.3-codex", "gpt-5.2"],
-  claude: ["sonnet", "opus", "haiku"],
-  gemini: ["gemini-pro", "gemini-flash"],
-  custom: [],
-};
-
-const noDefaultProfileValue = "__none";
-const cliDefaultModelValue = "__cli-default";
-const customModelValue = "__custom";
-
-interface ProfileDraft {
-  id?: number;
-  name: string;
-  agentKind: AgentKind;
-  command: string;
-  model: string;
-  customModel: string;
-  argsText: string;
-  envText: string;
-  createdAt?: string;
-}
+import type { AgentProfile, AppSettings, AppSettingsInput } from "../types";
+import { ProfileEditor } from "./settings/ProfileEditor";
+import {
+  createProfileDraft,
+  fallbackSettings,
+  noDefaultProfileValue,
+  normalizeProfileKindChange,
+  profileDraftToInput,
+  type ProfileDraft,
+  toProfileDraft,
+  toSettingsInput,
+} from "./settings/profileDrafts";
 
 interface SettingsPageProps {
   settings?: AppSettings;
@@ -106,32 +76,11 @@ export function SettingsPage({
   };
 
   const addProfileDraft = () => {
-    setProfileDrafts((current) => [
-      ...current,
-      {
-        name: "New Agent",
-        agentKind: "custom",
-        command: "",
-        model: "",
-        customModel: "",
-        argsText: "",
-        envText: "",
-      },
-    ]);
+    setProfileDrafts((current) => [...current, createProfileDraft()]);
   };
 
   const saveProfile = async (draft: ProfileDraft) => {
-    const model = draft.model === customModelValue ? draft.customModel.trim() : draft.model;
-    await onSaveAgentProfile({
-      id: draft.id,
-      name: draft.name.trim(),
-      agentKind: draft.agentKind,
-      command: draft.command.trim(),
-      model: model || null,
-      args: lines(draft.argsText),
-      env: parseEnv(draft.envText),
-      createdAt: draft.createdAt,
-    });
+    await onSaveAgentProfile(profileDraftToInput(draft));
   };
 
   return (
@@ -337,177 +286,6 @@ export function SettingsPage({
   );
 }
 
-function ProfileEditor({
-  profile,
-  isDefault,
-  busy,
-  onChange,
-  onSave,
-}: {
-  profile: ProfileDraft;
-  isDefault: boolean;
-  busy: boolean;
-  onChange: (patch: Partial<ProfileDraft>) => void;
-  onSave: () => void;
-}) {
-  const presets = modelPresets[profile.agentKind];
-  const modelValue = profile.model && presets.includes(profile.model) ? profile.model : profile.model ? customModelValue : cliDefaultModelValue;
-  const selectedModel = modelValue === customModelValue ? profile.customModel : modelValue === cliDefaultModelValue ? null : modelValue;
-  const commandLabel = profile.command.trim() || "No command set";
-  const modelLabel = selectedModel || "CLI default";
-  const saveDisabled = busy || !profile.name.trim() || !profile.command.trim();
-
-  return (
-    <Card size="sm" className="profile-editor shadow-none" data-agent-kind={profile.agentKind}>
-      <CardHeader className="profile-editor-header p-0">
-        <div className="profile-identity">
-          <AgentLogo agentKind={profile.agentKind} size="lg" className="profile-kind-mark" />
-          <div className="profile-title-fields">
-            <Input
-              aria-label="Profile name"
-              value={profile.name}
-              onChange={(event) => onChange({ name: event.target.value })}
-              className="profile-name-input"
-            />
-            <p className="profile-command-summary">
-              <Terminal size={13} />
-              <span className="font-mono">{commandLabel}</span>
-              <span aria-hidden="true">·</span>
-              <span>{modelLabel}</span>
-            </p>
-          </div>
-        </div>
-
-        <div className="profile-editor-toolbar">
-          <div className="profile-editor-badges">
-            {isDefault && (
-              <Badge variant="outline" className="profile-status-badge">
-                <Star size={11} />
-                Default
-              </Badge>
-            )}
-            <Badge variant="outline" className="profile-status-badge">
-              <AgentLogo agentKind={profile.agentKind} size="sm" />
-              {agentKindLabels[profile.agentKind]}
-            </Badge>
-            <Badge variant="outline" className="profile-status-badge">
-              <Cpu size={11} />
-              {modelLabel}
-            </Badge>
-          </div>
-          <Select value={profile.agentKind} onValueChange={(value) => onChange({ agentKind: value as AgentKind })}>
-            <SelectTrigger aria-label="Agent kind" className="profile-kind-select h-8 justify-between">
-              <span className="select-value-with-logo">
-                <SelectValue />
-              </span>
-            </SelectTrigger>
-            <SelectContent position="popper">
-              {Object.entries(agentKindLabels).map(([value, label]) => (
-                <SelectItem key={value} value={value} textValue={label}>
-                  <span className="select-option-with-logo">
-                    <AgentLogo agentKind={value as AgentKind} size="sm" />
-                    {label}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button type="button" size="sm" className="gap-2" onClick={onSave} disabled={saveDisabled}>
-            <Check size={14} />
-            Save
-          </Button>
-        </div>
-      </CardHeader>
-
-      <CardContent className="profile-editor-grid p-0">
-        <div className="settings-field">
-          <Label className="settings-field-label">
-            <Terminal size={13} />
-            Command
-          </Label>
-          <Input value={profile.command} onChange={(event) => onChange({ command: event.target.value })} className="font-mono" />
-        </div>
-        <div className="settings-field">
-          <Label className="settings-field-label">
-            <Cpu size={13} />
-            Model
-          </Label>
-          <Select
-            value={modelValue}
-            onValueChange={(value) => {
-              onChange({
-                model: value === cliDefaultModelValue ? "" : value,
-                customModel: value === customModelValue ? profile.customModel : "",
-              });
-            }}
-          >
-            <SelectTrigger className="h-8 w-full justify-between">
-              <span className="select-value-with-logo">
-                <SelectValue />
-              </span>
-            </SelectTrigger>
-            <SelectContent position="popper">
-              <SelectItem value={cliDefaultModelValue} textValue="CLI default">
-                <span className="select-option-with-logo">
-                  <ModelLogo agentKind={profile.agentKind} model={null} size="sm" />
-                  CLI default
-                </span>
-              </SelectItem>
-              {presets.map((preset) => (
-                <SelectItem key={preset} value={preset} textValue={preset}>
-                  <span className="select-option-with-logo">
-                    <ModelLogo agentKind={profile.agentKind} model={preset} size="sm" />
-                    {preset}
-                  </span>
-                </SelectItem>
-              ))}
-              <SelectItem value={customModelValue} textValue="Custom...">
-                <span className="select-option-with-logo">
-                  <ModelLogo agentKind="custom" model={profile.customModel || "custom"} size="sm" />
-                  Custom...
-                </span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          {modelValue === customModelValue && (
-            <Input
-              aria-label="Custom model"
-              value={profile.customModel}
-              onChange={(event) => onChange({ customModel: event.target.value })}
-              placeholder="model-id"
-              className="mt-2 font-mono"
-            />
-          )}
-        </div>
-        <div className="settings-field">
-          <Label className="settings-field-label">
-            <Terminal size={13} />
-            Args
-          </Label>
-          <Textarea
-            value={profile.argsText}
-            onChange={(event) => onChange({ argsText: event.target.value })}
-            placeholder="One CLI argument per line"
-            className="min-h-[82px] resize-y font-mono"
-          />
-        </div>
-        <div className="settings-field">
-          <Label className="settings-field-label">
-            <Cpu size={13} />
-            Environment
-          </Label>
-          <Textarea
-            value={profile.envText}
-            onChange={(event) => onChange({ envText: event.target.value })}
-            placeholder="KEY=value"
-            className="min-h-[82px] resize-y font-mono"
-          />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 function SegmentedRadioGroup<T extends string>({
   label,
   name,
@@ -545,63 +323,5 @@ function SegmentedRadioGroup<T extends string>({
         ))}
       </ToggleGroup>
     </fieldset>
-  );
-}
-
-function toSettingsInput(settings: AppSettings): AppSettingsInput {
-  return {
-    defaultAgentProfileId: settings.defaultAgentProfileId ?? null,
-    defaultWorktreeRootPattern: settings.defaultWorktreeRootPattern,
-    defaultBranchPrefix: settings.defaultBranchPrefix ?? null,
-    theme: settings.theme,
-    density: settings.density,
-  };
-}
-
-function toProfileDraft(profile: AgentProfile): ProfileDraft {
-  const presets = modelPresets[profile.agentKind];
-  const model = profile.model ?? "";
-  return {
-    id: profile.id,
-    name: profile.name,
-    agentKind: profile.agentKind,
-    command: profile.command,
-    model: model && presets.includes(model) ? model : model ? customModelValue : "",
-    customModel: model && presets.includes(model) ? "" : model,
-    argsText: profile.args.join("\n"),
-    envText: Object.entries(profile.env)
-      .map(([key, value]) => `${key}=${value}`)
-      .join("\n"),
-    createdAt: profile.createdAt,
-  };
-}
-
-function normalizeProfileKindChange(profile: ProfileDraft): ProfileDraft {
-  if (profile.agentKind === "custom") return profile;
-  const presets = modelPresets[profile.agentKind];
-  if (!profile.model || profile.model === customModelValue || presets.includes(profile.model)) return profile;
-  return {
-    ...profile,
-    model: customModelValue,
-    customModel: profile.model,
-  };
-}
-
-function lines(value: string): string[] {
-  return value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
-
-function parseEnv(value: string): Record<string, string> {
-  return Object.fromEntries(
-    lines(value)
-      .map((line) => {
-        const separator = line.indexOf("=");
-        if (separator < 1) return undefined;
-        return [line.slice(0, separator).trim(), line.slice(separator + 1).trim()] as const;
-      })
-      .filter((entry): entry is readonly [string, string] => Boolean(entry)),
   );
 }

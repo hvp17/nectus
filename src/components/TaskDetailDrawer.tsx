@@ -309,7 +309,7 @@ export function TaskDetailDrawer({
              <dl className="grid grid-cols-[80px_1fr] gap-x-4 gap-y-3 text-sm">
                 <dt className="text-muted-foreground font-semibold">Mode</dt>
                 <dd className="font-medium">{task.hasWorktree ? "With worktree" : "Task only"}</dd>
-                
+
                 {task.hasWorktree && (
                   <>
                     <dt className="text-muted-foreground font-semibold">Branch</dt>
@@ -319,7 +319,7 @@ export function TaskDetailDrawer({
                     </dd>
                   </>
                 )}
-                
+
                 <dt className="text-muted-foreground font-semibold">Status</dt>
                 <dd>
                   <Select value={task.status} onValueChange={(val) => onUpdateStatus(task, val as TaskStatus)}>

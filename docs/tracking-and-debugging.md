@@ -26,7 +26,12 @@ Schema owner: `native/src/db/migrations.rs`
 
 Row mapping and enum parsing: `native/src/db/rows.rs`
 
-Persistence API: `native/src/db/mod.rs`
+Persistence APIs:
+
+- `native/src/db/mod.rs`: database setup plus project, settings, task, and
+  session-state records.
+- `native/src/db/agent_profiles.rs`: agent profile queries and upserts.
+- `native/src/db/review_loops.rs`: review-loop and review-run records.
 
 ### Frontend State
 
@@ -37,11 +42,22 @@ The frontend keeps transient UI state in React:
 - Detail-pane expansion.
 - Create-task modal drafts.
 - Settings/profile edit drafts.
+- Review-loop detail state loaded for the selected task.
 
 The source of truth for saved project, task, profile, settings, and review-loop
 data remains SQLite through Tauri commands.
 
 Main owner: `src/hooks/useApp.ts`
+
+Focused state hooks:
+
+- `src/hooks/useSessionEvents.ts`: session attention events and notifications.
+- `src/hooks/useSessionAttentionControls.ts`: session controls that clear stale
+  attention before start, resume, stop, and input flows.
+- `src/hooks/useTaskDeletion.ts`: task deletion workflow and deletion toasts.
+- `src/hooks/useTaskReviewLoop.ts`: selected-task review-loop data and
+  `review_loop_updated` events.
+- `src/hooks/useCreateTaskForm.ts`: create-task modal drafts.
 
 ### Codex JSONL
 
@@ -122,7 +138,7 @@ Frontend event listeners:
   Tauri emits native file-drop events instead of relying on browser-only drops.
 - `src/hooks/useSessionEvents.ts` listens for attention events and sends
   notifications.
-- `src/hooks/useApp.ts` listens for `review_loop_updated`.
+- `src/hooks/useTaskReviewLoop.ts` listens for `review_loop_updated`.
 
 ## Task Tracking Fields
 

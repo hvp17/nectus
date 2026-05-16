@@ -24,6 +24,34 @@ fn app_result<T>(result: Result<T, String>) -> AppResult<T> {
     result.map_err(Into::into)
 }
 
+#[derive(Debug)]
+struct TaskSessionContext {
+    task: TaskSummary,
+    repo: Repo,
+    agent: AgentProfile,
+}
+
+fn task_session_context(
+    db: &Database,
+    task_id: i64,
+    agent_profile_id: Option<i64>,
+) -> AppResult<TaskSessionContext> {
+    let task = db
+        .task_by_id(task_id)?
+        .ok_or_else(|| AppError::from("Task not found"))?;
+    let agent_profile_id = agent_profile_id
+        .or(task.agent_profile_id)
+        .ok_or_else(|| AppError::from("Task does not have an agent profile to resume"))?;
+    let repo = db
+        .repo_by_id(task.repo_id)?
+        .ok_or_else(|| AppError::from("Repository not found"))?;
+    let agent = db
+        .agent_profile_by_id(agent_profile_id)?
+        .ok_or_else(|| AppError::from("Agent profile not found"))?;
+
+    Ok(TaskSessionContext { task, repo, agent })
+}
+
 #[tauri::command]
 fn add_repo(path: String, state: State<'_, AppState>) -> AppResult<Repo> {
     app_result(state.db.lock().add_repo(path))
@@ -147,23 +175,21 @@ fn start_session(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> AppResult<Session> {
-    let (task, repo, agent) = {
+    let context = {
         let db = state.db.lock();
-        let task = db
-            .task_by_id(task_id)?
-            .ok_or_else(|| "Task not found".to_string())?;
-        let repo = db
-            .repo_by_id(task.repo_id)?
-            .ok_or_else(|| "Repository not found".to_string())?;
-        let agent = db
-            .agent_profile_by_id(agent_profile_id)?
-            .ok_or_else(|| "Agent profile not found".to_string())?;
-        (task, repo, agent)
+        task_session_context(&db, task_id, Some(agent_profile_id))?
     };
 
     state
         .sessions
-        .start(app, state.db.clone(), task, repo, agent, false)
+        .start(
+            app,
+            state.db.clone(),
+            context.task,
+            context.repo,
+            context.agent,
+            false,
+        )
         .map_err(Into::into)
 }
 
@@ -173,29 +199,28 @@ fn resume_session(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> AppResult<Session> {
-    let (task, repo, agent) = {
+    let context = {
         let db = state.db.lock();
-        let task = db
-            .task_by_id(task_id)?
-            .ok_or_else(|| "Task not found".to_string())?;
-        let agent_profile_id = task
-            .agent_profile_id
-            .ok_or_else(|| "Task does not have an agent profile to resume".to_string())?;
-        let repo = db
-            .repo_by_id(task.repo_id)?
-            .ok_or_else(|| "Repository not found".to_string())?;
-        let agent = db
-            .agent_profile_by_id(agent_profile_id)?
-            .ok_or_else(|| "Agent profile not found".to_string())?;
-        if !matches!(agent.agent_kind, AgentKind::Codex | AgentKind::Claude) {
+        let context = task_session_context(&db, task_id, None)?;
+        if !matches!(
+            context.agent.agent_kind,
+            AgentKind::Codex | AgentKind::Claude
+        ) {
             return Err("Agent profile does not support resume".into());
         }
-        (task, repo, agent)
+        context
     };
 
     state
         .sessions
-        .start(app, state.db.clone(), task, repo, agent, true)
+        .start(
+            app,
+            state.db.clone(),
+            context.task,
+            context.repo,
+            context.agent,
+            true,
+        )
         .map_err(Into::into)
 }
 
@@ -310,4 +335,78 @@ fn init_tracing() {
         .with_env_filter(filter)
         .with_target(false)
         .try_init();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    fn add_temp_repo(db: &Database) -> Repo {
+        let repo_dir = tempdir().unwrap();
+        std::process::Command::new("git")
+            .arg("init")
+            .arg(repo_dir.path())
+            .output()
+            .unwrap();
+        db.add_repo(repo_dir.path().to_string_lossy().to_string())
+            .unwrap()
+    }
+
+    #[test]
+    fn task_session_context_loads_task_repo_and_explicit_agent() {
+        let db = Database::open_in_memory().unwrap();
+        let repo = add_temp_repo(&db);
+        let profiles = db.list_agent_profiles().unwrap();
+        let claude = profiles
+            .iter()
+            .find(|profile| profile.agent_kind == AgentKind::Claude)
+            .unwrap();
+        let task = db
+            .create_task_record(repo.id, "Run agent".to_string(), None, None, false, None)
+            .unwrap();
+
+        let context = task_session_context(&db, task.id, Some(claude.id)).unwrap();
+
+        assert_eq!(context.task.id, task.id);
+        assert_eq!(context.repo.id, repo.id);
+        assert_eq!(context.agent.id, claude.id);
+    }
+
+    #[test]
+    fn task_session_context_uses_stored_agent_for_resume() {
+        let db = Database::open_in_memory().unwrap();
+        let repo = add_temp_repo(&db);
+        let codex = db.list_agent_profiles().unwrap()[0].clone();
+        let task = db
+            .create_task_record(
+                repo.id,
+                "Resume agent".to_string(),
+                None,
+                Some(codex.id),
+                false,
+                None,
+            )
+            .unwrap();
+
+        let context = task_session_context(&db, task.id, None).unwrap();
+
+        assert_eq!(context.agent.id, codex.id);
+    }
+
+    #[test]
+    fn task_session_context_requires_an_agent_for_resume() {
+        let db = Database::open_in_memory().unwrap();
+        let repo = add_temp_repo(&db);
+        let task = db
+            .create_task_record(repo.id, "Resume agent".to_string(), None, None, false, None)
+            .unwrap();
+
+        let error = task_session_context(&db, task.id, None).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "Task does not have an agent profile to resume"
+        );
+    }
 }

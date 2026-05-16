@@ -1,0 +1,20 @@
+.field {
+  display: grid;
+  gap: 7px;
+}
+
+.field label,
+.field-group legend {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.field-group {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}

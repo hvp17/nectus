@@ -16,6 +16,7 @@ The app is local-first. Do not add GitHub OAuth/API sync unless explicitly reque
 
 - Start by inspecting the current checkout and the files that own the behavior you are changing. Do not rely on stale summaries when the repo is available.
 - Preserve user changes in the working tree. Do not revert unrelated edits.
+- Keep files concise and split code by concern, type, provider, domain, or workflow when a file starts mixing responsibilities or becomes difficult to scan.
 - Keep documentation up to date in the same change whenever behavior, commands, data models, troubleshooting steps, or project structure changes.
 - Update `README.md` for onboarding, setup, build, verification, or high-level feature changes.
 - Update `docs/features.md` when user-visible workflows, feature behavior, settings, session behavior, or ownership boundaries change.
@@ -24,6 +25,12 @@ The app is local-first. Do not add GitHub OAuth/API sync unless explicitly reque
 - Update `AGENTS.md` itself when development workflow, verification gates, important paths, or coding-session rules change.
 - Keep documentation concrete and repo-grounded. Prefer exact commands, file paths, table names, event names, and known caveats over general prose.
 - Do not add placeholder docs such as `TODO`, `TBD`, or speculative behavior unless it is clearly marked as a future idea outside current behavior.
+
+## Library Documentation
+
+Use Context7 MCP to fetch current documentation for libraries, frameworks, SDKs, APIs, CLI tools, and cloud services when implementation depends on current syntax, setup, version behavior, or component usage. Start with `resolve-library-id` unless an exact Context7 ID such as `/org/project` is already known, then use `query-docs` with the full question.
+
+Prefer Context7 results over memory for library-specific API usage. For shadcn/ui, use the Context7 library ID `/shadcn-ui/ui` when needed.
 
 ## Development Flow
 
@@ -132,6 +139,7 @@ Important backend files:
 - `native/src/db/`: SQLite schema, migrations, row mapping, and persistence tests
 - `native/src/git_ops.rs`: git repo/worktree validation and operations
 - `native/src/sessions/`: PTY lifecycle, terminal event emission, Codex JSONL watching, agent command setup, and review-loop runtime
+- `native/src/sessions/agents/`: provider-specific Codex, Claude, and Gemini command arguments and fallback locations
 - `native/src/models.rs`: shared serializable data types
 
 Tauri commands exposed to the frontend include:
@@ -173,11 +181,19 @@ Important frontend files:
 
 - `src/App.tsx`: app shell and top-level composition
 - `src/hooks/useApp.ts`: app state, project/task/settings orchestration
+- `src/hooks/useTaskReviewLoop.ts`: selected-task review-loop loading and event handling
+- `src/hooks/useTaskCardPointerDrag.ts`: task-card pointer drag and ghost lifecycle
+- `src/hooks/useTaskDeletion.ts`: task deletion workflow and deletion toasts
+- `src/hooks/useSessionAttentionControls.ts`: session controls that clear task attention
 - `src/TerminalPane.tsx`: xterm.js setup, terminal event listeners, input forwarding
 - `src/api.ts`: typed Tauri command wrapper
 - `src/types.ts`: frontend data contracts matching Rust serde output
 - `src/components/`: board, task detail, settings, and modal UI
-- `src/styles.css`: app-wide styling
+- `src/components/settings/`: settings subcomponents and profile-draft helpers
+- `src/test/testUtils.tsx`: shared frontend test helpers for providers, pointer events, DOM rects, and async deferrals
+- `src/test/app*Tests.tsx`: focused App test groups registered by `src/App.test.tsx`
+- `src/styles.css`: Tailwind imports, theme tokens, and global base rules
+- `src/styles/`: focused CSS files imported by `src/main.tsx` for layout, settings, task board, detail, and forms
 
 Do not call shell/git directly from the frontend. Add Rust commands instead.
 

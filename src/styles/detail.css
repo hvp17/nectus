@@ -1,0 +1,185 @@
+.detail-pane {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100vh;
+  min-height: 0;
+  min-width: 0;
+  border-left: 1px solid var(--border);
+  background: var(--background);
+}
+
+.dashboard-layout[data-detail-expanded="true"] .detail-pane {
+  border-left: 0;
+}
+
+.detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-header h3 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.detail-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.detail-list {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  gap: 10px 12px;
+  margin: 0;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-list dt {
+  color: var(--muted-foreground);
+  font-weight: 800;
+}
+
+.detail-list dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.detail-list .path {
+  overflow-wrap: anywhere;
+  font-family: "SFMono-Regular", Menlo, monospace;
+  font-size: 12px;
+}
+
+.detail-list a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--foreground);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.task-brief {
+  overflow-wrap: anywhere;
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.pair-loop-panel {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.review-run-summary {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--muted);
+}
+
+.detail-body {
+  min-height: 0;
+}
+
+.detail-scroll {
+  scrollbar-gutter: stable;
+}
+
+.terminal-title {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 14px 24px;
+  color: var(--muted-foreground);
+  font-weight: 850;
+}
+
+.terminal-resize-handle {
+  position: relative;
+  display: flex;
+  flex: 0 0 14px;
+  align-items: center;
+  justify-content: center;
+  height: 14px;
+  cursor: row-resize;
+  touch-action: none;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 72%, var(--background));
+  outline: none;
+}
+
+.terminal-resize-handle::before {
+  content: "";
+  display: block;
+  width: 44px;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted-foreground) 34%, transparent);
+  transition: width 120ms ease, background-color 120ms ease;
+}
+
+.terminal-resize-handle:hover::before,
+.terminal-resize-handle:focus-visible::before {
+  width: 58px;
+  background: var(--primary);
+}
+
+.terminal-resize-handle:focus-visible {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ring) 55%, transparent);
+}
+
+body[data-resizing-terminal="true"] {
+  cursor: row-resize;
+  user-select: none;
+}
+
+.detail-terminal-panel {
+  flex: 0 0 auto;
+  min-height: 220px;
+  max-height: min(760px, calc(100vh - 220px));
+}
+
+.terminal-host {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  background: var(--card);
+  padding: 10px;
+}
+
+.terminal-host[data-empty]::before {
+  content: "Select a task and start an agent.";
+  color: var(--muted-foreground);
+  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+  font-size: 13px;
+}
+
+.terminal-session-host {
+  width: 100%;
+  height: 100%;
+}
+
+.terminal-session-host[hidden] {
+  display: none;
+}

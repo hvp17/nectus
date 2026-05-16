@@ -5,8 +5,11 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const stylesPath = resolve(dirname(fileURLToPath(import.meta.url)), "styles.css");
-const styles = readFileSync(stylesPath, "utf8");
+const srcDir = dirname(fileURLToPath(import.meta.url));
+const styles = [
+  readFileSync(resolve(srcDir, "styles.css"), "utf8"),
+  readFileSync(resolve(srcDir, "styles/layout.css"), "utf8"),
+].join("\n");
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

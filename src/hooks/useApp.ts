@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { toast } from "sonner";
 import { api } from "../api";
 import {
   clearTaskAttention,
@@ -8,18 +6,17 @@ import {
   getTaskAttention,
   type TaskAttention,
 } from "../sessionAttention";
-import { isTauriRuntime } from "../sessionNotifications";
 import { useCreateTaskForm } from "./useCreateTaskForm";
 import { useSessionCommands } from "./useSessionCommands";
 import { useSessionEvents } from "./useSessionEvents";
+import { useSessionAttentionControls } from "./useSessionAttentionControls";
+import { useTaskDeletion } from "./useTaskDeletion";
+import { useTaskReviewLoop } from "./useTaskReviewLoop";
 import type {
   AgentProfile,
   AppSettings,
   AppSettingsInput,
   Repo,
-  ReviewLoop,
-  ReviewLoopUpdatedEvent,
-  ReviewRun,
   TaskStatus,
   TaskSummary,
 } from "../types";
@@ -29,8 +26,6 @@ export function useApp() {
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [settings, setSettings] = useState<AppSettings | undefined>();
-  const [selectedReviewLoop, setSelectedReviewLoop] = useState<ReviewLoop | null>(null);
-  const [selectedReviewRuns, setSelectedReviewRuns] = useState<ReviewRun[]>([]);
   const [currentView, setCurrentView] = useState<"dashboard" | "settings">("dashboard");
   const [selectedRepoId, setSelectedRepoId] = useState<number | undefined>();
   const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>();
@@ -60,7 +55,6 @@ export function useApp() {
   } = taskForm;
 
   const selectedRepoIdRef = useRef<number | undefined>(undefined);
-  const selectedTaskIdRef = useRef<number | undefined>(undefined);
   const selectedAgentProfileIdRef = useRef<number | undefined>(undefined);
   const tasksRef = useRef<TaskSummary[]>([]);
   const deletingTaskIdsRef = useRef<Set<number>>(new Set());
@@ -70,10 +64,6 @@ export function useApp() {
   }, [selectedRepoId]);
 
   useEffect(() => {
-    selectedTaskIdRef.current = selectedTaskId;
-  }, [selectedTaskId]);
-
-  useEffect(() => {
     selectedAgentProfileIdRef.current = selectedAgentProfileId;
   }, [selectedAgentProfileId]);
 
@@ -81,7 +71,7 @@ export function useApp() {
     tasksRef.current = tasks;
   }, [tasks]);
 
-  const setTaskDeleting = (taskId: number, deleting: boolean) => {
+  const setTaskDeleting = useCallback((taskId: number, deleting: boolean) => {
     const next = new Set(deletingTaskIdsRef.current);
     if (deleting) {
       next.add(taskId);
@@ -90,7 +80,7 @@ export function useApp() {
     }
     deletingTaskIdsRef.current = next;
     setDeletingTaskIds(next);
-  };
+  }, []);
 
   const selectedRepo = useMemo(() => repos.find((repo) => repo.id === selectedRepoId), [repos, selectedRepoId]);
   const visibleTasks = useMemo(() => {
@@ -120,18 +110,18 @@ export function useApp() {
       setRepos(repoResult);
       setAgentProfiles(profileResult);
       setSettings(settingsResult);
-      
+
       const nextAgentProfileId =
         selectedAgentProfileIdRef.current ?? settingsResult.defaultAgentProfileId ?? profileResult[0]?.id;
       if (!selectedAgentProfileIdRef.current && nextAgentProfileId) {
         selectedAgentProfileIdRef.current = nextAgentProfileId;
         setSelectedAgentProfileId(nextAgentProfileId);
       }
-      
+
       const nextRepoId = preferredRepoId ?? selectedRepoIdRef.current ?? repoResult[0]?.id;
       selectedRepoIdRef.current = nextRepoId;
       setSelectedRepoId(nextRepoId);
-      
+
       const taskResult = await api.listTasks();
       setTasks(taskResult);
     } catch (error) {
@@ -145,60 +135,12 @@ export function useApp() {
     refresh();
   }, [refresh]);
 
-  useEffect(() => {
-    if (!selectedTaskId) {
-      setSelectedReviewLoop(null);
-      setSelectedReviewRuns([]);
-      return;
-    }
-
-    let disposed = false;
-    Promise.all([api.getTaskReviewLoop(selectedTaskId), api.listTaskReviewRuns(selectedTaskId)])
-      .then(([reviewLoop, reviewRuns]) => {
-        if (disposed) return;
-        setSelectedReviewLoop(reviewLoop);
-        setSelectedReviewRuns(reviewRuns);
-      })
-      .catch((error) => {
-        if (!disposed) setMessage(String(error));
-      });
-
-    return () => {
-      disposed = true;
-    };
-  }, [selectedTaskId]);
+  const { selectedReviewLoop, setSelectedReviewLoop, selectedReviewRuns, setSelectedReviewRuns } = useTaskReviewLoop({
+    selectedTaskId,
+    onMessage: setMessage,
+  });
 
   useSessionEvents({ tasksRef, setTasks, setMessage, setTaskAttention });
-
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
-
-    let disposed = false;
-    let unlisten: UnlistenFn | undefined;
-    listen<ReviewLoopUpdatedEvent>("review_loop_updated", (event) => {
-      if (disposed) return;
-      if (selectedTaskIdRef.current !== event.payload.taskId) return;
-      setSelectedReviewLoop(event.payload.reviewLoop);
-      if (event.payload.reviewRun) {
-        setSelectedReviewRuns((current) => [...current, event.payload.reviewRun!]);
-      }
-    })
-      .then((callback) => {
-        if (disposed) {
-          callback();
-        } else {
-          unlisten = callback;
-        }
-      })
-      .catch((error) => {
-        if (!disposed) setMessage(String(error));
-      });
-
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
-  }, []);
 
   const sessionCommands = useSessionCommands({
     agentProfiles,
@@ -208,41 +150,12 @@ export function useApp() {
     setTasks,
   });
 
-  const startSession = async (task: TaskSummary) => {
-    setTaskAttention((current) => clearTaskAttention(current, task.id));
-    await sessionCommands.startSession(task);
-  };
-
-  const resumeSession = async (task: TaskSummary) => {
-    setTaskAttention((current) => clearTaskAttention(current, task.id));
-    await sessionCommands.resumeSession(task);
-  };
-
-  const stopSession = async (sessionId: string) => {
-    const task = tasksRef.current.find((task) => task.activeSessionId === sessionId);
-    if (task) {
-      setTaskAttention((current) => clearTaskAttention(current, task.id));
-    }
-    await sessionCommands.stopSession(sessionId);
-  };
-
-  const onSessionExit = useCallback(
-    (sessionId: string) => {
-      const task = tasksRef.current.find((task) => task.activeSessionId === sessionId);
-      if (task) {
-        setTaskAttention((current) => clearTaskAttention(current, task.id));
-      }
-      sessionCommands.onSessionExit(sessionId);
-    },
-    [sessionCommands],
-  );
-
-  const onSessionInput = useCallback((sessionId: string) => {
-    const task = tasksRef.current.find((task) => task.activeSessionId === sessionId);
-    if (task) {
-      setTaskAttention((current) => clearTaskAttention(current, task.id));
-    }
-  }, []);
+  const { startSession, resumeSession, stopSession, onSessionExit, onSessionInput } =
+    useSessionAttentionControls({
+      tasksRef,
+      setTaskAttention,
+      sessionCommands,
+    });
 
   const addProject = async () => {
     setMessage(null);
@@ -347,51 +260,14 @@ export function useApp() {
     }
   };
 
-  const requestDeleteTask = (task: TaskSummary) => {
-    setMessage(null);
-    if (task.activeSessionId) {
-      toast.error("Delete blocked", {
-        description: "Stop the running session before deleting this task.",
-        duration: 5000,
-      });
-      return;
-    }
-    if (deletingTaskIdsRef.current.has(task.id)) {
-      return;
-    }
-
-    setTaskDeleting(task.id, true);
-    const toastId = toast.loading(`Deleting ${task.title}`, {
-      description: task.hasWorktree
-        ? "Removing task and worktree in the background."
-        : "Removing task in the background.",
-      duration: Infinity,
-    });
-
-    const runDelete = async () => {
-      try {
-        await api.deleteTask(task.id);
-        setTasks((current) => current.filter((item) => item.id !== task.id));
-        setSelectedTaskId((current) => (current === task.id ? undefined : current));
-        setTaskAttention((current) => clearTaskAttention(current, task.id));
-        toast.success(`Deleted ${task.title}`, {
-          id: toastId,
-          description: task.hasWorktree ? "Task and worktree removed." : "Task removed.",
-          duration: 5000,
-        });
-      } catch (error) {
-        toast.error("Delete failed", {
-          id: toastId,
-          description: String(error),
-          duration: 8000,
-        });
-      } finally {
-        setTaskDeleting(task.id, false);
-      }
-    };
-
-    void runDelete();
-  };
+  const requestDeleteTask = useTaskDeletion({
+    deletingTaskIdsRef,
+    setTaskDeleting,
+    setTasks,
+    setSelectedTaskId,
+    setTaskAttention,
+    setMessage,
+  });
 
   const saveAppSettings = async (input: AppSettingsInput) => {
     setBusy(true);
