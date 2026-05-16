@@ -1,4 +1,5 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { useEffect, useRef } from "react";
@@ -20,6 +21,21 @@ interface CachedTerminal {
   renderedOffset: number;
   loadingSnapshot: boolean;
   pendingOutput: SessionOutputEvent[];
+}
+
+const SHELL_PATH_SAFE_CHAR = /[A-Za-z0-9_@%+=:,./-]/;
+const SHELL_PATH_SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
+
+function formatDroppedPaths(paths: string[]) {
+  const escapedPaths = paths.filter(Boolean).map(escapeShellPath);
+  return escapedPaths.length > 0 ? `${escapedPaths.join(" ")} ` : "";
+}
+
+function escapeShellPath(path: string) {
+  if (SHELL_PATH_SAFE.test(path)) return path;
+  return Array.from(path)
+    .map((char) => (SHELL_PATH_SAFE_CHAR.test(char) ? char : `\\${char}`))
+    .join("");
 }
 
 export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: TerminalPaneProps) {
@@ -73,6 +89,27 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
         disposeCachedTerminal(event.payload.sessionId);
       }
       onSessionExitRef.current(event.payload.sessionId);
+    }).then((unlisten) => {
+      if (disposed) {
+        unlisten();
+      } else {
+        unlistenCallbacks.push(unlisten);
+      }
+    });
+
+    getCurrentWebview().onDragDropEvent((event) => {
+      if (event.payload.type !== "drop") return;
+
+      const activeSessionId = sessionIdRef.current;
+      if (!activeSessionId || event.payload.paths.length === 0) return;
+
+      const cached = terminalsRef.current.get(activeSessionId);
+      if (!cached || cached.container.hidden) return;
+
+      const input = formatDroppedPaths(event.payload.paths);
+      if (input) {
+        sendSessionData(activeSessionId, input, cached.terminal);
+      }
     }).then((unlisten) => {
       if (disposed) {
         unlisten();
@@ -168,8 +205,7 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
 
     const dataDisposable = terminal.onData((data) => {
       if (sessionIdRef.current === sessionId) {
-        onSessionInputRef.current(sessionId);
-        api.sendSessionInput(sessionId, data).catch((error) => terminal.writeln(`\r\n${String(error)}`));
+        sendSessionData(sessionId, data, terminal);
       }
     });
 
@@ -222,6 +258,11 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
     api.resizeSession(activeSessionId, cached.terminal.rows, cached.terminal.cols).catch(() => undefined);
   };
 
+  const sendSessionData = (targetSessionId: string, data: string, terminal: Terminal) => {
+    onSessionInputRef.current(targetSessionId);
+    api.sendSessionInput(targetSessionId, data).catch((error) => terminal.writeln(`\r\n${String(error)}`));
+  };
+
   const disposeCachedTerminal = (sessionId: string) => {
     const cached = terminalsRef.current.get(sessionId);
     if (!cached) return;
@@ -232,5 +273,15 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
     terminalsRef.current.delete(sessionId);
   };
 
-  return <div className="terminal-host" ref={hostRef} />;
+  return (
+    <div
+      className="terminal-host"
+      ref={hostRef}
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+      }}
+      onDrop={(event) => event.preventDefault()}
+    />
+  );
 }

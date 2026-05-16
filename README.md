@@ -134,7 +134,8 @@ Important frontend files:
 - `src/App.tsx`: app shell and top-level composition
 - `src/hooks/useApp.ts`: app state, project/task/settings orchestration
 - `src/api.ts`: typed frontend wrapper around Tauri commands
-- `src/TerminalPane.tsx`: xterm.js lifecycle and PTY input/output
+- `src/TerminalPane.tsx`: xterm.js lifecycle, PTY input/output, and dropped
+  file-path insertion
 - `src/components/`: board, task detail, settings, and modal UI
 
 Important backend files:
