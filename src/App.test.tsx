@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { api } from "./api";
 import { formatNotificationBody } from "./notificationText";
+import type { Repo, TaskSummary } from "./types";
 
 vi.mock("./api", () => ({
   api: {
@@ -32,6 +33,45 @@ vi.mock("./api", () => ({
 }));
 
 const mockedApi = vi.mocked(api);
+
+const repoFixture: Repo = {
+  id: 7,
+  name: "nectus-desktop",
+  path: "/tmp/nectus-desktop",
+  defaultWorktreeRoot: "/tmp/nectus-desktop-worktrees",
+  createdAt: "2026-05-14T00:00:00.000Z",
+};
+
+function taskFixture(overrides: Partial<TaskSummary> = {}): TaskSummary {
+  return {
+    id: 21,
+    repoId: repoFixture.id,
+    title: "Wire task drag and drop",
+    prompt: null,
+    status: "planned",
+    prUrl: null,
+    agentProfileId: 1,
+    agentName: "Codex",
+    agentKind: "codex",
+    hasWorktree: false,
+    branchName: null,
+    worktreePath: null,
+    isDirty: false,
+    activeSessionId: null,
+    lastSessionId: null,
+    lastSessionAgent: null,
+    lastSessionCwd: null,
+    lastSessionLabel: null,
+    createdAt: "2026-05-14T00:00:00.000Z",
+    updatedAt: "2026-05-14T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function mockProject(tasks: TaskSummary[] = []) {
+  mockedApi.listRepos.mockResolvedValue([repoFixture]);
+  mockedApi.listTasks.mockResolvedValue(tasks);
+}
 
 function mockElementsFromPoint(elements: Element[]) {
   const originalElementsFromPoint = document.elementsFromPoint;
@@ -155,23 +195,31 @@ describe("App", () => {
     expect(screen.getByText("Operations")).toBeInTheDocument();
   });
 
-  it("renders browser demo tasks without Tauri data when demo mode is enabled", async () => {
+  it("ignores legacy demo query parameters and loads normal app data", async () => {
     window.history.pushState({}, "", "/?demo=1");
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Nectus Demo" })).toBeInTheDocument();
-    expect(screen.getByText("Drag this task into Review")).toBeInTheDocument();
-    expect(mockedApi.listRepos).not.toHaveBeenCalled();
-    expect(mockedApi.listTasks).not.toHaveBeenCalled();
+    expect(await screen.findByText("No projects yet")).toBeInTheDocument();
+    expect(mockedApi.listRepos).toHaveBeenCalled();
+    expect(mockedApi.listTasks).toHaveBeenCalled();
+    expect(screen.queryByRole("heading", { name: "Nectus Demo" })).not.toBeInTheDocument();
   });
 
   it("keeps the board visible while opening a task inspector that can expand full width", async () => {
-    window.history.pushState({}, "", "/?demo=1");
+    mockProject([
+      taskFixture({
+        id: 31,
+        title: "Inspect task detail",
+        hasWorktree: true,
+        branchName: "feat/detail",
+        worktreePath: "/tmp/nectus-desktop-worktrees/feat-detail",
+      }),
+    ]);
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /drag this task into review/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /inspect task detail/i }));
 
     const layout = screen.getByTestId("dashboard-layout");
     expect(layout).toHaveAttribute("data-detail-open", "true");
@@ -214,19 +262,24 @@ describe("App", () => {
     });
   });
 
-  it("moves demo tasks between columns without calling Tauri metadata APIs", async () => {
-    window.history.pushState({}, "", "/?demo=1");
+  it("moves tasks between columns through the metadata API", async () => {
+    mockProject([taskFixture({ id: 32, title: "Move task into review" })]);
+    mockedApi.updateTaskMetadata.mockResolvedValue(
+      taskFixture({ id: 32, title: "Move task into review", status: "review", updatedAt: "2026-05-14T00:01:00.000Z" }),
+    );
 
     render(<App />);
 
-    const taskCard = await screen.findByRole("button", { name: /drag this task into review/i });
+    const taskCard = await screen.findByRole("button", { name: /move task into review/i });
     const reviewColumn = screen.getByRole("region", { name: /review/i });
 
     pointerDrag(taskCard, reviewColumn);
 
-    expect(mockedApi.updateTaskMetadata).not.toHaveBeenCalled();
     await waitFor(() => {
-      expect(within(reviewColumn).getByText("Drag this task into Review")).toBeInTheDocument();
+      expect(mockedApi.updateTaskMetadata).toHaveBeenCalledWith({ taskId: 32, status: "review" });
+    });
+    await waitFor(() => {
+      expect(within(reviewColumn).getByText("Move task into review")).toBeInTheDocument();
     });
   });
 
@@ -507,7 +560,16 @@ describe("App", () => {
   });
 
   it("automatically dismisses alerts after 5 seconds", async () => {
-    window.history.pushState({}, "", "/?demo=1");
+    const creation = deferred<TaskSummary>();
+    const createdTask = taskFixture({
+      id: 41,
+      title: "Review modal task flow",
+      prompt: "Review modal task flow",
+      agentProfileId: 2,
+      agentName: "Claude",
+    });
+    mockProject();
+    mockedApi.createTask.mockReturnValue(creation.promise);
 
     render(<App />);
 
@@ -517,8 +579,18 @@ describe("App", () => {
     });
     fireEvent.click(screen.getByRole("radio", { name: /claude/i }));
     fireEvent.click(screen.getByRole("radio", { name: /direct edit/i }));
-    vi.useFakeTimers();
     fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
+    await waitFor(() => {
+      expect(mockedApi.createTask).toHaveBeenCalled();
+    });
+
+    vi.useFakeTimers();
+    await act(async () => {
+      creation.resolve(createdTask);
+      await creation.promise;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
