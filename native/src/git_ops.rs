@@ -1,5 +1,29 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
+
+fn command_error(output: &Output, fallback: &str) -> String {
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    if stderr.is_empty() {
+        fallback.into()
+    } else {
+        stderr
+    }
+}
+
+fn git_output(repo_path: &Path, args: &[&str], failure_message: &str) -> Result<Output, String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo_path)
+        .args(args)
+        .output()
+        .map_err(|error| format!("{failure_message}: {error}"))?;
+
+    if output.status.success() {
+        Ok(output)
+    } else {
+        Err(command_error(&output, failure_message))
+    }
+}
 
 pub fn validate_repo_path(path: &Path) -> Result<(), String> {
     if !path.exists() {
@@ -81,6 +105,55 @@ pub fn validate_branch_name(branch_name: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn default_remote(repo_path: &Path) -> Result<String, String> {
+    let output = git_output(repo_path, &["remote"], "Failed to list git remotes")?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let remotes = stdout
+        .lines()
+        .map(str::trim)
+        .filter(|remote| !remote.is_empty());
+
+    let mut first_remote = None;
+    for remote in remotes {
+        if remote == "origin" {
+            return Ok(remote.to_string());
+        }
+        first_remote.get_or_insert_with(|| remote.to_string());
+    }
+
+    first_remote.ok_or_else(|| "Repository has no git remotes".to_string())
+}
+
+fn remote_default_branch(repo_path: &Path, remote: &str) -> Result<String, String> {
+    let output = git_output(
+        repo_path,
+        &["ls-remote", "--symref", remote, "HEAD"],
+        "Failed to resolve remote default branch",
+    )?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    for line in stdout.lines() {
+        if let Some(rest) = line.strip_prefix("ref: refs/heads/") {
+            if let Some(branch) = rest.strip_suffix("\tHEAD") {
+                return Ok(branch.to_string());
+            }
+        }
+    }
+
+    Err(format!(
+        "Could not determine default branch for remote '{remote}'"
+    ))
+}
+
+fn fetch_remote(repo_path: &Path, remote: &str) -> Result<(), String> {
+    git_output(
+        repo_path,
+        &["fetch", "--prune", remote],
+        "Failed to fetch latest remote refs",
+    )?;
+    Ok(())
+}
+
 pub fn create_worktree(
     repo_path: &Path,
     worktree_path: &Path,
@@ -96,26 +169,28 @@ pub fn create_worktree(
             .map_err(|error| format!("Failed to create worktree parent folder: {error}"))?;
     }
 
+    let remote = default_remote(repo_path)?;
+    let default_branch = remote_default_branch(repo_path, &remote)?;
+    fetch_remote(repo_path, &remote)?;
+    let base_ref = format!("refs/remotes/{remote}/{default_branch}");
+
     let output = Command::new("git")
         .arg("-C")
         .arg(repo_path)
         .arg("worktree")
         .arg("add")
+        .arg("--no-track")
         .arg("-b")
         .arg(branch_name)
         .arg(worktree_path)
+        .arg(&base_ref)
         .output()
         .map_err(|error| format!("Failed to run git worktree add: {error}"))?;
 
     if output.status.success() {
         Ok(())
     } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Err(if stderr.is_empty() {
-            "git worktree add failed".into()
-        } else {
-            stderr
-        })
+        Err(command_error(&output, "git worktree add failed"))
     }
 }
 
@@ -143,12 +218,7 @@ pub fn remove_worktree(repo_path: &Path, worktree_path: &Path) -> Result<(), Str
         }
         Ok(())
     } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Err(if stderr.is_empty() {
-            "git worktree remove failed".into()
-        } else {
-            stderr
-        })
+        Err(command_error(&output, "git worktree remove failed"))
     }
 }
 
@@ -168,7 +238,24 @@ pub fn is_dirty(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use tempfile::tempdir;
+
+    fn run_git(path: &Path, args: &[&str]) {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(path)
+            .args(args)
+            .output()
+            .unwrap_or_else(|error| panic!("failed to run git {args:?}: {error}"));
+
+        assert!(
+            output.status.success(),
+            "git {args:?} failed\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 
     #[test]
     fn derives_sibling_worktree_root_from_repo_path() {
@@ -212,6 +299,55 @@ mod tests {
                 "{value} should be accepted"
             );
         }
+    }
+
+    #[test]
+    fn creates_worktree_from_latest_remote_default_branch() {
+        let dir = tempdir().unwrap();
+        let remote_dir = dir.path().join("remote.git");
+        let seed_dir = dir.path().join("seed");
+        let local_dir = dir.path().join("local");
+        let worktree_path = dir.path().join("worktree");
+
+        Command::new("git")
+            .args(["init", "--bare", "--initial-branch=trunk"])
+            .arg(&remote_dir)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["init", "--initial-branch=trunk"])
+            .arg(&seed_dir)
+            .output()
+            .unwrap();
+        run_git(&seed_dir, &["config", "user.email", "test@example.com"]);
+        run_git(&seed_dir, &["config", "user.name", "Test User"]);
+        run_git(
+            &seed_dir,
+            &["remote", "add", "origin", &remote_dir.to_string_lossy()],
+        );
+
+        fs::write(seed_dir.join("value.txt"), "local-stale\n").unwrap();
+        run_git(&seed_dir, &["add", "value.txt"]);
+        run_git(&seed_dir, &["commit", "-m", "Initial"]);
+        run_git(&seed_dir, &["push", "-u", "origin", "trunk"]);
+
+        Command::new("git")
+            .arg("clone")
+            .arg(&remote_dir)
+            .arg(&local_dir)
+            .output()
+            .unwrap();
+
+        fs::write(seed_dir.join("value.txt"), "remote-latest\n").unwrap();
+        run_git(&seed_dir, &["commit", "-am", "Update remote default"]);
+        run_git(&seed_dir, &["push"]);
+
+        create_worktree(&local_dir, &worktree_path, "feature/latest").unwrap();
+
+        assert_eq!(
+            fs::read_to_string(worktree_path.join("value.txt")).unwrap(),
+            "remote-latest\n"
+        );
     }
 
     #[test]
