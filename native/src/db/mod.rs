@@ -254,9 +254,11 @@ impl Database {
             SELECT t.id, t.repo_id, t.title, t.prompt, t.status, t.pr_url, t.agent_profile_id, a.name, a.agent_kind,
                    t.has_worktree, t.branch_name, t.worktree_path, t.active_session_id,
                    t.last_session_id, t.last_session_agent, t.last_session_cwd, t.last_session_label,
-                   t.created_at, t.updated_at
+                   t.created_at, t.updated_at,
+                   rl.status, rl.current_round, rl.max_rounds
             FROM tasks t
             LEFT JOIN agent_profiles a ON a.id = t.agent_profile_id
+            LEFT JOIN review_loops rl ON rl.task_id = t.id
         ";
 
         if let Some(repo_id) = repo_id {
@@ -292,9 +294,11 @@ impl Database {
                 SELECT t.id, t.repo_id, t.title, t.prompt, t.status, t.pr_url, t.agent_profile_id, a.name, a.agent_kind,
                        t.has_worktree, t.branch_name, t.worktree_path, t.active_session_id,
                        t.last_session_id, t.last_session_agent, t.last_session_cwd, t.last_session_label,
-                       t.created_at, t.updated_at
+                       t.created_at, t.updated_at,
+                       rl.status, rl.current_round, rl.max_rounds
                 FROM tasks t
                 LEFT JOIN agent_profiles a ON a.id = t.agent_profile_id
+                LEFT JOIN review_loops rl ON rl.task_id = t.id
                 WHERE t.id = ?1
                 ",
                 params![id],

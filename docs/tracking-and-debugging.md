@@ -43,6 +43,8 @@ The frontend keeps transient UI state in React:
 - Create-task modal drafts.
 - Settings/profile edit drafts.
 - Review-loop detail state loaded for the selected task.
+- Review-loop status, current round, and max rounds are also included in task
+  summaries so the board can label cards without opening the detail pane.
 
 The source of truth for saved project, task, profile, settings, and review-loop
 data remains SQLite through Tauri commands.
@@ -56,7 +58,8 @@ Focused state hooks:
   attention before start, resume, stop, and input flows.
 - `src/hooks/useTaskDeletion.ts`: task deletion workflow and deletion toasts.
 - `src/hooks/useTaskReviewLoop.ts`: selected-task review-loop data and
-  `review_loop_updated` events.
+  `review_loop_updated` events, including board-summary updates for any task.
+- `src/components/TaskCard.tsx`: board card review-loop status label.
 - `src/hooks/useCreateTaskForm.ts`: create-task modal drafts.
 
 ### Codex JSONL

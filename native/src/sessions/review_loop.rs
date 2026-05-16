@@ -335,6 +335,9 @@ mod tests {
             last_session_agent: Some("codex".to_string()),
             last_session_cwd: Some("/tmp/repo-worktrees/feat/settings".to_string()),
             last_session_label: None,
+            review_loop_status: None,
+            review_loop_current_round: None,
+            review_loop_max_rounds: None,
             created_at: "now".to_string(),
             updated_at: "now".to_string(),
         }

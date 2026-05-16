@@ -48,9 +48,16 @@ const firstRun: ReviewRun = {
   createdAt: "2026-05-15T00:01:00.000Z",
 };
 
-function Harness({ selectedTaskId }: { selectedTaskId?: number }) {
+function Harness({
+  selectedTaskId,
+  onReviewLoopUpdated,
+}: {
+  selectedTaskId?: number;
+  onReviewLoopUpdated?: (reviewLoop: ReviewLoop) => void;
+}) {
   const { selectedReviewLoop, selectedReviewRuns, message } = useTaskReviewLoop({
     selectedTaskId,
+    onReviewLoopUpdated,
   });
 
   return (
@@ -134,5 +141,32 @@ describe("useTaskReviewLoop", () => {
     });
 
     expect(screen.getByTestId("status")).toHaveTextContent("passed");
+  });
+
+  it("publishes review loop events for task-board summaries even when another task is selected", async () => {
+    const onReviewLoopUpdated = vi.fn();
+    render(<Harness selectedTaskId={21} onReviewLoopUpdated={onReviewLoopUpdated} />);
+
+    await waitFor(() => {
+      expect(eventTestState.handlers.has("review_loop_updated")).toBe(true);
+    });
+
+    act(() => {
+      eventTestState.handlers.get("review_loop_updated")?.({
+        payload: {
+          taskId: 99,
+          reviewLoop: { ...reviewLoop, taskId: 99, currentRound: 1, status: "passed" },
+          reviewRun: null,
+        } satisfies ReviewLoopUpdatedEvent,
+      });
+    });
+
+    expect(onReviewLoopUpdated).toHaveBeenCalledWith({
+      ...reviewLoop,
+      taskId: 99,
+      currentRound: 1,
+      status: "passed",
+    });
+    expect(screen.getByTestId("status")).toHaveTextContent("running");
   });
 });

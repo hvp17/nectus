@@ -36,6 +36,15 @@ pub(super) fn task_from_row(row: &Row<'_>) -> rusqlite::Result<Result<TaskSummar
         Ok(value) => value,
         Err(error) => return Ok(Err(error)),
     };
+    let review_loop_status: Option<String> = row.get(19)?;
+    let review_loop_status = match review_loop_status
+        .as_deref()
+        .map(ReviewLoopStatus::from_str)
+        .transpose()
+    {
+        Ok(value) => value,
+        Err(error) => return Ok(Err(error)),
+    };
     Ok(Ok(TaskSummary {
         id: row.get(0)?,
         repo_id: row.get(1)?,
@@ -55,6 +64,9 @@ pub(super) fn task_from_row(row: &Row<'_>) -> rusqlite::Result<Result<TaskSummar
         last_session_agent: row.get(14)?,
         last_session_cwd: row.get(15)?,
         last_session_label: row.get(16)?,
+        review_loop_status,
+        review_loop_current_round: row.get(20)?,
+        review_loop_max_rounds: row.get(21)?,
         created_at: row.get(17)?,
         updated_at: row.get(18)?,
     }))

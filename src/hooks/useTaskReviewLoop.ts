@@ -7,9 +7,10 @@ import type { ReviewLoop, ReviewLoopUpdatedEvent, ReviewRun } from "../types";
 interface UseTaskReviewLoopArgs {
   selectedTaskId?: number;
   onMessage?: (message: string) => void;
+  onReviewLoopUpdated?: (reviewLoop: ReviewLoop) => void;
 }
 
-export function useTaskReviewLoop({ selectedTaskId, onMessage }: UseTaskReviewLoopArgs) {
+export function useTaskReviewLoop({ selectedTaskId, onMessage, onReviewLoopUpdated }: UseTaskReviewLoopArgs) {
   const [selectedReviewLoop, setSelectedReviewLoop] = useState<ReviewLoop | null>(null);
   const [selectedReviewRuns, setSelectedReviewRuns] = useState<ReviewRun[]>([]);
   const [message, setMessage] = useState<string | null>(null);
@@ -57,6 +58,7 @@ export function useTaskReviewLoop({ selectedTaskId, onMessage }: UseTaskReviewLo
     let unlisten: UnlistenFn | undefined;
     listen<ReviewLoopUpdatedEvent>("review_loop_updated", (event) => {
       if (disposed) return;
+      onReviewLoopUpdated?.(event.payload.reviewLoop);
       if (selectedTaskIdRef.current !== event.payload.taskId) return;
       setSelectedReviewLoop(event.payload.reviewLoop);
       if (event.payload.reviewRun) {
@@ -78,7 +80,7 @@ export function useTaskReviewLoop({ selectedTaskId, onMessage }: UseTaskReviewLo
       disposed = true;
       unlisten?.();
     };
-  }, [publishMessage]);
+  }, [onReviewLoopUpdated, publishMessage]);
 
   return {
     selectedReviewLoop,

@@ -33,6 +33,9 @@ export interface TaskSummary {
   lastSessionAgent?: string | null;
   lastSessionCwd?: string | null;
   lastSessionLabel?: string | null;
+  reviewLoopStatus?: ReviewLoopStatus | null;
+  reviewLoopCurrentRound?: number | null;
+  reviewLoopMaxRounds?: number | null;
   createdAt: string;
   updatedAt: string;
 }

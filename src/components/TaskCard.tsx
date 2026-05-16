@@ -19,7 +19,37 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { truncateFinishedAttentionPreview } from "./attentionPreview";
 import { useTaskCardPointerDrag } from "../hooks/useTaskCardPointerDrag";
 import { formatAttentionReason, type TaskAttention } from "../sessionAttention";
-import { TaskSummary } from "../types";
+import type { ReviewLoopStatus, TaskSummary } from "../types";
+
+const reviewLoopStatusLabels: Record<ReviewLoopStatus, string> = {
+  running: "Review ready",
+  reviewing: "Reviewing",
+  passed: "Review passed",
+  max_rounds_reached: "Review limit",
+  error: "Review error",
+  stopped: "Review stopped",
+};
+
+const reviewLoopBadgeVariants: Record<ReviewLoopStatus, "default" | "secondary" | "destructive" | "outline"> = {
+  running: "secondary",
+  reviewing: "default",
+  passed: "secondary",
+  max_rounds_reached: "destructive",
+  error: "destructive",
+  stopped: "outline",
+};
+
+function getReviewRoundLabel(task: TaskSummary) {
+  if (typeof task.reviewLoopCurrentRound !== "number" || typeof task.reviewLoopMaxRounds !== "number") {
+    return undefined;
+  }
+
+  if (task.reviewLoopCurrentRound <= 0) {
+    return `Max ${task.reviewLoopMaxRounds}`;
+  }
+
+  return `Round ${task.reviewLoopCurrentRound}/${task.reviewLoopMaxRounds}`;
+}
 
 interface TaskCardProps {
   task: TaskSummary;
@@ -71,6 +101,9 @@ export function TaskCard({
   const isAttentionDetailTruncated = Boolean(
     attentionDetail && displayedAttentionDetail && displayedAttentionDetail !== attentionDetail,
   );
+  const reviewStatus = task.reviewLoopStatus ?? undefined;
+  const reviewStatusLabel = reviewStatus ? reviewLoopStatusLabels[reviewStatus] : undefined;
+  const reviewRoundLabel = getReviewRoundLabel(task);
 
   return (
     <Card
@@ -176,6 +209,20 @@ export function TaskCard({
                 {displayedAttentionDetail}
               </span>
             )}
+          </div>
+        )}
+
+        {reviewStatus && reviewStatusLabel && (
+          <div className="task-review-line">
+            <Badge
+              variant={reviewLoopBadgeVariants[reviewStatus]}
+              className="task-review-badge h-5 px-1.5 text-[10px]"
+              data-status={reviewStatus}
+            >
+              {reviewStatus === "passed" && <CircleCheckBig size={11} />}
+              {reviewStatusLabel}
+            </Badge>
+            {reviewRoundLabel && <span className="task-review-round">{reviewRoundLabel}</span>}
           </div>
         )}
 
