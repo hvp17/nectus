@@ -46,6 +46,7 @@ Key files:
 - Board and drag/drop status updates: `src/components/Workspace.tsx`
 - Task card: `src/components/TaskCard.tsx`
 - Detail pane: `src/components/TaskDetailDrawer.tsx`
+- Dashboard layout and board scrolling: `src/styles.css`
 - Frontend state orchestration: `src/hooks/useApp.ts`
 - Backend commands: `create_task`, `list_tasks`, `update_task_metadata`,
   `delete_task`

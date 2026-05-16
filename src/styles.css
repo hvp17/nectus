@@ -241,7 +241,8 @@ textarea {
 }
 
 .dashboard-layout {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   height: 100vh;
   min-height: 0;
   min-width: 0;
@@ -249,7 +250,6 @@ textarea {
 }
 
 .dashboard-layout[data-detail-open="true"] {
-  display: grid;
   grid-template-columns: minmax(520px, 1fr) minmax(390px, 480px);
 }
 
