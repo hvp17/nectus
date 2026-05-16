@@ -84,6 +84,9 @@ pub struct TaskSummary {
     pub last_session_agent: Option<String>,
     pub last_session_cwd: Option<String>,
     pub last_session_label: Option<String>,
+    pub review_loop_status: Option<ReviewLoopStatus>,
+    pub review_loop_current_round: Option<i64>,
+    pub review_loop_max_rounds: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
 }

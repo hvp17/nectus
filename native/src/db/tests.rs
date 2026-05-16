@@ -372,6 +372,56 @@ fn passing_review_marks_task_done() {
 }
 
 #[test]
+fn list_tasks_includes_review_loop_summary() {
+    let db = Database::open_in_memory().unwrap();
+    let repo_dir = tempdir().unwrap();
+    std::process::Command::new("git")
+        .arg("init")
+        .arg(repo_dir.path())
+        .output()
+        .unwrap();
+    let repo = db
+        .add_repo(repo_dir.path().to_string_lossy().to_string())
+        .unwrap();
+    let profiles = db.list_agent_profiles().unwrap();
+    let reviewer = profiles
+        .iter()
+        .find(|profile| profile.agent_kind == AgentKind::Claude)
+        .unwrap();
+    let task = db
+        .create_task_record(
+            repo.id,
+            "Task".to_string(),
+            None,
+            Some(profiles[0].id),
+            false,
+            None,
+        )
+        .unwrap();
+    db.start_review_loop(task.id, reviewer.id, 3).unwrap();
+    db.record_review_run(ReviewRunInput {
+        task_id: task.id,
+        round: 1,
+        reviewer_profile_id: reviewer.id,
+        verdict: ReviewVerdict::Pass,
+        prompt: "Review this diff".to_string(),
+        output: "NECTUS_NO_BLOCKERS".to_string(),
+        error: None,
+    })
+    .unwrap();
+
+    let tasks = db.list_tasks(Some(repo.id)).unwrap();
+    let task = tasks
+        .iter()
+        .find(|candidate| candidate.id == task.id)
+        .expect("task should be returned");
+
+    assert_eq!(task.review_loop_status, Some(ReviewLoopStatus::Passed));
+    assert_eq!(task.review_loop_current_round, Some(1));
+    assert_eq!(task.review_loop_max_rounds, Some(3));
+}
+
+#[test]
 fn review_loop_rejects_invalid_reviewer_and_round_limit() {
     let db = Database::open_in_memory().unwrap();
     let repo_dir = tempdir().unwrap();

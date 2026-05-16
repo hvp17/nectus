@@ -192,6 +192,8 @@ Current behavior:
   - `feedback` when a line is exactly `NECTUS_FEEDBACK`.
   - `unknown` otherwise.
 - Passing review marks the loop `passed` and moves the task to `done`.
+- Task cards show the saved review-loop status and completed round count once a
+  loop exists, including completed `Review passed` state.
 - Blocking review or feedback before the max round is written back into the
   worker PTY and submitted with the same Enter sequence as terminal input.
 - Blocking review or feedback at the max round marks the loop
@@ -201,6 +203,7 @@ Current behavior:
 Key files:
 
 - UI controls and latest run summary: `src/components/TaskDetailDrawer.tsx`
+- Board review status label: `src/components/TaskCard.tsx`
 - Frontend review-loop loading and event subscription: `src/hooks/useTaskReviewLoop.ts`
 - Frontend API: `src/api.ts`
 - Backend commands: `start_pair_loop`, `run_pair_review`, `stop_pair_loop`,

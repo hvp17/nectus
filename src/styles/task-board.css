@@ -129,6 +129,33 @@ body.task-drag-selection-lock * {
   white-space: nowrap;
 }
 
+.task-review-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.task-review-badge {
+  max-width: 100%;
+  font-weight: 850;
+}
+
+.task-review-badge[data-status="passed"] {
+  background: color-mix(in srgb, oklch(0.6 0.13 150) 16%, transparent);
+  color: oklch(0.67 0.14 150);
+}
+
+.task-review-round {
+  flex: none;
+  color: var(--muted-foreground);
+  font-family: "SFMono-Regular", Menlo, monospace;
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
 .dirty-indicator {
   color: oklch(0.55 0.12 265);
 }

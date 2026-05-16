@@ -20,6 +20,7 @@ git, SQLite, and PTY work lives in the Rust backend.
 - Resume Codex and Claude sessions when a saved session id is available.
 - Track task status across `Planned`, `In progress`, `Review`, and `Done`.
 - Drag tasks between board columns to update status.
+- Show review-loop status and completed review rounds on task cards.
 - Surface running, dirty, finished, review, and needs-input counts.
 - Watch Codex session JSONL for finished or input-needed events.
 - Send macOS notifications for session attention events.

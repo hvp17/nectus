@@ -17,6 +17,7 @@ import type {
   AppSettings,
   AppSettingsInput,
   Repo,
+  ReviewLoop,
   TaskStatus,
   TaskSummary,
 } from "../types";
@@ -135,24 +136,33 @@ export function useApp() {
     refresh();
   }, [refresh]);
 
-  const { selectedReviewLoop, setSelectedReviewLoop, selectedReviewRuns, setSelectedReviewRuns } = useTaskReviewLoop({
-    selectedTaskId,
-    onMessage: setMessage,
-  });
-
-  useEffect(() => {
-    if (selectedReviewLoop?.status !== "passed") return;
+  const applyReviewLoopToTask = useCallback((reviewLoop: ReviewLoop) => {
     setTasks((current) =>
       current.map((task) =>
-        task.id === selectedReviewLoop.taskId
+        task.id === reviewLoop.taskId
           ? {
               ...task,
-              status: "done",
+              status: reviewLoop.status === "passed" ? "done" : task.status,
+              reviewLoopStatus: reviewLoop.status,
+              reviewLoopCurrentRound: reviewLoop.currentRound,
+              reviewLoopMaxRounds: reviewLoop.maxRounds,
             }
           : task,
       ),
     );
-  }, [selectedReviewLoop]);
+  }, []);
+
+  const { selectedReviewLoop, setSelectedReviewLoop, selectedReviewRuns, setSelectedReviewRuns } = useTaskReviewLoop({
+    selectedTaskId,
+    onMessage: setMessage,
+    onReviewLoopUpdated: applyReviewLoopToTask,
+  });
+
+  useEffect(() => {
+    if (selectedReviewLoop) {
+      applyReviewLoopToTask(selectedReviewLoop);
+    }
+  }, [applyReviewLoopToTask, selectedReviewLoop]);
 
   useSessionEvents({ tasksRef, setTasks, setMessage, setTaskAttention });
 
