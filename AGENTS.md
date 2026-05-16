@@ -16,6 +16,7 @@ The app is local-first. Do not add GitHub OAuth/API sync unless explicitly reque
 
 - Start by inspecting the current checkout and the files that own the behavior you are changing. Do not rely on stale summaries when the repo is available.
 - Preserve user changes in the working tree. Do not revert unrelated edits.
+- Keep files concise and split code by concern, type, provider, domain, or workflow when a file starts mixing responsibilities or becomes difficult to scan.
 - Keep documentation up to date in the same change whenever behavior, commands, data models, troubleshooting steps, or project structure changes.
 - Update `README.md` for onboarding, setup, build, verification, or high-level feature changes.
 - Update `docs/features.md` when user-visible workflows, feature behavior, settings, session behavior, or ownership boundaries change.
