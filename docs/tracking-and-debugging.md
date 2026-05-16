@@ -240,6 +240,9 @@ Check:
 - `session_output` events are being emitted.
 - `send_session_input` is called from keyboard input and from file drops over
   the terminal host.
+- Dragging the task-detail terminal resize separator changes the terminal host
+  height; `src/TerminalPane.tsx` observes that host resize and sends
+  `resize_session` with the fitted PTY rows and columns.
 - `session_output_snapshot` only works for running sessions.
 
 Relevant code:
