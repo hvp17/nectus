@@ -18,7 +18,7 @@ mod command;
 mod review_loop;
 
 #[cfg(test)]
-use codex::{codex_session_event_from_line, CodexSessionEvent};
+use codex::{codex_session_event_from_line, codex_session_metadata_from_line, CodexSessionEvent};
 use codex::{latest_codex_session_metadata, spawn_codex_event_watcher};
 use command::{configure_agent_command, resolve_agent_command};
 
@@ -408,11 +408,61 @@ mod tests {
     }
 
     #[test]
+    fn recognizes_codex_turn_complete_alias_as_idle_event() {
+        let started_at = chrono::DateTime::parse_from_rfc3339("2026-05-14T10:00:00Z").unwrap();
+        let line = r#"{"timestamp":"2026-05-14T10:00:05.000Z","type":"event_msg","payload":{"type":"turn_complete","turn_id":"turn-1","last_agent_message":"Done."}}"#;
+
+        assert_eq!(
+            codex_session_event_from_line(line, started_at),
+            Some(CodexSessionEvent::Idle {
+                turn_id: Some("turn-1".to_string()),
+                message: Some("Done.".to_string()),
+            })
+        );
+    }
+
+    #[test]
+    fn recognizes_codex_turn_started_events() {
+        let started_at = chrono::DateTime::parse_from_rfc3339("2026-05-14T10:00:00Z").unwrap();
+        let line = r#"{"timestamp":"2026-05-14T10:00:05.000Z","type":"event_msg","payload":{"type":"turn_started","turn_id":"turn-1"}}"#;
+
+        assert_eq!(
+            codex_session_event_from_line(line, started_at),
+            Some(CodexSessionEvent::Started {
+                turn_id: Some("turn-1".to_string()),
+            })
+        );
+    }
+
+    #[test]
+    fn recognizes_codex_turn_aborted_events() {
+        let started_at = chrono::DateTime::parse_from_rfc3339("2026-05-14T10:00:00Z").unwrap();
+        let line = r#"{"timestamp":"2026-05-14T10:00:05.000Z","type":"event_msg","payload":{"type":"turn_aborted","turn_id":"turn-1","reason":"interrupted"}}"#;
+
+        assert_eq!(
+            codex_session_event_from_line(line, started_at),
+            Some(CodexSessionEvent::Aborted {
+                turn_id: Some("turn-1".to_string()),
+                reason: Some("interrupted".to_string()),
+            })
+        );
+    }
+
+    #[test]
     fn ignores_codex_events_before_nectus_session_start() {
         let started_at = chrono::DateTime::parse_from_rfc3339("2026-05-14T10:00:00Z").unwrap();
         let line = r#"{"timestamp":"2026-05-14T09:59:59.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1","last_agent_message":"Done."}}"#;
 
         assert_eq!(codex_session_event_from_line(line, started_at), None);
+    }
+
+    #[test]
+    fn ignores_unknown_and_malformed_codex_lines() {
+        let started_at = chrono::DateTime::parse_from_rfc3339("2026-05-14T10:00:00Z").unwrap();
+        let unknown = r#"{"timestamp":"2026-05-14T10:00:05.000Z","type":"event_msg","payload":{"type":"future_event","turn_id":"turn-1"}}"#;
+
+        assert_eq!(codex_session_event_from_line(unknown, started_at), None);
+        assert_eq!(codex_session_event_from_line("{not-json", started_at), None);
     }
 
     #[test]
@@ -428,5 +478,40 @@ mod tests {
                 prompt: Some("Allow command?".to_string()),
             })
         );
+    }
+
+    #[test]
+    fn recognizes_codex_elicitation_events_as_needing_input() {
+        let started_at = chrono::DateTime::parse_from_rfc3339("2026-05-14T10:00:00Z").unwrap();
+        let line = r#"{"timestamp":"2026-05-14T10:00:05.000Z","type":"event_msg","payload":{"type":"elicitation_request","turn_id":"turn-3","prompt":"Choose an option"}}"#;
+
+        assert_eq!(
+            codex_session_event_from_line(line, started_at),
+            Some(CodexSessionEvent::NeedsInput {
+                turn_id: Some("turn-3".to_string()),
+                reason: "elicitation_request".to_string(),
+                prompt: Some("Choose an option".to_string()),
+            })
+        );
+    }
+
+    #[test]
+    fn parses_codex_session_metadata_with_top_level_timestamp() {
+        let started_at = chrono::DateTime::parse_from_rfc3339("2026-05-14T10:00:00Z").unwrap();
+        let line = r#"{"timestamp":"2026-05-14T10:00:05.000Z","type":"session_meta","payload":{"id":"codex-session-1","cwd":"/tmp/project","thread_name":" Refactor JSONL parser "}}"#;
+        let (timestamp, metadata) = codex_session_metadata_from_line(
+            "/tmp/rollout.jsonl".as_ref(),
+            line,
+            "/tmp/project",
+            started_at,
+        )
+        .unwrap();
+
+        assert_eq!(
+            timestamp,
+            chrono::DateTime::parse_from_rfc3339("2026-05-14T10:00:05.000Z").unwrap()
+        );
+        assert_eq!(metadata.id, "codex-session-1");
+        assert_eq!(metadata.label.as_deref(), Some("Refactor JSONL parser"));
     }
 }

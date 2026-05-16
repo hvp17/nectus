@@ -56,9 +56,11 @@ The watcher:
 - Finds the latest file whose `session_meta.payload.cwd` matches the task cwd
   and whose timestamp is after the Nectus session start.
 - Reads appended lines every 500 ms.
-- Emits `session_idle` for `event_msg.payload.type == "task_complete"`.
-- Attempts to emit `session_needs_input` for approval, permission,
-  confirmation, request-user-input, or needs-input event names.
+- Emits `session_idle` for `event_msg.payload.type == "task_complete"` or
+  `event_msg.payload.type == "turn_complete"`.
+- Attempts to emit `session_needs_input` for explicit approval, permission,
+  user-input, elicitation, patch-approval, confirmation, or needs-input event
+  names.
 
 The JSONL protocol details and caveats are in
 [codex-session-jsonl.md](codex-session-jsonl.md).

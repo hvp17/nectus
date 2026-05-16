@@ -191,14 +191,22 @@ Current behavior:
 - Finds the latest Codex rollout whose `session_meta.payload.cwd` matches the
   launched task cwd.
 - Reads appended lines from that file.
+- Parses the rollout envelope plus the `session_meta` and `event_msg` payloads
+  with tolerant Rust types. Unknown rollout entries and unknown event names are
+  ignored.
 - Emits `session_idle` when it sees:
 
 ```text
-type == "event_msg" and payload.type == "task_complete"
+type == "event_msg" and payload.type is "task_complete" or "turn_complete"
 ```
 
-- Tries to emit `session_needs_input` for event names containing approval,
-  permission, confirmation, `request_user_input`, or `needs_input`.
+- Parses `task_started`, `turn_started`, and `turn_aborted`, but does not emit
+  app-level events for them yet.
+- Tries to emit `session_needs_input` for explicit input-request event names:
+  `exec_approval_request`, `request_permissions`, `request_user_input`,
+  `elicitation_request`, `apply_patch_approval_request`, plus the fallback names
+  `approval_request`, `confirmation_request`, `needs_input`, and
+  `permission_request`.
 
 Important caveat: the checked Codex rollout policy says approval/input request
 events such as `exec_approval_request`, `request_permissions`,

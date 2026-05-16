@@ -2,6 +2,7 @@ use super::{review_loop::spawn_review_on_session_idle, RunningSession};
 use crate::db::Database;
 use crate::models::{SessionIdleEvent, SessionNeedsInputEvent};
 use parking_lot::Mutex;
+use serde::{Deserialize, Deserializer};
 use std::collections::HashMap;
 use std::env;
 use std::fs;
@@ -17,6 +18,119 @@ pub(super) struct CodexSessionMetadata {
     pub id: String,
     pub label: Option<String>,
     path: PathBuf,
+}
+
+#[derive(Debug, Deserialize)]
+struct CodexRolloutLine {
+    timestamp: chrono::DateTime<chrono::FixedOffset>,
+    #[serde(rename = "type")]
+    line_type: CodexRolloutLineType,
+    #[serde(default)]
+    payload: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum CodexRolloutLineType {
+    SessionMeta,
+    ResponseItem,
+    Compacted,
+    TurnContext,
+    EventMsg,
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Debug, Deserialize)]
+struct CodexSessionMetaPayload {
+    id: String,
+    cwd: String,
+    timestamp: Option<chrono::DateTime<chrono::FixedOffset>>,
+    thread_name: Option<String>,
+    name: Option<String>,
+    title: Option<String>,
+    initial_prompt: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CodexEventPayload {
+    #[serde(rename = "type")]
+    event_type: CodexEventType,
+    turn_id: Option<String>,
+    last_agent_message: Option<String>,
+    message: Option<String>,
+    prompt: Option<String>,
+    reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum CodexEventType {
+    TaskComplete,
+    TurnComplete,
+    TaskStarted,
+    TurnStarted,
+    TurnAborted,
+    ExecApprovalRequest,
+    RequestPermissions,
+    RequestUserInput,
+    ElicitationRequest,
+    ApplyPatchApprovalRequest,
+    Other(String),
+}
+
+impl CodexEventType {
+    fn as_str(&self) -> &str {
+        match self {
+            Self::TaskComplete => "task_complete",
+            Self::TurnComplete => "turn_complete",
+            Self::TaskStarted => "task_started",
+            Self::TurnStarted => "turn_started",
+            Self::TurnAborted => "turn_aborted",
+            Self::ExecApprovalRequest => "exec_approval_request",
+            Self::RequestPermissions => "request_permissions",
+            Self::RequestUserInput => "request_user_input",
+            Self::ElicitationRequest => "elicitation_request",
+            Self::ApplyPatchApprovalRequest => "apply_patch_approval_request",
+            Self::Other(value) => value,
+        }
+    }
+
+    fn is_input_request(&self) -> bool {
+        match self {
+            Self::ExecApprovalRequest
+            | Self::RequestPermissions
+            | Self::RequestUserInput
+            | Self::ElicitationRequest
+            | Self::ApplyPatchApprovalRequest => true,
+            Self::Other(value) => matches!(
+                value.as_str(),
+                "approval_request" | "confirmation_request" | "needs_input" | "permission_request"
+            ),
+            _ => false,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for CodexEventType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Ok(match value.as_str() {
+            "task_complete" => Self::TaskComplete,
+            "turn_complete" => Self::TurnComplete,
+            "task_started" => Self::TaskStarted,
+            "turn_started" => Self::TurnStarted,
+            "turn_aborted" => Self::TurnAborted,
+            "exec_approval_request" => Self::ExecApprovalRequest,
+            "request_permissions" => Self::RequestPermissions,
+            "request_user_input" => Self::RequestUserInput,
+            "elicitation_request" => Self::ElicitationRequest,
+            "apply_patch_approval_request" => Self::ApplyPatchApprovalRequest,
+            _ => Self::Other(value),
+        })
+    }
 }
 
 pub(super) fn latest_codex_session_metadata(
@@ -57,59 +171,65 @@ fn collect_codex_session_ids(
         if bytes_read == 0 {
             continue;
         };
-        let Ok(value) = serde_json::from_str::<serde_json::Value>(&first_line) else {
-            continue;
-        };
-        if value.pointer("/type").and_then(|value| value.as_str()) != Some("session_meta") {
-            continue;
-        }
-        let Some(payload) = value.pointer("/payload") else {
-            continue;
-        };
-        if payload.pointer("/cwd").and_then(|value| value.as_str()) != Some(cwd) {
-            continue;
-        }
-        let Some(id) = payload
-            .pointer("/id")
-            .and_then(|value| value.as_str())
-            .map(ToOwned::to_owned)
+
+        let Some((timestamp, metadata)) =
+            codex_session_metadata_from_line(&path, &first_line, cwd, started_at)
         else {
             continue;
         };
-        let Some(timestamp) = payload
-            .pointer("/timestamp")
-            .and_then(|value| value.as_str())
-            .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
-        else {
-            continue;
-        };
-        if timestamp < started_at {
-            continue;
-        }
+
         if best
             .as_ref()
             .is_none_or(|(best_timestamp, _)| timestamp > *best_timestamp)
         {
-            *best = Some((
-                timestamp,
-                CodexSessionMetadata {
-                    id,
-                    label: codex_session_label(payload),
-                    path: path.clone(),
-                },
-            ));
+            *best = Some((timestamp, metadata));
         }
     }
 }
 
-fn codex_session_label(payload: &serde_json::Value) -> Option<String> {
-    for pointer in ["/thread_name", "/name", "/title", "/initial_prompt"] {
-        if let Some(label) = payload
-            .pointer(pointer)
-            .and_then(|value| value.as_str())
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
+pub(super) fn codex_session_metadata_from_line(
+    path: &Path,
+    line: &str,
+    cwd: &str,
+    started_at: chrono::DateTime<chrono::FixedOffset>,
+) -> Option<(chrono::DateTime<chrono::FixedOffset>, CodexSessionMetadata)> {
+    let line = serde_json::from_str::<CodexRolloutLine>(line).ok()?;
+    if line.line_type != CodexRolloutLineType::SessionMeta {
+        return None;
+    }
+
+    let payload = serde_json::from_value::<CodexSessionMetaPayload>(line.payload).ok()?;
+    if payload.cwd != cwd {
+        return None;
+    }
+
+    let timestamp = payload.timestamp.unwrap_or(line.timestamp);
+    if timestamp < started_at {
+        return None;
+    }
+
+    Some((
+        timestamp,
+        CodexSessionMetadata {
+            id: payload.id.clone(),
+            label: codex_session_label(&payload),
+            path: path.to_path_buf(),
+        },
+    ))
+}
+
+fn codex_session_label(payload: &CodexSessionMetaPayload) -> Option<String> {
+    for label in [
+        payload.thread_name.as_deref(),
+        payload.name.as_deref(),
+        payload.title.as_deref(),
+        payload.initial_prompt.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let label = label.trim();
+        if !label.is_empty() {
             return Some(label.chars().take(120).collect());
         }
     }
@@ -232,6 +352,7 @@ pub(super) fn spawn_codex_event_watcher(
                                     )
                                 });
                         }
+                        CodexSessionEvent::Started { .. } | CodexSessionEvent::Aborted { .. } => {}
                     }
                 }
             }
@@ -252,58 +373,49 @@ pub(super) enum CodexSessionEvent {
         reason: String,
         prompt: Option<String>,
     },
+    Started {
+        turn_id: Option<String>,
+    },
+    Aborted {
+        turn_id: Option<String>,
+        reason: Option<String>,
+    },
 }
 
 pub(super) fn codex_session_event_from_line(
     line: &str,
     started_at: chrono::DateTime<chrono::FixedOffset>,
 ) -> Option<CodexSessionEvent> {
-    let value = serde_json::from_str::<serde_json::Value>(line).ok()?;
-    let timestamp = value
-        .pointer("/timestamp")
-        .and_then(|value| value.as_str())
-        .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())?;
-    if timestamp < started_at {
+    let line = serde_json::from_str::<CodexRolloutLine>(line).ok()?;
+    if line.timestamp < started_at {
         return None;
     }
-    if value.pointer("/type").and_then(|value| value.as_str()) != Some("event_msg") {
+    if line.line_type != CodexRolloutLineType::EventMsg {
         return None;
     }
-    let payload = value.pointer("/payload")?;
-    let payload_type = payload.pointer("/type").and_then(|value| value.as_str())?;
-    match payload_type {
-        "task_complete" => Some(CodexSessionEvent::Idle {
-            turn_id: payload
-                .pointer("/turn_id")
-                .and_then(|value| value.as_str())
-                .map(ToOwned::to_owned),
-            message: payload
-                .pointer("/last_agent_message")
-                .and_then(|value| value.as_str())
-                .map(ToOwned::to_owned),
+    let payload = serde_json::from_value::<CodexEventPayload>(line.payload).ok()?;
+
+    match payload.event_type {
+        CodexEventType::TaskComplete | CodexEventType::TurnComplete => {
+            Some(CodexSessionEvent::Idle {
+                turn_id: payload.turn_id,
+                message: payload.last_agent_message,
+            })
+        }
+        CodexEventType::TaskStarted | CodexEventType::TurnStarted => {
+            Some(CodexSessionEvent::Started {
+                turn_id: payload.turn_id,
+            })
+        }
+        CodexEventType::TurnAborted => Some(CodexSessionEvent::Aborted {
+            turn_id: payload.turn_id,
+            reason: payload.reason.or(payload.message),
         }),
-        value if is_codex_needs_input_event(value) => Some(CodexSessionEvent::NeedsInput {
-            turn_id: payload
-                .pointer("/turn_id")
-                .and_then(|value| value.as_str())
-                .map(ToOwned::to_owned),
-            reason: payload_type.to_string(),
-            prompt: payload
-                .pointer("/prompt")
-                .or_else(|| payload.pointer("/message"))
-                .or_else(|| payload.pointer("/reason"))
-                .and_then(|value| value.as_str())
-                .map(ToOwned::to_owned),
+        event_type if event_type.is_input_request() => Some(CodexSessionEvent::NeedsInput {
+            turn_id: payload.turn_id,
+            reason: event_type.as_str().to_string(),
+            prompt: payload.prompt.or(payload.message).or(payload.reason),
         }),
         _ => None,
     }
-}
-
-fn is_codex_needs_input_event(payload_type: &str) -> bool {
-    let normalized = payload_type.to_ascii_lowercase();
-    normalized.contains("approval")
-        || normalized.contains("permission")
-        || normalized.contains("confirmation")
-        || normalized.contains("request_user_input")
-        || normalized.contains("needs_input")
 }
