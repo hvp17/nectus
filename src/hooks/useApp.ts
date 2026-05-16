@@ -272,7 +272,10 @@ export function useApp() {
       }
       const runningLoop = await api.runPairReview(task.id);
       const reviewRuns = await api.listTaskReviewRuns(task.id);
-      setSelectedReviewLoop(runningLoop ?? reviewLoop);
+      const nextLoop = runningLoop ?? reviewLoop;
+      setSelectedReviewLoop(
+        nextLoop.status === "running" ? { ...nextLoop, status: "reviewing" } : nextLoop,
+      );
       setSelectedReviewRuns(reviewRuns);
       setMessage("Pair loop: Review started");
     } catch (error) {

@@ -174,6 +174,8 @@ Current behavior:
 
 - Start a pair loop from the task detail pane, or use `Start review` above the
   terminal to start the loop and immediately run the first review round.
+- `Start review` switches the selected task UI to `reviewing` while the reviewer
+  command runs, and the terminal toolbar shows the in-progress state.
 - Choose a reviewer profile and max rounds from 1 to 10.
 - On each Codex `session_idle` event, the backend runs the reviewer command in
   the task cwd with a generated review prompt.
@@ -191,7 +193,7 @@ Current behavior:
   - `unknown` otherwise.
 - Passing review marks the loop `passed` and moves the task to `done`.
 - Blocking review or feedback before the max round is written back into the
-  worker PTY.
+  worker PTY and submitted with the same Enter sequence as terminal input.
 - Blocking review or feedback at the max round marks the loop
   `max_rounds_reached`.
 - Unknown reviewer output marks the loop `error`.

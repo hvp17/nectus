@@ -335,12 +335,16 @@ Check:
 
 - The review loop status is `running`.
 - The worker session is a Codex session that emits `session_idle`.
+- Manual `Start review` should emit `review_loop_updated` with status
+  `reviewing` before the reviewer command finishes.
 - The reviewer profile command resolves and exits successfully.
 - Claude and Gemini reviewer profiles can run headless with `-p`; custom
   reviewers must read the generated prompt from stdin.
 - Reviewer output contains an exact first-line verdict token:
   `NECTUS_NO_BLOCKERS`, `NECTUS_BLOCKERS`, or `NECTUS_FEEDBACK`. Legacy `PASS`
   and blocking-review phrase parsing are still accepted.
+- Worker feedback is written to the Codex PTY and submitted with carriage
+  return (`\r`), matching the terminal Enter key.
 - `max_rounds` is between 1 and 10.
 
 Relevant code:

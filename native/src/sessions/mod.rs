@@ -23,7 +23,7 @@ mod review_loop;
 use agents::configure_agent_command;
 use codex::{latest_codex_session_metadata, spawn_codex_event_watcher};
 use command::resolve_agent_command;
-use review_loop::spawn_review_on_session_idle;
+use review_loop::{spawn_review_on_session_idle, write_agent_submission};
 
 const OUTPUT_BUFFER_LIMIT: usize = 2 * 1024 * 1024;
 
@@ -117,7 +117,7 @@ impl SessionManager {
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
             {
-                if let Err(error) = writeln!(writer, "{prompt}") {
+                if let Err(error) = write_agent_submission(writer.as_mut(), prompt) {
                     let _ = child.kill();
                     return Err(format!("Failed to send initial prompt: {error}"));
                 }

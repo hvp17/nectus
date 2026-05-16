@@ -80,6 +80,7 @@ fn run_review_round(
         database.set_review_loop_state(task_id, ReviewLoopStatus::Reviewing, None, None)?;
         (review_loop, task, reviewer)
     };
+    emit_review_loop_update(&app, &db, task_id, None);
 
     let round = review_loop.current_round + 1;
     let prompt = build_review_prompt(&task);
@@ -210,6 +211,12 @@ fn run_reviewer_command(
     Ok(stdout)
 }
 
+pub(super) fn write_agent_submission(writer: &mut dyn Write, input: &str) -> std::io::Result<()> {
+    writer.write_all(input.as_bytes())?;
+    writer.write_all(b"\r")?;
+    writer.flush()
+}
+
 fn reviewer_prompt_args(reviewer: &AgentProfile, prompt: &str) -> Option<Vec<String>> {
     match reviewer.agent_kind {
         AgentKind::Claude | AgentKind::Gemini => Some(vec!["-p".to_string(), prompt.to_string()]),
@@ -226,7 +233,7 @@ fn send_worker_feedback(
     let running = sessions
         .get_mut(session_id)
         .ok_or_else(|| "Worker session stopped before review feedback could be sent".to_string())?;
-    writeln!(running.writer, "{feedback}")
+    write_agent_submission(running.writer.as_mut(), feedback)
         .map_err(|error| format!("Failed to send review feedback to worker agent: {error}"))
 }
 
@@ -435,5 +442,14 @@ mod tests {
         assert!(feedback.contains("AI reviewer round 2"));
         assert!(feedback.contains("Blocking issue: missing test"));
         assert!(feedback.contains("Decide which findings are valid"));
+    }
+
+    #[test]
+    fn writes_agent_submission_with_terminal_enter() {
+        let mut output = Vec::new();
+
+        write_agent_submission(&mut output, "Line 1\nLine 2").unwrap();
+
+        assert_eq!(output, b"Line 1\nLine 2\r");
     }
 }

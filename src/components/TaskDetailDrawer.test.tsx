@@ -138,6 +138,25 @@ describe("TaskDetailDrawer", () => {
     expect(onStartReview).toHaveBeenCalledWith(task, 2, 3);
   });
 
+  it("shows review progress in the terminal toolbar", () => {
+    renderTaskDetailDrawer({
+      reviewLoop: {
+        taskId: task.id,
+        reviewerProfileId: 2,
+        maxRounds: 3,
+        currentRound: 0,
+        status: "reviewing",
+        lastError: null,
+        createdAt: "2026-05-15T00:00:00.000Z",
+        updatedAt: "2026-05-15T00:01:00.000Z",
+      },
+    });
+
+    const reviewButton = screen.getByRole("button", { name: /reviewing/i });
+
+    expect(reviewButton).toBeDisabled();
+  });
+
   it("shows review loop status and latest review output", () => {
     renderTaskDetailDrawer({
       reviewLoop: {

@@ -65,6 +65,7 @@ function Harness() {
       <output data-testid="task-status">
         {app.tasks.find((task) => task.id === activeTask.id)?.status ?? "none"}
       </output>
+      <output data-testid="review-status">{app.selectedReviewLoop?.status ?? "none"}</output>
       <button type="button" onClick={() => app.onSessionInput("session-21")}>
         send input
       </button>
@@ -181,6 +182,20 @@ describe("useApp", () => {
     await waitFor(() => {
       expect(mockedApi.startPairLoop).toHaveBeenCalledWith(activeTask.id, 1, 3);
       expect(mockedApi.runPairReview).toHaveBeenCalledWith(activeTask.id);
+    });
+  });
+
+  it("shows an immediate review as reviewing after triggering it", async () => {
+    render(<Harness />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("tasks")).toHaveTextContent("1");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /start review/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("review-status")).toHaveTextContent("reviewing");
     });
   });
 

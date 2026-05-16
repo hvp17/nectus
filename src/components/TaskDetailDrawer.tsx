@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   CircleCheckBig,
   GitBranch,
+  LoaderCircle,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
@@ -486,8 +487,8 @@ export function TaskDetailDrawer({
                     onStartReview(task, reviewerProfileId, Math.min(10, Math.max(1, maxRounds || 3)));
                   }}
                 >
-                  <Play size={13} />
-                  Start review
+                  {reviewInProgress ? <LoaderCircle size={13} className="animate-spin" /> : <Play size={13} />}
+                  {reviewInProgress ? "Reviewing..." : "Start review"}
                 </Button>
              </div>
              <div className="flex-1 min-h-0 bg-[#0A0A0A]">
