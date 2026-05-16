@@ -12,6 +12,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { Textarea } from "./ui/textarea";
+import { AgentLogo, ModelLogo } from "./AgentBrand";
 import { cn } from "../lib/utils";
 import { AgentProfile } from "../types";
 
@@ -95,7 +96,14 @@ export function CreateTaskModal({
                     checked={newTaskAgentProfileId === profile.id}
                   >
                     <RadioGroupItem id={`agent-profile-${profile.id}`} value={profile.id.toString()} />
-                    {profile.name}
+                    <AgentLogo agentKind={profile.agentKind} size="md" className="agent-choice-logo" />
+                    <span className="agent-choice-text">
+                      <span>{profile.name}</span>
+                      <span>
+                        <ModelLogo agentKind={profile.agentKind} model={profile.model} size="sm" />
+                        {profile.model ?? "CLI default"}
+                      </span>
+                    </span>
                   </RadioChoice>
                 ))}
               </RadioGroup>
