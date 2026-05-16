@@ -45,6 +45,7 @@ Key files:
 - Creation modal: `src/components/CreateTaskModal.tsx`
 - Board and drag/drop status updates: `src/components/Workspace.tsx`
 - Task card: `src/components/TaskCard.tsx`
+- Task-card pointer drag tracking: `src/hooks/useTaskCardPointerDrag.ts`
 - Detail pane: `src/components/TaskDetailDrawer.tsx`
 - Dashboard layout and board scrolling: `src/styles.css`
 - Frontend state orchestration: `src/hooks/useApp.ts`
@@ -73,13 +74,18 @@ Profiles can also be customized with:
 
 Key files:
 
-- Settings UI: `src/components/SettingsPage.tsx`
+- Settings page composition: `src/components/SettingsPage.tsx`
+- Agent profile editor: `src/components/settings/ProfileEditor.tsx`
+- Profile draft parsing and normalization: `src/components/settings/profileDrafts.ts`
 - Frontend API: `src/api.ts`
-- Command resolution and launch arguments: `native/src/sessions/command.rs`
+- Command resolution: `native/src/sessions/command.rs`
+- Provider-specific launch arguments: `native/src/sessions/agents/`
 - Persistence: `agent_profiles` table in `native/src/db/migrations.rs`
+- Persistence API: `native/src/db/agent_profiles.rs`
 
-Command resolution checks PATH first, then common user binary locations. Codex
-also has fallback checks for the app bundle resource path.
+Command resolution checks PATH first, then common user binary locations.
+Provider modules own command arguments and app-specific fallback locations, such
+as Codex app bundle resource paths.
 
 ## Sessions And Terminal
 
@@ -104,6 +110,7 @@ Key files:
 
 - Terminal UI: `src/TerminalPane.tsx`
 - Session controls: `src/hooks/useSessionCommands.ts`
+- Attention-clearing session control wrappers: `src/hooks/useSessionAttentionControls.ts`
 - Backend command registration: `native/src/lib.rs`
 - PTY lifecycle: `native/src/sessions/mod.rs`
 
@@ -182,11 +189,13 @@ Current behavior:
 Key files:
 
 - UI controls and latest run summary: `src/components/TaskDetailDrawer.tsx`
+- Frontend review-loop loading and event subscription: `src/hooks/useTaskReviewLoop.ts`
 - Frontend API: `src/api.ts`
 - Backend commands: `start_pair_loop`, `stop_pair_loop`,
   `get_task_review_loop`, `list_task_review_runs`
 - Runtime worker: `native/src/sessions/review_loop.rs`
 - Persistence: `review_loops` and `review_runs` tables
+- Persistence API: `native/src/db/review_loops.rs`
 
 ## Settings
 
@@ -203,7 +212,9 @@ refreshed when the pattern changes.
 
 Key files:
 
-- Settings UI: `src/components/SettingsPage.tsx`
+- Settings page composition: `src/components/SettingsPage.tsx`
+- Agent profile editor: `src/components/settings/ProfileEditor.tsx`
+- Settings draft helpers: `src/components/settings/profileDrafts.ts`
 - Theme hook: `src/hooks/useAppTheme.ts`
 - Backend commands: `get_app_settings`, `update_app_settings`
 - Persistence: `app_settings` table

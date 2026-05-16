@@ -21,7 +21,7 @@ interface CreateTaskModalProps {
   onSubmit: (e: React.FormEvent) => void;
   agentProfiles: AgentProfile[];
   busy: boolean;
-  
+
   newTaskTitle: string;
   setNewTaskTitle: (val: string) => void;
   newTaskPrompt: string;

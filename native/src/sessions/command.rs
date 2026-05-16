@@ -1,5 +1,4 @@
-use crate::models::{AgentKind, AgentProfile};
-use portable_pty::CommandBuilder;
+use super::agents::fallback_agent_candidates;
 use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -62,90 +61,6 @@ fn resolve_agent_command_in_env(
             format!(" or known app locations: {fallback_display}")
         }
     ))
-}
-
-fn fallback_agent_candidates(command: &str, home: Option<&Path>) -> Vec<PathBuf> {
-    let mut candidates = Vec::new();
-    candidates.extend(user_bin_candidates(command, home));
-    if command == "codex" {
-        candidates.push(PathBuf::from(
-            "/Applications/Codex.app/Contents/Resources/codex",
-        ));
-        if let Some(home) = home {
-            candidates.push(
-                home.join("Applications")
-                    .join("Codex.app")
-                    .join("Contents")
-                    .join("Resources")
-                    .join("codex"),
-            );
-        }
-    }
-    candidates
-}
-
-fn user_bin_candidates(command: &str, home: Option<&Path>) -> Vec<PathBuf> {
-    let mut candidates = Vec::new();
-    if let Some(home) = home {
-        candidates.push(home.join(".local").join("bin").join(command));
-        candidates.push(home.join(".cargo").join("bin").join(command));
-        candidates.push(home.join(".npm-global").join("bin").join(command));
-    }
-    for dir in [
-        "/opt/homebrew/bin",
-        "/usr/local/bin",
-        "/opt/local/bin",
-        "/usr/local/sbin",
-        "/opt/homebrew/sbin",
-    ] {
-        candidates.push(PathBuf::from(dir).join(command));
-    }
-    candidates
-}
-
-pub(super) fn configure_agent_command(
-    command: &mut CommandBuilder,
-    agent: &AgentProfile,
-    session_id: &str,
-    resume: bool,
-) {
-    if should_pass_model(agent.agent_kind, resume) {
-        if let Some(model) = agent
-            .model
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
-            command.arg("--model");
-            command.arg(model);
-        }
-    }
-
-    if resume && agent.agent_kind == AgentKind::Codex {
-        command.arg("resume");
-    }
-    for arg in &agent.args {
-        command.arg(arg);
-    }
-    if resume && agent.agent_kind == AgentKind::Codex {
-        command.arg(session_id);
-    }
-    if agent.agent_kind == AgentKind::Claude {
-        if resume {
-            command.arg("--resume");
-            command.arg(session_id);
-        } else {
-            command.arg("--session-id");
-            command.arg(session_id);
-        }
-    }
-}
-
-fn should_pass_model(agent_kind: AgentKind, resume: bool) -> bool {
-    matches!(
-        agent_kind,
-        AgentKind::Codex | AgentKind::Claude | AgentKind::Gemini
-    ) && !(resume && agent_kind == AgentKind::Codex)
 }
 
 #[cfg(unix)]

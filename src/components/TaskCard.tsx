@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { GitBranch, Bot, Trash2, AlertTriangle, CircleCheckBig, Radio } from "lucide-react";
 import {
   AlertDialog,
@@ -17,11 +17,9 @@ import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { truncateFinishedAttentionPreview } from "./attentionPreview";
+import { useTaskCardPointerDrag } from "../hooks/useTaskCardPointerDrag";
 import { formatAttentionReason, type TaskAttention } from "../sessionAttention";
 import { TaskSummary } from "../types";
-
-const DRAG_START_THRESHOLD_PX = 3;
-const TASK_DRAG_SELECTION_LOCK_CLASS = "task-drag-selection-lock";
 
 interface TaskCardProps {
   task: TaskSummary;
@@ -52,8 +50,14 @@ export function TaskCard({
   onPointerDragEnd,
   onDragEnd,
 }: TaskCardProps) {
-  const cardRef = useRef<HTMLDivElement | null>(null);
-  const suppressClickRef = useRef(false);
+  const { cardRef, suppressClickRef } = useTaskCardPointerDrag({
+    taskId: task.id,
+    busy,
+    onDragStart,
+    onPointerDragMove,
+    onPointerDragEnd,
+    onDragEnd,
+  });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const deleteDisabled = busy || isDeleting || Boolean(task.activeSessionId);
   const deleteLabel = task.activeSessionId ? "Stop session first" : isDeleting ? "Deleting task" : "Delete task";
@@ -67,133 +71,6 @@ export function TaskCard({
   const isAttentionDetailTruncated = Boolean(
     attentionDetail && displayedAttentionDetail && displayedAttentionDetail !== attentionDetail,
   );
-
-  useEffect(() => {
-    const element = cardRef.current;
-    if (!element || busy) return;
-
-    let startX = 0;
-    let startY = 0;
-    let pointerId: number | undefined;
-    let dragging = false;
-    let ghost: HTMLElement | null = null;
-    let ghostOffsetX = 0;
-    let ghostOffsetY = 0;
-    let selectionLocked = false;
-
-    const lockPageSelection = () => {
-      selectionLocked = true;
-      document.body.classList.add(TASK_DRAG_SELECTION_LOCK_CLASS);
-    };
-
-    const unlockPageSelection = () => {
-      if (!selectionLocked) return;
-      selectionLocked = false;
-      document.body.classList.remove(TASK_DRAG_SELECTION_LOCK_CLASS);
-    };
-
-    const getClientPosition = (event: PointerEvent) => ({
-      clientX: Number.isFinite(event.clientX) ? event.clientX : startX,
-      clientY: Number.isFinite(event.clientY) ? event.clientY : startY,
-    });
-
-    const moveGhost = (clientX: number, clientY: number) => {
-      if (!ghost) return;
-      ghost.style.transform = `translate3d(${clientX - ghostOffsetX}px, ${clientY - ghostOffsetY}px, 0) rotate(1deg) scale(0.98)`;
-    };
-
-    const removeGhost = () => {
-      ghost?.remove();
-      ghost = null;
-    };
-
-    const createGhost = (clientX: number, clientY: number) => {
-      removeGhost();
-      const rect = element.getBoundingClientRect();
-      ghostOffsetX = clientX - rect.left;
-      ghostOffsetY = clientY - rect.top;
-      ghost = element.cloneNode(true) as HTMLElement;
-      ghost.classList.add("task-drag-ghost");
-      ghost.style.width = `${rect.width}px`;
-      ghost.style.height = `${rect.height}px`;
-      ghost.style.left = "0";
-      ghost.style.top = "0";
-      ghost.style.transition = "none";
-      ghost.style.animation = "none";
-      document.body.appendChild(ghost);
-      moveGhost(clientX, clientY);
-    };
-
-    const stopTracking = () => {
-      window.removeEventListener("pointermove", onPointerMove, true);
-      window.removeEventListener("pointerup", onPointerUp, true);
-      window.removeEventListener("pointercancel", onPointerCancel, true);
-      unlockPageSelection();
-    };
-
-    const onPointerMove = (event: PointerEvent) => {
-      if (event.pointerId !== pointerId) return;
-      event.preventDefault();
-
-      const { clientX, clientY } = getClientPosition(event);
-      const deltaX = clientX - startX;
-      const deltaY = clientY - startY;
-      if (!dragging && Math.hypot(deltaX, deltaY) < DRAG_START_THRESHOLD_PX) return;
-
-      if (!dragging) {
-        dragging = true;
-        createGhost(clientX, clientY);
-        onDragStart(task.id);
-      }
-
-      event.preventDefault();
-      moveGhost(clientX, clientY);
-      onPointerDragMove(clientX, clientY);
-    };
-
-    const onPointerUp = (event: PointerEvent) => {
-      if (event.pointerId !== pointerId) return;
-      stopTracking();
-
-      if (dragging) {
-        const { clientX, clientY } = getClientPosition(event);
-        event.preventDefault();
-        suppressClickRef.current = true;
-        removeGhost();
-        onPointerDragEnd(task.id, clientX, clientY);
-        window.setTimeout(() => {
-          suppressClickRef.current = false;
-        }, 0);
-      }
-    };
-
-    const onPointerCancel = (event: PointerEvent) => {
-      if (event.pointerId !== pointerId) return;
-      stopTracking();
-      removeGhost();
-      onDragEnd();
-    };
-
-    const onPointerDown = (event: PointerEvent) => {
-      if (event.button > 0 || (event.target as HTMLElement).closest("button")) return;
-      pointerId = event.pointerId;
-      startX = event.clientX;
-      startY = event.clientY;
-      dragging = false;
-      lockPageSelection();
-      window.addEventListener("pointermove", onPointerMove, true);
-      window.addEventListener("pointerup", onPointerUp, true);
-      window.addEventListener("pointercancel", onPointerCancel, true);
-    };
-
-    element.addEventListener("pointerdown", onPointerDown);
-
-    return () => {
-      element.removeEventListener("pointerdown", onPointerDown);
-      stopTracking();
-      removeGhost();
-    };
-  }, [busy, onDragEnd, onDragStart, onPointerDragEnd, onPointerDragMove, task.id]);
 
   return (
     <Card
@@ -242,7 +119,7 @@ export function TaskCard({
               LIVE
             </Badge>
           )}
-          
+
           <div className="opacity-0 transition-opacity group-hover:opacity-100">
             <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
               <Tooltip>
@@ -306,7 +183,7 @@ export function TaskCard({
           {task.hasWorktree ? <GitBranch size={12} className="opacity-70" /> : <Bot size={12} className="opacity-70" />}
           <span className="truncate">{task.hasWorktree ? task.branchName : "No worktree"}</span>
         </div>
-        
+
         <div className="task-card-meta flex items-center justify-between text-[10px] uppercase tracking-wider font-bold text-muted-foreground/60">
           <span>{task.agentName ?? "No agent"}</span>
           <span className={task.isDirty ? "dirty-indicator" : ""}>

@@ -126,7 +126,14 @@ The Codex JSONL protocol snapshot lives in
 
 ```text
 src/                 React app, UI components, typed Tauri API wrapper
+src/components/settings/
+                     Settings subcomponents and pure profile-draft helpers
+src/styles/          Focused CSS files for layout, settings, task board, detail,
+                     and forms
+src/test/            Shared Vitest and Testing Library helpers
 native/src/          Rust Tauri commands, database, git ops, session runtime
+native/src/sessions/agents/
+                     Provider-specific Codex, Claude, and Gemini launch behavior
 native/capabilities/ Tauri permission capability files
 docs/                Project documentation and debugging references
 ```
@@ -135,16 +142,32 @@ Important frontend files:
 
 - `src/App.tsx`: app shell and top-level composition
 - `src/hooks/useApp.ts`: app state, project/task/settings orchestration
+- `src/hooks/useTaskReviewLoop.ts`: review-loop loading and
+  `review_loop_updated` event subscription
+- `src/hooks/useTaskDeletion.ts`: task deletion workflow and deletion toasts
+- `src/hooks/useSessionAttentionControls.ts`: wrappers that clear attention
+  before session start/resume/stop/input events
+- `src/hooks/useTaskCardPointerDrag.ts`: task-card pointer drag tracking and
+  drag ghost lifecycle
 - `src/api.ts`: typed frontend wrapper around Tauri commands
 - `src/TerminalPane.tsx`: xterm.js lifecycle, PTY input/output, and dropped
   file-path insertion
 - `src/components/`: board, task detail, settings, and modal UI
+- `src/styles.css`: Tailwind imports, theme tokens, and global base rules
+- `src/styles/`: focused CSS files imported by `src/main.tsx`
+- `src/test/testUtils.tsx`: shared DOM, pointer-event, tooltip-provider, and
+  async helpers for frontend tests
+- `src/test/app*Tests.tsx`: focused App test groups registered by
+  `src/App.test.tsx`
 
 Important backend files:
 
 - `native/src/lib.rs`: Tauri command registration, app setup, plugins, shutdown
-- `native/src/db/`: SQLite schema, migrations, row mapping, persistence tests
+- `native/src/db/`: SQLite schema, migrations, row mapping, domain persistence
+  modules, and persistence tests
 - `native/src/git_ops.rs`: git repository and worktree operations
 - `native/src/sessions/`: PTY lifecycle, agent command setup, Codex JSONL watcher,
   and review-loop worker
+- `native/src/sessions/agents/`: Codex, Claude, and Gemini command argument
+  builders and provider-specific fallback locations
 - `native/src/models.rs`: serializable backend/frontend contracts

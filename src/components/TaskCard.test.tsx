@@ -1,9 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TaskAttention } from "../sessionAttention";
+import { dispatchPointerEvent, renderWithTooltipProvider } from "../test/testUtils";
 import type { TaskSummary } from "../types";
 import { TaskCard } from "./TaskCard";
-import { TooltipProvider } from "./ui/tooltip";
 
 const task: TaskSummary = {
   id: 42,
@@ -29,38 +29,20 @@ const task: TaskSummary = {
 };
 
 function renderTaskCard(attention?: TaskAttention, taskOverride: Partial<TaskSummary> = {}) {
-  return render(
-    <TooltipProvider>
-      <TaskCard
-        task={{ ...task, ...taskOverride }}
-        attention={attention}
-        isSelected={false}
-        busy={false}
-        onSelect={vi.fn()}
-        onDelete={vi.fn()}
-        onDragStart={vi.fn()}
-        onPointerDragMove={vi.fn()}
-        onPointerDragEnd={vi.fn()}
-        onDragEnd={vi.fn()}
-      />
-    </TooltipProvider>,
+  return renderWithTooltipProvider(
+    <TaskCard
+      task={{ ...task, ...taskOverride }}
+      attention={attention}
+      isSelected={false}
+      busy={false}
+      onSelect={vi.fn()}
+      onDelete={vi.fn()}
+      onDragStart={vi.fn()}
+      onPointerDragMove={vi.fn()}
+      onPointerDragEnd={vi.fn()}
+      onDragEnd={vi.fn()}
+    />,
   );
-}
-
-function dispatchPointerEvent(
-  target: Element | Node | Window | Document,
-  type: string,
-  init: { pointerId: number; button?: number; clientX: number; clientY: number },
-) {
-  const event = new Event(type, { bubbles: true, cancelable: true });
-  Object.defineProperties(event, {
-    pointerId: { value: init.pointerId },
-    button: { value: init.button ?? 0 },
-    clientX: { value: init.clientX },
-    clientY: { value: init.clientY },
-  });
-  fireEvent(target, event);
-  return event;
 }
 
 describe("TaskCard", () => {
