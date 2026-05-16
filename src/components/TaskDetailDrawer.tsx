@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import {
   ArrowLeft,
   Square,
@@ -63,6 +70,22 @@ const reviewVerdictLabels: Record<ReviewRun["verdict"], string> = {
   needs_changes: "Needs changes",
   unknown: "Unknown",
 };
+const DEFAULT_TERMINAL_HEIGHT = 360;
+const MIN_TERMINAL_HEIGHT = 220;
+const MIN_DETAIL_HEIGHT = 220;
+const MAX_TERMINAL_HEIGHT = 760;
+const TERMINAL_RESIZE_STEP = 32;
+
+function getTerminalHeightLimit(frameHeight?: number) {
+  if (!frameHeight || !Number.isFinite(frameHeight)) return MAX_TERMINAL_HEIGHT;
+  return Math.max(MIN_TERMINAL_HEIGHT, Math.min(MAX_TERMINAL_HEIGHT, frameHeight - MIN_DETAIL_HEIGHT));
+}
+
+function clampTerminalHeight(height: number, frameHeight?: number) {
+  const maxHeight = getTerminalHeightLimit(frameHeight);
+  const normalizedHeight = Number.isFinite(height) ? height : maxHeight;
+  return Math.round(Math.min(maxHeight, Math.max(MIN_TERMINAL_HEIGHT, normalizedHeight)));
+}
 
 export function TaskDetailDrawer({
   task,
@@ -92,10 +115,93 @@ export function TaskDetailDrawer({
     reviewLoop?.reviewerProfileId ?? defaultReviewerProfileId,
   );
   const [maxRounds, setMaxRounds] = useState(reviewLoop?.maxRounds ?? 3);
+  const [terminalHeight, setTerminalHeight] = useState(DEFAULT_TERMINAL_HEIGHT);
+  const [terminalHeightLimit, setTerminalHeightLimit] = useState(MAX_TERMINAL_HEIGHT);
+  const detailBodyRef = useRef<HTMLDivElement | null>(null);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     setReviewerProfileId(reviewLoop?.reviewerProfileId ?? defaultReviewerProfileId);
     setMaxRounds(reviewLoop?.maxRounds ?? 3);
   }, [defaultReviewerProfileId, reviewLoop?.maxRounds, reviewLoop?.reviewerProfileId]);
+
+  useEffect(() => {
+    const detailBody = detailBodyRef.current;
+    if (!detailBody || typeof ResizeObserver === "undefined") return undefined;
+
+    const resizeObserver = new ResizeObserver(() => {
+      const { height } = detailBody.getBoundingClientRect();
+      setTerminalHeightLimit(getTerminalHeightLimit(height));
+      setTerminalHeight((current) => clampTerminalHeight(current, height));
+    });
+    resizeObserver.observe(detailBody);
+
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  useEffect(
+    () => () => {
+      resizeCleanupRef.current?.();
+    },
+    [],
+  );
+
+  const updateTerminalHeightFromClientY = (clientY: number) => {
+    const detailBody = detailBodyRef.current;
+    if (!detailBody) return;
+
+    const rect = detailBody.getBoundingClientRect();
+    setTerminalHeightLimit(getTerminalHeightLimit(rect.height));
+    setTerminalHeight(clampTerminalHeight(rect.bottom - clientY, rect.height));
+  };
+
+  const handleTerminalResizePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button > 0) return;
+
+    event.preventDefault();
+    resizeCleanupRef.current?.();
+    updateTerminalHeightFromClientY(event.clientY);
+
+    const resizeHandle = event.currentTarget;
+    resizeHandle.setPointerCapture?.(event.pointerId);
+    document.body.setAttribute("data-resizing-terminal", "true");
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      moveEvent.preventDefault();
+      updateTerminalHeightFromClientY(moveEvent.clientY);
+    };
+    const stopResize = () => {
+      resizeHandle.releasePointerCapture?.(event.pointerId);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResize);
+      window.removeEventListener("pointercancel", stopResize);
+      document.body.removeAttribute("data-resizing-terminal");
+      resizeCleanupRef.current = null;
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResize);
+    window.addEventListener("pointercancel", stopResize);
+    resizeCleanupRef.current = stopResize;
+  };
+
+  const handleTerminalResizeKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(event.key)) return;
+
+    event.preventDefault();
+    const frameHeight = detailBodyRef.current?.getBoundingClientRect().height;
+    if (frameHeight) {
+      setTerminalHeightLimit(getTerminalHeightLimit(frameHeight));
+    }
+    setTerminalHeight((current) => {
+      if (event.key === "Home") return clampTerminalHeight(MIN_TERMINAL_HEIGHT, frameHeight);
+      if (event.key === "End") return clampTerminalHeight(Number.POSITIVE_INFINITY, frameHeight);
+      const direction = event.key === "ArrowUp" || event.key === "PageUp" ? 1 : -1;
+      const step = event.key === "PageUp" || event.key === "PageDown" ? TERMINAL_RESIZE_STEP * 3 : TERMINAL_RESIZE_STEP;
+      return clampTerminalHeight(current + direction * step, frameHeight);
+    });
+  };
+
   const latestReviewRun = reviewRuns.at(-1);
   const pairLoopActive = Boolean(reviewLoop && !["passed", "max_rounds_reached", "error", "stopped"].includes(reviewLoop.status));
   if (!task) return null;
@@ -154,8 +260,8 @@ export function TaskDetailDrawer({
         </Button>
       </div>
 
-        <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
-          <div className="shrink-0 px-6 pb-6 border-b">
+        <div ref={detailBodyRef} data-testid="task-detail-body" className="detail-body flex flex-1 min-h-0 flex-col overflow-hidden">
+          <div className="detail-scroll min-h-0 flex-1 overflow-auto px-6 pb-6">
              <div className="flex gap-2 mb-6">
                 {task.activeSessionId ? (
                   <Button variant="destructive" className="w-full gap-2" onClick={() => onStopSession(task.activeSessionId!)}>
@@ -342,7 +448,25 @@ export function TaskDetailDrawer({
              </section>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div
+            role="separator"
+            aria-label="Resize terminal"
+            aria-orientation="horizontal"
+            aria-valuemin={MIN_TERMINAL_HEIGHT}
+            aria-valuemax={terminalHeightLimit}
+            aria-valuenow={terminalHeight}
+            tabIndex={0}
+            title="Drag to resize terminal"
+            className="terminal-resize-handle"
+            onPointerDown={handleTerminalResizePointerDown}
+            onKeyDown={handleTerminalResizeKeyDown}
+          />
+
+          <section
+            className="detail-terminal-panel flex min-h-0 flex-col"
+            aria-label="Agent terminal"
+            style={{ height: terminalHeight }}
+          >
              <div className="flex shrink-0 items-center gap-2 px-6 py-4 border-b text-[11px] font-bold uppercase tracking-widest opacity-60">
                 <TerminalSquare size={14} />
                 Agent Terminal
@@ -354,7 +478,7 @@ export function TaskDetailDrawer({
                   onSessionInput={onSessionInput}
                 />
              </div>
-          </div>
+          </section>
         </div>
       </aside>
     );

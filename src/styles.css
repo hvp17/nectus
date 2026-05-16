@@ -1036,6 +1036,60 @@ body.task-drag-selection-lock * {
   font-weight: 850;
 }
 
+.detail-body {
+  min-height: 0;
+}
+
+.detail-scroll {
+  scrollbar-gutter: stable;
+}
+
+.terminal-resize-handle {
+  position: relative;
+  display: flex;
+  flex: 0 0 14px;
+  align-items: center;
+  justify-content: center;
+  height: 14px;
+  cursor: row-resize;
+  touch-action: none;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 72%, var(--background));
+  outline: none;
+}
+
+.terminal-resize-handle::before {
+  content: "";
+  display: block;
+  width: 44px;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted-foreground) 34%, transparent);
+  transition: width 120ms ease, background-color 120ms ease;
+}
+
+.terminal-resize-handle:hover::before,
+.terminal-resize-handle:focus-visible::before {
+  width: 58px;
+  background: var(--primary);
+}
+
+.terminal-resize-handle:focus-visible {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ring) 55%, transparent);
+}
+
+body[data-resizing-terminal="true"] {
+  cursor: row-resize;
+  user-select: none;
+}
+
+.detail-terminal-panel {
+  flex: 0 0 auto;
+  min-height: 220px;
+  max-height: min(760px, calc(100vh - 220px));
+}
+
 .terminal-host {
   position: relative;
   flex: 1;

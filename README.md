@@ -14,6 +14,8 @@ git, SQLite, and PTY work lives in the Rust backend.
 - Create Tasks against a project in direct-edit mode or with a new git worktree.
 - Launch Codex, Claude, Gemini, or custom CLI agent profiles in an embedded
   terminal.
+- Expand the task inspector full width or resize its terminal vertically while
+  an agent session is running.
 - Send the task prompt into a new agent session automatically.
 - Resume Codex and Claude sessions when a saved session id is available.
 - Track task status across `Planned`, `In progress`, `Review`, and `Done`.

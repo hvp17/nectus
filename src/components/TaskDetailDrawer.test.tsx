@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { TaskAttention } from "../sessionAttention";
 import type { AgentProfile, ReviewLoop, ReviewRun, TaskSummary } from "../types";
@@ -51,6 +51,20 @@ const agentProfiles: AgentProfile[] = [
     updatedAt: "2026-05-15T00:00:00.000Z",
   },
 ];
+
+function dispatchPointerEvent(
+  target: Element | Window,
+  type: string,
+  init: { pointerId: number; button?: number; clientY: number },
+) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    pointerId: { value: init.pointerId },
+    button: { value: init.button ?? 0 },
+    clientY: { value: init.clientY },
+  });
+  fireEvent(target, event);
+}
 
 function renderTaskDetailDrawer(input?: {
   attention?: TaskAttention;
@@ -141,5 +155,39 @@ describe("TaskDetailDrawer", () => {
 
     expect(screen.getByText(/round 1 of 3/i)).toBeInTheDocument();
     expect(screen.getByText(/blocking issue: missing persistence test/i)).toBeInTheDocument();
+  });
+
+  it("lets the terminal panel expand vertically from the resize separator", () => {
+    renderTaskDetailDrawer();
+
+    const inspectorBody = screen.getByTestId("task-detail-body");
+    vi.spyOn(inspectorBody, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 480,
+      height: 800,
+      top: 0,
+      right: 480,
+      bottom: 800,
+      left: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    const separator = screen.getByRole("separator", { name: /resize terminal/i });
+    const terminalPanel = screen.getByRole("region", { name: /agent terminal/i });
+
+    expect(terminalPanel).toHaveStyle({ height: "360px" });
+
+    separator.focus();
+    fireEvent.keyDown(separator, { key: "ArrowUp" });
+
+    expect(terminalPanel).toHaveStyle({ height: "392px" });
+
+    dispatchPointerEvent(separator, "pointerdown", { pointerId: 1, button: 0, clientY: 430 });
+    dispatchPointerEvent(window, "pointermove", { pointerId: 1, clientY: 300 });
+    dispatchPointerEvent(window, "pointerup", { pointerId: 1, clientY: 300 });
+
+    expect(terminalPanel).toHaveStyle({ height: "500px" });
+    expect(separator).toHaveAttribute("aria-valuenow", "500");
   });
 });
