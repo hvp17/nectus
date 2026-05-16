@@ -109,6 +109,9 @@ export const api = {
   async startPairLoop(taskId: number, reviewerProfileId: number, maxRounds: number): Promise<ReviewLoop> {
     return invoke("start_pair_loop", { taskId, reviewerProfileId, maxRounds });
   },
+  async runPairReview(taskId: number): Promise<ReviewLoop> {
+    return invoke("run_pair_review", { taskId });
+  },
   async stopPairLoop(taskId: number): Promise<ReviewLoop> {
     return invoke("stop_pair_loop", { taskId });
   },

@@ -99,6 +99,14 @@ describe("api", () => {
     });
   });
 
+  it("runs an immediate pair review for a task", async () => {
+    await api.runPairReview(2);
+
+    expect(mockedInvoke).toHaveBeenCalledWith("run_pair_review", {
+      taskId: 2,
+    });
+  });
+
   it("truncates long system notification bodies sent to Tauri", async () => {
     vi.resetModules();
     Object.defineProperty(window, "__TAURI_INTERNALS__", {

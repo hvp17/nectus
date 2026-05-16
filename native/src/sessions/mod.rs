@@ -23,6 +23,7 @@ mod review_loop;
 use agents::configure_agent_command;
 use codex::{latest_codex_session_metadata, spawn_codex_event_watcher};
 use command::resolve_agent_command;
+use review_loop::spawn_review_on_session_idle;
 
 const OUTPUT_BUFFER_LIMIT: usize = 2 * 1024 * 1024;
 
@@ -324,6 +325,30 @@ impl SessionManager {
             .writer
             .write_all(data.as_bytes())
             .map_err(|error| format!("Failed to write to PTY: {error}"))
+    }
+
+    pub fn run_pair_review(
+        &self,
+        app: AppHandle,
+        db: Arc<Mutex<Database>>,
+        task_id: i64,
+    ) -> Result<(), String> {
+        let (session_id, cwd) = {
+            let sessions = self.sessions.lock();
+            let running = sessions
+                .values()
+                .find(|running| {
+                    running.session.task_id == task_id
+                        && running.agent_command == AgentKind::Codex.as_str()
+                })
+                .ok_or_else(|| {
+                    "Start review requires a running Codex session for this task".to_string()
+                })?;
+            (running.session.id.clone(), running.cwd.clone())
+        };
+
+        spawn_review_on_session_idle(app, db, self.sessions.clone(), task_id, session_id, cwd);
+        Ok(())
     }
 
     pub fn resize(&self, session_id: &str, rows: u16, cols: u16) -> Result<(), String> {

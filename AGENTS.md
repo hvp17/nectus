@@ -155,6 +155,7 @@ Tauri commands exposed to the frontend include:
 - `list_agent_profiles`
 - `upsert_agent_profile`
 - `start_pair_loop`
+- `run_pair_review`
 - `stop_pair_loop`
 - `get_task_review_loop`
 - `list_task_review_runs`

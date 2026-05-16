@@ -4,7 +4,7 @@ export type AgentKind = "codex" | "claude" | "gemini" | "custom";
 export type ThemeMode = "system" | "light" | "dark";
 export type DensityMode = "comfortable" | "compact";
 export type ReviewLoopStatus = "running" | "reviewing" | "passed" | "max_rounds_reached" | "error" | "stopped";
-export type ReviewVerdict = "pass" | "needs_changes" | "unknown";
+export type ReviewVerdict = "pass" | "needs_changes" | "feedback" | "unknown";
 
 export interface Repo {
   id: number;

@@ -172,18 +172,28 @@ The AI pair loop is a worker-plus-reviewer flow.
 
 Current behavior:
 
-- Start a pair loop from the task detail pane.
+- Start a pair loop from the task detail pane, or use `Start review` above the
+  terminal to start the loop and immediately run the first review round.
 - Choose a reviewer profile and max rounds from 1 to 10.
 - On each Codex `session_idle` event, the backend runs the reviewer command in
   the task cwd with a generated review prompt.
+- Manual `Start review` requires a running Codex worker session so blockers or
+  feedback can be written back into that session.
+- Claude and Gemini reviewers are run in headless prompt mode with `-p` and the
+  generated review prompt. Custom reviewers receive the prompt on stdin.
 - Reviewer output is parsed as:
-  - `pass` when a line is exactly `PASS` or starts with `PASS:`.
-  - `needs_changes` when it contains blocking-review phrases such as
-    `Blocking issue`, `needs changes`, `request changes`, or `must fix`.
+  - `pass` when a line is exactly `NECTUS_NO_BLOCKERS`, `PASS`, or starts with
+    `PASS:`.
+  - `needs_changes` when a line is exactly `NECTUS_BLOCKERS`, or the output
+    contains blocking-review phrases such as `Blocking issue`, `needs changes`,
+    `request changes`, or `must fix`.
+  - `feedback` when a line is exactly `NECTUS_FEEDBACK`.
   - `unknown` otherwise.
-- Passing review marks the loop `passed`.
-- Blocking feedback before the max round is written back into the worker PTY.
-- Blocking feedback at the max round marks the loop `max_rounds_reached`.
+- Passing review marks the loop `passed` and moves the task to `done`.
+- Blocking review or feedback before the max round is written back into the
+  worker PTY.
+- Blocking review or feedback at the max round marks the loop
+  `max_rounds_reached`.
 - Unknown reviewer output marks the loop `error`.
 
 Key files:
@@ -191,7 +201,7 @@ Key files:
 - UI controls and latest run summary: `src/components/TaskDetailDrawer.tsx`
 - Frontend review-loop loading and event subscription: `src/hooks/useTaskReviewLoop.ts`
 - Frontend API: `src/api.ts`
-- Backend commands: `start_pair_loop`, `stop_pair_loop`,
+- Backend commands: `start_pair_loop`, `run_pair_review`, `stop_pair_loop`,
   `get_task_review_loop`, `list_task_review_runs`
 - Runtime worker: `native/src/sessions/review_loop.rs`
 - Persistence: `review_loops` and `review_runs` tables

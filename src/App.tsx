@@ -70,6 +70,7 @@ function App() {
     stopSession,
     resumeSession,
     startPairLoop,
+    startReview,
     stopPairLoop,
     onSessionExit,
     onSessionInput,
@@ -184,6 +185,7 @@ function App() {
                   onResumeSession={resumeSession}
                   onStartSession={startSession}
                   onStartPairLoop={startPairLoop}
+                  onStartReview={startReview}
                   onStopPairLoop={stopPairLoop}
                   onUpdateStatus={updateStatus}
                   onSessionExit={onSessionExit}

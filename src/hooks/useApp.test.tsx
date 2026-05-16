@@ -23,6 +23,7 @@ vi.mock("../api", () => ({
     listTasks: vi.fn(),
     getAppSettings: vi.fn(),
     startPairLoop: vi.fn(),
+    runPairReview: vi.fn(),
     stopPairLoop: vi.fn(),
     getTaskReviewLoop: vi.fn(),
     listTaskReviewRuns: vi.fn(),
@@ -61,8 +62,17 @@ function Harness() {
     <>
       <output data-testid="tasks">{app.tasks.length}</output>
       <output data-testid="finished">{app.counts.finished}</output>
+      <output data-testid="task-status">
+        {app.tasks.find((task) => task.id === activeTask.id)?.status ?? "none"}
+      </output>
       <button type="button" onClick={() => app.onSessionInput("session-21")}>
         send input
+      </button>
+      <button type="button" onClick={() => app.startReview(activeTask, 1, 3)}>
+        start review
+      </button>
+      <button type="button" onClick={() => app.setSelectedTaskId(activeTask.id)}>
+        select task
       </button>
     </>
   );
@@ -109,6 +119,26 @@ describe("useApp", () => {
     mockedApi.listTasks.mockResolvedValue([activeTask]);
     mockedApi.getTaskReviewLoop.mockResolvedValue(null);
     mockedApi.listTaskReviewRuns.mockResolvedValue([]);
+    mockedApi.startPairLoop.mockResolvedValue({
+      taskId: activeTask.id,
+      reviewerProfileId: 1,
+      maxRounds: 3,
+      currentRound: 0,
+      status: "running",
+      lastError: null,
+      createdAt: "2026-05-16T00:00:00.000Z",
+      updatedAt: "2026-05-16T00:00:00.000Z",
+    });
+    mockedApi.runPairReview.mockResolvedValue({
+      taskId: activeTask.id,
+      reviewerProfileId: 1,
+      maxRounds: 3,
+      currentRound: 0,
+      status: "running",
+      lastError: null,
+      createdAt: "2026-05-16T00:00:00.000Z",
+      updatedAt: "2026-05-16T00:00:00.000Z",
+    });
   });
 
   it("clears finished attention when input is sent to that active session", async () => {
@@ -137,5 +167,52 @@ describe("useApp", () => {
     fireEvent.click(screen.getByRole("button", { name: /send input/i }));
 
     expect(screen.getByTestId("finished")).toHaveTextContent("0");
+  });
+
+  it("starts a review loop before triggering an immediate review", async () => {
+    render(<Harness />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("tasks")).toHaveTextContent("1");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /start review/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.startPairLoop).toHaveBeenCalledWith(activeTask.id, 1, 3);
+      expect(mockedApi.runPairReview).toHaveBeenCalledWith(activeTask.id);
+    });
+  });
+
+  it("marks the selected task done when a review loop passes", async () => {
+    render(<Harness />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("tasks")).toHaveTextContent("1");
+    });
+    fireEvent.click(screen.getByRole("button", { name: /select task/i }));
+
+    act(() => {
+      eventTestState.handlers.get("review_loop_updated")?.({
+        payload: {
+          taskId: activeTask.id,
+          reviewLoop: {
+            taskId: activeTask.id,
+            reviewerProfileId: 1,
+            maxRounds: 3,
+            currentRound: 1,
+            status: "passed",
+            lastError: null,
+            createdAt: "2026-05-16T00:00:00.000Z",
+            updatedAt: "2026-05-16T00:01:00.000Z",
+          },
+          reviewRun: null,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("task-status")).toHaveTextContent("done");
+    });
   });
 });

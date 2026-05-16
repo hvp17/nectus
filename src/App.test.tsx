@@ -25,6 +25,7 @@ vi.mock("./api", () => ({
     updateAppSettings: vi.fn(),
     upsertAgentProfile: vi.fn(),
     startPairLoop: vi.fn(),
+    runPairReview: vi.fn(),
     stopPairLoop: vi.fn(),
     getTaskReviewLoop: vi.fn(),
     listTaskReviewRuns: vi.fn(),
