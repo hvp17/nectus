@@ -142,14 +142,13 @@ fn upsert_agent_profile(
 fn start_pair_loop(
     task_id: i64,
     reviewer_profile_id: i64,
-    max_rounds: i64,
     state: State<'_, AppState>,
 ) -> AppResult<ReviewLoop> {
     app_result(
         state
             .db
             .lock()
-            .start_review_loop(task_id, reviewer_profile_id, max_rounds),
+            .start_review_loop(task_id, reviewer_profile_id),
     )
 }
 
@@ -163,7 +162,7 @@ fn run_pair_review(
         .db
         .lock()
         .review_loop_by_task_id(task_id)?
-        .ok_or_else(|| "Start a pair loop before running a review".to_string())?;
+        .ok_or_else(|| "Start a review before running the reviewer".to_string())?;
     if review_loop.status != crate::models::ReviewLoopStatus::Running {
         return Err(format!(
             "Review loop is not ready to run: {}",

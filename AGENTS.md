@@ -136,7 +136,7 @@ Keep OS, git, SQLite, and PTY behavior in Rust.
 Important backend files:
 
 - `native/src/lib.rs`: Tauri command registration and app setup
-- `native/src/db/`: SQLite schema, migrations, row mapping, and persistence tests
+- `native/src/db/`: SQLite schema, row mapping, and persistence tests
 - `native/src/git_ops.rs`: git repo/worktree validation and operations
 - `native/src/sessions/`: PTY lifecycle, terminal event emission, Codex JSONL watching, agent command setup, and review-loop runtime
 - `native/src/sessions/agents/`: provider-specific Codex, Claude, and Gemini command arguments and fallback locations

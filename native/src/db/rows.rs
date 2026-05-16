@@ -65,8 +65,6 @@ pub(super) fn task_from_row(row: &Row<'_>) -> rusqlite::Result<Result<TaskSummar
         last_session_cwd: row.get(15)?,
         last_session_label: row.get(16)?,
         review_loop_status,
-        review_loop_current_round: row.get(20)?,
-        review_loop_max_rounds: row.get(21)?,
         created_at: row.get(17)?,
         updated_at: row.get(18)?,
     }))
@@ -138,7 +136,7 @@ pub(super) fn app_settings_from_row(
 }
 
 pub(super) fn review_loop_from_row(row: &Row<'_>) -> rusqlite::Result<Result<ReviewLoop, String>> {
-    let status: String = row.get(4)?;
+    let status: String = row.get(2)?;
     let status = match ReviewLoopStatus::from_str(&status) {
         Ok(value) => value,
         Err(error) => return Ok(Err(error)),
@@ -147,17 +145,15 @@ pub(super) fn review_loop_from_row(row: &Row<'_>) -> rusqlite::Result<Result<Rev
     Ok(Ok(ReviewLoop {
         task_id: row.get(0)?,
         reviewer_profile_id: row.get(1)?,
-        max_rounds: row.get(2)?,
-        current_round: row.get(3)?,
         status,
-        last_error: row.get(5)?,
-        created_at: row.get(6)?,
-        updated_at: row.get(7)?,
+        last_error: row.get(3)?,
+        created_at: row.get(4)?,
+        updated_at: row.get(5)?,
     }))
 }
 
 pub(super) fn review_run_from_row(row: &Row<'_>) -> rusqlite::Result<Result<ReviewRun, String>> {
-    let verdict: String = row.get(4)?;
+    let verdict: String = row.get(3)?;
     let verdict = match ReviewVerdict::from_str(&verdict) {
         Ok(value) => value,
         Err(error) => return Ok(Err(error)),
@@ -166,12 +162,11 @@ pub(super) fn review_run_from_row(row: &Row<'_>) -> rusqlite::Result<Result<Revi
     Ok(Ok(ReviewRun {
         id: row.get(0)?,
         task_id: row.get(1)?,
-        round: row.get(2)?,
-        reviewer_profile_id: row.get(3)?,
+        reviewer_profile_id: row.get(2)?,
         verdict,
-        prompt: row.get(5)?,
-        output: row.get(6)?,
-        error: row.get(7)?,
-        created_at: row.get(8)?,
+        prompt: row.get(4)?,
+        output: row.get(5)?,
+        error: row.get(6)?,
+        created_at: row.get(7)?,
     }))
 }

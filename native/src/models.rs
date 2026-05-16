@@ -85,8 +85,6 @@ pub struct TaskSummary {
     pub last_session_cwd: Option<String>,
     pub last_session_label: Option<String>,
     pub review_loop_status: Option<ReviewLoopStatus>,
-    pub review_loop_current_round: Option<i64>,
-    pub review_loop_max_rounds: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -100,7 +98,7 @@ pub enum ReviewLoopStatus {
     Running,
     Reviewing,
     Passed,
-    MaxRoundsReached,
+    FeedbackSent,
     Error,
     Stopped,
 }
@@ -146,8 +144,6 @@ impl ReviewVerdict {
 pub struct ReviewLoop {
     pub task_id: i64,
     pub reviewer_profile_id: i64,
-    pub max_rounds: i64,
-    pub current_round: i64,
     pub status: ReviewLoopStatus,
     pub last_error: Option<String>,
     pub created_at: String,
@@ -159,7 +155,6 @@ pub struct ReviewLoop {
 pub struct ReviewRun {
     pub id: i64,
     pub task_id: i64,
-    pub round: i64,
     pub reviewer_profile_id: i64,
     pub verdict: ReviewVerdict,
     pub prompt: String,
@@ -172,7 +167,6 @@ pub struct ReviewRun {
 #[serde(rename_all = "camelCase")]
 pub struct ReviewRunInput {
     pub task_id: i64,
-    pub round: i64,
     pub reviewer_profile_id: i64,
     pub verdict: ReviewVerdict,
     pub prompt: String,

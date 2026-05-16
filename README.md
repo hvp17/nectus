@@ -20,13 +20,12 @@ git, SQLite, and PTY work lives in the Rust backend.
 - Resume Codex and Claude sessions when a saved session id is available.
 - Track task status across `Planned`, `In progress`, `Review`, and `Done`.
 - Drag tasks between board columns to update status.
-- Show review-loop status and completed review rounds on task cards.
+- Show saved review status on task cards.
 - Surface running, dirty, finished, review, and needs-input counts.
 - Watch Codex session JSONL for finished or input-needed events.
 - Send macOS notifications for session attention events.
-- Run an AI pair loop that reviews Codex idle events or a manual `Start review`
-  action with another agent profile and feeds blockers or implementation
-  feedback back to the worker session until the reviewer returns no blockers.
+- Run a single AI review with another agent profile and feed blockers or
+  implementation feedback back to the worker session.
 - Configure agent commands, model arguments, environment variables, theme,
   density, branch prefixes, and worktree root patterns.
 
@@ -117,7 +116,7 @@ The main tracking and debugging guide is
 - SQLite tables and task/session fields.
 - Tauri commands and emitted frontend events.
 - Codex JSONL tracking and its current limitations.
-- AI pair-loop tracking.
+- AI review tracking.
 - macOS notification troubleshooting.
 - Common debugging commands and failure modes.
 
@@ -165,7 +164,7 @@ Important frontend files:
 Important backend files:
 
 - `native/src/lib.rs`: Tauri command registration, app setup, plugins, shutdown
-- `native/src/db/`: SQLite schema, migrations, row mapping, domain persistence
+- `native/src/db/`: SQLite schema, row mapping, domain persistence
   modules, and persistence tests
 - `native/src/git_ops.rs`: git repository and worktree operations
 - `native/src/sessions/`: PTY lifecycle, agent command setup, Codex JSONL watcher,

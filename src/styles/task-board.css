@@ -147,15 +147,6 @@ body.task-drag-selection-lock * {
   color: oklch(0.67 0.14 150);
 }
 
-.task-review-round {
-  flex: none;
-  color: var(--muted-foreground);
-  font-family: "SFMono-Regular", Menlo, monospace;
-  font-size: 10px;
-  font-weight: 750;
-  white-space: nowrap;
-}
-
 .dirty-indicator {
   color: oklch(0.55 0.12 265);
 }

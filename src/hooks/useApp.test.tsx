@@ -69,7 +69,7 @@ function Harness() {
       <button type="button" onClick={() => app.onSessionInput("session-21")}>
         send input
       </button>
-      <button type="button" onClick={() => app.startReview(activeTask, 1, 3)}>
+      <button type="button" onClick={() => app.startReview(activeTask, 1)}>
         start review
       </button>
       <button type="button" onClick={() => app.setSelectedTaskId(activeTask.id)}>
@@ -123,8 +123,6 @@ describe("useApp", () => {
     mockedApi.startPairLoop.mockResolvedValue({
       taskId: activeTask.id,
       reviewerProfileId: 1,
-      maxRounds: 3,
-      currentRound: 0,
       status: "running",
       lastError: null,
       createdAt: "2026-05-16T00:00:00.000Z",
@@ -133,8 +131,6 @@ describe("useApp", () => {
     mockedApi.runPairReview.mockResolvedValue({
       taskId: activeTask.id,
       reviewerProfileId: 1,
-      maxRounds: 3,
-      currentRound: 0,
       status: "running",
       lastError: null,
       createdAt: "2026-05-16T00:00:00.000Z",
@@ -180,7 +176,7 @@ describe("useApp", () => {
     fireEvent.click(screen.getByRole("button", { name: /start review/i }));
 
     await waitFor(() => {
-      expect(mockedApi.startPairLoop).toHaveBeenCalledWith(activeTask.id, 1, 3);
+      expect(mockedApi.startPairLoop).toHaveBeenCalledWith(activeTask.id, 1);
       expect(mockedApi.runPairReview).toHaveBeenCalledWith(activeTask.id);
     });
   });
@@ -214,8 +210,6 @@ describe("useApp", () => {
           reviewLoop: {
             taskId: activeTask.id,
             reviewerProfileId: 1,
-            maxRounds: 3,
-            currentRound: 1,
             status: "passed",
             lastError: null,
             createdAt: "2026-05-16T00:00:00.000Z",

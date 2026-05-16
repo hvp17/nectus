@@ -24,7 +24,6 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import {
   Stepper,
@@ -55,9 +54,7 @@ interface TaskDetailDrawerProps {
   onStopSession: (sessionId: string) => void;
   onResumeSession: (task: TaskSummary) => void;
   onStartSession: (task: TaskSummary) => void;
-  onStartPairLoop: (task: TaskSummary, reviewerProfileId: number, maxRounds: number) => void;
-  onStartReview: (task: TaskSummary, reviewerProfileId: number, maxRounds: number) => void;
-  onStopPairLoop: (task: TaskSummary) => void;
+  onStartReview: (task: TaskSummary, reviewerProfileId: number) => void;
   onUpdateStatus: (task: TaskSummary, status: TaskStatus) => void;
   onSessionExit: (sessionId: string) => void;
   onSessionInput: (sessionId: string) => void;
@@ -71,10 +68,10 @@ const statusLabels: Record<TaskStatus, string> = {
   done: "Done",
 };
 const reviewLoopStatusLabels: Record<ReviewLoop["status"], string> = {
-  running: "Running",
+  running: "Ready",
   reviewing: "Reviewing",
   passed: "Passed",
-  max_rounds_reached: "Max rounds",
+  feedback_sent: "Feedback sent",
   error: "Error",
   stopped: "Stopped",
 };
@@ -113,9 +110,7 @@ export function TaskDetailDrawer({
   onStopSession,
   onResumeSession,
   onStartSession,
-  onStartPairLoop,
   onStartReview,
-  onStopPairLoop,
   onUpdateStatus,
   onSessionExit,
   onSessionInput,
@@ -129,7 +124,6 @@ export function TaskDetailDrawer({
   const [reviewerProfileId, setReviewerProfileId] = useState<number | undefined>(
     reviewLoop?.reviewerProfileId ?? defaultReviewerProfileId,
   );
-  const [maxRounds, setMaxRounds] = useState(reviewLoop?.maxRounds ?? 3);
   const [terminalHeight, setTerminalHeight] = useState(DEFAULT_TERMINAL_HEIGHT);
   const [terminalHeightLimit, setTerminalHeightLimit] = useState(MAX_TERMINAL_HEIGHT);
   const detailBodyRef = useRef<HTMLDivElement | null>(null);
@@ -137,8 +131,7 @@ export function TaskDetailDrawer({
 
   useEffect(() => {
     setReviewerProfileId(reviewLoop?.reviewerProfileId ?? defaultReviewerProfileId);
-    setMaxRounds(reviewLoop?.maxRounds ?? 3);
-  }, [defaultReviewerProfileId, reviewLoop?.maxRounds, reviewLoop?.reviewerProfileId]);
+  }, [defaultReviewerProfileId, reviewLoop?.reviewerProfileId]);
 
   useEffect(() => {
     const detailBody = detailBodyRef.current;
@@ -218,7 +211,7 @@ export function TaskDetailDrawer({
   };
 
   const latestReviewRun = reviewRuns.at(-1);
-  const pairLoopActive = Boolean(reviewLoop && !["passed", "max_rounds_reached", "error", "stopped"].includes(reviewLoop.status));
+  const reviewActive = Boolean(reviewLoop && !["passed", "feedback_sent", "error", "stopped"].includes(reviewLoop.status));
   const reviewInProgress = reviewLoop?.status === "reviewing";
   if (!task) return null;
   const canResumeSession = task.agentKind === "codex" || task.agentKind === "claude";
@@ -230,13 +223,12 @@ export function TaskDetailDrawer({
   );
   const startReviewDisabled = !reviewerProfileId || reviewerProfiles.length === 0 || reviewInProgress;
   const hasReviewResult = Boolean(
-    reviewLoop &&
-      (reviewLoop.currentRound > 0 || ["passed", "max_rounds_reached", "error", "stopped"].includes(reviewLoop.status)),
+    reviewLoop && !["running", "reviewing"].includes(reviewLoop.status),
   );
   const workflowStep = task.status === "done" || task.prUrl ? 3 : reviewInProgress ? 1 : hasReviewResult ? 2 : 1;
   const startReview = () => {
     if (!reviewerProfileId || startReviewDisabled) return;
-    onStartReview(task, reviewerProfileId, Math.min(10, Math.max(1, maxRounds || 3)));
+    onStartReview(task, reviewerProfileId);
   };
   const workflowSteps = [
     {
@@ -455,15 +447,11 @@ export function TaskDetailDrawer({
                </Stepper>
              </section>
 
-             <section className="pair-loop-panel" aria-label="AI pair loop">
+             <section className="review-panel" aria-label="Task review">
                <div className="flex items-center justify-between gap-3">
                  <div>
-                   <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">AI Pair Loop</p>
-                   <p className="mt-1 text-xs text-muted-foreground">
-                     {reviewLoop
-                       ? `Round ${reviewLoop.currentRound} of ${reviewLoop.maxRounds}`
-                       : "Worker + reviewer"}
-                   </p>
+                   <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Review</p>
+                   <p className="mt-1 text-xs text-muted-foreground">Choose the reviewer for this task.</p>
                  </div>
                  {reviewLoop && (
                    <Badge variant="outline" className="rounded-md">
@@ -472,71 +460,32 @@ export function TaskDetailDrawer({
                  )}
                </div>
 
-               <div className="mt-3 grid grid-cols-[1fr_76px] gap-2">
-                 <div className="min-w-0">
-                   <Label htmlFor="pair-loop-reviewer" className="sr-only">
-                     Reviewer
-                   </Label>
-                   <Select
-                     value={reviewerProfileId?.toString()}
-                     onValueChange={(value) => setReviewerProfileId(Number(value))}
-                     disabled={pairLoopActive || reviewerProfiles.length === 0}
-                   >
-                     <SelectTrigger id="pair-loop-reviewer" className="h-8 w-full justify-between text-xs">
-                       <SelectValue placeholder="Reviewer" />
-                     </SelectTrigger>
-                     <SelectContent>
-                       {reviewerProfiles.map((profile) => (
-                         <SelectItem key={profile.id} value={profile.id.toString()} className="text-xs">
-                           {profile.name}
-                         </SelectItem>
-                       ))}
-                     </SelectContent>
-                   </Select>
-                 </div>
-                 <div>
-                   <Label htmlFor="pair-loop-rounds" className="sr-only">
-                     Max rounds
-                   </Label>
-                   <Input
-                     id="pair-loop-rounds"
-                     type="number"
-                     min={1}
-                     max={10}
-                     value={maxRounds}
-                     disabled={pairLoopActive}
-                     onChange={(event) => setMaxRounds(Number(event.target.value))}
-                     className="h-8 text-xs"
-                   />
-                 </div>
-               </div>
-
-               <div className="mt-3 flex gap-2">
-                 {pairLoopActive ? (
-                   <Button variant="outline" className="h-8 flex-1 gap-2" onClick={() => onStopPairLoop(task)}>
-                     <Square size={13} />
-                     Stop Pair Loop
-                   </Button>
-                 ) : (
-                   <Button
-                     variant="outline"
-                     className="h-8 flex-1 gap-2"
-                     disabled={!reviewerProfileId || reviewerProfiles.length === 0}
-                     onClick={() => {
-                       if (!reviewerProfileId) return;
-                       onStartPairLoop(task, reviewerProfileId, Math.min(10, Math.max(1, maxRounds || 3)));
-                     }}
-                   >
-                     <Play size={13} />
-                     Start Pair Loop
-                   </Button>
-                 )}
+               <div className="mt-3">
+                 <Label htmlFor="task-reviewer" className="sr-only">
+                   Reviewer
+                 </Label>
+                 <Select
+                   value={reviewerProfileId?.toString()}
+                   onValueChange={(value) => setReviewerProfileId(Number(value))}
+                   disabled={reviewActive || reviewerProfiles.length === 0}
+                 >
+                   <SelectTrigger id="task-reviewer" className="h-8 w-full justify-between text-xs">
+                     <SelectValue placeholder="Reviewer" />
+                   </SelectTrigger>
+                   <SelectContent>
+                     {reviewerProfiles.map((profile) => (
+                       <SelectItem key={profile.id} value={profile.id.toString()} className="text-xs">
+                         {profile.name}
+                       </SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
                </div>
 
                {latestReviewRun && (
                  <div className="review-run-summary">
                    <div className="flex items-center justify-between gap-2">
-                     <span className="text-xs font-semibold">Review {latestReviewRun.round}</span>
+                     <span className="text-xs font-semibold">Review feedback</span>
                      <Badge variant="outline" className="rounded-md">
                        {reviewVerdictLabels[latestReviewRun.verdict]}
                      </Badge>

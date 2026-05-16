@@ -11,7 +11,7 @@ folder with git before saving it.
 - Dialog wrapper: `src/api.ts`
 - Backend command: `add_repo`
 - Git validation: `native/src/git_ops.rs`
-- Persistence: `repos` table in `native/src/db/migrations.rs`
+- Persistence: `repos` table in `native/src/db/schema.rs`
 
 Adding the same project path again updates the existing row instead of creating
 a duplicate.
@@ -51,7 +51,7 @@ Key files:
 - Frontend state orchestration: `src/hooks/useApp.ts`
 - Backend commands: `create_task`, `list_tasks`, `update_task_metadata`,
   `delete_task`
-- Persistence: `tasks` table in `native/src/db/migrations.rs`
+- Persistence: `tasks` table in `native/src/db/schema.rs`
 
 ## Agent Profiles
 
@@ -80,7 +80,7 @@ Key files:
 - Frontend API: `src/api.ts`
 - Command resolution: `native/src/sessions/command.rs`
 - Provider-specific launch arguments: `native/src/sessions/agents/`
-- Persistence: `agent_profiles` table in `native/src/db/migrations.rs`
+- Persistence: `agent_profiles` table in `native/src/db/schema.rs`
 - Persistence API: `native/src/db/agent_profiles.rs`
 
 Command resolution checks PATH first, then common user binary locations.
@@ -166,22 +166,18 @@ Key files:
 - Event listener hook: `src/hooks/useSessionEvents.ts`
 - Codex event source: `native/src/sessions/codex.rs`
 
-## AI Pair Loop
+## AI Review
 
-The AI pair loop is a worker-plus-reviewer flow.
+AI review is a single reviewer pass over the selected task worktree.
 
 Current behavior:
 
-- Start a pair loop from the task detail pane, or use the task workflow stepper's
-  `Start review` step to start the loop and immediately run the first review
-  round.
+- Choose one reviewer profile in the task detail pane.
+- Use the task workflow stepper's `Start review` step to run one reviewer pass.
 - `Start review` switches the selected task UI to `reviewing` while the reviewer
   command runs, and the task workflow stepper shows the in-progress state.
 - The task workflow stepper also shows a placeholder `Create PR` step and a
   `Move to done` step that marks the task complete.
-- Choose a reviewer profile and max rounds from 1 to 10.
-- On each Codex `session_idle` event, the backend runs the reviewer command in
-  the task cwd with a generated review prompt.
 - Manual `Start review` requires a running Codex worker session so blockers or
   feedback can be written back into that session.
 - Claude and Gemini reviewers are run in headless prompt mode with `-p` and the
@@ -195,12 +191,11 @@ Current behavior:
   - `feedback` when a line is exactly `NECTUS_FEEDBACK`.
   - `unknown` otherwise.
 - Passing review marks the loop `passed` and moves the task to `done`.
-- Task cards show the saved review-loop status and completed round count once a
-  loop exists, including completed `Review passed` state.
-- Blocking review or feedback before the max round is written back into the
-  worker PTY and submitted with the same Enter sequence as terminal input.
-- Blocking review or feedback at the max round marks the loop
-  `max_rounds_reached`.
+- Task cards show the saved review status once a review exists, including
+  completed `Review passed` state.
+- Blocking review or feedback is written back into the worker PTY and submitted
+  with the same Enter sequence as terminal input. That status is persisted as
+  `feedback_sent` and shown as review feedback in the UI.
 - Unknown reviewer output marks the loop `error`.
 
 Key files:

@@ -28,8 +28,6 @@ const mockedApi = vi.mocked(api);
 const reviewLoop: ReviewLoop = {
   taskId: 21,
   reviewerProfileId: 2,
-  maxRounds: 3,
-  currentRound: 1,
   status: "running",
   lastError: null,
   createdAt: "2026-05-15T00:00:00.000Z",
@@ -39,7 +37,6 @@ const reviewLoop: ReviewLoop = {
 const firstRun: ReviewRun = {
   id: 1,
   taskId: 21,
-  round: 1,
   reviewerProfileId: 2,
   verdict: "needs_changes",
   prompt: "Review this task",
@@ -111,7 +108,6 @@ describe("useTaskReviewLoop", () => {
     const nextRun: ReviewRun = {
       ...firstRun,
       id: 2,
-      round: 2,
       output: "Passed",
       verdict: "pass",
       createdAt: "2026-05-15T00:02:00.000Z",
@@ -121,7 +117,7 @@ describe("useTaskReviewLoop", () => {
       eventTestState.handlers.get("review_loop_updated")?.({
         payload: {
           taskId: 21,
-          reviewLoop: { ...reviewLoop, currentRound: 2, status: "passed" },
+          reviewLoop: { ...reviewLoop, status: "passed" },
           reviewRun: nextRun,
         } satisfies ReviewLoopUpdatedEvent,
       });
@@ -155,7 +151,7 @@ describe("useTaskReviewLoop", () => {
       eventTestState.handlers.get("review_loop_updated")?.({
         payload: {
           taskId: 99,
-          reviewLoop: { ...reviewLoop, taskId: 99, currentRound: 1, status: "passed" },
+          reviewLoop: { ...reviewLoop, taskId: 99, status: "passed" },
           reviewRun: null,
         } satisfies ReviewLoopUpdatedEvent,
       });
@@ -164,7 +160,6 @@ describe("useTaskReviewLoop", () => {
     expect(onReviewLoopUpdated).toHaveBeenCalledWith({
       ...reviewLoop,
       taskId: 99,
-      currentRound: 1,
       status: "passed",
     });
     expect(screen.getByTestId("status")).toHaveTextContent("running");

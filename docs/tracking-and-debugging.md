@@ -19,16 +19,12 @@ Core tables:
 | `agent_profiles` | CLI agent configuration, including command, model, args, and env. |
 | `app_settings` | Default agent, worktree pattern, branch prefix, theme, and density. |
 | `tasks` | Primary work item, status, prompt, optional worktree, active session, saved session. |
-| `review_loops` | Current pair-loop configuration and status per task. |
-| `review_runs` | Reviewer prompts, outputs, verdicts, and errors by round. |
+| `review_loops` | Current review configuration and status per task. |
+| `review_runs` | Reviewer prompts, outputs, verdicts, and errors by review attempt. |
 
-Schema owner: `native/src/db/migrations.rs`
+Schema owner: `native/src/db/schema.rs`
 
 Row mapping and enum parsing: `native/src/db/rows.rs`
-
-Settings migrations add and backfill `app_settings.theme` and
-`app_settings.density` so databases created before appearance settings can still
-load through `get_app_settings`.
 
 Persistence APIs:
 
@@ -47,8 +43,8 @@ The frontend keeps transient UI state in React:
 - Create-task modal drafts.
 - Settings/profile edit drafts.
 - Review-loop detail state loaded for the selected task.
-- Review-loop status, current round, and max rounds are also included in task
-  summaries so the board can label cards without opening the detail pane.
+- Review status is included in task summaries so the board can label cards
+  without opening the detail pane. Review is modeled as a single pass.
 
 The source of truth for saved project, task, profile, settings, and review-loop
 data remains SQLite through Tauri commands.
@@ -114,7 +110,7 @@ Current commands:
 | `list_agent_profiles` | Load agent profiles. |
 | `upsert_agent_profile` | Create or update an agent profile. |
 | `start_pair_loop` | Enable reviewer automation for a task. |
-| `run_pair_review` | Trigger an immediate review round for a task with a running Codex session. |
+| `run_pair_review` | Trigger an immediate reviewer pass for a task with a running Codex session. |
 | `stop_pair_loop` | Stop reviewer automation for a task. |
 | `get_task_review_loop` | Load a task's current review loop. |
 | `list_task_review_runs` | Load stored reviewer runs for a task. |
@@ -190,7 +186,7 @@ Useful backend log messages include:
   flag.
 - Watching a Codex session log.
 - Failure to emit session or review events.
-- Review round start, recorded verdict, reviewer output, and review-loop errors.
+- Review start, recorded verdict, reviewer output, and review-loop errors.
 
 ## Database Inspection
 
@@ -200,8 +196,8 @@ it with:
 ```bash
 sqlite3 "/path/to/nectus.sqlite3" ".tables"
 sqlite3 "/path/to/nectus.sqlite3" "select id, title, status, has_worktree, branch_name, active_session_id, last_session_id from tasks order by updated_at desc;"
-sqlite3 "/path/to/nectus.sqlite3" "select task_id, status, current_round, max_rounds, last_error from review_loops;"
-sqlite3 "/path/to/nectus.sqlite3" "select task_id, round, verdict, error from review_runs order by id desc limit 20;"
+sqlite3 "/path/to/nectus.sqlite3" "select task_id, status, last_error from review_loops;"
+sqlite3 "/path/to/nectus.sqlite3" "select task_id, verdict, error from review_runs order by id desc limit 20;"
 ```
 
 Do not edit the database directly unless the user explicitly asks for recovery
@@ -336,11 +332,11 @@ development only, a temporary bundle identifier change in
 `native/tauri.conf.json` can force a fresh prompt. Change it back before
 shipping.
 
-### Pair Loop Does Not Run
+### Review Does Not Run
 
 Check:
 
-- The review loop status is `running`.
+- The review loop status is `running` or `reviewing`.
 - The worker session is a Codex session that emits `session_idle`.
 - Manual `Start review` should emit `review_loop_updated` with status
   `reviewing` before the reviewer command finishes.
@@ -352,7 +348,6 @@ Check:
   and blocking-review phrase parsing are still accepted.
 - Worker feedback is written to the Codex PTY and submitted with carriage
   return (`\r`), matching the terminal Enter key.
-- `max_rounds` is between 1 and 10.
 
 Relevant code:
 

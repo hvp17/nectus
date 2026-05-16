@@ -106,8 +106,8 @@ export const api = {
   ): Promise<AgentProfile> {
     return invoke("upsert_agent_profile", { profile });
   },
-  async startPairLoop(taskId: number, reviewerProfileId: number, maxRounds: number): Promise<ReviewLoop> {
-    return invoke("start_pair_loop", { taskId, reviewerProfileId, maxRounds });
+  async startPairLoop(taskId: number, reviewerProfileId: number): Promise<ReviewLoop> {
+    return invoke("start_pair_loop", { taskId, reviewerProfileId });
   },
   async runPairReview(taskId: number): Promise<ReviewLoop> {
     return invoke("run_pair_review", { taskId });

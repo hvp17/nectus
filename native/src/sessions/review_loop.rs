@@ -32,13 +32,10 @@ pub(super) fn spawn_review_on_session_idle(
             &session_id,
             &cwd,
         ) {
-            tracing::warn!(?error, task_id, session_id = %session_id, "review round failed");
-            let _ = db.lock().set_review_loop_state(
-                task_id,
-                ReviewLoopStatus::Error,
-                None,
-                Some(&error),
-            );
+            tracing::warn!(?error, task_id, session_id = %session_id, "review failed");
+            let _ = db
+                .lock()
+                .set_review_loop_state(task_id, ReviewLoopStatus::Error, Some(&error));
             emit_review_loop_update(&app, &db, task_id, None);
         }
     });
@@ -52,23 +49,12 @@ fn run_review_round(
     session_id: &str,
     cwd: &Path,
 ) -> Result<(), String> {
-    let (review_loop, task, reviewer) = {
+    let (task, reviewer) = {
         let database = db.lock();
         let Some(review_loop) = database.review_loop_by_task_id(task_id)? else {
             return Ok(());
         };
         if review_loop.status != ReviewLoopStatus::Running {
-            return Ok(());
-        }
-        if review_loop.current_round >= review_loop.max_rounds {
-            database.set_review_loop_state(
-                task_id,
-                ReviewLoopStatus::MaxRoundsReached,
-                None,
-                None,
-            )?;
-            drop(database);
-            emit_review_loop_update(&app, &db, task_id, None);
             return Ok(());
         }
         let task = database
@@ -77,20 +63,18 @@ fn run_review_round(
         let reviewer = database
             .agent_profile_by_id(review_loop.reviewer_profile_id)?
             .ok_or_else(|| "Reviewer profile not found".to_string())?;
-        database.set_review_loop_state(task_id, ReviewLoopStatus::Reviewing, None, None)?;
-        (review_loop, task, reviewer)
+        database.set_review_loop_state(task_id, ReviewLoopStatus::Reviewing, None)?;
+        (task, reviewer)
     };
     emit_review_loop_update(&app, &db, task_id, None);
 
-    let round = review_loop.current_round + 1;
     let prompt = build_review_prompt(&task);
-    tracing::info!(task_id, round, reviewer = %reviewer.name, "starting review round");
+    tracing::info!(task_id, reviewer = %reviewer.name, "starting review");
     let reviewer_output = match run_reviewer_command(&reviewer, cwd, &prompt) {
         Ok(output) => output,
         Err(error) => {
             let run = db.lock().record_review_run(ReviewRunInput {
                 task_id,
-                round,
                 reviewer_profile_id: reviewer.id,
                 verdict: ReviewVerdict::Unknown,
                 prompt,
@@ -105,25 +89,20 @@ fn run_review_round(
     let error = (verdict == ReviewVerdict::Unknown).then(|| UNCLEAR_REVIEW_ERROR.to_string());
     let run = db.lock().record_review_run(ReviewRunInput {
         task_id,
-        round,
         reviewer_profile_id: reviewer.id,
         verdict,
         prompt,
         output: reviewer_output.clone(),
         error,
     })?;
-    tracing::info!(task_id, round, verdict = %verdict.as_str(), "recorded review round");
+    tracing::info!(task_id, verdict = %verdict.as_str(), "recorded review");
     emit_review_loop_update(&app, &db, task_id, Some(run));
 
     let Some(review_loop) = db.lock().review_loop_by_task_id(task_id)? else {
         return Ok(());
     };
-    if matches!(
-        verdict,
-        ReviewVerdict::NeedsChanges | ReviewVerdict::Feedback
-    ) && review_loop.status == ReviewLoopStatus::Running
-    {
-        let feedback = format_worker_review_feedback(round, &reviewer_output);
+    if should_forward_review_feedback(verdict, review_loop.status) {
+        let feedback = format_worker_review_feedback(&reviewer_output);
         send_worker_feedback(sessions, session_id, &feedback)?;
     }
 
@@ -297,16 +276,26 @@ Do not mark style nits or minor preference differences as blockers.
     )
 }
 
-pub(super) fn format_worker_review_feedback(round: i64, reviewer_output: &str) -> String {
+pub(super) fn format_worker_review_feedback(reviewer_output: &str) -> String {
     format!(
         "\
-AI reviewer round {round} returned this review:
+AI reviewer returned this review:
 
 {reviewer_output}
 
 Decide which findings are valid, make the necessary code or test changes, and explain any review feedback you intentionally do not apply.
 ",
         reviewer_output = reviewer_output.trim()
+    )
+}
+
+fn should_forward_review_feedback(verdict: ReviewVerdict, status: ReviewLoopStatus) -> bool {
+    matches!(
+        verdict,
+        ReviewVerdict::NeedsChanges | ReviewVerdict::Feedback
+    ) && matches!(
+        status,
+        ReviewLoopStatus::Running | ReviewLoopStatus::FeedbackSent
     )
 }
 
@@ -336,8 +325,6 @@ mod tests {
             last_session_cwd: Some("/tmp/repo-worktrees/feat/settings".to_string()),
             last_session_label: None,
             review_loop_status: None,
-            review_loop_current_round: None,
-            review_loop_max_rounds: None,
             created_at: "now".to_string(),
             updated_at: "now".to_string(),
         }
@@ -440,11 +427,28 @@ mod tests {
 
     #[test]
     fn formats_review_feedback_for_worker_agent() {
-        let feedback = format_worker_review_feedback(2, "Blocking issue: missing test");
+        let feedback = format_worker_review_feedback("Blocking issue: missing test");
 
-        assert!(feedback.contains("AI reviewer round 2"));
+        assert!(feedback.contains("AI reviewer returned this review"));
+        assert!(!feedback.contains("round"));
         assert!(feedback.contains("Blocking issue: missing test"));
         assert!(feedback.contains("Decide which findings are valid"));
+    }
+
+    #[test]
+    fn forwards_single_review_feedback_after_terminal_review() {
+        assert!(should_forward_review_feedback(
+            ReviewVerdict::Feedback,
+            ReviewLoopStatus::FeedbackSent
+        ));
+        assert!(should_forward_review_feedback(
+            ReviewVerdict::NeedsChanges,
+            ReviewLoopStatus::FeedbackSent
+        ));
+        assert!(!should_forward_review_feedback(
+            ReviewVerdict::Pass,
+            ReviewLoopStatus::Passed
+        ));
     }
 
     #[test]

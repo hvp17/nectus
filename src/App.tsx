@@ -69,9 +69,7 @@ function App() {
     startSession,
     stopSession,
     resumeSession,
-    startPairLoop,
     startReview,
-    stopPairLoop,
     onSessionExit,
     onSessionInput,
     agentProfiles,
@@ -184,9 +182,7 @@ function App() {
                   onStopSession={stopSession}
                   onResumeSession={resumeSession}
                   onStartSession={startSession}
-                  onStartPairLoop={startPairLoop}
                   onStartReview={startReview}
-                  onStopPairLoop={stopPairLoop}
                   onUpdateStatus={updateStatus}
                   onSessionExit={onSessionExit}
                   onSessionInput={onSessionInput}

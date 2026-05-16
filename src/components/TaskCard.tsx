@@ -25,7 +25,7 @@ const reviewLoopStatusLabels: Record<ReviewLoopStatus, string> = {
   running: "Review ready",
   reviewing: "Reviewing",
   passed: "Review passed",
-  max_rounds_reached: "Review limit",
+  feedback_sent: "Review feedback",
   error: "Review error",
   stopped: "Review stopped",
 };
@@ -34,22 +34,10 @@ const reviewLoopBadgeVariants: Record<ReviewLoopStatus, "default" | "secondary" 
   running: "secondary",
   reviewing: "default",
   passed: "secondary",
-  max_rounds_reached: "destructive",
+  feedback_sent: "destructive",
   error: "destructive",
   stopped: "outline",
 };
-
-function getReviewRoundLabel(task: TaskSummary) {
-  if (typeof task.reviewLoopCurrentRound !== "number" || typeof task.reviewLoopMaxRounds !== "number") {
-    return undefined;
-  }
-
-  if (task.reviewLoopCurrentRound <= 0) {
-    return `Max ${task.reviewLoopMaxRounds}`;
-  }
-
-  return `Round ${task.reviewLoopCurrentRound}/${task.reviewLoopMaxRounds}`;
-}
 
 interface TaskCardProps {
   task: TaskSummary;
@@ -103,7 +91,6 @@ export function TaskCard({
   );
   const reviewStatus = task.reviewLoopStatus ?? undefined;
   const reviewStatusLabel = reviewStatus ? reviewLoopStatusLabels[reviewStatus] : undefined;
-  const reviewRoundLabel = getReviewRoundLabel(task);
 
   return (
     <Card
@@ -222,7 +209,6 @@ export function TaskCard({
               {reviewStatus === "passed" && <CircleCheckBig size={11} />}
               {reviewStatusLabel}
             </Badge>
-            {reviewRoundLabel && <span className="task-review-round">{reviewRoundLabel}</span>}
           </div>
         )}
 

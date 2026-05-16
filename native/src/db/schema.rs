@@ -1,11 +1,11 @@
-use super::{now, rows::rows, Database};
+use super::{now, Database};
 use crate::git_ops;
 use crate::models::{AgentKind, DensityMode, ThemeMode};
 use rusqlite::params;
 use std::path::PathBuf;
 
 impl Database {
-    pub(super) fn migrate(&self) -> Result<(), String> {
+    pub(super) fn create_schema(&self) -> Result<(), String> {
         self.conn
             .execute_batch(
                 "
@@ -77,133 +77,28 @@ impl Database {
                 CREATE TABLE IF NOT EXISTS review_loops (
                   task_id INTEGER PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
                   reviewer_profile_id INTEGER NOT NULL REFERENCES agent_profiles(id),
-                  max_rounds INTEGER NOT NULL,
-                  current_round INTEGER NOT NULL DEFAULT 0,
                   status TEXT NOT NULL,
                   last_error TEXT,
                   created_at TEXT NOT NULL,
-                  updated_at TEXT NOT NULL,
-                  CHECK (max_rounds >= 1 AND max_rounds <= 10),
-                  CHECK (current_round >= 0)
+                  updated_at TEXT NOT NULL
                 );
 
                 CREATE TABLE IF NOT EXISTS review_runs (
                   id INTEGER PRIMARY KEY AUTOINCREMENT,
                   task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-                  round INTEGER NOT NULL,
                   reviewer_profile_id INTEGER NOT NULL REFERENCES agent_profiles(id),
                   verdict TEXT NOT NULL,
                   prompt TEXT NOT NULL,
                   output TEXT NOT NULL,
                   error TEXT,
-                  created_at TEXT NOT NULL,
-                  CHECK (round >= 1)
+                  created_at TEXT NOT NULL
                 );
 
-                CREATE INDEX IF NOT EXISTS review_runs_task_round_idx
-                ON review_runs(task_id, round, id);
+                CREATE INDEX IF NOT EXISTS review_runs_task_idx
+                ON review_runs(task_id, id);
                 ",
             )
-            .map_err(|error| format!("Failed to migrate database: {error}"))?;
-
-        self.add_missing_column("tasks", "last_session_id", "TEXT")?;
-        self.add_missing_column("tasks", "last_session_agent", "TEXT")?;
-        self.add_missing_column("tasks", "last_session_cwd", "TEXT")?;
-        self.add_missing_column("tasks", "last_session_label", "TEXT")?;
-        self.add_missing_column("tasks", "prompt", "TEXT")?;
-        self.add_missing_column(
-            "agent_profiles",
-            "agent_kind",
-            "TEXT NOT NULL DEFAULT 'custom'",
-        )?;
-        self.add_missing_column("agent_profiles", "model", "TEXT")?;
-        self.add_missing_column("app_settings", "theme", "TEXT NOT NULL DEFAULT 'system'")?;
-        self.add_missing_column(
-            "app_settings",
-            "density",
-            "TEXT NOT NULL DEFAULT 'comfortable'",
-        )?;
-        self.migrate_legacy_worktrees()
-    }
-
-    fn add_missing_column(
-        &self,
-        table: &str,
-        column: &str,
-        column_type: &str,
-    ) -> Result<(), String> {
-        let mut stmt = self
-            .conn
-            .prepare(&format!("PRAGMA table_info({table})"))
-            .map_err(|error| format!("Failed to inspect {table} table: {error}"))?;
-        let columns = rows(
-            stmt.query_map([], |row| row.get::<_, String>(1))
-                .map_err(|error| format!("Failed to inspect {table} columns: {error}"))?,
-        )?;
-        if columns.iter().any(|name| name == column) {
-            return Ok(());
-        }
-
-        self.conn
-            .execute(
-                &format!("ALTER TABLE {table} ADD COLUMN {column} {column_type}"),
-                [],
-            )
-            .map_err(|error| format!("Failed to add {column} column: {error}"))?;
-        Ok(())
-    }
-
-    fn migrate_legacy_worktrees(&self) -> Result<(), String> {
-        let has_worktrees_table: bool = self
-            .conn
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'worktrees')",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(|error| format!("Failed to inspect legacy worktrees table: {error}"))?;
-        if !has_worktrees_table {
-            return Ok(());
-        }
-
-        let task_count: i64 = self
-            .conn
-            .query_row("SELECT COUNT(*) FROM tasks", [], |row| row.get(0))
-            .map_err(|error| format!("Failed to inspect tasks table: {error}"))?;
-        if task_count > 0 {
-            return Ok(());
-        }
-
-        let mut columns = self
-            .conn
-            .prepare("PRAGMA table_info(worktrees)")
-            .map_err(|error| format!("Failed to inspect worktrees table: {error}"))?;
-        let column_names = rows(
-            columns
-                .query_map([], |row| row.get::<_, String>(1))
-                .map_err(|error| format!("Failed to inspect worktrees columns: {error}"))?,
-        )?;
-        let has_worktree_expr = if column_names.iter().any(|name| name == "has_worktree") {
-            "has_worktree"
-        } else {
-            "1"
-        };
-
-        self.conn
-            .execute_batch(&format!(
-                "
-                INSERT INTO tasks
-                  (id, repo_id, title, status, pr_url, agent_profile_id, active_session_id, last_session_id, last_session_agent, last_session_cwd, last_session_label,
-                   has_worktree, branch_name, worktree_path, created_at, updated_at)
-                SELECT id, repo_id, task_title, status, pr_url, agent_profile_id, active_session_id, active_session_id, NULL, NULL, NULL,
-                       {has_worktree_expr},
-                       CASE WHEN {has_worktree_expr} = 1 THEN branch_name ELSE NULL END,
-                       CASE WHEN {has_worktree_expr} = 1 THEN path ELSE NULL END,
-                       created_at, updated_at
-                FROM worktrees;
-                "
-            ))
-            .map_err(|error| format!("Failed to migrate legacy worktrees: {error}"))
+            .map_err(|error| format!("Failed to create database schema: {error}"))
     }
 
     pub(super) fn seed_agent_profiles(&self) -> Result<(), String> {
@@ -257,23 +152,6 @@ impl Database {
                 ],
             )
             .map_err(|error| format!("Failed to seed app settings: {error}"))?;
-        self.conn
-            .execute(
-                "
-                UPDATE app_settings
-                SET theme = COALESCE(theme, ?1),
-                    density = COALESCE(density, ?2),
-                    updated_at = ?3
-                WHERE id = 1
-                  AND (theme IS NULL OR density IS NULL)
-                ",
-                params![
-                    ThemeMode::System.as_str(),
-                    DensityMode::Comfortable.as_str(),
-                    now
-                ],
-            )
-            .map_err(|error| format!("Failed to backfill app settings: {error}"))?;
         Ok(())
     }
 
@@ -289,7 +167,12 @@ impl Database {
                     "UPDATE repos SET default_worktree_root = ?1 WHERE id = ?2",
                     params![default_root, repo.id],
                 )
-                .map_err(|error| format!("Failed to refresh repository worktree root: {error}"))?;
+                .map_err(|error| {
+                    format!(
+                        "Failed to refresh default worktree root for {}: {error}",
+                        repo.name
+                    )
+                })?;
         }
         Ok(())
     }

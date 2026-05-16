@@ -71,8 +71,7 @@ function renderTaskDetailDrawer(input?: {
   attention?: TaskAttention;
   reviewLoop?: ReviewLoop | null;
   reviewRuns?: ReviewRun[];
-  onStartPairLoop?: (task: TaskSummary, reviewerProfileId: number, maxRounds: number) => void;
-  onStartReview?: (task: TaskSummary, reviewerProfileId: number, maxRounds: number) => void;
+  onStartReview?: (task: TaskSummary, reviewerProfileId: number) => void;
   onUpdateStatus?: (task: TaskSummary, status: TaskSummary["status"]) => void;
 }) {
   return render(
@@ -88,9 +87,7 @@ function renderTaskDetailDrawer(input?: {
       onStopSession={vi.fn()}
       onResumeSession={vi.fn()}
       onStartSession={vi.fn()}
-      onStartPairLoop={input?.onStartPairLoop ?? vi.fn()}
       onStartReview={input?.onStartReview ?? vi.fn()}
-      onStopPairLoop={vi.fn()}
       onUpdateStatus={input?.onUpdateStatus ?? vi.fn()}
       onSessionExit={vi.fn()}
       onSessionInput={vi.fn()}
@@ -120,14 +117,13 @@ describe("TaskDetailDrawer", () => {
     expect(detail).toHaveAttribute("title", message);
   });
 
-  it("starts a pair loop with the selected reviewer", () => {
-    const onStartPairLoop = vi.fn();
+  it("shows single-review controls without rounds", () => {
+    renderTaskDetailDrawer();
 
-    renderTaskDetailDrawer({ onStartPairLoop });
-
-    screen.getByRole("button", { name: /start pair loop/i }).click();
-
-    expect(onStartPairLoop).toHaveBeenCalledWith(task, 2, 3);
+    expect(screen.getByRole("combobox", { name: /reviewer/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /start pair loop/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("spinbutton", { name: /max rounds/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/round/i)).not.toBeInTheDocument();
   });
 
   it("starts an immediate review from the workflow stepper", () => {
@@ -137,7 +133,7 @@ describe("TaskDetailDrawer", () => {
 
     screen.getByRole("tab", { name: /start review/i }).click();
 
-    expect(onStartReview).toHaveBeenCalledWith(task, 2, 3);
+    expect(onStartReview).toHaveBeenCalledWith(task, 2);
   });
 
   it("runs task workflow actions from the sidebar stepper", () => {
@@ -148,7 +144,7 @@ describe("TaskDetailDrawer", () => {
     renderTaskDetailDrawer({ task: inReviewTask, onStartReview, onUpdateStatus });
 
     screen.getByRole("tab", { name: /start review/i }).click();
-    expect(onStartReview).toHaveBeenCalledWith(inReviewTask, 2, 3);
+    expect(onStartReview).toHaveBeenCalledWith(inReviewTask, 2);
 
     expect(screen.getByRole("tab", { name: /create pr/i })).toBeDisabled();
 
@@ -162,8 +158,6 @@ describe("TaskDetailDrawer", () => {
       reviewLoop: {
         taskId: task.id,
         reviewerProfileId: 2,
-        maxRounds: 3,
-        currentRound: 0,
         status: "reviewing",
         lastError: null,
         createdAt: "2026-05-15T00:00:00.000Z",
@@ -181,9 +175,7 @@ describe("TaskDetailDrawer", () => {
       reviewLoop: {
         taskId: task.id,
         reviewerProfileId: 2,
-        maxRounds: 3,
-        currentRound: 1,
-        status: "running",
+        status: "feedback_sent",
         lastError: null,
         createdAt: "2026-05-15T00:00:00.000Z",
         updatedAt: "2026-05-15T00:02:00.000Z",
@@ -192,7 +184,6 @@ describe("TaskDetailDrawer", () => {
         {
           id: 10,
           taskId: task.id,
-          round: 1,
           reviewerProfileId: 2,
           verdict: "feedback",
           prompt: "Review the worktree",
@@ -203,7 +194,8 @@ describe("TaskDetailDrawer", () => {
       ],
     });
 
-    expect(screen.getByText(/round 1 of 3/i)).toBeInTheDocument();
+    expect(screen.getByText(/review feedback/i)).toBeInTheDocument();
+    expect(screen.queryByText(/round/i)).not.toBeInTheDocument();
     expect(screen.getByText(/consider moving this into a smaller helper/i)).toBeInTheDocument();
     expect(screen.getByText("Feedback")).toBeInTheDocument();
   });

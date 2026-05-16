@@ -3,7 +3,7 @@ export type SessionState = "running" | "stopped";
 export type AgentKind = "codex" | "claude" | "gemini" | "custom";
 export type ThemeMode = "system" | "light" | "dark";
 export type DensityMode = "comfortable" | "compact";
-export type ReviewLoopStatus = "running" | "reviewing" | "passed" | "max_rounds_reached" | "error" | "stopped";
+export type ReviewLoopStatus = "running" | "reviewing" | "passed" | "feedback_sent" | "error" | "stopped";
 export type ReviewVerdict = "pass" | "needs_changes" | "feedback" | "unknown";
 
 export interface Repo {
@@ -34,8 +34,6 @@ export interface TaskSummary {
   lastSessionCwd?: string | null;
   lastSessionLabel?: string | null;
   reviewLoopStatus?: ReviewLoopStatus | null;
-  reviewLoopCurrentRound?: number | null;
-  reviewLoopMaxRounds?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -55,8 +53,6 @@ export interface AgentProfile {
 export interface ReviewLoop {
   taskId: number;
   reviewerProfileId: number;
-  maxRounds: number;
-  currentRound: number;
   status: ReviewLoopStatus;
   lastError?: string | null;
   createdAt: string;
@@ -66,7 +62,6 @@ export interface ReviewLoop {
 export interface ReviewRun {
   id: number;
   taskId: number;
-  round: number;
   reviewerProfileId: number;
   verdict: ReviewVerdict;
   prompt: string;

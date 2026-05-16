@@ -72,12 +72,10 @@ describe("TaskCard", () => {
   it("shows completed review status on the card", () => {
     renderTaskCard(undefined, {
       reviewLoopStatus: "passed",
-      reviewLoopCurrentRound: 2,
-      reviewLoopMaxRounds: 3,
     });
 
     expect(screen.getByText("Review passed")).toBeInTheDocument();
-    expect(screen.getByText("Round 2/3")).toBeInTheDocument();
+    expect(screen.queryByText(/round/i)).not.toBeInTheDocument();
   });
 
   it("warns that worktree task deletion removes the worktree from disk", async () => {

@@ -144,8 +144,6 @@ export function useApp() {
               ...task,
               status: reviewLoop.status === "passed" ? "done" : task.status,
               reviewLoopStatus: reviewLoop.status,
-              reviewLoopCurrentRound: reviewLoop.currentRound,
-              reviewLoopMaxRounds: reviewLoop.maxRounds,
             }
           : task,
       ),
@@ -258,27 +256,27 @@ export function useApp() {
     }
   };
 
-  const startPairLoop = async (task: TaskSummary, reviewerProfileId: number, maxRounds: number) => {
+  const startPairLoop = async (task: TaskSummary, reviewerProfileId: number) => {
     setMessage(null);
 
     try {
-      const reviewLoop = await api.startPairLoop(task.id, reviewerProfileId, maxRounds);
+      const reviewLoop = await api.startPairLoop(task.id, reviewerProfileId);
       const reviewRuns = await api.listTaskReviewRuns(task.id);
       setSelectedReviewLoop(reviewLoop);
       setSelectedReviewRuns(reviewRuns);
-      setMessage("Pair loop: Started");
+      setMessage("Review: Started");
     } catch (error) {
       setMessage(String(error));
     }
   };
 
-  const startReview = async (task: TaskSummary, reviewerProfileId: number, maxRounds: number) => {
+  const startReview = async (task: TaskSummary, reviewerProfileId: number) => {
     setMessage(null);
 
     try {
       let reviewLoop = selectedReviewLoop;
-      if (!reviewLoop || ["passed", "max_rounds_reached", "error", "stopped"].includes(reviewLoop.status)) {
-        reviewLoop = await api.startPairLoop(task.id, reviewerProfileId, maxRounds);
+      if (!reviewLoop || ["passed", "feedback_sent", "error", "stopped"].includes(reviewLoop.status)) {
+        reviewLoop = await api.startPairLoop(task.id, reviewerProfileId);
       }
       const runningLoop = await api.runPairReview(task.id);
       const reviewRuns = await api.listTaskReviewRuns(task.id);
@@ -287,7 +285,7 @@ export function useApp() {
         nextLoop.status === "running" ? { ...nextLoop, status: "reviewing" } : nextLoop,
       );
       setSelectedReviewRuns(reviewRuns);
-      setMessage("Pair loop: Review started");
+      setMessage("Review: Started");
     } catch (error) {
       setMessage(String(error));
     }
@@ -299,7 +297,7 @@ export function useApp() {
     try {
       const reviewLoop = await api.stopPairLoop(task.id);
       setSelectedReviewLoop(reviewLoop);
-      setMessage("Pair loop: Stopped");
+      setMessage("Review: Stopped");
     } catch (error) {
       setMessage(String(error));
     }

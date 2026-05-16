@@ -16,6 +16,32 @@ fn seeds_default_agent_profiles() {
 }
 
 #[test]
+fn review_tables_store_singular_review_data() {
+    let db = Database::open_in_memory().unwrap();
+
+    let review_loop_columns: Vec<String> = db
+        .conn
+        .prepare("PRAGMA table_info(review_loops)")
+        .unwrap()
+        .query_map([], |row| row.get::<_, String>(1))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    let review_run_columns: Vec<String> = db
+        .conn
+        .prepare("PRAGMA table_info(review_runs)")
+        .unwrap()
+        .query_map([], |row| row.get::<_, String>(1))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+
+    assert!(!review_loop_columns.contains(&"max_rounds".to_string()));
+    assert!(!review_loop_columns.contains(&"current_round".to_string()));
+    assert!(!review_run_columns.contains(&"round".to_string()));
+}
+
+#[test]
 fn seeds_and_updates_global_app_settings() {
     let db = Database::open_in_memory().unwrap();
     let profiles = db.list_agent_profiles().unwrap();
@@ -51,76 +77,6 @@ fn seeds_and_updates_global_app_settings() {
     assert_eq!(updated.default_branch_prefix.as_deref(), Some("feat/"));
     assert_eq!(updated.theme, ThemeMode::Dark);
     assert_eq!(updated.density, DensityMode::Compact);
-}
-
-#[test]
-fn migrates_existing_app_settings_without_theme_or_density() {
-    let db_dir = tempdir().unwrap();
-    let db_path = db_dir.path().join("nectus.sqlite");
-    {
-        let conn = Connection::open(&db_path).unwrap();
-        conn.execute_batch(
-            "
-            CREATE TABLE app_settings (
-              id INTEGER PRIMARY KEY CHECK (id = 1),
-              default_agent_profile_id INTEGER,
-              default_worktree_root_pattern TEXT NOT NULL,
-              default_branch_prefix TEXT,
-              updated_at TEXT NOT NULL
-            );
-            INSERT INTO app_settings
-              (id, default_agent_profile_id, default_worktree_root_pattern, default_branch_prefix, updated_at)
-            VALUES (1, NULL, '../legacy/{repoName}', 'tgadliuskas/', '2026-05-15T00:00:00Z');
-            ",
-        )
-        .unwrap();
-    }
-
-    let db = Database::open(db_path).unwrap();
-    let settings = db.get_app_settings().unwrap();
-
-    assert_eq!(
-        settings.default_worktree_root_pattern,
-        "../legacy/{repoName}"
-    );
-    assert_eq!(
-        settings.default_branch_prefix.as_deref(),
-        Some("tgadliuskas/")
-    );
-    assert_eq!(settings.theme, ThemeMode::System);
-    assert_eq!(settings.density, DensityMode::Comfortable);
-}
-
-#[test]
-fn backfills_null_theme_and_density_on_existing_app_settings() {
-    let db_dir = tempdir().unwrap();
-    let db_path = db_dir.path().join("nectus.sqlite");
-    {
-        let conn = Connection::open(&db_path).unwrap();
-        conn.execute_batch(
-            "
-            CREATE TABLE app_settings (
-              id INTEGER PRIMARY KEY CHECK (id = 1),
-              default_agent_profile_id INTEGER,
-              default_worktree_root_pattern TEXT NOT NULL,
-              default_branch_prefix TEXT,
-              theme TEXT,
-              density TEXT,
-              updated_at TEXT NOT NULL
-            );
-            INSERT INTO app_settings
-              (id, default_agent_profile_id, default_worktree_root_pattern, default_branch_prefix, theme, density, updated_at)
-            VALUES (1, NULL, '../legacy/{repoName}', NULL, NULL, NULL, '2026-05-15T00:00:00Z');
-            ",
-        )
-        .unwrap();
-    }
-
-    let db = Database::open(db_path).unwrap();
-    let settings = db.get_app_settings().unwrap();
-
-    assert_eq!(settings.theme, ThemeMode::System);
-    assert_eq!(settings.density, DensityMode::Comfortable);
 }
 
 #[test]
@@ -244,20 +200,17 @@ fn starts_review_loop_and_records_review_runs() {
         .unwrap();
 
     let review_loop = db
-        .start_review_loop(task.id, reviewer.id, 3)
+        .start_review_loop(task.id, reviewer.id)
         .expect("review loop should start");
 
     assert_eq!(review_loop.task_id, task.id);
     assert_eq!(review_loop.reviewer_profile_id, reviewer.id);
-    assert_eq!(review_loop.max_rounds, 3);
-    assert_eq!(review_loop.current_round, 0);
     assert_eq!(review_loop.status, ReviewLoopStatus::Running);
     assert_eq!(review_loop.last_error, None);
 
     let run = db
         .record_review_run(ReviewRunInput {
             task_id: task.id,
-            round: 1,
             reviewer_profile_id: reviewer.id,
             verdict: ReviewVerdict::NeedsChanges,
             prompt: "Review this diff".to_string(),
@@ -267,19 +220,17 @@ fn starts_review_loop_and_records_review_runs() {
         .expect("review run should be recorded");
 
     assert_eq!(run.task_id, task.id);
-    assert_eq!(run.round, 1);
     assert_eq!(run.verdict, ReviewVerdict::NeedsChanges);
 
     let review_loop = db.review_loop_by_task_id(task.id).unwrap().unwrap();
-    assert_eq!(review_loop.current_round, 1);
-    assert_eq!(review_loop.status, ReviewLoopStatus::Running);
+    assert_eq!(review_loop.status, ReviewLoopStatus::FeedbackSent);
 
     let runs = db.list_review_runs(task.id).unwrap();
     assert_eq!(runs, vec![run]);
 }
 
 #[test]
-fn feedback_review_run_keeps_loop_running_for_another_round() {
+fn feedback_review_run_marks_loop_feedback_sent() {
     let db = Database::open_in_memory().unwrap();
     let repo_dir = tempdir().unwrap();
     std::process::Command::new("git")
@@ -305,11 +256,10 @@ fn feedback_review_run_keeps_loop_running_for_another_round() {
             None,
         )
         .unwrap();
-    db.start_review_loop(task.id, reviewer.id, 3).unwrap();
+    db.start_review_loop(task.id, reviewer.id).unwrap();
 
     db.record_review_run(ReviewRunInput {
         task_id: task.id,
-        round: 1,
         reviewer_profile_id: reviewer.id,
         verdict: ReviewVerdict::Feedback,
         prompt: "Review this diff".to_string(),
@@ -320,8 +270,7 @@ fn feedback_review_run_keeps_loop_running_for_another_round() {
 
     let review_loop = db.review_loop_by_task_id(task.id).unwrap().unwrap();
 
-    assert_eq!(review_loop.current_round, 1);
-    assert_eq!(review_loop.status, ReviewLoopStatus::Running);
+    assert_eq!(review_loop.status, ReviewLoopStatus::FeedbackSent);
 }
 
 #[test]
@@ -353,11 +302,10 @@ fn passing_review_marks_task_done() {
         .unwrap();
     db.update_task_metadata(task.id, None, Some(TaskStatus::InProgress), None)
         .unwrap();
-    db.start_review_loop(task.id, reviewer.id, 3).unwrap();
+    db.start_review_loop(task.id, reviewer.id).unwrap();
 
     db.record_review_run(ReviewRunInput {
         task_id: task.id,
-        round: 1,
         reviewer_profile_id: reviewer.id,
         verdict: ReviewVerdict::Pass,
         prompt: "Review this diff".to_string(),
@@ -398,10 +346,9 @@ fn list_tasks_includes_review_loop_summary() {
             None,
         )
         .unwrap();
-    db.start_review_loop(task.id, reviewer.id, 3).unwrap();
+    db.start_review_loop(task.id, reviewer.id).unwrap();
     db.record_review_run(ReviewRunInput {
         task_id: task.id,
-        round: 1,
         reviewer_profile_id: reviewer.id,
         verdict: ReviewVerdict::Pass,
         prompt: "Review this diff".to_string(),
@@ -417,12 +364,10 @@ fn list_tasks_includes_review_loop_summary() {
         .expect("task should be returned");
 
     assert_eq!(task.review_loop_status, Some(ReviewLoopStatus::Passed));
-    assert_eq!(task.review_loop_current_round, Some(1));
-    assert_eq!(task.review_loop_max_rounds, Some(3));
 }
 
 #[test]
-fn review_loop_rejects_invalid_reviewer_and_round_limit() {
+fn review_loop_rejects_invalid_reviewer() {
     let db = Database::open_in_memory().unwrap();
     let repo_dir = tempdir().unwrap();
     std::process::Command::new("git")
@@ -436,18 +381,10 @@ fn review_loop_rejects_invalid_reviewer_and_round_limit() {
     let task = db
         .create_task_record(repo.id, "Task".to_string(), None, None, false, None)
         .unwrap();
-    let reviewer = db.list_agent_profiles().unwrap()[1].id;
-
-    let missing_reviewer = db.start_review_loop(task.id, 9999, 3).unwrap_err();
+    let missing_reviewer = db.start_review_loop(task.id, 9999).unwrap_err();
     assert!(
         missing_reviewer.contains("Reviewer profile not found"),
         "{missing_reviewer}"
-    );
-
-    let invalid_rounds = db.start_review_loop(task.id, reviewer, 0).unwrap_err();
-    assert!(
-        invalid_rounds.contains("Max review rounds"),
-        "{invalid_rounds}"
     );
 }
 

@@ -78,24 +78,21 @@ describe("api", () => {
     });
   });
 
-  it("starts a pair loop with reviewer profile and max rounds", async () => {
+  it("starts review tracking with reviewer profile", async () => {
     mockedInvoke.mockResolvedValueOnce({
       taskId: 2,
       reviewerProfileId: 4,
-      maxRounds: 3,
-      currentRound: 0,
       status: "running",
       lastError: null,
       createdAt: "2026-05-15T12:00:00.000Z",
       updatedAt: "2026-05-15T12:00:00.000Z",
     });
 
-    await api.startPairLoop(2, 4, 3);
+    await api.startPairLoop(2, 4);
 
     expect(mockedInvoke).toHaveBeenCalledWith("start_pair_loop", {
       taskId: 2,
       reviewerProfileId: 4,
-      maxRounds: 3,
     });
   });
 

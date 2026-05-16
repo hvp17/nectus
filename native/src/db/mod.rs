@@ -12,9 +12,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 mod agent_profiles;
-mod migrations;
 mod review_loops;
 mod rows;
+mod schema;
 
 use rows::{app_settings_from_row, repo_from_row, rows, task_from_row};
 
@@ -32,7 +32,7 @@ impl Database {
         let conn =
             Connection::open(path).map_err(|error| format!("Failed to open database: {error}"))?;
         let db = Self { conn };
-        db.migrate()?;
+        db.create_schema()?;
         db.seed_agent_profiles()?;
         db.seed_app_settings()?;
         Ok(db)
@@ -43,7 +43,7 @@ impl Database {
         let db = Self {
             conn: Connection::open_in_memory().map_err(|error| error.to_string())?,
         };
-        db.migrate()?;
+        db.create_schema()?;
         db.seed_agent_profiles()?;
         db.seed_app_settings()?;
         Ok(db)
@@ -255,7 +255,7 @@ impl Database {
                    t.has_worktree, t.branch_name, t.worktree_path, t.active_session_id,
                    t.last_session_id, t.last_session_agent, t.last_session_cwd, t.last_session_label,
                    t.created_at, t.updated_at,
-                   rl.status, rl.current_round, rl.max_rounds
+                   rl.status
             FROM tasks t
             LEFT JOIN agent_profiles a ON a.id = t.agent_profile_id
             LEFT JOIN review_loops rl ON rl.task_id = t.id
@@ -295,7 +295,7 @@ impl Database {
                        t.has_worktree, t.branch_name, t.worktree_path, t.active_session_id,
                        t.last_session_id, t.last_session_agent, t.last_session_cwd, t.last_session_label,
                        t.created_at, t.updated_at,
-                       rl.status, rl.current_round, rl.max_rounds
+                       rl.status
                 FROM tasks t
                 LEFT JOIN agent_profiles a ON a.id = t.agent_profile_id
                 LEFT JOIN review_loops rl ON rl.task_id = t.id
