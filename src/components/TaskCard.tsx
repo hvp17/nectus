@@ -21,6 +21,7 @@ import { formatAttentionReason, type TaskAttention } from "../sessionAttention";
 import { TaskSummary } from "../types";
 
 const DRAG_START_THRESHOLD_PX = 3;
+const TASK_DRAG_SELECTION_LOCK_CLASS = "task-drag-selection-lock";
 
 interface TaskCardProps {
   task: TaskSummary;
@@ -78,6 +79,18 @@ export function TaskCard({
     let ghost: HTMLElement | null = null;
     let ghostOffsetX = 0;
     let ghostOffsetY = 0;
+    let selectionLocked = false;
+
+    const lockPageSelection = () => {
+      selectionLocked = true;
+      document.body.classList.add(TASK_DRAG_SELECTION_LOCK_CLASS);
+    };
+
+    const unlockPageSelection = () => {
+      if (!selectionLocked) return;
+      selectionLocked = false;
+      document.body.classList.remove(TASK_DRAG_SELECTION_LOCK_CLASS);
+    };
 
     const getClientPosition = (event: PointerEvent) => ({
       clientX: Number.isFinite(event.clientX) ? event.clientX : startX,
@@ -115,10 +128,13 @@ export function TaskCard({
       window.removeEventListener("pointermove", onPointerMove, true);
       window.removeEventListener("pointerup", onPointerUp, true);
       window.removeEventListener("pointercancel", onPointerCancel, true);
+      unlockPageSelection();
     };
 
     const onPointerMove = (event: PointerEvent) => {
       if (event.pointerId !== pointerId) return;
+      event.preventDefault();
+
       const { clientX, clientY } = getClientPosition(event);
       const deltaX = clientX - startX;
       const deltaY = clientY - startY;
@@ -164,6 +180,7 @@ export function TaskCard({
       startX = event.clientX;
       startY = event.clientY;
       dragging = false;
+      lockPageSelection();
       window.addEventListener("pointermove", onPointerMove, true);
       window.addEventListener("pointerup", onPointerUp, true);
       window.addEventListener("pointercancel", onPointerCancel, true);

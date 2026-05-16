@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TaskAttention } from "../sessionAttention";
 import type { TaskSummary } from "../types";
 import { TaskCard } from "./TaskCard";
@@ -47,7 +47,27 @@ function renderTaskCard(attention?: TaskAttention, taskOverride: Partial<TaskSum
   );
 }
 
+function dispatchPointerEvent(
+  target: Element | Node | Window | Document,
+  type: string,
+  init: { pointerId: number; button?: number; clientX: number; clientY: number },
+) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    pointerId: { value: init.pointerId },
+    button: { value: init.button ?? 0 },
+    clientX: { value: init.clientX },
+    clientY: { value: init.clientY },
+  });
+  fireEvent(target, event);
+  return event;
+}
+
 describe("TaskCard", () => {
+  afterEach(() => {
+    document.body.classList.remove("task-drag-selection-lock");
+  });
+
   it("truncates long finished-card content", () => {
     const message = "A".repeat(220);
 
@@ -76,5 +96,25 @@ describe("TaskCard", () => {
     expect(
       screen.getByText(`This removes "${task.title}" and its worktree from Nectus and disk.`),
     ).toBeInTheDocument();
+  });
+
+  it("locks page text selection while tracking a pointer drag", () => {
+    renderTaskCard();
+
+    const card = screen.getByRole("button", { name: /finished task with long output/i });
+
+    dispatchPointerEvent(card, "pointerdown", { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    expect(document.body).toHaveClass("task-drag-selection-lock");
+
+    const moveEvent = dispatchPointerEvent(window, "pointermove", {
+      pointerId: 1,
+      clientX: 11,
+      clientY: 10,
+    });
+
+    expect(moveEvent.defaultPrevented).toBe(true);
+
+    dispatchPointerEvent(window, "pointerup", { pointerId: 1, clientX: 11, clientY: 10 });
+    expect(document.body).not.toHaveClass("task-drag-selection-lock");
   });
 });
