@@ -3,6 +3,8 @@ export type SessionState = "running" | "stopped";
 export type AgentKind = "codex" | "claude" | "gemini" | "custom";
 export type ThemeMode = "system" | "light" | "dark";
 export type DensityMode = "comfortable" | "compact";
+export type ReviewLoopStatus = "running" | "reviewing" | "passed" | "max_rounds_reached" | "error" | "stopped";
+export type ReviewVerdict = "pass" | "needs_changes" | "unknown";
 
 export interface Repo {
   id: number;
@@ -45,6 +47,35 @@ export interface AgentProfile {
   env: Record<string, string>;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ReviewLoop {
+  taskId: number;
+  reviewerProfileId: number;
+  maxRounds: number;
+  currentRound: number;
+  status: ReviewLoopStatus;
+  lastError?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReviewRun {
+  id: number;
+  taskId: number;
+  round: number;
+  reviewerProfileId: number;
+  verdict: ReviewVerdict;
+  prompt: string;
+  output: string;
+  error?: string | null;
+  createdAt: string;
+}
+
+export interface ReviewLoopUpdatedEvent {
+  taskId: number;
+  reviewLoop: ReviewLoop;
+  reviewRun?: ReviewRun | null;
 }
 
 export interface AppSettings {

@@ -124,6 +124,99 @@ fn upserts_agent_profile_with_args_and_env() {
 }
 
 #[test]
+fn starts_review_loop_and_records_review_runs() {
+    let db = Database::open_in_memory().unwrap();
+    let repo_dir = tempdir().unwrap();
+    std::process::Command::new("git")
+        .arg("init")
+        .arg(repo_dir.path())
+        .output()
+        .unwrap();
+    let repo = db
+        .add_repo(repo_dir.path().to_string_lossy().to_string())
+        .unwrap();
+    let profiles = db.list_agent_profiles().unwrap();
+    let reviewer = profiles
+        .iter()
+        .find(|profile| profile.agent_kind == AgentKind::Claude)
+        .unwrap();
+    let task = db
+        .create_task_record(
+            repo.id,
+            "Implement settings panel".to_string(),
+            Some("Add project settings and tests".to_string()),
+            Some(profiles[0].id),
+            false,
+            None,
+        )
+        .unwrap();
+
+    let review_loop = db
+        .start_review_loop(task.id, reviewer.id, 3)
+        .expect("review loop should start");
+
+    assert_eq!(review_loop.task_id, task.id);
+    assert_eq!(review_loop.reviewer_profile_id, reviewer.id);
+    assert_eq!(review_loop.max_rounds, 3);
+    assert_eq!(review_loop.current_round, 0);
+    assert_eq!(review_loop.status, ReviewLoopStatus::Running);
+    assert_eq!(review_loop.last_error, None);
+
+    let run = db
+        .record_review_run(ReviewRunInput {
+            task_id: task.id,
+            round: 1,
+            reviewer_profile_id: reviewer.id,
+            verdict: ReviewVerdict::NeedsChanges,
+            prompt: "Review this diff".to_string(),
+            output: "Blocking issue: missing error path".to_string(),
+            error: None,
+        })
+        .expect("review run should be recorded");
+
+    assert_eq!(run.task_id, task.id);
+    assert_eq!(run.round, 1);
+    assert_eq!(run.verdict, ReviewVerdict::NeedsChanges);
+
+    let review_loop = db.review_loop_by_task_id(task.id).unwrap().unwrap();
+    assert_eq!(review_loop.current_round, 1);
+    assert_eq!(review_loop.status, ReviewLoopStatus::Running);
+
+    let runs = db.list_review_runs(task.id).unwrap();
+    assert_eq!(runs, vec![run]);
+}
+
+#[test]
+fn review_loop_rejects_invalid_reviewer_and_round_limit() {
+    let db = Database::open_in_memory().unwrap();
+    let repo_dir = tempdir().unwrap();
+    std::process::Command::new("git")
+        .arg("init")
+        .arg(repo_dir.path())
+        .output()
+        .unwrap();
+    let repo = db
+        .add_repo(repo_dir.path().to_string_lossy().to_string())
+        .unwrap();
+    let task = db
+        .create_task_record(repo.id, "Task".to_string(), None, None, false, None)
+        .unwrap();
+    let reviewer = db.list_agent_profiles().unwrap()[1].id;
+
+    let missing_reviewer = db.start_review_loop(task.id, 9999, 3).unwrap_err();
+    assert!(
+        missing_reviewer.contains("Reviewer profile not found"),
+        "{missing_reviewer}"
+    );
+
+    let invalid_rounds = db.start_review_loop(task.id, reviewer, 0).unwrap_err();
+    assert!(
+        invalid_rounds.contains("Max review rounds"),
+        "{invalid_rounds}"
+    );
+}
+
+#[test]
 fn creates_task_without_worktree() {
     let db = Database::open_in_memory().unwrap();
     let repo_dir = tempdir().unwrap();

@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   Square,
@@ -14,22 +15,29 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { truncateFinishedAttentionPreview } from "./attentionPreview";
 import { TerminalPane } from "../TerminalPane";
 import { cn } from "../lib/utils";
 import { formatAttentionReason, type TaskAttention } from "../sessionAttention";
-import { TaskSummary, TaskStatus } from "../types";
+import { AgentProfile, ReviewLoop, ReviewRun, TaskSummary, TaskStatus } from "../types";
 
 interface TaskDetailDrawerProps {
   task: TaskSummary | undefined;
   attention?: TaskAttention;
+  agentProfiles: AgentProfile[];
+  reviewLoop?: ReviewLoop | null;
+  reviewRuns: ReviewRun[];
   isExpanded: boolean;
   onClose: () => void;
   onToggleExpanded: () => void;
   onStopSession: (sessionId: string) => void;
   onResumeSession: (task: TaskSummary) => void;
   onStartSession: (task: TaskSummary) => void;
+  onStartPairLoop: (task: TaskSummary, reviewerProfileId: number, maxRounds: number) => void;
+  onStopPairLoop: (task: TaskSummary) => void;
   onUpdateStatus: (task: TaskSummary, status: TaskStatus) => void;
   onSessionExit: (sessionId: string) => void;
   onSessionInput: (sessionId: string) => void;
@@ -42,20 +50,54 @@ const statusLabels: Record<TaskStatus, string> = {
   review: "Review",
   done: "Done",
 };
+const reviewLoopStatusLabels: Record<ReviewLoop["status"], string> = {
+  running: "Running",
+  reviewing: "Reviewing",
+  passed: "Passed",
+  max_rounds_reached: "Max rounds",
+  error: "Error",
+  stopped: "Stopped",
+};
+const reviewVerdictLabels: Record<ReviewRun["verdict"], string> = {
+  pass: "Pass",
+  needs_changes: "Needs changes",
+  unknown: "Unknown",
+};
 
 export function TaskDetailDrawer({
   task,
   attention,
+  agentProfiles,
+  reviewLoop,
+  reviewRuns,
   isExpanded,
   onClose,
   onToggleExpanded,
   onStopSession,
   onResumeSession,
   onStartSession,
+  onStartPairLoop,
+  onStopPairLoop,
   onUpdateStatus,
   onSessionExit,
   onSessionInput,
 }: TaskDetailDrawerProps) {
+  const reviewerProfiles = useMemo(
+    () => agentProfiles,
+    [agentProfiles],
+  );
+  const defaultReviewerProfileId =
+    reviewerProfiles.find((profile) => profile.id !== task?.agentProfileId)?.id ?? reviewerProfiles[0]?.id;
+  const [reviewerProfileId, setReviewerProfileId] = useState<number | undefined>(
+    reviewLoop?.reviewerProfileId ?? defaultReviewerProfileId,
+  );
+  const [maxRounds, setMaxRounds] = useState(reviewLoop?.maxRounds ?? 3);
+  useEffect(() => {
+    setReviewerProfileId(reviewLoop?.reviewerProfileId ?? defaultReviewerProfileId);
+    setMaxRounds(reviewLoop?.maxRounds ?? 3);
+  }, [defaultReviewerProfileId, reviewLoop?.maxRounds, reviewLoop?.reviewerProfileId]);
+  const latestReviewRun = reviewRuns.at(-1);
+  const pairLoopActive = Boolean(reviewLoop && !["passed", "max_rounds_reached", "error", "stopped"].includes(reviewLoop.status));
   if (!task) return null;
   const canResumeSession = task.agentKind === "codex" || task.agentKind === "claude";
   const attentionDetail = attention?.prompt ?? attention?.message;
@@ -205,6 +247,99 @@ export function TaskDetailDrawer({
                   </>
                 )}
              </dl>
+
+             <section className="pair-loop-panel" aria-label="AI pair loop">
+               <div className="flex items-center justify-between gap-3">
+                 <div>
+                   <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">AI Pair Loop</p>
+                   <p className="mt-1 text-xs text-muted-foreground">
+                     {reviewLoop
+                       ? `Round ${reviewLoop.currentRound} of ${reviewLoop.maxRounds}`
+                       : "Worker + reviewer"}
+                   </p>
+                 </div>
+                 {reviewLoop && (
+                   <Badge variant="outline" className="rounded-md">
+                     {reviewLoopStatusLabels[reviewLoop.status]}
+                   </Badge>
+                 )}
+               </div>
+
+               <div className="mt-3 grid grid-cols-[1fr_76px] gap-2">
+                 <div className="min-w-0">
+                   <Label htmlFor="pair-loop-reviewer" className="sr-only">
+                     Reviewer
+                   </Label>
+                   <Select
+                     value={reviewerProfileId?.toString()}
+                     onValueChange={(value) => setReviewerProfileId(Number(value))}
+                     disabled={pairLoopActive || reviewerProfiles.length === 0}
+                   >
+                     <SelectTrigger id="pair-loop-reviewer" className="h-8 w-full justify-between text-xs">
+                       <SelectValue placeholder="Reviewer" />
+                     </SelectTrigger>
+                     <SelectContent>
+                       {reviewerProfiles.map((profile) => (
+                         <SelectItem key={profile.id} value={profile.id.toString()} className="text-xs">
+                           {profile.name}
+                         </SelectItem>
+                       ))}
+                     </SelectContent>
+                   </Select>
+                 </div>
+                 <div>
+                   <Label htmlFor="pair-loop-rounds" className="sr-only">
+                     Max rounds
+                   </Label>
+                   <Input
+                     id="pair-loop-rounds"
+                     type="number"
+                     min={1}
+                     max={10}
+                     value={maxRounds}
+                     disabled={pairLoopActive}
+                     onChange={(event) => setMaxRounds(Number(event.target.value))}
+                     className="h-8 text-xs"
+                   />
+                 </div>
+               </div>
+
+               <div className="mt-3 flex gap-2">
+                 {pairLoopActive ? (
+                   <Button variant="outline" className="h-8 flex-1 gap-2" onClick={() => onStopPairLoop(task)}>
+                     <Square size={13} />
+                     Stop Pair Loop
+                   </Button>
+                 ) : (
+                   <Button
+                     variant="outline"
+                     className="h-8 flex-1 gap-2"
+                     disabled={!reviewerProfileId || reviewerProfiles.length === 0}
+                     onClick={() => {
+                       if (!reviewerProfileId) return;
+                       onStartPairLoop(task, reviewerProfileId, Math.min(10, Math.max(1, maxRounds || 3)));
+                     }}
+                   >
+                     <Play size={13} />
+                     Start Pair Loop
+                   </Button>
+                 )}
+               </div>
+
+               {latestReviewRun && (
+                 <div className="review-run-summary">
+                   <div className="flex items-center justify-between gap-2">
+                     <span className="text-xs font-semibold">Review {latestReviewRun.round}</span>
+                     <Badge variant="outline" className="rounded-md">
+                       {reviewVerdictLabels[latestReviewRun.verdict]}
+                     </Badge>
+                   </div>
+                   <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-xs text-muted-foreground">
+                     {latestReviewRun.error ?? latestReviewRun.output}
+                   </p>
+                 </div>
+               )}
+             </section>
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col">

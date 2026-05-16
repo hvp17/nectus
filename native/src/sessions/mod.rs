@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 mod codex;
 mod command;
+mod review_loop;
 
 #[cfg(test)]
 use codex::{codex_session_event_from_line, CodexSessionEvent};
@@ -161,6 +162,7 @@ impl SessionManager {
         if agent.agent_kind == AgentKind::Codex {
             spawn_codex_event_watcher(
                 app.clone(),
+                db.clone(),
                 self.sessions.clone(),
                 task.id,
                 session_id.clone(),

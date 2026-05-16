@@ -6,7 +6,8 @@ mod sessions;
 use crate::db::Database;
 use crate::models::{
     AgentKind, AgentProfile, AgentProfileInput, AppResult, AppSettings, AppSettingsInput, Repo,
-    Session, SessionExitedEvent, SessionOutputSnapshot, TaskStatus, TaskSummary,
+    ReviewLoop, ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskStatus,
+    TaskSummary,
 };
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
@@ -96,6 +97,34 @@ fn upsert_agent_profile(
     state: State<'_, AppState>,
 ) -> AppResult<AgentProfile> {
     state.db.lock().upsert_agent_profile(profile)
+}
+
+#[tauri::command]
+fn start_pair_loop(
+    task_id: i64,
+    reviewer_profile_id: i64,
+    max_rounds: i64,
+    state: State<'_, AppState>,
+) -> AppResult<ReviewLoop> {
+    state
+        .db
+        .lock()
+        .start_review_loop(task_id, reviewer_profile_id, max_rounds)
+}
+
+#[tauri::command]
+fn stop_pair_loop(task_id: i64, state: State<'_, AppState>) -> AppResult<ReviewLoop> {
+    state.db.lock().stop_review_loop(task_id)
+}
+
+#[tauri::command]
+fn get_task_review_loop(task_id: i64, state: State<'_, AppState>) -> AppResult<Option<ReviewLoop>> {
+    state.db.lock().review_loop_by_task_id(task_id)
+}
+
+#[tauri::command]
+fn list_task_review_runs(task_id: i64, state: State<'_, AppState>) -> AppResult<Vec<ReviewRun>> {
+    state.db.lock().list_review_runs(task_id)
 }
 
 #[tauri::command]
@@ -236,6 +265,10 @@ pub fn run() {
             delete_task,
             list_agent_profiles,
             upsert_agent_profile,
+            start_pair_loop,
+            stop_pair_loop,
+            get_task_review_loop,
+            list_task_review_runs,
             start_session,
             resume_session,
             stop_session,

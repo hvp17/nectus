@@ -73,6 +73,35 @@ impl Database {
                 CREATE UNIQUE INDEX IF NOT EXISTS tasks_repo_branch_unique
                 ON tasks(repo_id, branch_name)
                 WHERE has_worktree = 1;
+
+                CREATE TABLE IF NOT EXISTS review_loops (
+                  task_id INTEGER PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+                  reviewer_profile_id INTEGER NOT NULL REFERENCES agent_profiles(id),
+                  max_rounds INTEGER NOT NULL,
+                  current_round INTEGER NOT NULL DEFAULT 0,
+                  status TEXT NOT NULL,
+                  last_error TEXT,
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  CHECK (max_rounds >= 1 AND max_rounds <= 10),
+                  CHECK (current_round >= 0)
+                );
+
+                CREATE TABLE IF NOT EXISTS review_runs (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                  round INTEGER NOT NULL,
+                  reviewer_profile_id INTEGER NOT NULL REFERENCES agent_profiles(id),
+                  verdict TEXT NOT NULL,
+                  prompt TEXT NOT NULL,
+                  output TEXT NOT NULL,
+                  error TEXT,
+                  created_at TEXT NOT NULL,
+                  CHECK (round >= 1)
+                );
+
+                CREATE INDEX IF NOT EXISTS review_runs_task_round_idx
+                ON review_runs(task_id, round, id);
                 ",
             )
             .map_err(|error| format!("Failed to migrate database: {error}"))?;

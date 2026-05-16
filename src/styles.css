@@ -716,6 +716,20 @@ textarea {
   line-height: 1.45;
 }
 
+.pair-loop-panel {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.review-run-summary {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--muted);
+}
+
 .terminal-title {
   justify-content: flex-start;
   padding: 14px 24px;
@@ -733,7 +747,7 @@ textarea {
 }
 
 .terminal-host[data-empty]::before {
-  content: "Select a task and start Codex or Claude.";
+  content: "Select a task and start an agent.";
   color: var(--muted-foreground);
   font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
   font-size: 13px;

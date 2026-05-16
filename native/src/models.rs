@@ -70,6 +70,116 @@ pub struct TaskSummary {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+pub enum ReviewLoopStatus {
+    Running,
+    Reviewing,
+    Passed,
+    MaxRoundsReached,
+    Error,
+    Stopped,
+}
+
+impl ReviewLoopStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ReviewLoopStatus::Running => "running",
+            ReviewLoopStatus::Reviewing => "reviewing",
+            ReviewLoopStatus::Passed => "passed",
+            ReviewLoopStatus::MaxRoundsReached => "max_rounds_reached",
+            ReviewLoopStatus::Error => "error",
+            ReviewLoopStatus::Stopped => "stopped",
+        }
+    }
+
+    pub fn from_str(value: &str) -> Result<Self, String> {
+        match value {
+            "running" => Ok(ReviewLoopStatus::Running),
+            "reviewing" => Ok(ReviewLoopStatus::Reviewing),
+            "passed" => Ok(ReviewLoopStatus::Passed),
+            "max_rounds_reached" => Ok(ReviewLoopStatus::MaxRoundsReached),
+            "error" => Ok(ReviewLoopStatus::Error),
+            "stopped" => Ok(ReviewLoopStatus::Stopped),
+            _ => Err(format!("Unknown review loop status: {value}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewVerdict {
+    Pass,
+    NeedsChanges,
+    Unknown,
+}
+
+impl ReviewVerdict {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ReviewVerdict::Pass => "pass",
+            ReviewVerdict::NeedsChanges => "needs_changes",
+            ReviewVerdict::Unknown => "unknown",
+        }
+    }
+
+    pub fn from_str(value: &str) -> Result<Self, String> {
+        match value {
+            "pass" => Ok(ReviewVerdict::Pass),
+            "needs_changes" => Ok(ReviewVerdict::NeedsChanges),
+            "unknown" => Ok(ReviewVerdict::Unknown),
+            _ => Err(format!("Unknown review verdict: {value}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewLoop {
+    pub task_id: i64,
+    pub reviewer_profile_id: i64,
+    pub max_rounds: i64,
+    pub current_round: i64,
+    pub status: ReviewLoopStatus,
+    pub last_error: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewRun {
+    pub id: i64,
+    pub task_id: i64,
+    pub round: i64,
+    pub reviewer_profile_id: i64,
+    pub verdict: ReviewVerdict,
+    pub prompt: String,
+    pub output: String,
+    pub error: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewRunInput {
+    pub task_id: i64,
+    pub round: i64,
+    pub reviewer_profile_id: i64,
+    pub verdict: ReviewVerdict,
+    pub prompt: String,
+    pub output: String,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewLoopUpdatedEvent {
+    pub task_id: i64,
+    pub review_loop: ReviewLoop,
+    pub review_run: Option<ReviewRun>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum AgentKind {
     Codex,
     Claude,

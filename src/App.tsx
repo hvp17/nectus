@@ -37,6 +37,8 @@ function App() {
     setSelectedTaskId,
     selectedRepo,
     selectedTask,
+    selectedReviewLoop,
+    selectedReviewRuns,
     taskAttention,
     selectedTaskAttention,
     counts,
@@ -65,6 +67,8 @@ function App() {
     startSession,
     stopSession,
     resumeSession,
+    startPairLoop,
+    stopPairLoop,
     onSessionExit,
     onSessionInput,
     agentProfiles,
@@ -164,6 +168,9 @@ function App() {
                 <TaskDetailDrawer
                   task={selectedTask}
                   attention={selectedTaskAttention}
+                  agentProfiles={agentProfiles}
+                  reviewLoop={selectedReviewLoop}
+                  reviewRuns={selectedReviewRuns}
                   isExpanded={detailExpanded}
                   onToggleExpanded={() => setDetailExpanded((current) => !current)}
                   onClose={() => {
@@ -173,6 +180,8 @@ function App() {
                   onStopSession={stopSession}
                   onResumeSession={resumeSession}
                   onStartSession={startSession}
+                  onStartPairLoop={startPairLoop}
+                  onStopPairLoop={stopPairLoop}
                   onUpdateStatus={updateStatus}
                   onSessionExit={onSessionExit}
                   onSessionInput={onSessionInput}
