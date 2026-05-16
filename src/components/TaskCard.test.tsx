@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { TaskAttention } from "../sessionAttention";
 import type { TaskSummary } from "../types";
@@ -28,11 +28,11 @@ const task: TaskSummary = {
   updatedAt: "2026-05-15T00:00:00.000Z",
 };
 
-function renderTaskCard(attention?: TaskAttention) {
+function renderTaskCard(attention?: TaskAttention, taskOverride: Partial<TaskSummary> = {}) {
   return render(
     <TooltipProvider>
       <TaskCard
-        task={task}
+        task={{ ...task, ...taskOverride }}
         attention={attention}
         isSelected={false}
         busy={false}
@@ -65,5 +65,16 @@ describe("TaskCard", () => {
 
     expect(screen.queryByText(message)).not.toBeInTheDocument();
     expect(detail).toHaveAttribute("title", message);
+  });
+
+  it("warns that worktree task deletion removes the worktree from disk", async () => {
+    renderTaskCard();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete task" }));
+
+    expect(await screen.findByText("Delete task?")).toBeInTheDocument();
+    expect(
+      screen.getByText(`This removes "${task.title}" and its worktree from Nectus and disk.`),
+    ).toBeInTheDocument();
   });
 });

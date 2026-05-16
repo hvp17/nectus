@@ -45,6 +45,7 @@ function App() {
     message,
     setMessage,
     busy,
+    deletingTaskIds,
     loading,
     refresh,
     addProject,
@@ -158,6 +159,7 @@ function App() {
                   }}
                   onDeleteTask={requestDeleteTask}
                   onUpdateStatus={updateStatus}
+                  deletingTaskIds={deletingTaskIds}
                   counts={counts}
                   busy={busy}
                   loading={loading}

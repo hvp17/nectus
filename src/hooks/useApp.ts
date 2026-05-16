@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { toast } from "sonner";
 import { api } from "../api";
 import { defaultDemoSettings, demoAgentProfiles, demoRepo, demoTasks } from "../demoData";
 import {
@@ -40,6 +41,7 @@ export function useApp() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [deletingTaskIds, setDeletingTaskIds] = useState<ReadonlySet<number>>(() => new Set());
   const taskForm = useCreateTaskForm(settings?.defaultAgentProfileId ?? selectedAgentProfileId);
   const {
     createTaskOpen,
@@ -63,6 +65,7 @@ export function useApp() {
   const selectedTaskIdRef = useRef<number | undefined>(undefined);
   const selectedAgentProfileIdRef = useRef<number | undefined>(undefined);
   const tasksRef = useRef<TaskSummary[]>([]);
+  const deletingTaskIdsRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     selectedRepoIdRef.current = selectedRepoId;
@@ -79,6 +82,17 @@ export function useApp() {
   useEffect(() => {
     tasksRef.current = tasks;
   }, [tasks]);
+
+  const setTaskDeleting = (taskId: number, deleting: boolean) => {
+    const next = new Set(deletingTaskIdsRef.current);
+    if (deleting) {
+      next.add(taskId);
+    } else {
+      next.delete(taskId);
+    }
+    deletingTaskIdsRef.current = next;
+    setDeletingTaskIds(next);
+  };
 
   const selectedRepo = useMemo(() => repos.find((repo) => repo.id === selectedRepoId), [repos, selectedRepoId]);
   const visibleTasks = useMemo(() => {
@@ -420,34 +434,52 @@ export function useApp() {
     }
   };
 
-  const requestDeleteTask = async (task: TaskSummary) => {
+  const requestDeleteTask = (task: TaskSummary) => {
     setMessage(null);
     if (task.activeSessionId) {
-      setMessage("Stop the running session before deleting this task.");
+      toast.error("Delete blocked", {
+        description: "Stop the running session before deleting this task.",
+        duration: 5000,
+      });
+      return;
+    }
+    if (deletingTaskIdsRef.current.has(task.id)) {
       return;
     }
 
-    setBusy(true);
-    if (demoMode) {
-      setTasks((current) => current.filter((item) => item.id !== task.id));
-      setSelectedTaskId((current) => (current === task.id ? undefined : current));
-      setTaskAttention((current) => clearTaskAttention(current, task.id));
-      setMessage(`Deleted ${task.title}`);
-      setBusy(false);
-      return;
-    }
+    setTaskDeleting(task.id, true);
+    const toastId = toast.loading(`Deleting ${task.title}`, {
+      description: task.hasWorktree
+        ? "Removing task and worktree in the background."
+        : "Removing task in the background.",
+      duration: Infinity,
+    });
 
-    try {
-      await api.deleteTask(task.id);
-      setTasks((current) => current.filter((item) => item.id !== task.id));
-      setSelectedTaskId((current) => (current === task.id ? undefined : current));
-      setTaskAttention((current) => clearTaskAttention(current, task.id));
-      setMessage(`Deleted ${task.title}`);
-    } catch (error) {
-      setMessage(String(error));
-    } finally {
-      setBusy(false);
-    }
+    const runDelete = async () => {
+      try {
+        if (!demoMode) {
+          await api.deleteTask(task.id);
+        }
+        setTasks((current) => current.filter((item) => item.id !== task.id));
+        setSelectedTaskId((current) => (current === task.id ? undefined : current));
+        setTaskAttention((current) => clearTaskAttention(current, task.id));
+        toast.success(`Deleted ${task.title}`, {
+          id: toastId,
+          description: task.hasWorktree ? "Task and worktree removed." : "Task removed.",
+          duration: 5000,
+        });
+      } catch (error) {
+        toast.error("Delete failed", {
+          id: toastId,
+          description: String(error),
+          duration: 8000,
+        });
+      } finally {
+        setTaskDeleting(task.id, false);
+      }
+    };
+
+    void runDelete();
   };
 
   const saveAppSettings = async (input: AppSettingsInput) => {
@@ -542,6 +574,7 @@ export function useApp() {
     message,
     setMessage,
     busy,
+    deletingTaskIds,
     loading,
     refresh,
     addProject,

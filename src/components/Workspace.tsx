@@ -65,6 +65,7 @@ interface WorkspaceProps {
   onCreateTask: () => void;
   onDeleteTask: (task: TaskSummary) => void;
   onUpdateStatus: (task: TaskSummary, status: TaskStatus) => void;
+  deletingTaskIds: ReadonlySet<number>;
   counts: { active: number; dirty: number; review: number; needsInput: number; finished: number };
   busy: boolean;
   loading: boolean;
@@ -80,6 +81,7 @@ export function Workspace({
   onCreateTask,
   onDeleteTask,
   onUpdateStatus,
+  deletingTaskIds,
   counts,
   busy,
   loading,
@@ -207,6 +209,7 @@ export function Workspace({
                     attention={getTaskAttention(taskAttention, task.id)}
                     isSelected={selectedTaskId === task.id}
                     busy={busy}
+                    isDeleting={deletingTaskIds.has(task.id)}
                     isDragging={draggingTaskId === task.id}
                     onSelect={onSelectTask}
                     onDelete={onDeleteTask}
