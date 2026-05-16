@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, Plus, Save } from "lucide-react";
+import { Check, Cpu, GitBranch, Palette, Plus, Save, Star, Terminal } from "lucide-react";
 import { AgentLogo, ModelLogo } from "./AgentBrand";
+import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader } from "./ui/card";
 import { Input } from "./ui/input";
@@ -87,6 +88,9 @@ export function SettingsPage({
   const selectedDefaultProfile = defaultProfileOptions.find(
     (profile) => profile.id === settingsDraft.defaultAgentProfileId,
   );
+  const profileCountLabel = `${profileDrafts.length} ${profileDrafts.length === 1 ? "profile" : "profiles"}`;
+  const themeLabel = settingsDraft.theme[0].toUpperCase() + settingsDraft.theme.slice(1);
+  const densityLabel = settingsDraft.density[0].toUpperCase() + settingsDraft.density.slice(1);
 
   const updateProfileDraft = (index: number, patch: Partial<ProfileDraft>) => {
     setProfileDrafts((current) =>
@@ -131,16 +135,52 @@ export function SettingsPage({
   };
 
   return (
-    <section className="settings-page workspace p-10 overflow-auto max-w-[1040px] mx-auto w-full">
-      <header className="topbar">
+    <section className="settings-page workspace p-10 overflow-auto mx-auto w-full">
+      <header className="settings-hero">
         <div>
           <p className="eyebrow">Preferences</p>
           <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
         </div>
-        <Button variant="outline" size="sm" onClick={onBack} className="h-9">
-          Back to dashboard
-        </Button>
+        <div className="settings-hero-actions">
+          <div className="settings-profile-count" aria-label={profileCountLabel}>
+            <strong>{profileDrafts.length}</strong>
+            <span>{profileDrafts.length === 1 ? "profile" : "profiles"}</span>
+          </div>
+          <Button variant="outline" size="sm" onClick={onBack} className="h-9">
+            Back to dashboard
+          </Button>
+        </div>
       </header>
+
+      <div className="settings-overview" aria-label="Settings summary">
+        <div className="settings-overview-item">
+          <span className="settings-overview-icon">
+            {selectedDefaultProfile ? <AgentLogo agentKind={selectedDefaultProfile.agentKind} size="sm" /> : <Terminal size={15} />}
+          </span>
+          <span>
+            <small>Default agent</small>
+            <strong>{selectedDefaultProfile?.name ?? "No default"}</strong>
+          </span>
+        </div>
+        <div className="settings-overview-item">
+          <span className="settings-overview-icon">
+            <GitBranch size={15} />
+          </span>
+          <span>
+            <small>Worktree root</small>
+            <strong className="font-mono">{settingsDraft.defaultWorktreeRootPattern || "Unset"}</strong>
+          </span>
+        </div>
+        <div className="settings-overview-item">
+          <span className="settings-overview-icon">
+            <Palette size={15} />
+          </span>
+          <span>
+            <small>Interface</small>
+            <strong>{themeLabel} / {densityLabel}</strong>
+          </span>
+        </div>
+      </div>
 
       <div className="settings-stack">
         <section className="settings-section">
@@ -149,14 +189,25 @@ export function SettingsPage({
               <p className="eyebrow">Agents</p>
               <h3>Agent Profiles</h3>
             </div>
-            <Button type="button" variant="outline" size="sm" className="gap-2" onClick={addProfileDraft}>
-              <Plus size={14} />
-              Add Profile
-            </Button>
+            <div className="settings-section-actions">
+              <Badge variant="outline">{profileCountLabel}</Badge>
+              <Button type="button" variant="outline" size="sm" className="gap-2" onClick={addProfileDraft}>
+                <Plus size={14} />
+                Add Profile
+              </Button>
+            </div>
           </div>
           <div className="settings-section-content">
-            <div className="settings-field">
-              <Label htmlFor="default-agent-profile">Default agent</Label>
+            <div className="default-agent-strip">
+              <div className="default-agent-copy">
+                <span className="settings-overview-icon">
+                  {selectedDefaultProfile ? <AgentLogo agentKind={selectedDefaultProfile.agentKind} size="sm" /> : <Terminal size={15} />}
+                </span>
+                <span>
+                  <strong>Default agent</strong>
+                  <small>Used when a new task does not choose a specific profile.</small>
+                </span>
+              </div>
               <Select
                 value={settingsDraft.defaultAgentProfileId?.toString() ?? noDefaultProfileValue}
                 onValueChange={(value) =>
@@ -166,9 +217,8 @@ export function SettingsPage({
                   }))
                 }
               >
-                <SelectTrigger id="default-agent-profile" className="h-9 w-full justify-between">
+                <SelectTrigger id="default-agent-profile" aria-label="Default agent" className="h-9 w-full justify-between md:w-[280px]">
                   <span className="select-value-with-logo">
-                    {selectedDefaultProfile && <AgentLogo agentKind={selectedDefaultProfile.agentKind} size="sm" />}
                     <SelectValue />
                   </span>
                 </SelectTrigger>
@@ -191,6 +241,7 @@ export function SettingsPage({
                 <ProfileEditor
                   key={profile.id ?? `new-${index}`}
                   profile={profile}
+                  isDefault={Boolean(profile.id && profile.id === settingsDraft.defaultAgentProfileId)}
                   busy={busy}
                   onChange={(patch) => updateProfileDraft(index, patch)}
                   onSave={() => saveProfile(profile)}
@@ -288,11 +339,13 @@ export function SettingsPage({
 
 function ProfileEditor({
   profile,
+  isDefault,
   busy,
   onChange,
   onSave,
 }: {
   profile: ProfileDraft;
+  isDefault: boolean;
   busy: boolean;
   onChange: (patch: Partial<ProfileDraft>) => void;
   onSave: () => void;
@@ -300,22 +353,51 @@ function ProfileEditor({
   const presets = modelPresets[profile.agentKind];
   const modelValue = profile.model && presets.includes(profile.model) ? profile.model : profile.model ? customModelValue : cliDefaultModelValue;
   const selectedModel = modelValue === customModelValue ? profile.customModel : modelValue === cliDefaultModelValue ? null : modelValue;
+  const commandLabel = profile.command.trim() || "No command set";
+  const modelLabel = selectedModel || "CLI default";
+  const saveDisabled = busy || !profile.name.trim() || !profile.command.trim();
 
   return (
-    <Card size="sm" className="profile-editor bg-muted/40 shadow-none">
+    <Card size="sm" className="profile-editor shadow-none" data-agent-kind={profile.agentKind}>
       <CardHeader className="profile-editor-header p-0">
-        <AgentLogo agentKind={profile.agentKind} size="lg" className="profile-kind-mark" />
-        <div className="profile-title-fields">
-          <Input
-            aria-label="Profile name"
-            value={profile.name}
-            onChange={(event) => onChange({ name: event.target.value })}
-            className="profile-name-input"
-          />
+        <div className="profile-identity">
+          <AgentLogo agentKind={profile.agentKind} size="lg" className="profile-kind-mark" />
+          <div className="profile-title-fields">
+            <Input
+              aria-label="Profile name"
+              value={profile.name}
+              onChange={(event) => onChange({ name: event.target.value })}
+              className="profile-name-input"
+            />
+            <p className="profile-command-summary">
+              <Terminal size={13} />
+              <span className="font-mono">{commandLabel}</span>
+              <span aria-hidden="true">·</span>
+              <span>{modelLabel}</span>
+            </p>
+          </div>
+        </div>
+
+        <div className="profile-editor-toolbar">
+          <div className="profile-editor-badges">
+            {isDefault && (
+              <Badge variant="outline" className="profile-status-badge">
+                <Star size={11} />
+                Default
+              </Badge>
+            )}
+            <Badge variant="outline" className="profile-status-badge">
+              <AgentLogo agentKind={profile.agentKind} size="sm" />
+              {agentKindLabels[profile.agentKind]}
+            </Badge>
+            <Badge variant="outline" className="profile-status-badge">
+              <Cpu size={11} />
+              {modelLabel}
+            </Badge>
+          </div>
           <Select value={profile.agentKind} onValueChange={(value) => onChange({ agentKind: value as AgentKind })}>
-            <SelectTrigger aria-label="Agent kind" className="h-8 w-full justify-between">
+            <SelectTrigger aria-label="Agent kind" className="profile-kind-select h-8 justify-between">
               <span className="select-value-with-logo">
-                <AgentLogo agentKind={profile.agentKind} size="sm" />
                 <SelectValue />
               </span>
             </SelectTrigger>
@@ -330,20 +412,26 @@ function ProfileEditor({
               ))}
             </SelectContent>
           </Select>
+          <Button type="button" size="sm" className="gap-2" onClick={onSave} disabled={saveDisabled}>
+            <Check size={14} />
+            Save
+          </Button>
         </div>
-        <Button type="button" size="sm" className="gap-2" onClick={onSave} disabled={busy || !profile.name.trim() || !profile.command.trim()}>
-          <Check size={14} />
-          Save
-        </Button>
       </CardHeader>
 
       <CardContent className="profile-editor-grid p-0">
         <div className="settings-field">
-          <Label>Command</Label>
+          <Label className="settings-field-label">
+            <Terminal size={13} />
+            Command
+          </Label>
           <Input value={profile.command} onChange={(event) => onChange({ command: event.target.value })} className="font-mono" />
         </div>
         <div className="settings-field">
-          <Label>Model</Label>
+          <Label className="settings-field-label">
+            <Cpu size={13} />
+            Model
+          </Label>
           <Select
             value={modelValue}
             onValueChange={(value) => {
@@ -355,7 +443,6 @@ function ProfileEditor({
           >
             <SelectTrigger className="h-8 w-full justify-between">
               <span className="select-value-with-logo">
-                <ModelLogo agentKind={profile.agentKind} model={selectedModel} size="sm" />
                 <SelectValue />
               </span>
             </SelectTrigger>
@@ -393,7 +480,10 @@ function ProfileEditor({
           )}
         </div>
         <div className="settings-field">
-          <Label>Args</Label>
+          <Label className="settings-field-label">
+            <Terminal size={13} />
+            Args
+          </Label>
           <Textarea
             value={profile.argsText}
             onChange={(event) => onChange({ argsText: event.target.value })}
@@ -402,7 +492,10 @@ function ProfileEditor({
           />
         </div>
         <div className="settings-field">
-          <Label>Environment</Label>
+          <Label className="settings-field-label">
+            <Cpu size={13} />
+            Environment
+          </Label>
           <Textarea
             value={profile.envText}
             onChange={(event) => onChange({ envText: event.target.value })}
