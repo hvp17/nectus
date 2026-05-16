@@ -154,6 +154,31 @@ fn start_pair_loop(
 }
 
 #[tauri::command]
+fn run_pair_review(
+    task_id: i64,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<ReviewLoop> {
+    let review_loop = state
+        .db
+        .lock()
+        .review_loop_by_task_id(task_id)?
+        .ok_or_else(|| "Start a pair loop before running a review".to_string())?;
+    if review_loop.status != crate::models::ReviewLoopStatus::Running {
+        return Err(format!(
+            "Review loop is not ready to run: {}",
+            review_loop.status.as_str()
+        )
+        .into());
+    }
+    state
+        .sessions
+        .run_pair_review(app, state.db.clone(), task_id)
+        .map_err(AppError::from)?;
+    Ok(review_loop)
+}
+
+#[tauri::command]
 fn stop_pair_loop(task_id: i64, state: State<'_, AppState>) -> AppResult<ReviewLoop> {
     app_result(state.db.lock().stop_review_loop(task_id))
 }
@@ -314,6 +339,7 @@ pub fn run() {
             list_agent_profiles,
             upsert_agent_profile,
             start_pair_loop,
+            run_pair_review,
             stop_pair_loop,
             get_task_review_loop,
             list_task_review_runs,

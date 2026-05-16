@@ -2,8 +2,8 @@ use super::command::resolve_agent_command;
 use super::RunningSession;
 use crate::db::Database;
 use crate::models::{
-    AgentProfile, ReviewLoopStatus, ReviewLoopUpdatedEvent, ReviewRunInput, ReviewVerdict,
-    TaskSummary,
+    AgentKind, AgentProfile, ReviewLoopStatus, ReviewLoopUpdatedEvent, ReviewRunInput,
+    ReviewVerdict, TaskSummary,
 };
 use parking_lot::Mutex;
 use std::collections::HashMap;
@@ -117,7 +117,11 @@ fn run_review_round(
     let Some(review_loop) = db.lock().review_loop_by_task_id(task_id)? else {
         return Ok(());
     };
-    if verdict == ReviewVerdict::NeedsChanges && review_loop.status == ReviewLoopStatus::Running {
+    if matches!(
+        verdict,
+        ReviewVerdict::NeedsChanges | ReviewVerdict::Feedback
+    ) && review_loop.status == ReviewLoopStatus::Running
+    {
         let feedback = format_worker_review_feedback(round, &reviewer_output);
         send_worker_feedback(sessions, session_id, &feedback)?;
     }
@@ -163,6 +167,13 @@ fn run_reviewer_command(
     for arg in &reviewer.args {
         command.arg(arg);
     }
+    let stdin_prompt = match reviewer_prompt_args(reviewer, prompt) {
+        Some(args) => {
+            command.args(args);
+            false
+        }
+        None => true,
+    };
     for (key, value) in &reviewer.env {
         command.env(key, value);
     }
@@ -175,10 +186,14 @@ fn run_reviewer_command(
     let mut child = command
         .spawn()
         .map_err(|error| format!("Failed to start reviewer {}: {error}", reviewer.name))?;
-    if let Some(stdin) = child.stdin.as_mut() {
-        stdin
-            .write_all(prompt.as_bytes())
-            .map_err(|error| format!("Failed to send review prompt: {error}"))?;
+    if stdin_prompt {
+        if let Some(stdin) = child.stdin.as_mut() {
+            stdin
+                .write_all(prompt.as_bytes())
+                .map_err(|error| format!("Failed to send review prompt: {error}"))?;
+        }
+    } else {
+        drop(child.stdin.take());
     }
     let output = child
         .wait_with_output()
@@ -193,6 +208,13 @@ fn run_reviewer_command(
         });
     }
     Ok(stdout)
+}
+
+fn reviewer_prompt_args(reviewer: &AgentProfile, prompt: &str) -> Option<Vec<String>> {
+    match reviewer.agent_kind {
+        AgentKind::Claude | AgentKind::Gemini => Some(vec!["-p".to_string(), prompt.to_string()]),
+        AgentKind::Codex | AgentKind::Custom => None,
+    }
 }
 
 fn send_worker_feedback(
@@ -213,6 +235,15 @@ pub(super) fn parse_review_verdict(output: &str) -> ReviewVerdict {
         let line = line.trim();
         if line.eq_ignore_ascii_case("pass") || line.to_ascii_lowercase().starts_with("pass:") {
             return ReviewVerdict::Pass;
+        }
+        if line.eq_ignore_ascii_case("NECTUS_NO_BLOCKERS") {
+            return ReviewVerdict::Pass;
+        }
+        if line.eq_ignore_ascii_case("NECTUS_BLOCKERS") {
+            return ReviewVerdict::NeedsChanges;
+        }
+        if line.eq_ignore_ascii_case("NECTUS_FEEDBACK") {
+            return ReviewVerdict::Feedback;
         }
     }
 
@@ -245,8 +276,14 @@ Start from:
 - git diff --no-ext-diff HEAD --
 
 Review only for blocking correctness issues, regressions, missing tests, unsafe behavior, or clear requirement misses.
-Respond with PASS if there are no blocking issues.
-If there are blocking issues, write concise findings beginning with \"Blocking issue:\" and include file paths when possible.
+Return one exact verdict token on the first line:
+- NECTUS_BLOCKERS when there are blockers that must be fixed before this task can be accepted.
+- NECTUS_FEEDBACK when there are no blockers, but there is meaningful implementation or approach feedback worth considering.
+- NECTUS_NO_BLOCKERS when there are no blockers and no material feedback.
+
+After NECTUS_BLOCKERS, list only concise blockers with file paths when possible.
+After NECTUS_FEEDBACK, list concise non-blocking implementation or approach suggestions.
+Do not mark style nits or minor preference differences as blockers.
 ",
         title = task.title,
         brief = task.prompt.as_deref().unwrap_or("No task brief provided.")
@@ -269,7 +306,7 @@ Decide which findings are valid, make the necessary code or test changes, and ex
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{ReviewVerdict, TaskStatus, TaskSummary};
+    use crate::models::{AgentKind, AgentProfile, ReviewVerdict, TaskStatus, TaskSummary};
 
     fn task() -> TaskSummary {
         TaskSummary {
@@ -296,11 +333,70 @@ mod tests {
         }
     }
 
+    fn agent(name: &str, agent_kind: AgentKind, command: &str) -> AgentProfile {
+        AgentProfile {
+            id: 1,
+            name: name.to_string(),
+            agent_kind,
+            command: command.to_string(),
+            model: None,
+            args: Vec::new(),
+            env: Default::default(),
+            created_at: "now".to_string(),
+            updated_at: "now".to_string(),
+        }
+    }
+
     #[test]
     fn parses_reviewer_pass_verdict() {
         assert_eq!(
             parse_review_verdict("PASS\nNo blocking issues."),
             ReviewVerdict::Pass
+        );
+    }
+
+    #[test]
+    fn parses_reviewer_no_blockers_sentinel_as_pass() {
+        assert_eq!(
+            parse_review_verdict("NECTUS_NO_BLOCKERS\nNo blockers found."),
+            ReviewVerdict::Pass
+        );
+    }
+
+    #[test]
+    fn parses_reviewer_blockers_sentinel_as_needs_changes() {
+        assert_eq!(
+            parse_review_verdict(
+                "NECTUS_BLOCKERS\n- native/src/lib.rs misses the command registration."
+            ),
+            ReviewVerdict::NeedsChanges
+        );
+    }
+
+    #[test]
+    fn parses_reviewer_feedback_sentinel_as_feedback() {
+        assert_eq!(
+            parse_review_verdict("NECTUS_FEEDBACK\nConsider splitting this into a smaller helper."),
+            ReviewVerdict::Feedback
+        );
+    }
+
+    #[test]
+    fn sends_claude_and_gemini_review_prompts_through_headless_prompt_args() {
+        assert_eq!(
+            reviewer_prompt_args(&agent("Claude", AgentKind::Claude, "claude"), "Review this"),
+            Some(vec!["-p".to_string(), "Review this".to_string()])
+        );
+        assert_eq!(
+            reviewer_prompt_args(&agent("Gemini", AgentKind::Gemini, "gemini"), "Review this"),
+            Some(vec!["-p".to_string(), "Review this".to_string()])
+        );
+        assert_eq!(
+            reviewer_prompt_args(
+                &agent("Custom", AgentKind::Custom, "reviewer"),
+                "Review this"
+            ),
+            None
         );
     }
 
@@ -327,7 +423,9 @@ mod tests {
         assert!(prompt.contains("Add project settings with tests"));
         assert!(prompt.contains("git diff --no-ext-diff HEAD --"));
         assert!(!prompt.contains("diff --git a/src/App.tsx b/src/App.tsx"));
-        assert!(prompt.contains("Respond with PASS"));
+        assert!(prompt.contains("NECTUS_NO_BLOCKERS"));
+        assert!(prompt.contains("NECTUS_BLOCKERS"));
+        assert!(prompt.contains("NECTUS_FEEDBACK"));
     }
 
     #[test]

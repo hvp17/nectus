@@ -44,6 +44,7 @@ interface TaskDetailDrawerProps {
   onResumeSession: (task: TaskSummary) => void;
   onStartSession: (task: TaskSummary) => void;
   onStartPairLoop: (task: TaskSummary, reviewerProfileId: number, maxRounds: number) => void;
+  onStartReview: (task: TaskSummary, reviewerProfileId: number, maxRounds: number) => void;
   onStopPairLoop: (task: TaskSummary) => void;
   onUpdateStatus: (task: TaskSummary, status: TaskStatus) => void;
   onSessionExit: (sessionId: string) => void;
@@ -68,6 +69,7 @@ const reviewLoopStatusLabels: Record<ReviewLoop["status"], string> = {
 const reviewVerdictLabels: Record<ReviewRun["verdict"], string> = {
   pass: "Pass",
   needs_changes: "Needs changes",
+  feedback: "Feedback",
   unknown: "Unknown",
 };
 const DEFAULT_TERMINAL_HEIGHT = 360;
@@ -100,6 +102,7 @@ export function TaskDetailDrawer({
   onResumeSession,
   onStartSession,
   onStartPairLoop,
+  onStartReview,
   onStopPairLoop,
   onUpdateStatus,
   onSessionExit,
@@ -204,6 +207,7 @@ export function TaskDetailDrawer({
 
   const latestReviewRun = reviewRuns.at(-1);
   const pairLoopActive = Boolean(reviewLoop && !["passed", "max_rounds_reached", "error", "stopped"].includes(reviewLoop.status));
+  const reviewInProgress = reviewLoop?.status === "reviewing";
   if (!task) return null;
   const canResumeSession = task.agentKind === "codex" || task.agentKind === "claude";
   const attentionDetail = attention?.prompt ?? attention?.message;
@@ -467,9 +471,24 @@ export function TaskDetailDrawer({
             aria-label="Agent terminal"
             style={{ height: terminalHeight }}
           >
-             <div className="flex shrink-0 items-center gap-2 px-6 py-4 border-b text-[11px] font-bold uppercase tracking-widest opacity-60">
-                <TerminalSquare size={14} />
-                Agent Terminal
+             <div className="flex shrink-0 items-center justify-between gap-3 px-6 py-3 border-b">
+                <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest opacity-60">
+                  <TerminalSquare size={14} />
+                  Agent Terminal
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-8 gap-2"
+                  disabled={!reviewerProfileId || reviewerProfiles.length === 0 || reviewInProgress}
+                  onClick={() => {
+                    if (!reviewerProfileId) return;
+                    onStartReview(task, reviewerProfileId, Math.min(10, Math.max(1, maxRounds || 3)));
+                  }}
+                >
+                  <Play size={13} />
+                  Start review
+                </Button>
              </div>
              <div className="flex-1 min-h-0 bg-[#0A0A0A]">
                 <TerminalPane

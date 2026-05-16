@@ -1,6 +1,8 @@
 use super::rows::{review_loop_from_row, review_run_from_row};
 use super::{now, Database};
-use crate::models::{ReviewLoop, ReviewLoopStatus, ReviewRun, ReviewRunInput, ReviewVerdict};
+use crate::models::{
+    ReviewLoop, ReviewLoopStatus, ReviewRun, ReviewRunInput, ReviewVerdict, TaskStatus,
+};
 use rusqlite::{params, OptionalExtension};
 
 impl Database {
@@ -131,6 +133,9 @@ impl Database {
             Some(input.round),
             last_error.as_deref(),
         )?;
+        if run.verdict == ReviewVerdict::Pass {
+            self.update_task_metadata(input.task_id, None, Some(TaskStatus::Done), None)?;
+        }
         Ok(run)
     }
 
@@ -184,10 +189,12 @@ fn review_loop_state_after_run(
 ) -> (ReviewLoopStatus, Option<String>) {
     match run.verdict {
         ReviewVerdict::Pass => (ReviewLoopStatus::Passed, None),
-        ReviewVerdict::NeedsChanges if run.round >= review_loop.max_rounds => {
+        ReviewVerdict::NeedsChanges | ReviewVerdict::Feedback
+            if run.round >= review_loop.max_rounds =>
+        {
             (ReviewLoopStatus::MaxRoundsReached, None)
         }
-        ReviewVerdict::NeedsChanges => (ReviewLoopStatus::Running, None),
+        ReviewVerdict::NeedsChanges | ReviewVerdict::Feedback => (ReviewLoopStatus::Running, None),
         ReviewVerdict::Unknown => {
             (
                 ReviewLoopStatus::Error,

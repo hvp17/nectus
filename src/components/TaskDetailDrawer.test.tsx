@@ -71,6 +71,7 @@ function renderTaskDetailDrawer(input?: {
   reviewLoop?: ReviewLoop | null;
   reviewRuns?: ReviewRun[];
   onStartPairLoop?: (task: TaskSummary, reviewerProfileId: number, maxRounds: number) => void;
+  onStartReview?: (task: TaskSummary, reviewerProfileId: number, maxRounds: number) => void;
 }) {
   return render(
     <TaskDetailDrawer
@@ -86,6 +87,7 @@ function renderTaskDetailDrawer(input?: {
       onResumeSession={vi.fn()}
       onStartSession={vi.fn()}
       onStartPairLoop={input?.onStartPairLoop ?? vi.fn()}
+      onStartReview={input?.onStartReview ?? vi.fn()}
       onStopPairLoop={vi.fn()}
       onUpdateStatus={vi.fn()}
       onSessionExit={vi.fn()}
@@ -126,6 +128,16 @@ describe("TaskDetailDrawer", () => {
     expect(onStartPairLoop).toHaveBeenCalledWith(task, 2, 3);
   });
 
+  it("starts an immediate review from the terminal toolbar", () => {
+    const onStartReview = vi.fn();
+
+    renderTaskDetailDrawer({ onStartReview });
+
+    screen.getByRole("button", { name: /start review/i }).click();
+
+    expect(onStartReview).toHaveBeenCalledWith(task, 2, 3);
+  });
+
   it("shows review loop status and latest review output", () => {
     renderTaskDetailDrawer({
       reviewLoop: {
@@ -144,9 +156,9 @@ describe("TaskDetailDrawer", () => {
           taskId: task.id,
           round: 1,
           reviewerProfileId: 2,
-          verdict: "needs_changes",
+          verdict: "feedback",
           prompt: "Review the worktree",
-          output: "Blocking issue: missing persistence test",
+          output: "NECTUS_FEEDBACK\nConsider moving this into a smaller helper.",
           error: null,
           createdAt: "2026-05-15T00:01:00.000Z",
         },
@@ -154,7 +166,8 @@ describe("TaskDetailDrawer", () => {
     });
 
     expect(screen.getByText(/round 1 of 3/i)).toBeInTheDocument();
-    expect(screen.getByText(/blocking issue: missing persistence test/i)).toBeInTheDocument();
+    expect(screen.getByText(/consider moving this into a smaller helper/i)).toBeInTheDocument();
+    expect(screen.getByText("Feedback")).toBeInTheDocument();
   });
 
   it("lets the terminal panel expand vertically from the resize separator", () => {

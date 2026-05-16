@@ -122,6 +122,7 @@ impl ReviewLoopStatus {
 pub enum ReviewVerdict {
     Pass,
     NeedsChanges,
+    Feedback,
     Unknown,
 }
 

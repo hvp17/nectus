@@ -107,6 +107,7 @@ Current commands:
 | `list_agent_profiles` | Load agent profiles. |
 | `upsert_agent_profile` | Create or update an agent profile. |
 | `start_pair_loop` | Enable reviewer automation for a task. |
+| `run_pair_review` | Trigger an immediate review round for a task with a running Codex session. |
 | `stop_pair_loop` | Stop reviewer automation for a task. |
 | `get_task_review_loop` | Load a task's current review loop. |
 | `list_task_review_runs` | Load stored reviewer runs for a task. |
@@ -182,7 +183,7 @@ Useful backend log messages include:
   flag.
 - Watching a Codex session log.
 - Failure to emit session or review events.
-- Review round start, recorded verdict, and review-loop errors.
+- Review round start, recorded verdict, reviewer output, and review-loop errors.
 
 ## Database Inspection
 
@@ -335,8 +336,11 @@ Check:
 - The review loop status is `running`.
 - The worker session is a Codex session that emits `session_idle`.
 - The reviewer profile command resolves and exits successfully.
-- Reviewer output begins with `PASS`, contains a blocking-review phrase, or the
-  loop will be marked `error` as unknown.
+- Claude and Gemini reviewer profiles can run headless with `-p`; custom
+  reviewers must read the generated prompt from stdin.
+- Reviewer output contains an exact first-line verdict token:
+  `NECTUS_NO_BLOCKERS`, `NECTUS_BLOCKERS`, or `NECTUS_FEEDBACK`. Legacy `PASS`
+  and blocking-review phrase parsing are still accepted.
 - `max_rounds` is between 1 and 10.
 
 Relevant code:

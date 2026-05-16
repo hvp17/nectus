@@ -209,6 +209,99 @@ fn starts_review_loop_and_records_review_runs() {
 }
 
 #[test]
+fn feedback_review_run_keeps_loop_running_for_another_round() {
+    let db = Database::open_in_memory().unwrap();
+    let repo_dir = tempdir().unwrap();
+    std::process::Command::new("git")
+        .arg("init")
+        .arg(repo_dir.path())
+        .output()
+        .unwrap();
+    let repo = db
+        .add_repo(repo_dir.path().to_string_lossy().to_string())
+        .unwrap();
+    let profiles = db.list_agent_profiles().unwrap();
+    let reviewer = profiles
+        .iter()
+        .find(|profile| profile.agent_kind == AgentKind::Claude)
+        .unwrap();
+    let task = db
+        .create_task_record(
+            repo.id,
+            "Task".to_string(),
+            None,
+            Some(profiles[0].id),
+            false,
+            None,
+        )
+        .unwrap();
+    db.start_review_loop(task.id, reviewer.id, 3).unwrap();
+
+    db.record_review_run(ReviewRunInput {
+        task_id: task.id,
+        round: 1,
+        reviewer_profile_id: reviewer.id,
+        verdict: ReviewVerdict::Feedback,
+        prompt: "Review this diff".to_string(),
+        output: "NECTUS_FEEDBACK\nConsider extracting a helper.".to_string(),
+        error: None,
+    })
+    .unwrap();
+
+    let review_loop = db.review_loop_by_task_id(task.id).unwrap().unwrap();
+
+    assert_eq!(review_loop.current_round, 1);
+    assert_eq!(review_loop.status, ReviewLoopStatus::Running);
+}
+
+#[test]
+fn passing_review_marks_task_done() {
+    let db = Database::open_in_memory().unwrap();
+    let repo_dir = tempdir().unwrap();
+    std::process::Command::new("git")
+        .arg("init")
+        .arg(repo_dir.path())
+        .output()
+        .unwrap();
+    let repo = db
+        .add_repo(repo_dir.path().to_string_lossy().to_string())
+        .unwrap();
+    let profiles = db.list_agent_profiles().unwrap();
+    let reviewer = profiles
+        .iter()
+        .find(|profile| profile.agent_kind == AgentKind::Claude)
+        .unwrap();
+    let task = db
+        .create_task_record(
+            repo.id,
+            "Task".to_string(),
+            None,
+            Some(profiles[0].id),
+            false,
+            None,
+        )
+        .unwrap();
+    db.update_task_metadata(task.id, None, Some(TaskStatus::InProgress), None)
+        .unwrap();
+    db.start_review_loop(task.id, reviewer.id, 3).unwrap();
+
+    db.record_review_run(ReviewRunInput {
+        task_id: task.id,
+        round: 1,
+        reviewer_profile_id: reviewer.id,
+        verdict: ReviewVerdict::Pass,
+        prompt: "Review this diff".to_string(),
+        output: "NECTUS_NO_BLOCKERS".to_string(),
+        error: None,
+    })
+    .unwrap();
+
+    let task = db.task_by_id(task.id).unwrap().unwrap();
+
+    assert_eq!(task.status, TaskStatus::Done);
+}
+
+#[test]
 fn review_loop_rejects_invalid_reviewer_and_round_limit() {
     let db = Database::open_in_memory().unwrap();
     let repo_dir = tempdir().unwrap();

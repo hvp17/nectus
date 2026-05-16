@@ -23,8 +23,9 @@ git, SQLite, and PTY work lives in the Rust backend.
 - Surface running, dirty, finished, review, and needs-input counts.
 - Watch Codex session JSONL for finished or input-needed events.
 - Send macOS notifications for session attention events.
-- Run an AI pair loop that reviews Codex idle events with another agent profile
-  and feeds blocking feedback back to the worker session.
+- Run an AI pair loop that reviews Codex idle events or a manual `Start review`
+  action with another agent profile and feeds blockers or implementation
+  feedback back to the worker session until the reviewer returns no blockers.
 - Configure agent commands, model arguments, environment variables, theme,
   density, branch prefixes, and worktree root patterns.
 

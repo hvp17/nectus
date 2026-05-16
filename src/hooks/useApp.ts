@@ -140,6 +140,20 @@ export function useApp() {
     onMessage: setMessage,
   });
 
+  useEffect(() => {
+    if (selectedReviewLoop?.status !== "passed") return;
+    setTasks((current) =>
+      current.map((task) =>
+        task.id === selectedReviewLoop.taskId
+          ? {
+              ...task,
+              status: "done",
+            }
+          : task,
+      ),
+    );
+  }, [selectedReviewLoop]);
+
   useSessionEvents({ tasksRef, setTasks, setMessage, setTaskAttention });
 
   const sessionCommands = useSessionCommands({
@@ -243,6 +257,24 @@ export function useApp() {
       setSelectedReviewLoop(reviewLoop);
       setSelectedReviewRuns(reviewRuns);
       setMessage("Pair loop: Started");
+    } catch (error) {
+      setMessage(String(error));
+    }
+  };
+
+  const startReview = async (task: TaskSummary, reviewerProfileId: number, maxRounds: number) => {
+    setMessage(null);
+
+    try {
+      let reviewLoop = selectedReviewLoop;
+      if (!reviewLoop || ["passed", "max_rounds_reached", "error", "stopped"].includes(reviewLoop.status)) {
+        reviewLoop = await api.startPairLoop(task.id, reviewerProfileId, maxRounds);
+      }
+      const runningLoop = await api.runPairReview(task.id);
+      const reviewRuns = await api.listTaskReviewRuns(task.id);
+      setSelectedReviewLoop(runningLoop ?? reviewLoop);
+      setSelectedReviewRuns(reviewRuns);
+      setMessage("Pair loop: Review started");
     } catch (error) {
       setMessage(String(error));
     }
@@ -355,6 +387,7 @@ export function useApp() {
     stopSession,
     resumeSession,
     startPairLoop,
+    startReview,
     stopPairLoop,
     onSessionExit,
     onSessionInput,
