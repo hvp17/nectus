@@ -1,16 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "./api";
 import { invoke } from "@tauri-apps/api/core";
+import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
+vi.mock("@tauri-apps/plugin-notification", () => ({
+  isPermissionGranted: vi.fn(),
+  requestPermission: vi.fn(),
+  sendNotification: vi.fn(),
+}));
+
 const mockedInvoke = vi.mocked(invoke);
+const mockedIsPermissionGranted = vi.mocked(isPermissionGranted);
+const mockedRequestPermission = vi.mocked(requestPermission);
+const mockedSendNotification = vi.mocked(sendNotification);
 
 describe("api", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
   });
 
   it("sends explicit nulls for omitted task metadata fields", async () => {
@@ -85,6 +96,25 @@ describe("api", () => {
       taskId: 2,
       reviewerProfileId: 4,
       maxRounds: 3,
+    });
+  });
+
+  it("truncates long system notification bodies sent to Tauri", async () => {
+    vi.resetModules();
+    Object.defineProperty(window, "__TAURI_INTERNALS__", {
+      configurable: true,
+      value: {},
+    });
+    mockedIsPermissionGranted.mockResolvedValue(true);
+
+    const { api: tauriApi } = await import("./api");
+
+    await tauriApi.sendSystemNotification("Codex finished", "A".repeat(300));
+
+    expect(mockedRequestPermission).not.toHaveBeenCalled();
+    expect(mockedSendNotification).toHaveBeenCalledWith({
+      title: "Codex finished",
+      body: `${"A".repeat(177)}...`,
     });
   });
 });
