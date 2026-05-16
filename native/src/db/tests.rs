@@ -54,6 +54,76 @@ fn seeds_and_updates_global_app_settings() {
 }
 
 #[test]
+fn migrates_existing_app_settings_without_theme_or_density() {
+    let db_dir = tempdir().unwrap();
+    let db_path = db_dir.path().join("nectus.sqlite");
+    {
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            "
+            CREATE TABLE app_settings (
+              id INTEGER PRIMARY KEY CHECK (id = 1),
+              default_agent_profile_id INTEGER,
+              default_worktree_root_pattern TEXT NOT NULL,
+              default_branch_prefix TEXT,
+              updated_at TEXT NOT NULL
+            );
+            INSERT INTO app_settings
+              (id, default_agent_profile_id, default_worktree_root_pattern, default_branch_prefix, updated_at)
+            VALUES (1, NULL, '../legacy/{repoName}', 'tgadliuskas/', '2026-05-15T00:00:00Z');
+            ",
+        )
+        .unwrap();
+    }
+
+    let db = Database::open(db_path).unwrap();
+    let settings = db.get_app_settings().unwrap();
+
+    assert_eq!(
+        settings.default_worktree_root_pattern,
+        "../legacy/{repoName}"
+    );
+    assert_eq!(
+        settings.default_branch_prefix.as_deref(),
+        Some("tgadliuskas/")
+    );
+    assert_eq!(settings.theme, ThemeMode::System);
+    assert_eq!(settings.density, DensityMode::Comfortable);
+}
+
+#[test]
+fn backfills_null_theme_and_density_on_existing_app_settings() {
+    let db_dir = tempdir().unwrap();
+    let db_path = db_dir.path().join("nectus.sqlite");
+    {
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            "
+            CREATE TABLE app_settings (
+              id INTEGER PRIMARY KEY CHECK (id = 1),
+              default_agent_profile_id INTEGER,
+              default_worktree_root_pattern TEXT NOT NULL,
+              default_branch_prefix TEXT,
+              theme TEXT,
+              density TEXT,
+              updated_at TEXT NOT NULL
+            );
+            INSERT INTO app_settings
+              (id, default_agent_profile_id, default_worktree_root_pattern, default_branch_prefix, theme, density, updated_at)
+            VALUES (1, NULL, '../legacy/{repoName}', NULL, NULL, NULL, '2026-05-15T00:00:00Z');
+            ",
+        )
+        .unwrap();
+    }
+
+    let db = Database::open(db_path).unwrap();
+    let settings = db.get_app_settings().unwrap();
+
+    assert_eq!(settings.theme, ThemeMode::System);
+    assert_eq!(settings.density, DensityMode::Comfortable);
+}
+
+#[test]
 fn updated_worktree_root_pattern_applies_to_existing_and_new_repos() {
     let db = Database::open_in_memory().unwrap();
     let first_repo_dir = tempdir().unwrap();

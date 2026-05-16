@@ -134,7 +134,7 @@ export function SettingsPage({
       <div className="settings-stack">
         <section className="settings-section">
           <div className="settings-section-header">
-            <div>
+            <div className="settings-section-title">
               <p className="eyebrow">Agents</p>
               <h3>Agent Profiles</h3>
             </div>
@@ -202,8 +202,10 @@ export function SettingsPage({
 
         <section className="settings-section">
           <div className="settings-section-header">
-            <p className="eyebrow">Repositories</p>
-            <h3>Projects & Worktrees</h3>
+            <div className="settings-section-title">
+              <p className="eyebrow">Repositories</p>
+              <h3>Projects & Worktrees</h3>
+            </div>
           </div>
           <div className="settings-grid">
             <div className="settings-field">
@@ -242,8 +244,10 @@ export function SettingsPage({
 
         <section className="settings-section">
           <div className="settings-section-header">
-            <p className="eyebrow">Interface</p>
-            <h3>Appearance</h3>
+            <div className="settings-section-title">
+              <p className="eyebrow">Interface</p>
+              <h3>Appearance</h3>
+            </div>
           </div>
           <div className="settings-grid">
             <SegmentedRadioGroup

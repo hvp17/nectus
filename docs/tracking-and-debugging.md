@@ -26,6 +26,10 @@ Schema owner: `native/src/db/migrations.rs`
 
 Row mapping and enum parsing: `native/src/db/rows.rs`
 
+Settings migrations add and backfill `app_settings.theme` and
+`app_settings.density` so databases created before appearance settings can still
+load through `get_app_settings`.
+
 Persistence APIs:
 
 - `native/src/db/mod.rs`: database setup plus project, settings, task, and

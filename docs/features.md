@@ -221,6 +221,8 @@ Settings are persisted locally and include:
 
 The worktree root pattern must include `{repoName}`. Existing project rows are
 refreshed when the pattern changes.
+When Theme is set to System, the UI follows OS color-scheme changes while the
+app is running.
 
 Key files:
 

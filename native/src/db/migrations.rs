@@ -117,6 +117,12 @@ impl Database {
             "TEXT NOT NULL DEFAULT 'custom'",
         )?;
         self.add_missing_column("agent_profiles", "model", "TEXT")?;
+        self.add_missing_column("app_settings", "theme", "TEXT NOT NULL DEFAULT 'system'")?;
+        self.add_missing_column(
+            "app_settings",
+            "density",
+            "TEXT NOT NULL DEFAULT 'comfortable'",
+        )?;
         self.migrate_legacy_worktrees()
     }
 
@@ -251,6 +257,23 @@ impl Database {
                 ],
             )
             .map_err(|error| format!("Failed to seed app settings: {error}"))?;
+        self.conn
+            .execute(
+                "
+                UPDATE app_settings
+                SET theme = COALESCE(theme, ?1),
+                    density = COALESCE(density, ?2),
+                    updated_at = ?3
+                WHERE id = 1
+                  AND (theme IS NULL OR density IS NULL)
+                ",
+                params![
+                    ThemeMode::System.as_str(),
+                    DensityMode::Comfortable.as_str(),
+                    now
+                ],
+            )
+            .map_err(|error| format!("Failed to backfill app settings: {error}"))?;
         Ok(())
     }
 
