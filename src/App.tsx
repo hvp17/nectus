@@ -9,20 +9,21 @@ import { CreateTaskModal } from "./components/CreateTaskModal";
 import { SettingsPage } from "./components/SettingsPage";
 import { useApp } from "./hooks/useApp";
 import { useAppTheme } from "./hooks/useAppTheme";
+import { formatNotificationBody } from "./notificationText";
 
 function getToastContent(message: string) {
   const separator = message.indexOf(": ");
   if (separator > 0) {
     return {
       title: message.slice(0, separator),
-      body: message.slice(separator + 2),
+      body: formatNotificationBody(message.slice(separator + 2)),
       kind: "success" as const,
     };
   }
 
   return {
     title: "Nectus",
-    body: message,
+    body: formatNotificationBody(message),
     kind: "info" as const,
   };
 }

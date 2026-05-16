@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { api } from "./api";
+import { formatNotificationBody } from "./notificationText";
 
 vi.mock("./api", () => ({
   api: {
@@ -439,16 +440,24 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("radio", { name: /direct edit/i }));
     fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
 
-    expect(await screen.findByText("Created Review modal task flow")).toBeInTheDocument();
+    const createdToastBody = await screen.findByText("Created Review modal task flow");
+    const createdToast = createdToastBody.closest("[data-sonner-toast]");
+    expect(createdToast).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /close toast/i }));
+    fireEvent.click(within(createdToast as HTMLElement).getByRole("button", { name: /close toast/i }));
 
     await waitFor(() => {
       expect(screen.queryByText("Created Review modal task flow")).not.toBeInTheDocument();
     });
   });
 
-  it("renders notification text in a sonner toast", async () => {
+  it("does not render the temporary dummy notification preview on launch", async () => {
+    render(<App />);
+
+    await expect(screen.findByText("Notification truncation preview", undefined, { timeout: 100 })).rejects.toThrow();
+  });
+
+  it("renders truncated notification text in a sonner toast", async () => {
     const longTaskTitle =
       "Review a long running agent summary that explains the final state, the important changed files, and the next manual verification steps";
 
@@ -492,7 +501,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("radio", { name: /direct edit/i }));
     fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
 
-    const toastBody = await screen.findByText(`Created ${longTaskTitle}`);
+    const toastBody = await screen.findByText(formatNotificationBody(`Created ${longTaskTitle}`));
 
     expect(toastBody.closest("[data-sonner-toast]")).toHaveClass("cn-toast");
   });
