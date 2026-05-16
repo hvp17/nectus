@@ -81,6 +81,12 @@
   line-height: 1.45;
 }
 
+.task-workflow-panel {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
 .pair-loop-panel {
   margin-top: 18px;
   padding-top: 18px;

@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   ArrowLeft,
+  Check,
   Square,
   RotateCcw,
   Play,
@@ -25,6 +26,16 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import {
+  Stepper,
+  StepperDescription,
+  StepperIndicator,
+  StepperItem,
+  StepperNav,
+  StepperSeparator,
+  StepperTitle,
+  StepperTrigger,
+} from "./reui/stepper";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { truncateFinishedAttentionPreview } from "./attentionPreview";
 import { TerminalPane } from "../TerminalPane";
@@ -217,6 +228,42 @@ export function TaskDetailDrawer({
   const isAttentionDetailTruncated = Boolean(
     attentionDetail && displayedAttentionDetail && displayedAttentionDetail !== attentionDetail,
   );
+  const startReviewDisabled = !reviewerProfileId || reviewerProfiles.length === 0 || reviewInProgress;
+  const hasReviewResult = Boolean(
+    reviewLoop &&
+      (reviewLoop.currentRound > 0 || ["passed", "max_rounds_reached", "error", "stopped"].includes(reviewLoop.status)),
+  );
+  const workflowStep = task.status === "done" || task.prUrl ? 3 : reviewInProgress ? 1 : hasReviewResult ? 2 : 1;
+  const startReview = () => {
+    if (!reviewerProfileId || startReviewDisabled) return;
+    onStartReview(task, reviewerProfileId, Math.min(10, Math.max(1, maxRounds || 3)));
+  };
+  const workflowSteps = [
+    {
+      title: reviewInProgress ? "Reviewing..." : "Start review",
+      description: reviewInProgress ? "Reviewer is checking the task" : "Run one reviewer pass",
+      completed: hasReviewResult || task.status === "done",
+      loading: reviewInProgress,
+      disabled: startReviewDisabled,
+      onClick: startReview,
+    },
+    {
+      title: "Create PR",
+      description: task.prUrl ? "Pull request linked" : "Placeholder",
+      completed: Boolean(task.prUrl),
+      loading: false,
+      disabled: true,
+      onClick: undefined,
+    },
+    {
+      title: "Move to done",
+      description: task.status === "done" ? "Task is complete" : "Mark task complete",
+      completed: task.status === "done",
+      loading: false,
+      disabled: task.status === "done",
+      onClick: () => onUpdateStatus(task, "done"),
+    },
+  ];
 
   return (
     <aside
@@ -359,6 +406,55 @@ export function TaskDetailDrawer({
                 )}
              </dl>
 
+             <section className="task-workflow-panel" aria-label="Task workflow">
+               <div>
+                 <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Task Workflow</p>
+                 <p className="mt-1 text-xs text-muted-foreground">Review, prepare, and close out the task.</p>
+               </div>
+
+               <Stepper
+                 className="mt-4"
+                 value={workflowStep}
+                 orientation="vertical"
+                 indicators={{
+                   completed: <Check className="size-3.5" />,
+                   loading: <LoaderCircle className="size-3.5 animate-spin" />,
+                 }}
+               >
+                 <StepperNav className="w-full">
+                   {workflowSteps.map((step, index) => (
+                     <StepperItem
+                       key={step.title}
+                       step={index + 1}
+                       completed={step.completed}
+                       disabled={step.disabled}
+                       loading={step.loading}
+                       className="relative items-start not-last:flex-1"
+                     >
+                       <StepperTrigger
+                         className={cn(
+                           "w-full items-start gap-2.5 text-left disabled:cursor-not-allowed",
+                           index < workflowSteps.length - 1 ? "pb-10" : "pb-0",
+                         )}
+                         onClick={step.onClick}
+                       >
+                         <StepperIndicator className="data-[state=completed]:bg-primary data-[state=completed]:text-primary-foreground">
+                           {index + 1}
+                         </StepperIndicator>
+                         <div className="mt-0.5 min-w-0 text-left">
+                           <StepperTitle>{step.title}</StepperTitle>
+                           <StepperDescription>{step.description}</StepperDescription>
+                         </div>
+                       </StepperTrigger>
+                       {index < workflowSteps.length - 1 && (
+                         <StepperSeparator className="absolute inset-y-0 left-3 top-7 -order-1 m-0 -translate-x-1/2 group-data-[orientation=vertical]/stepper-nav:h-[calc(100%-2rem)] group-data-[state=completed]/step:bg-primary" />
+                       )}
+                     </StepperItem>
+                   ))}
+                 </StepperNav>
+               </Stepper>
+             </section>
+
              <section className="pair-loop-panel" aria-label="AI pair loop">
                <div className="flex items-center justify-between gap-3">
                  <div>
@@ -477,19 +573,6 @@ export function TaskDetailDrawer({
                   <TerminalSquare size={14} />
                   Agent Terminal
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-8 gap-2"
-                  disabled={!reviewerProfileId || reviewerProfiles.length === 0 || reviewInProgress}
-                  onClick={() => {
-                    if (!reviewerProfileId) return;
-                    onStartReview(task, reviewerProfileId, Math.min(10, Math.max(1, maxRounds || 3)));
-                  }}
-                >
-                  {reviewInProgress ? <LoaderCircle size={13} className="animate-spin" /> : <Play size={13} />}
-                  {reviewInProgress ? "Reviewing..." : "Start review"}
-                </Button>
              </div>
              <div className="flex-1 min-h-0 bg-[#0A0A0A]">
                 <TerminalPane

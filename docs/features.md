@@ -172,10 +172,13 @@ The AI pair loop is a worker-plus-reviewer flow.
 
 Current behavior:
 
-- Start a pair loop from the task detail pane, or use `Start review` above the
-  terminal to start the loop and immediately run the first review round.
+- Start a pair loop from the task detail pane, or use the task workflow stepper's
+  `Start review` step to start the loop and immediately run the first review
+  round.
 - `Start review` switches the selected task UI to `reviewing` while the reviewer
-  command runs, and the terminal toolbar shows the in-progress state.
+  command runs, and the task workflow stepper shows the in-progress state.
+- The task workflow stepper also shows a placeholder `Create PR` step and a
+  `Move to done` step that marks the task complete.
 - Choose a reviewer profile and max rounds from 1 to 10.
 - On each Codex `session_idle` event, the backend runs the reviewer command in
   the task cwd with a generated review prompt.

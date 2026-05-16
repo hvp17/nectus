@@ -67,15 +67,17 @@ function dispatchPointerEvent(
 }
 
 function renderTaskDetailDrawer(input?: {
+  task?: TaskSummary;
   attention?: TaskAttention;
   reviewLoop?: ReviewLoop | null;
   reviewRuns?: ReviewRun[];
   onStartPairLoop?: (task: TaskSummary, reviewerProfileId: number, maxRounds: number) => void;
   onStartReview?: (task: TaskSummary, reviewerProfileId: number, maxRounds: number) => void;
+  onUpdateStatus?: (task: TaskSummary, status: TaskSummary["status"]) => void;
 }) {
   return render(
     <TaskDetailDrawer
-      task={task}
+      task={input?.task ?? task}
       attention={input?.attention}
       agentProfiles={agentProfiles}
       reviewLoop={input?.reviewLoop ?? null}
@@ -89,7 +91,7 @@ function renderTaskDetailDrawer(input?: {
       onStartPairLoop={input?.onStartPairLoop ?? vi.fn()}
       onStartReview={input?.onStartReview ?? vi.fn()}
       onStopPairLoop={vi.fn()}
-      onUpdateStatus={vi.fn()}
+      onUpdateStatus={input?.onUpdateStatus ?? vi.fn()}
       onSessionExit={vi.fn()}
       onSessionInput={vi.fn()}
     />,
@@ -128,18 +130,35 @@ describe("TaskDetailDrawer", () => {
     expect(onStartPairLoop).toHaveBeenCalledWith(task, 2, 3);
   });
 
-  it("starts an immediate review from the terminal toolbar", () => {
+  it("starts an immediate review from the workflow stepper", () => {
     const onStartReview = vi.fn();
 
     renderTaskDetailDrawer({ onStartReview });
 
-    screen.getByRole("button", { name: /start review/i }).click();
+    screen.getByRole("tab", { name: /start review/i }).click();
 
     expect(onStartReview).toHaveBeenCalledWith(task, 2, 3);
   });
 
-  it("shows review progress in the terminal toolbar", () => {
+  it("runs task workflow actions from the sidebar stepper", () => {
+    const onStartReview = vi.fn();
+    const onUpdateStatus = vi.fn();
+    const inReviewTask: TaskSummary = { ...task, status: "review" };
+
+    renderTaskDetailDrawer({ task: inReviewTask, onStartReview, onUpdateStatus });
+
+    screen.getByRole("tab", { name: /start review/i }).click();
+    expect(onStartReview).toHaveBeenCalledWith(inReviewTask, 2, 3);
+
+    expect(screen.getByRole("tab", { name: /create pr/i })).toBeDisabled();
+
+    screen.getByRole("tab", { name: /move to done/i }).click();
+    expect(onUpdateStatus).toHaveBeenCalledWith(inReviewTask, "done");
+  });
+
+  it("shows review progress in the workflow stepper", () => {
     renderTaskDetailDrawer({
+      task: { ...task, status: "review" },
       reviewLoop: {
         taskId: task.id,
         reviewerProfileId: 2,
@@ -152,7 +171,7 @@ describe("TaskDetailDrawer", () => {
       },
     });
 
-    const reviewButton = screen.getByRole("button", { name: /reviewing/i });
+    const reviewButton = screen.getByRole("tab", { name: /reviewing/i });
 
     expect(reviewButton).toBeDisabled();
   });
