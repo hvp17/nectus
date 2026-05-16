@@ -89,6 +89,16 @@ function mockElementRect(element: Element, rect: Partial<DOMRect>) {
   return () => spy.mockRestore();
 }
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("App", () => {
   beforeEach(() => {
     vi.useRealTimers();
@@ -518,6 +528,69 @@ describe("App", () => {
       await vi.advanceTimersByTimeAsync(500);
     });
     expect(screen.queryByText("Created Review modal task flow")).not.toBeInTheDocument();
+  });
+
+  it("shows progress and keeps the board interactive while deleting a worktree task", async () => {
+    const deletion = deferred<void>();
+
+    mockedApi.listRepos.mockResolvedValue([
+      {
+        id: 7,
+        name: "nectus-desktop",
+        path: "/tmp/nectus-desktop",
+        defaultWorktreeRoot: "/tmp/nectus-desktop-worktrees",
+        createdAt: "2026-05-14T00:00:00.000Z",
+      },
+    ]);
+    mockedApi.listTasks.mockResolvedValue([
+      {
+        id: 31,
+        repoId: 7,
+        title: "Remove old worktree",
+        status: "planned",
+        prUrl: null,
+        agentProfileId: 1,
+        agentName: "Codex",
+        hasWorktree: true,
+        branchName: "delete-flow",
+        worktreePath: "/tmp/nectus-desktop-worktrees/delete-flow",
+        isDirty: false,
+        activeSessionId: null,
+        lastSessionId: null,
+        lastSessionAgent: null,
+        lastSessionCwd: null,
+        lastSessionLabel: null,
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+      },
+    ]);
+    mockedApi.deleteTask.mockReturnValue(deletion.promise);
+
+    render(<App />);
+
+    const taskCard = await screen.findByRole("button", { name: /remove old worktree/i });
+    const deleteButton = within(taskCard).getByRole("button");
+    fireEvent.click(deleteButton);
+    fireEvent.click(await screen.findByRole("button", { name: /^delete task$/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Delete task?")).not.toBeInTheDocument();
+    });
+    expect(await screen.findByText("Deleting Remove old worktree")).toBeInTheDocument();
+    expect(screen.getByText("Removing task and worktree in the background.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /new task/i })).toBeEnabled();
+    expect(deleteButton).toBeDisabled();
+    expect(mockedApi.deleteTask).toHaveBeenCalledWith(31);
+
+    await act(async () => {
+      deletion.resolve();
+      await deletion.promise;
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Deleted Remove old worktree")).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("button", { name: /remove old worktree/i })).not.toBeInTheDocument();
   });
 
   it("moves a task to a new status column when dropped there", async () => {

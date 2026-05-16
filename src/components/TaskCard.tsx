@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GitBranch, Bot, Trash2, AlertTriangle, CircleCheckBig, Radio } from "lucide-react";
 import {
   AlertDialog,
@@ -27,6 +27,7 @@ interface TaskCardProps {
   attention?: TaskAttention;
   isSelected: boolean;
   busy: boolean;
+  isDeleting?: boolean;
   isDragging?: boolean;
   onSelect: (id: number) => void;
   onDelete: (task: TaskSummary) => void;
@@ -41,6 +42,7 @@ export function TaskCard({
   attention,
   isSelected,
   busy,
+  isDeleting = false,
   isDragging = false,
   onSelect,
   onDelete,
@@ -51,8 +53,12 @@ export function TaskCard({
 }: TaskCardProps) {
   const cardRef = useRef<HTMLDivElement | null>(null);
   const suppressClickRef = useRef(false);
-  const deleteDisabled = busy || Boolean(task.activeSessionId);
-  const deleteLabel = task.activeSessionId ? "Stop session first" : "Delete task";
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const deleteDisabled = busy || isDeleting || Boolean(task.activeSessionId);
+  const deleteLabel = task.activeSessionId ? "Stop session first" : isDeleting ? "Deleting task" : "Delete task";
+  const deleteDescription = task.hasWorktree
+    ? `This removes "${task.title}" and its worktree from Nectus and disk.`
+    : `This removes "${task.title}" from Nectus. No files are deleted.`;
   const cardState = attention?.kind ?? (task.activeSessionId ? "running" : task.isDirty ? "dirty" : "normal");
   const attentionDetail = attention?.prompt ?? attention?.message;
   const displayedAttentionDetail =
@@ -221,7 +227,7 @@ export function TaskCard({
           )}
           
           <div className="opacity-0 transition-opacity group-hover:opacity-100">
-            <AlertDialog>
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <AlertDialogTrigger asChild>
@@ -230,6 +236,7 @@ export function TaskCard({
                       size="icon"
                       className="h-7 w-7 text-destructive hover:bg-destructive/10"
                       disabled={deleteDisabled}
+                      aria-label={deleteLabel}
                       onClick={(e) => e.stopPropagation()}
                     >
                       <Trash2 size={14} />
@@ -246,13 +253,17 @@ export function TaskCard({
                     <Trash2 size={16} />
                   </AlertDialogMedia>
                   <AlertDialogTitle>Delete task?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This removes "{task.title}" from Nectus. It does not delete files from disk.
-                  </AlertDialogDescription>
+                  <AlertDialogDescription>{deleteDescription}</AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction variant="destructive" onClick={() => onDelete(task)}>
+                  <AlertDialogAction
+                    variant="destructive"
+                    onClick={() => {
+                      setDeleteDialogOpen(false);
+                      onDelete(task);
+                    }}
+                  >
                     Delete Task
                   </AlertDialogAction>
                 </AlertDialogFooter>

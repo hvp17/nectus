@@ -82,8 +82,11 @@ fn update_task_metadata(
 }
 
 #[tauri::command]
-fn delete_task(task_id: i64, state: State<'_, AppState>) -> AppResult<()> {
-    state.db.lock().delete_task(task_id)
+async fn delete_task(task_id: i64, state: State<'_, AppState>) -> AppResult<()> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || db.lock().delete_task(task_id))
+        .await
+        .map_err(|error| format!("Failed to finish task deletion: {error}"))?
 }
 
 #[tauri::command]
