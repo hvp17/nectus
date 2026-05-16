@@ -1,4 +1,5 @@
-use super::RunningSession;
+use super::{review_loop::spawn_review_on_session_idle, RunningSession};
+use crate::db::Database;
 use crate::models::{SessionIdleEvent, SessionNeedsInputEvent};
 use parking_lot::Mutex;
 use std::collections::HashMap;
@@ -121,6 +122,7 @@ fn codex_session_label(payload: &serde_json::Value) -> Option<String> {
 
 pub(super) fn spawn_codex_event_watcher(
     app: AppHandle,
+    db: Arc<Mutex<Database>>,
     sessions: Arc<Mutex<HashMap<String, RunningSession>>>,
     task_id: i64,
     session_id: String,
@@ -168,6 +170,14 @@ pub(super) fn spawn_codex_event_watcher(
                                     turn_id,
                                     message,
                                 },
+                            );
+                            spawn_review_on_session_idle(
+                                app.clone(),
+                                db.clone(),
+                                sessions.clone(),
+                                task_id,
+                                session_id.clone(),
+                                cwd.clone(),
                             );
                         }
                         CodexSessionEvent::NeedsInput {

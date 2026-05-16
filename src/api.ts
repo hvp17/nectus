@@ -6,6 +6,8 @@ import type {
   AppSettings,
   AppSettingsInput,
   Repo,
+  ReviewLoop,
+  ReviewRun,
   Session,
   SessionOutputSnapshot,
   TaskStatus,
@@ -103,6 +105,20 @@ export const api = {
     profile: Partial<AgentProfile> & Pick<AgentProfile, "name" | "agentKind" | "command">,
   ): Promise<AgentProfile> {
     return invoke("upsert_agent_profile", { profile });
+  },
+  async startPairLoop(taskId: number, reviewerProfileId: number, maxRounds: number): Promise<ReviewLoop> {
+    return invoke("start_pair_loop", { taskId, reviewerProfileId, maxRounds });
+  },
+  async stopPairLoop(taskId: number): Promise<ReviewLoop> {
+    return invoke("stop_pair_loop", { taskId });
+  },
+  async getTaskReviewLoop(taskId: number): Promise<ReviewLoop | null> {
+    if (!isTauri) return null;
+    return invoke("get_task_review_loop", { taskId });
+  },
+  async listTaskReviewRuns(taskId: number): Promise<ReviewRun[]> {
+    if (!isTauri) return [];
+    return invoke("list_task_review_runs", { taskId });
   },
   async getAppSettings(): Promise<AppSettings> {
     if (!isTauri) {

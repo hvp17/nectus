@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { api } from "../api";
 import { defaultDemoSettings, demoAgentProfiles, demoRepo, demoTasks } from "../demoData";
 import {
@@ -7,6 +8,7 @@ import {
   getTaskAttention,
   type TaskAttention,
 } from "../sessionAttention";
+import { isTauriRuntime } from "../sessionNotifications";
 import { useCreateTaskForm } from "./useCreateTaskForm";
 import { useSessionCommands } from "./useSessionCommands";
 import { useSessionEvents } from "./useSessionEvents";
@@ -15,6 +17,9 @@ import type {
   AppSettings,
   AppSettingsInput,
   Repo,
+  ReviewLoop,
+  ReviewLoopUpdatedEvent,
+  ReviewRun,
   TaskStatus,
   TaskSummary,
 } from "../types";
@@ -25,6 +30,8 @@ export function useApp() {
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [settings, setSettings] = useState<AppSettings | undefined>();
+  const [selectedReviewLoop, setSelectedReviewLoop] = useState<ReviewLoop | null>(null);
+  const [selectedReviewRuns, setSelectedReviewRuns] = useState<ReviewRun[]>([]);
   const [currentView, setCurrentView] = useState<"dashboard" | "settings">("dashboard");
   const [selectedRepoId, setSelectedRepoId] = useState<number | undefined>();
   const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>();
@@ -53,12 +60,17 @@ export function useApp() {
   } = taskForm;
 
   const selectedRepoIdRef = useRef<number | undefined>(undefined);
+  const selectedTaskIdRef = useRef<number | undefined>(undefined);
   const selectedAgentProfileIdRef = useRef<number | undefined>(undefined);
   const tasksRef = useRef<TaskSummary[]>([]);
 
   useEffect(() => {
     selectedRepoIdRef.current = selectedRepoId;
   }, [selectedRepoId]);
+
+  useEffect(() => {
+    selectedTaskIdRef.current = selectedTaskId;
+  }, [selectedTaskId]);
 
   useEffect(() => {
     selectedAgentProfileIdRef.current = selectedAgentProfileId;
@@ -135,7 +147,61 @@ export function useApp() {
     refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    if (!selectedTaskId || demoMode) {
+      setSelectedReviewLoop(null);
+      setSelectedReviewRuns([]);
+      return;
+    }
+
+    let disposed = false;
+    Promise.all([api.getTaskReviewLoop(selectedTaskId), api.listTaskReviewRuns(selectedTaskId)])
+      .then(([reviewLoop, reviewRuns]) => {
+        if (disposed) return;
+        setSelectedReviewLoop(reviewLoop);
+        setSelectedReviewRuns(reviewRuns);
+      })
+      .catch((error) => {
+        if (!disposed) setMessage(String(error));
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, [demoMode, selectedTaskId]);
+
   useSessionEvents({ tasksRef, setTasks, setMessage, setTaskAttention });
+
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+
+    let disposed = false;
+    let unlisten: UnlistenFn | undefined;
+    listen<ReviewLoopUpdatedEvent>("review_loop_updated", (event) => {
+      if (disposed) return;
+      if (selectedTaskIdRef.current !== event.payload.taskId) return;
+      setSelectedReviewLoop(event.payload.reviewLoop);
+      if (event.payload.reviewRun) {
+        setSelectedReviewRuns((current) => [...current, event.payload.reviewRun!]);
+      }
+    })
+      .then((callback) => {
+        if (disposed) {
+          callback();
+        } else {
+          unlisten = callback;
+        }
+      })
+      .catch((error) => {
+        if (!disposed) setMessage(String(error));
+      });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
   const sessionCommands = useSessionCommands({
     agentProfiles,
     selectedAgentProfileId,
@@ -206,7 +272,7 @@ export function useApp() {
   const createTask = async () => {
     if (!selectedRepoId) return;
     if (!newTaskAgentProfileId) {
-      setMessage("Select Codex or Claude before creating a task.");
+      setMessage("Select an agent before creating a task.");
       return;
     }
     if (newTaskHasWorktree && !newTaskBranchName.trim()) {
@@ -298,6 +364,57 @@ export function useApp() {
       if (status === "done") {
         setTaskAttention((current) => clearTaskAttention(current, task.id));
       }
+    } catch (error) {
+      setMessage(String(error));
+    }
+  };
+
+  const startPairLoop = async (task: TaskSummary, reviewerProfileId: number, maxRounds: number) => {
+    setMessage(null);
+    if (demoMode) {
+      const now = new Date().toISOString();
+      setSelectedReviewLoop({
+        taskId: task.id,
+        reviewerProfileId,
+        maxRounds,
+        currentRound: 0,
+        status: "running",
+        lastError: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      setSelectedReviewRuns([]);
+      setMessage("Pair loop: Started");
+      return;
+    }
+
+    try {
+      const reviewLoop = await api.startPairLoop(task.id, reviewerProfileId, maxRounds);
+      const reviewRuns = await api.listTaskReviewRuns(task.id);
+      setSelectedReviewLoop(reviewLoop);
+      setSelectedReviewRuns(reviewRuns);
+      setMessage("Pair loop: Started");
+    } catch (error) {
+      setMessage(String(error));
+    }
+  };
+
+  const stopPairLoop = async (task: TaskSummary) => {
+    setMessage(null);
+    if (demoMode) {
+      setSelectedReviewLoop((current) =>
+        current && current.taskId === task.id
+          ? { ...current, status: "stopped", updatedAt: new Date().toISOString() }
+          : current,
+      );
+      setMessage("Pair loop: Stopped");
+      return;
+    }
+
+    try {
+      const reviewLoop = await api.stopPairLoop(task.id);
+      setSelectedReviewLoop(reviewLoop);
+      setMessage("Pair loop: Stopped");
     } catch (error) {
       setMessage(String(error));
     }
@@ -417,6 +534,8 @@ export function useApp() {
     selectedRepo,
     visibleTasks,
     selectedTask,
+    selectedReviewLoop,
+    selectedReviewRuns,
     taskAttention,
     selectedTaskAttention: selectedTask ? getTaskAttention(taskAttention, selectedTask.id) : undefined,
     counts,
@@ -445,6 +564,8 @@ export function useApp() {
     startSession,
     stopSession,
     resumeSession,
+    startPairLoop,
+    stopPairLoop,
     onSessionExit,
     onSessionInput,
     selectedAgentProfileId,

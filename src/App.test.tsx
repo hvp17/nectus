@@ -23,6 +23,10 @@ vi.mock("./api", () => ({
     getAppSettings: vi.fn(),
     updateAppSettings: vi.fn(),
     upsertAgentProfile: vi.fn(),
+    startPairLoop: vi.fn(),
+    stopPairLoop: vi.fn(),
+    getTaskReviewLoop: vi.fn(),
+    listTaskReviewRuns: vi.fn(),
   },
 }));
 
@@ -129,6 +133,8 @@ describe("App", () => {
       ...settings,
       updatedAt: "2026-05-14T00:01:00.000Z",
     }));
+    mockedApi.getTaskReviewLoop.mockResolvedValue(null);
+    mockedApi.listTaskReviewRuns.mockResolvedValue([]);
   });
 
   it("renders the empty repo state", async () => {

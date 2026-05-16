@@ -1,5 +1,6 @@
 use crate::models::{
-    AgentKind, AgentProfile, AppSettings, DensityMode, Repo, TaskStatus, TaskSummary, ThemeMode,
+    AgentKind, AgentProfile, AppSettings, DensityMode, Repo, ReviewLoop, ReviewLoopStatus,
+    ReviewRun, ReviewVerdict, TaskStatus, TaskSummary, ThemeMode,
 };
 use rusqlite::Row;
 use std::collections::BTreeMap;
@@ -106,5 +107,44 @@ pub(super) fn app_settings_from_row(
         theme,
         density,
         updated_at: row.get(5)?,
+    }))
+}
+
+pub(super) fn review_loop_from_row(row: &Row<'_>) -> rusqlite::Result<Result<ReviewLoop, String>> {
+    let status: String = row.get(4)?;
+    let status = match ReviewLoopStatus::from_str(&status) {
+        Ok(value) => value,
+        Err(error) => return Ok(Err(error)),
+    };
+
+    Ok(Ok(ReviewLoop {
+        task_id: row.get(0)?,
+        reviewer_profile_id: row.get(1)?,
+        max_rounds: row.get(2)?,
+        current_round: row.get(3)?,
+        status,
+        last_error: row.get(5)?,
+        created_at: row.get(6)?,
+        updated_at: row.get(7)?,
+    }))
+}
+
+pub(super) fn review_run_from_row(row: &Row<'_>) -> rusqlite::Result<Result<ReviewRun, String>> {
+    let verdict: String = row.get(4)?;
+    let verdict = match ReviewVerdict::from_str(&verdict) {
+        Ok(value) => value,
+        Err(error) => return Ok(Err(error)),
+    };
+
+    Ok(Ok(ReviewRun {
+        id: row.get(0)?,
+        task_id: row.get(1)?,
+        round: row.get(2)?,
+        reviewer_profile_id: row.get(3)?,
+        verdict,
+        prompt: row.get(5)?,
+        output: row.get(6)?,
+        error: row.get(7)?,
+        created_at: row.get(8)?,
     }))
 }

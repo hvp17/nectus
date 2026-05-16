@@ -22,6 +22,10 @@ vi.mock("../api", () => ({
     listAgentProfiles: vi.fn(),
     listTasks: vi.fn(),
     getAppSettings: vi.fn(),
+    startPairLoop: vi.fn(),
+    stopPairLoop: vi.fn(),
+    getTaskReviewLoop: vi.fn(),
+    listTaskReviewRuns: vi.fn(),
     sendSystemNotification: vi.fn().mockResolvedValue(true),
   },
 }));
@@ -103,6 +107,8 @@ describe("useApp", () => {
       updatedAt: "2026-05-14T00:00:00.000Z",
     });
     mockedApi.listTasks.mockResolvedValue([activeTask]);
+    mockedApi.getTaskReviewLoop.mockResolvedValue(null);
+    mockedApi.listTaskReviewRuns.mockResolvedValue([]);
   });
 
   it("clears finished attention when input is sent to that active session", async () => {
