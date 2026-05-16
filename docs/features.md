@@ -90,6 +90,8 @@ Current behavior:
 - Direct-edit tasks launch in the project path.
 - Worktree-backed tasks launch in the worktree path.
 - New task prompts are written to the PTY after launch.
+- Dropping files on the terminal inserts their escaped paths into the active
+  session input, matching the local terminal workflow for Codex image/file paths.
 - Terminal output is streamed through the `session_output` Tauri event.
 - Recent terminal output is buffered in memory for snapshot restore.
 - Closing the app stops owned sessions and clears active session ids.

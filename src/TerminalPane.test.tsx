@@ -5,6 +5,8 @@ import { api } from "./api";
 
 const terminalTestState = vi.hoisted(() => {
   const instances: MockTerminal[] = [];
+  const handlers = new Map<string, (event: { payload: unknown }) => void>();
+  let dragDropHandler: ((event: { payload: unknown }) => void) | undefined;
 
   class MockTerminal {
     rows = 24;
@@ -37,7 +39,23 @@ const terminalTestState = vi.hoisted(() => {
 
   return {
     instances,
-    listen: vi.fn(async () => vi.fn()),
+    handlers,
+    getDragDropHandler: () => dragDropHandler,
+    listen: vi.fn(async (eventName: string, handler: (event: { payload: unknown }) => void) => {
+      handlers.set(eventName, handler);
+      return vi.fn(() => handlers.delete(eventName));
+    }),
+    getCurrentWebview: vi.fn(() => ({
+      onDragDropEvent: vi.fn(async (handler: (event: { payload: unknown }) => void) => {
+        dragDropHandler = handler;
+        return vi.fn(() => {
+          dragDropHandler = undefined;
+        });
+      }),
+    })),
+    resetDragDropHandler: () => {
+      dragDropHandler = undefined;
+    },
     MockTerminal,
     MockFitAddon,
   };
@@ -53,6 +71,10 @@ vi.mock("@xterm/addon-fit", () => ({
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: terminalTestState.listen,
+}));
+
+vi.mock("@tauri-apps/api/webview", () => ({
+  getCurrentWebview: terminalTestState.getCurrentWebview,
 }));
 
 vi.mock("./api", () => ({
@@ -75,6 +97,8 @@ describe("TerminalPane", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     terminalTestState.instances.length = 0;
+    terminalTestState.handlers.clear();
+    terminalTestState.resetDragDropHandler();
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
       configurable: true,
       value: {},
@@ -102,5 +126,38 @@ describe("TerminalPane", () => {
 
     expect(onSessionInput).toHaveBeenCalledWith("session-21");
     expect(mockedApi.sendSessionInput).toHaveBeenCalledWith("session-21", "Continue\n");
+  });
+
+  it("sends dropped file paths to the active session when files are dropped on the terminal", async () => {
+    const onSessionInput = vi.fn();
+    const { container } = render(
+      <TerminalPane
+        sessionId="session-21"
+        onSessionExit={vi.fn()}
+        onSessionInput={onSessionInput}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalTestState.instances).toHaveLength(1);
+    });
+
+    expect(container.querySelector<HTMLElement>(".terminal-host")).not.toBeNull();
+
+    act(() => {
+      terminalTestState.getDragDropHandler()?.({
+        payload: {
+          type: "drop",
+          paths: ["/Users/tomas/Desktop/screenshot 1.png", "/tmp/report (final).pdf"],
+          position: { x: 20, y: 20 },
+        },
+      });
+    });
+
+    expect(onSessionInput).toHaveBeenCalledWith("session-21");
+    expect(mockedApi.sendSessionInput).toHaveBeenCalledWith(
+      "session-21",
+      "/Users/tomas/Desktop/screenshot\\ 1.png /tmp/report\\ \\(final\\).pdf ",
+    );
   });
 });

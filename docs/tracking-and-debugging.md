@@ -98,7 +98,7 @@ Current commands:
 | `resume_session` | Resume a Codex or Claude saved session. |
 | `stop_session` | Stop a running PTY child process. |
 | `resize_session` | Resize the PTY. |
-| `send_session_input` | Write terminal input into the PTY. |
+| `send_session_input` | Write keyboard input or terminal-dropped file paths into the PTY. |
 | `session_output_snapshot` | Load buffered terminal output for a running session. |
 
 ## Events
@@ -115,7 +115,11 @@ Backend-to-frontend events:
 
 Frontend event listeners:
 
-- `src/TerminalPane.tsx` listens for `session_output` and `session_exited`.
+- `src/TerminalPane.tsx` listens for `session_output`, `session_exited`, and
+  Tauri v2 `getCurrentWebview().onDragDropEvent()` file-path drops for the
+  active terminal.
+- `native/tauri.conf.json` keeps `dragDropEnabled` enabled on the main window so
+  Tauri emits native file-drop events instead of relying on browser-only drops.
 - `src/hooks/useSessionEvents.ts` listens for attention events and sends
   notifications.
 - `src/hooks/useApp.ts` listens for `review_loop_updated`.
@@ -234,7 +238,8 @@ Check:
 - The task has an `active_session_id`.
 - The session process started successfully in the backend logs.
 - `session_output` events are being emitted.
-- `send_session_input` is called from the terminal UI.
+- `send_session_input` is called from keyboard input and from file drops over
+  the terminal host.
 - `session_output_snapshot` only works for running sessions.
 
 Relevant code:
