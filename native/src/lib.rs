@@ -5,33 +5,38 @@ mod sessions;
 
 use crate::db::Database;
 use crate::models::{
-    AgentKind, AgentProfile, AgentProfileInput, AppResult, AppSettings, AppSettingsInput, Repo,
-    ReviewLoop, ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskStatus,
+    AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings, AppSettingsInput,
+    Repo, ReviewLoop, ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskStatus,
     TaskSummary,
 };
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use tauri::{Emitter, Manager, State};
+use tracing_subscriber::EnvFilter;
 
 pub struct AppState {
     db: Arc<Mutex<Database>>,
     sessions: SessionManager,
 }
 
+fn app_result<T>(result: Result<T, String>) -> AppResult<T> {
+    result.map_err(Into::into)
+}
+
 #[tauri::command]
 fn add_repo(path: String, state: State<'_, AppState>) -> AppResult<Repo> {
-    state.db.lock().add_repo(path)
+    app_result(state.db.lock().add_repo(path))
 }
 
 #[tauri::command]
 fn list_repos(state: State<'_, AppState>) -> AppResult<Vec<Repo>> {
-    state.db.lock().list_repos()
+    app_result(state.db.lock().list_repos())
 }
 
 #[tauri::command]
 fn get_app_settings(state: State<'_, AppState>) -> AppResult<AppSettings> {
-    state.db.lock().get_app_settings()
+    app_result(state.db.lock().get_app_settings())
 }
 
 #[tauri::command]
@@ -39,7 +44,7 @@ fn update_app_settings(
     settings: AppSettingsInput,
     state: State<'_, AppState>,
 ) -> AppResult<AppSettings> {
-    state.db.lock().update_app_settings(settings)
+    app_result(state.db.lock().update_app_settings(settings))
 }
 
 #[tauri::command]
@@ -52,19 +57,19 @@ fn create_task(
     branch_name: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<TaskSummary> {
-    state.db.lock().create_task_record(
+    app_result(state.db.lock().create_task_record(
         repo_id,
         title,
         prompt,
         agent_profile_id,
         has_worktree.unwrap_or(false),
         branch_name,
-    )
+    ))
 }
 
 #[tauri::command]
 fn list_tasks(repo_id: Option<i64>, state: State<'_, AppState>) -> AppResult<Vec<TaskSummary>> {
-    state.db.lock().list_tasks(repo_id)
+    app_result(state.db.lock().list_tasks(repo_id))
 }
 
 #[tauri::command]
@@ -75,10 +80,12 @@ fn update_task_metadata(
     pr_url: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<TaskSummary> {
-    state
-        .db
-        .lock()
-        .update_task_metadata(task_id, title, status, pr_url)
+    app_result(
+        state
+            .db
+            .lock()
+            .update_task_metadata(task_id, title, status, pr_url),
+    )
 }
 
 #[tauri::command]
@@ -86,12 +93,13 @@ async fn delete_task(task_id: i64, state: State<'_, AppState>) -> AppResult<()> 
     let db = state.db.clone();
     tauri::async_runtime::spawn_blocking(move || db.lock().delete_task(task_id))
         .await
-        .map_err(|error| format!("Failed to finish task deletion: {error}"))?
+        .map_err(|error| AppError::from(format!("Failed to finish task deletion: {error}")))?
+        .map_err(Into::into)
 }
 
 #[tauri::command]
 fn list_agent_profiles(state: State<'_, AppState>) -> AppResult<Vec<AgentProfile>> {
-    state.db.lock().list_agent_profiles()
+    app_result(state.db.lock().list_agent_profiles())
 }
 
 #[tauri::command]
@@ -99,7 +107,7 @@ fn upsert_agent_profile(
     profile: AgentProfileInput,
     state: State<'_, AppState>,
 ) -> AppResult<AgentProfile> {
-    state.db.lock().upsert_agent_profile(profile)
+    app_result(state.db.lock().upsert_agent_profile(profile))
 }
 
 #[tauri::command]
@@ -109,25 +117,27 @@ fn start_pair_loop(
     max_rounds: i64,
     state: State<'_, AppState>,
 ) -> AppResult<ReviewLoop> {
-    state
-        .db
-        .lock()
-        .start_review_loop(task_id, reviewer_profile_id, max_rounds)
+    app_result(
+        state
+            .db
+            .lock()
+            .start_review_loop(task_id, reviewer_profile_id, max_rounds),
+    )
 }
 
 #[tauri::command]
 fn stop_pair_loop(task_id: i64, state: State<'_, AppState>) -> AppResult<ReviewLoop> {
-    state.db.lock().stop_review_loop(task_id)
+    app_result(state.db.lock().stop_review_loop(task_id))
 }
 
 #[tauri::command]
 fn get_task_review_loop(task_id: i64, state: State<'_, AppState>) -> AppResult<Option<ReviewLoop>> {
-    state.db.lock().review_loop_by_task_id(task_id)
+    app_result(state.db.lock().review_loop_by_task_id(task_id))
 }
 
 #[tauri::command]
 fn list_task_review_runs(task_id: i64, state: State<'_, AppState>) -> AppResult<Vec<ReviewRun>> {
-    state.db.lock().list_review_runs(task_id)
+    app_result(state.db.lock().list_review_runs(task_id))
 }
 
 #[tauri::command]
@@ -154,6 +164,7 @@ fn start_session(
     state
         .sessions
         .start(app, state.db.clone(), task, repo, agent, false)
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -177,7 +188,7 @@ fn resume_session(
             .agent_profile_by_id(agent_profile_id)?
             .ok_or_else(|| "Agent profile not found".to_string())?;
         if !matches!(agent.agent_kind, AgentKind::Codex | AgentKind::Claude) {
-            return Err("Agent profile does not support resume".to_string());
+            return Err("Agent profile does not support resume".into());
         }
         (task, repo, agent)
     };
@@ -185,6 +196,7 @@ fn resume_session(
     state
         .sessions
         .start(app, state.db.clone(), task, repo, agent, true)
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -193,14 +205,19 @@ fn stop_session(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> AppResult<Session> {
-    let session = state.sessions.stop(state.db.clone(), session_id.clone())?;
-    let _ = app.emit(
-        "session_exited",
-        SessionExitedEvent {
-            session_id,
-            exit_code: None,
-        },
-    );
+    let session = state
+        .sessions
+        .stop(state.db.clone(), session_id.clone())
+        .map_err(AppError::from)?;
+    let _ = app
+        .emit(
+            "session_exited",
+            SessionExitedEvent {
+                session_id,
+                exit_code: None,
+            },
+        )
+        .inspect_err(|error| tracing::warn!(?error, "failed to emit session_exited"));
     Ok(session)
 }
 
@@ -211,7 +228,7 @@ fn resize_session(
     cols: u16,
     state: State<'_, AppState>,
 ) -> AppResult<()> {
-    state.sessions.resize(&session_id, rows, cols)
+    app_result(state.sessions.resize(&session_id, rows, cols))
 }
 
 #[tauri::command]
@@ -220,7 +237,7 @@ fn send_session_input(
     data: String,
     state: State<'_, AppState>,
 ) -> AppResult<()> {
-    state.sessions.write_input(&session_id, &data)
+    app_result(state.sessions.write_input(&session_id, &data))
 }
 
 #[tauri::command]
@@ -228,10 +245,12 @@ fn session_output_snapshot(
     session_id: String,
     state: State<'_, AppState>,
 ) -> AppResult<SessionOutputSnapshot> {
-    state.sessions.output_snapshot(&session_id)
+    app_result(state.sessions.output_snapshot(&session_id))
 }
 
 pub fn run() {
+    init_tracing();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
@@ -240,6 +259,7 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .map_err(|error| format!("Failed to find app data directory: {error}"))?;
+            tracing::info!(path = %data_dir.display(), "opening app data directory");
             let db = Database::open(data_dir.join("nectus.sqlite3"))?;
             db.clear_active_sessions()?;
             app.manage(AppState {
@@ -281,4 +301,13 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+fn init_tracing() {
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("nectus_desktop_lib=info"));
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(false)
+        .try_init();
 }

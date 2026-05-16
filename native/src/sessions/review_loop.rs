@@ -32,6 +32,7 @@ pub(super) fn spawn_review_on_session_idle(
             &session_id,
             &cwd,
         ) {
+            tracing::warn!(?error, task_id, session_id = %session_id, "review round failed");
             let _ = db.lock().set_review_loop_state(
                 task_id,
                 ReviewLoopStatus::Error,
@@ -82,6 +83,7 @@ fn run_review_round(
 
     let round = review_loop.current_round + 1;
     let prompt = build_review_prompt(&task);
+    tracing::info!(task_id, round, reviewer = %reviewer.name, "starting review round");
     let reviewer_output = match run_reviewer_command(&reviewer, cwd, &prompt) {
         Ok(output) => output,
         Err(error) => {
@@ -109,6 +111,7 @@ fn run_review_round(
         output: reviewer_output.clone(),
         error,
     })?;
+    tracing::info!(task_id, round, verdict = %verdict.as_str(), "recorded review round");
     emit_review_loop_update(&app, &db, task_id, Some(run));
 
     let Some(review_loop) = db.lock().review_loop_by_task_id(task_id)? else {

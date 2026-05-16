@@ -1,7 +1,33 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use std::collections::BTreeMap;
+use strum::{Display, EnumString, IntoStaticStr};
 
-pub type AppResult<T> = Result<T, String>;
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+pub struct AppError(String);
+
+impl From<String> for AppError {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl From<&str> for AppError {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl Serialize for AppError {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+pub type AppResult<T> = Result<T, AppError>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -13,8 +39,11 @@ pub struct Repo {
     pub created_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Display, EnumString, IntoStaticStr,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum TaskStatus {
     Planned,
     InProgress,
@@ -24,22 +53,13 @@ pub enum TaskStatus {
 
 impl TaskStatus {
     pub fn as_str(&self) -> &'static str {
-        match self {
-            TaskStatus::Planned => "planned",
-            TaskStatus::InProgress => "in_progress",
-            TaskStatus::Review => "review",
-            TaskStatus::Done => "done",
-        }
+        self.into()
     }
 
     pub fn from_str(value: &str) -> Result<Self, String> {
-        match value {
-            "planned" => Ok(TaskStatus::Planned),
-            "in_progress" => Ok(TaskStatus::InProgress),
-            "review" => Ok(TaskStatus::Review),
-            "done" => Ok(TaskStatus::Done),
-            _ => Err(format!("Unknown task status: {value}")),
-        }
+        value
+            .parse()
+            .map_err(|_| format!("Unknown task status: {value}"))
     }
 }
 
@@ -68,8 +88,11 @@ pub struct TaskSummary {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Display, EnumString, IntoStaticStr,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum ReviewLoopStatus {
     Running,
     Reviewing,
@@ -81,31 +104,21 @@ pub enum ReviewLoopStatus {
 
 impl ReviewLoopStatus {
     pub fn as_str(&self) -> &'static str {
-        match self {
-            ReviewLoopStatus::Running => "running",
-            ReviewLoopStatus::Reviewing => "reviewing",
-            ReviewLoopStatus::Passed => "passed",
-            ReviewLoopStatus::MaxRoundsReached => "max_rounds_reached",
-            ReviewLoopStatus::Error => "error",
-            ReviewLoopStatus::Stopped => "stopped",
-        }
+        self.into()
     }
 
     pub fn from_str(value: &str) -> Result<Self, String> {
-        match value {
-            "running" => Ok(ReviewLoopStatus::Running),
-            "reviewing" => Ok(ReviewLoopStatus::Reviewing),
-            "passed" => Ok(ReviewLoopStatus::Passed),
-            "max_rounds_reached" => Ok(ReviewLoopStatus::MaxRoundsReached),
-            "error" => Ok(ReviewLoopStatus::Error),
-            "stopped" => Ok(ReviewLoopStatus::Stopped),
-            _ => Err(format!("Unknown review loop status: {value}")),
-        }
+        value
+            .parse()
+            .map_err(|_| format!("Unknown review loop status: {value}"))
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Display, EnumString, IntoStaticStr,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum ReviewVerdict {
     Pass,
     NeedsChanges,
@@ -114,20 +127,13 @@ pub enum ReviewVerdict {
 
 impl ReviewVerdict {
     pub fn as_str(&self) -> &'static str {
-        match self {
-            ReviewVerdict::Pass => "pass",
-            ReviewVerdict::NeedsChanges => "needs_changes",
-            ReviewVerdict::Unknown => "unknown",
-        }
+        self.into()
     }
 
     pub fn from_str(value: &str) -> Result<Self, String> {
-        match value {
-            "pass" => Ok(ReviewVerdict::Pass),
-            "needs_changes" => Ok(ReviewVerdict::NeedsChanges),
-            "unknown" => Ok(ReviewVerdict::Unknown),
-            _ => Err(format!("Unknown review verdict: {value}")),
-        }
+        value
+            .parse()
+            .map_err(|_| format!("Unknown review verdict: {value}"))
     }
 }
 
@@ -178,8 +184,11 @@ pub struct ReviewLoopUpdatedEvent {
     pub review_run: Option<ReviewRun>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Display, EnumString, IntoStaticStr,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum AgentKind {
     Codex,
     Claude,
@@ -189,22 +198,13 @@ pub enum AgentKind {
 
 impl AgentKind {
     pub fn as_str(&self) -> &'static str {
-        match self {
-            AgentKind::Codex => "codex",
-            AgentKind::Claude => "claude",
-            AgentKind::Gemini => "gemini",
-            AgentKind::Custom => "custom",
-        }
+        self.into()
     }
 
     pub fn from_str(value: &str) -> Result<Self, String> {
-        match value {
-            "codex" => Ok(AgentKind::Codex),
-            "claude" => Ok(AgentKind::Claude),
-            "gemini" => Ok(AgentKind::Gemini),
-            "custom" => Ok(AgentKind::Custom),
-            _ => Err(format!("Unknown agent kind: {value}")),
-        }
+        value
+            .parse()
+            .map_err(|_| format!("Unknown agent kind: {value}"))
     }
 }
 
@@ -236,8 +236,11 @@ pub struct AgentProfileInput {
     pub env: BTreeMap<String, String>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Display, EnumString, IntoStaticStr,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum ThemeMode {
     System,
     Light,
@@ -246,25 +249,21 @@ pub enum ThemeMode {
 
 impl ThemeMode {
     pub fn as_str(&self) -> &'static str {
-        match self {
-            ThemeMode::System => "system",
-            ThemeMode::Light => "light",
-            ThemeMode::Dark => "dark",
-        }
+        self.into()
     }
 
     pub fn from_str(value: &str) -> Result<Self, String> {
-        match value {
-            "system" => Ok(ThemeMode::System),
-            "light" => Ok(ThemeMode::Light),
-            "dark" => Ok(ThemeMode::Dark),
-            _ => Err(format!("Unknown theme mode: {value}")),
-        }
+        value
+            .parse()
+            .map_err(|_| format!("Unknown theme mode: {value}"))
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Display, EnumString, IntoStaticStr,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum DensityMode {
     Comfortable,
     Compact,
@@ -272,18 +271,13 @@ pub enum DensityMode {
 
 impl DensityMode {
     pub fn as_str(&self) -> &'static str {
-        match self {
-            DensityMode::Comfortable => "comfortable",
-            DensityMode::Compact => "compact",
-        }
+        self.into()
     }
 
     pub fn from_str(value: &str) -> Result<Self, String> {
-        match value {
-            "comfortable" => Ok(DensityMode::Comfortable),
-            "compact" => Ok(DensityMode::Compact),
-            _ => Err(format!("Unknown density mode: {value}")),
-        }
+        value
+            .parse()
+            .map_err(|_| format!("Unknown density mode: {value}"))
     }
 }
 

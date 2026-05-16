@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
+use walkdir::WalkDir;
 
 #[derive(Debug, Clone)]
 pub(super) struct CodexSessionMetadata {
@@ -37,16 +38,11 @@ fn collect_codex_session_ids(
     started_at: chrono::DateTime<chrono::FixedOffset>,
     best: &mut Option<(chrono::DateTime<chrono::FixedOffset>, CodexSessionMetadata)>,
 ) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            collect_codex_session_ids(&path, cwd, started_at, best);
+    for entry in WalkDir::new(dir).into_iter().filter_map(Result::ok) {
+        if !entry.file_type().is_file() {
             continue;
         }
+        let path = entry.into_path();
         if path.extension().and_then(|value| value.to_str()) != Some("jsonl") {
             continue;
         }
@@ -132,7 +128,14 @@ pub(super) fn spawn_codex_event_watcher(
     std::thread::spawn(move || {
         let started_at = match chrono::DateTime::parse_from_rfc3339(&started_at) {
             Ok(value) => value,
-            Err(_) => return,
+            Err(error) => {
+                tracing::warn!(
+                    ?error,
+                    session_id = %session_id,
+                    "failed to parse session start timestamp"
+                );
+                return;
+            }
         };
         let mut metadata = None;
         for _ in 0..120 {
@@ -146,8 +149,20 @@ pub(super) fn spawn_codex_event_watcher(
             std::thread::sleep(Duration::from_millis(500));
         }
         let Some(metadata) = metadata else {
+            tracing::warn!(
+                session_id = %session_id,
+                task_id,
+                cwd = %cwd.display(),
+                "timed out waiting for Codex session metadata"
+            );
             return;
         };
+        tracing::info!(
+            session_id = %session_id,
+            codex_session_id = %metadata.id,
+            path = %metadata.path.display(),
+            "watching Codex session log"
+        );
 
         let mut processed_lines = 0_usize;
         loop {
@@ -155,6 +170,11 @@ pub(super) fn spawn_codex_event_watcher(
                 return;
             }
             let Ok(contents) = fs::read_to_string(&metadata.path) else {
+                tracing::trace!(
+                    session_id = %session_id,
+                    path = %metadata.path.display(),
+                    "Codex session log is not readable yet"
+                );
                 std::thread::sleep(Duration::from_millis(500));
                 continue;
             };
@@ -162,15 +182,23 @@ pub(super) fn spawn_codex_event_watcher(
                 if let Some(event) = codex_session_event_from_line(line, started_at) {
                     match event {
                         CodexSessionEvent::Idle { turn_id, message } => {
-                            let _ = app.emit(
-                                "session_idle",
-                                SessionIdleEvent {
-                                    session_id: session_id.clone(),
-                                    task_id,
-                                    turn_id,
-                                    message,
-                                },
-                            );
+                            let _ = app
+                                .emit(
+                                    "session_idle",
+                                    SessionIdleEvent {
+                                        session_id: session_id.clone(),
+                                        task_id,
+                                        turn_id,
+                                        message,
+                                    },
+                                )
+                                .inspect_err(|error| {
+                                    tracing::warn!(
+                                        ?error,
+                                        session_id = %session_id,
+                                        "failed to emit session_idle"
+                                    )
+                                });
                             spawn_review_on_session_idle(
                                 app.clone(),
                                 db.clone(),
@@ -185,16 +213,24 @@ pub(super) fn spawn_codex_event_watcher(
                             reason,
                             prompt,
                         } => {
-                            let _ = app.emit(
-                                "session_needs_input",
-                                SessionNeedsInputEvent {
-                                    session_id: session_id.clone(),
-                                    task_id,
-                                    turn_id,
-                                    reason,
-                                    prompt,
-                                },
-                            );
+                            let _ = app
+                                .emit(
+                                    "session_needs_input",
+                                    SessionNeedsInputEvent {
+                                        session_id: session_id.clone(),
+                                        task_id,
+                                        turn_id,
+                                        reason,
+                                        prompt,
+                                    },
+                                )
+                                .inspect_err(|error| {
+                                    tracing::warn!(
+                                        ?error,
+                                        session_id = %session_id,
+                                        "failed to emit session_needs_input"
+                                    )
+                                });
                         }
                     }
                 }

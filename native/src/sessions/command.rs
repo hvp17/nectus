@@ -28,18 +28,18 @@ fn resolve_agent_command_in_env(
 ) -> Result<PathBuf, String> {
     let command_path = Path::new(command);
     if command_path.components().count() > 1 {
-        return if command_path.exists() {
+        return if is_executable_file(command_path) {
             Ok(command_path.to_path_buf())
+        } else if command_path.exists() {
+            Err(format!("Agent command is not executable: {command}"))
         } else {
             Err(format!("Agent command does not exist: {command}"))
         };
     }
 
-    for path_dir in env::split_paths(&search_env.path) {
-        let candidate = path_dir.join(command);
-        if is_executable_file(&candidate) {
-            return Ok(candidate);
-        }
+    let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    if let Ok(path) = which::which_in(command, Some(&search_env.path), cwd) {
+        return Ok(path);
     }
 
     for candidate in fallback_agent_candidates(command, search_env.home.as_deref()) {
@@ -200,6 +200,18 @@ mod tests {
             resolve_agent_command(executable.to_str().unwrap()).unwrap(),
             executable
         );
+    }
+
+    #[test]
+    fn rejects_explicit_command_path_that_is_not_executable() {
+        let dir = tempdir().unwrap();
+        let executable = dir.path().join("agent");
+        std::fs::write(&executable, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+        let error = resolve_agent_command(executable.to_str().unwrap()).unwrap_err();
+
+        assert!(error.contains("Agent command is not executable"), "{error}");
     }
 
     #[test]

@@ -143,6 +143,15 @@ impl SessionManager {
             task.last_session_label.as_deref(),
         )?;
 
+        tracing::info!(
+            session_id = %session_id,
+            task_id = task.id,
+            agent = %agent.name,
+            cwd = %cwd,
+            resume,
+            "started agent session"
+        );
+
         self.sessions.lock().insert(
             session.id.clone(),
             RunningSession {
@@ -192,36 +201,65 @@ impl SessionManager {
                                 .get_mut(&session_id)
                                 .map(|running| append_output_buffer(running, &data))
                                 .unwrap_or(0);
-                            let _ = app.emit(
-                                "session_output",
-                                SessionOutputEvent {
-                                    session_id: session_id.clone(),
-                                    data,
-                                    start_offset,
-                                },
-                            );
+                            let _ = app
+                                .emit(
+                                    "session_output",
+                                    SessionOutputEvent {
+                                        session_id: session_id.clone(),
+                                        data,
+                                        start_offset,
+                                    },
+                                )
+                                .inspect_err(|error| {
+                                    tracing::warn!(
+                                        ?error,
+                                        session_id = %session_id,
+                                        "failed to emit session output"
+                                    )
+                                });
                         }
-                        Err(_) => break,
+                        Err(error) => {
+                            tracing::debug!(
+                                ?error,
+                                session_id = %session_id,
+                                "session reader stopped"
+                            );
+                            break;
+                        }
                     }
                 }
                 if sessions.lock().remove(&session_id).is_some() {
                     if agent_command == AgentKind::Codex.as_str() {
                         if let Some(metadata) = latest_codex_session_metadata(&cwd, &started_at) {
-                            let _ = db.lock().set_last_session(
-                                task_id,
-                                &metadata.id,
-                                metadata.label.as_deref(),
-                            );
+                            let _ = db
+                                .lock()
+                                .set_last_session(task_id, &metadata.id, metadata.label.as_deref())
+                                .inspect_err(|error| {
+                                    tracing::warn!(
+                                        ?error,
+                                        task_id,
+                                        "failed to save latest Codex session"
+                                    )
+                                });
                         }
                     }
-                    let _ = db.lock().set_active_session(task_id, None);
-                    let _ = app.emit(
-                        "session_exited",
-                        SessionExitedEvent {
-                            session_id,
-                            exit_code: None,
-                        },
-                    );
+                    let _ = db
+                        .lock()
+                        .set_active_session(task_id, None)
+                        .inspect_err(|error| {
+                            tracing::warn!(?error, task_id, "failed to clear active session")
+                        });
+                    let _ = app
+                        .emit(
+                            "session_exited",
+                            SessionExitedEvent {
+                                session_id,
+                                exit_code: None,
+                            },
+                        )
+                        .inspect_err(|error| {
+                            tracing::warn!(?error, "failed to emit session_exited")
+                        });
                 }
             }
         });
@@ -249,6 +287,11 @@ impl SessionManager {
             .remove(&session_id)
             .ok_or_else(|| "Session is not running".to_string())?;
         let _ = running.child.kill();
+        tracing::info!(
+            session_id = %session_id,
+            task_id = running.session.task_id,
+            "stopped agent session"
+        );
         let stopped_at = Utc::now().to_rfc3339();
         running.session.state = SessionState::Stopped;
         running.session.stopped_at = Some(stopped_at);
@@ -301,14 +344,25 @@ impl SessionManager {
         let ids: Vec<String> = self.sessions.lock().keys().cloned().collect();
         for session_id in ids {
             if let Ok(session) = self.stop(db.clone(), session_id.clone()) {
-                let _ = app.emit(
-                    "session_exited",
-                    SessionExitedEvent {
-                        session_id,
-                        exit_code: None,
-                    },
-                );
-                let _ = db.lock().set_active_session(session.task_id, None);
+                let _ = app
+                    .emit(
+                        "session_exited",
+                        SessionExitedEvent {
+                            session_id,
+                            exit_code: None,
+                        },
+                    )
+                    .inspect_err(|error| tracing::warn!(?error, "failed to emit session_exited"));
+                let _ = db
+                    .lock()
+                    .set_active_session(session.task_id, None)
+                    .inspect_err(|error| {
+                        tracing::warn!(
+                            ?error,
+                            task_id = session.task_id,
+                            "failed to clear active session"
+                        )
+                    });
             }
         }
     }

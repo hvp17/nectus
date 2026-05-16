@@ -4,6 +4,7 @@ use crate::models::{
 };
 use rusqlite::Row;
 use std::collections::BTreeMap;
+use std::io;
 
 pub(super) fn rows<T, I>(mapped: I) -> Result<Vec<T>, String>
 where
@@ -63,27 +64,41 @@ pub(super) fn agent_from_row(row: &Row<'_>) -> rusqlite::Result<AgentProfile> {
     let agent_kind: String = row.get(2)?;
     let agent_kind = match AgentKind::from_str(&agent_kind) {
         Ok(kind) => kind,
-        Err(error) => {
-            return Err(rusqlite::Error::FromSqlConversionFailure(
-                2,
-                rusqlite::types::Type::Text,
-                Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, error)),
-            ));
-        }
+        Err(error) => return Err(invalid_text_column(2, error)),
     };
     let args_json: String = row.get(5)?;
     let env_json: String = row.get(6)?;
+    let args = serde_json::from_str(&args_json).map_err(|error| {
+        invalid_text_column(
+            5,
+            format!("Failed to parse agent profile args_json: {error}"),
+        )
+    })?;
+    let env = serde_json::from_str::<BTreeMap<String, String>>(&env_json).map_err(|error| {
+        invalid_text_column(
+            6,
+            format!("Failed to parse agent profile env_json: {error}"),
+        )
+    })?;
     Ok(AgentProfile {
         id: row.get(0)?,
         name: row.get(1)?,
         agent_kind,
         command: row.get(3)?,
         model: row.get(4)?,
-        args: serde_json::from_str(&args_json).unwrap_or_default(),
-        env: serde_json::from_str::<BTreeMap<String, String>>(&env_json).unwrap_or_default(),
+        args,
+        env,
         created_at: row.get(7)?,
         updated_at: row.get(8)?,
     })
+}
+
+fn invalid_text_column(column: usize, error: String) -> rusqlite::Error {
+    rusqlite::Error::FromSqlConversionFailure(
+        column,
+        rusqlite::types::Type::Text,
+        Box::new(io::Error::new(io::ErrorKind::InvalidData, error)),
+    )
 }
 
 pub(super) fn app_settings_from_row(

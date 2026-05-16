@@ -124,6 +124,28 @@ fn upserts_agent_profile_with_args_and_env() {
 }
 
 #[test]
+fn list_agent_profiles_rejects_corrupt_args_json() {
+    let db = Database::open_in_memory().unwrap();
+    db.conn
+        .execute(
+            "
+            INSERT INTO agent_profiles
+              (name, agent_kind, command, model, args_json, env_json, created_at, updated_at)
+            VALUES ('Broken', 'custom', 'broken-agent', NULL, '{not-json', '{}', 'now', 'now')
+            ",
+            [],
+        )
+        .unwrap();
+
+    let error = db.list_agent_profiles().unwrap_err();
+
+    assert!(
+        error.contains("Failed to parse agent profile args_json"),
+        "{error}"
+    );
+}
+
+#[test]
 fn starts_review_loop_and_records_review_runs() {
     let db = Database::open_in_memory().unwrap();
     let repo_dir = tempdir().unwrap();
