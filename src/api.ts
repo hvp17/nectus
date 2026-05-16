@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
+import { formatNotificationBody } from "./notificationText";
 import type {
   AgentProfile,
   AppSettings,
@@ -15,7 +16,6 @@ import type {
 } from "./types";
 
 const isTauri = "__TAURI_INTERNALS__" in window;
-const notificationBodyLimit = 240;
 
 const demoProfiles: AgentProfile[] = [
   {
@@ -167,7 +167,7 @@ export const api = {
 
     sendNotification({
       title,
-      body: body.length > notificationBodyLimit ? `${body.slice(0, notificationBodyLimit - 3)}...` : body,
+      body: formatNotificationBody(body),
     });
     return true;
   },
