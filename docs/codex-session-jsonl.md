@@ -3,6 +3,9 @@
 This maps the Codex session rollout files that Nectus reads from the Codex
 sessions directory, usually `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`.
 
+For the broader app-level state, event, and troubleshooting guide, see
+[tracking-and-debugging.md](tracking-and-debugging.md).
+
 Checked against the Codex source on 2026-05-16. Treat this as a snapshot;
 Codex can add or rename event types.
 
