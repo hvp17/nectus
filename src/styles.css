@@ -429,6 +429,51 @@ textarea {
   font-size: 12px;
 }
 
+.brand-logo {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  color: var(--foreground);
+}
+
+.brand-logo-sm {
+  width: 16px;
+  height: 16px;
+}
+
+.brand-logo-md {
+  width: 22px;
+  height: 22px;
+}
+
+.brand-logo-lg {
+  width: 30px;
+  height: 30px;
+}
+
+.brand-logo img,
+.brand-logo > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.brand-logo-custom {
+  color: var(--muted-foreground);
+}
+
+.select-value-with-logo,
+.select-option-with-logo {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.select-value-with-logo {
+  flex: 1;
+}
+
 .profile-list {
   display: grid;
   gap: 12px;
@@ -448,14 +493,13 @@ textarea {
 }
 
 .profile-kind-mark {
-  display: grid;
-  place-items: center;
   width: 36px;
   height: 36px;
+  padding: 7px;
   border-radius: var(--radius-md);
-  background: var(--primary);
-  color: var(--primary-foreground);
-  font-weight: 800;
+  border: 1px solid var(--border);
+  background: var(--background);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 4%, transparent);
 }
 
 .profile-title-fields {
@@ -482,6 +526,37 @@ textarea {
   justify-content: flex-end;
   padding: 16px 0 2px;
   background: linear-gradient(to top, var(--background) 72%, transparent);
+}
+
+.agent-choice-logo {
+  width: 28px;
+  height: 28px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--background);
+}
+
+.agent-choice-text {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.agent-choice-text > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-choice-text > span:last-child {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
 }
 
 .density-compact .metrics,

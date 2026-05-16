@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Plus, Save } from "lucide-react";
-import { Badge } from "./ui/badge";
+import { AgentLogo, ModelLogo } from "./AgentBrand";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader } from "./ui/card";
 import { Input } from "./ui/input";
@@ -84,6 +84,9 @@ export function SettingsPage({
     () => profileDrafts.filter((profile) => profile.id && profile.name.trim()),
     [profileDrafts],
   );
+  const selectedDefaultProfile = defaultProfileOptions.find(
+    (profile) => profile.id === settingsDraft.defaultAgentProfileId,
+  );
 
   const updateProfileDraft = (index: number, patch: Partial<ProfileDraft>) => {
     setProfileDrafts((current) =>
@@ -164,13 +167,19 @@ export function SettingsPage({
                 }
               >
                 <SelectTrigger id="default-agent-profile" className="h-9 w-full justify-between">
-                  <SelectValue />
+                  <span className="select-value-with-logo">
+                    {selectedDefaultProfile && <AgentLogo agentKind={selectedDefaultProfile.agentKind} size="sm" />}
+                    <SelectValue />
+                  </span>
                 </SelectTrigger>
                 <SelectContent position="popper">
                   <SelectItem value={noDefaultProfileValue}>No default</SelectItem>
                   {defaultProfileOptions.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id!.toString()}>
-                      {profile.name}
+                    <SelectItem key={profile.id} value={profile.id!.toString()} textValue={profile.name}>
+                      <span className="select-option-with-logo">
+                        <AgentLogo agentKind={profile.agentKind} size="sm" />
+                        {profile.name}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -290,11 +299,12 @@ function ProfileEditor({
 }) {
   const presets = modelPresets[profile.agentKind];
   const modelValue = profile.model && presets.includes(profile.model) ? profile.model : profile.model ? customModelValue : cliDefaultModelValue;
+  const selectedModel = modelValue === customModelValue ? profile.customModel : modelValue === cliDefaultModelValue ? null : modelValue;
 
   return (
     <Card size="sm" className="profile-editor bg-muted/40 shadow-none">
       <CardHeader className="profile-editor-header p-0">
-        <Badge className="profile-kind-mark rounded-md">{agentKindLabels[profile.agentKind].slice(0, 1)}</Badge>
+        <AgentLogo agentKind={profile.agentKind} size="lg" className="profile-kind-mark" />
         <div className="profile-title-fields">
           <Input
             aria-label="Profile name"
@@ -304,12 +314,18 @@ function ProfileEditor({
           />
           <Select value={profile.agentKind} onValueChange={(value) => onChange({ agentKind: value as AgentKind })}>
             <SelectTrigger aria-label="Agent kind" className="h-8 w-full justify-between">
-              <SelectValue />
+              <span className="select-value-with-logo">
+                <AgentLogo agentKind={profile.agentKind} size="sm" />
+                <SelectValue />
+              </span>
             </SelectTrigger>
             <SelectContent position="popper">
               {Object.entries(agentKindLabels).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
+                <SelectItem key={value} value={value} textValue={label}>
+                  <span className="select-option-with-logo">
+                    <AgentLogo agentKind={value as AgentKind} size="sm" />
+                    {label}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -338,16 +354,32 @@ function ProfileEditor({
             }}
           >
             <SelectTrigger className="h-8 w-full justify-between">
-              <SelectValue />
+              <span className="select-value-with-logo">
+                <ModelLogo agentKind={profile.agentKind} model={selectedModel} size="sm" />
+                <SelectValue />
+              </span>
             </SelectTrigger>
             <SelectContent position="popper">
-              <SelectItem value={cliDefaultModelValue}>CLI default</SelectItem>
+              <SelectItem value={cliDefaultModelValue} textValue="CLI default">
+                <span className="select-option-with-logo">
+                  <ModelLogo agentKind={profile.agentKind} model={null} size="sm" />
+                  CLI default
+                </span>
+              </SelectItem>
               {presets.map((preset) => (
-                <SelectItem key={preset} value={preset}>
-                  {preset}
+                <SelectItem key={preset} value={preset} textValue={preset}>
+                  <span className="select-option-with-logo">
+                    <ModelLogo agentKind={profile.agentKind} model={preset} size="sm" />
+                    {preset}
+                  </span>
                 </SelectItem>
               ))}
-              <SelectItem value={customModelValue}>Custom...</SelectItem>
+              <SelectItem value={customModelValue} textValue="Custom...">
+                <span className="select-option-with-logo">
+                  <ModelLogo agentKind="custom" model={profile.customModel || "custom"} size="sm" />
+                  Custom...
+                </span>
+              </SelectItem>
             </SelectContent>
           </Select>
           {modelValue === customModelValue && (
