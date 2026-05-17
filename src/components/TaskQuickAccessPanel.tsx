@@ -2,9 +2,9 @@ import {
   Alert01Icon,
   CheckmarkCircle02Icon,
   GitBranchIcon,
+  PlusSignIcon,
   RadioIcon,
   StopCircleIcon,
-  TaskAdd01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { ReactNode } from "react";
@@ -82,13 +82,13 @@ export function TaskQuickAccessPanel({
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-xs"
+                size="icon-sm"
                 className="task-quick-access-add"
                 aria-label="Add task"
                 disabled={createTaskDisabled}
                 onClick={onCreateTask}
               >
-                <HugeiconsIcon icon={TaskAdd01Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
+                <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" className="text-xs">
