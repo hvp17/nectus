@@ -275,6 +275,39 @@
   border-top: 1px solid var(--border);
 }
 
+.task-review-step-description {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-review-action {
+  display: flex;
+  width: min(calc(100% - 34px), 260px);
+  min-width: 0;
+  align-items: stretch;
+  margin-top: 10px;
+  margin-left: 34px;
+}
+
+.task-review-action-main {
+  min-width: 0;
+  flex: 1;
+  justify-content: flex-start;
+  gap: 7px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.task-review-action-menu {
+  width: 34px;
+  flex: none;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 0;
+}
+
 .review-panel {
   margin-top: 18px;
   padding-top: 18px;

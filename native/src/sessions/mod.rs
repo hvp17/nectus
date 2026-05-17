@@ -44,6 +44,23 @@ struct RunningSession {
     output_end_offset: u64,
 }
 
+struct ReviewSessionTarget {
+    session_id: String,
+    cwd: PathBuf,
+}
+
+fn review_session_target<'a>(
+    mut sessions: impl Iterator<Item = (&'a Session, &'a PathBuf)>,
+    task_id: i64,
+) -> Option<ReviewSessionTarget> {
+    sessions
+        .find(|(session, _)| session.task_id == task_id)
+        .map(|(session, cwd)| ReviewSessionTarget {
+            session_id: session.id.clone(),
+            cwd: cwd.clone(),
+        })
+}
+
 impl SessionManager {
     pub fn new() -> Self {
         Self {
@@ -333,21 +350,27 @@ impl SessionManager {
         db: Arc<Mutex<Database>>,
         task_id: i64,
     ) -> Result<(), String> {
-        let (session_id, cwd) = {
+        let target = {
             let sessions = self.sessions.lock();
-            let running = sessions
-                .values()
-                .find(|running| {
-                    running.session.task_id == task_id
-                        && running.agent_command == AgentKind::Codex.as_str()
-                })
-                .ok_or_else(|| {
-                    "Start review requires a running Codex session for this task".to_string()
-                })?;
-            (running.session.id.clone(), running.cwd.clone())
+            review_session_target(
+                sessions
+                    .values()
+                    .map(|running| (&running.session, &running.cwd)),
+                task_id,
+            )
+            .ok_or_else(|| {
+                "Start review requires a running worker session for this task".to_string()
+            })?
         };
 
-        spawn_review_on_session_idle(app, db, self.sessions.clone(), task_id, session_id, cwd);
+        spawn_review_on_session_idle(
+            app,
+            db,
+            self.sessions.clone(),
+            task_id,
+            target.session_id,
+            target.cwd,
+        );
         Ok(())
     }
 
@@ -392,6 +415,42 @@ impl SessionManager {
                     });
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn session(id: &str, task_id: i64) -> Session {
+        Session {
+            id: id.to_string(),
+            resumable_session_id: Some(id.to_string()),
+            resumable_session_label: None,
+            task_id,
+            agent_profile_id: 2,
+            state: SessionState::Running,
+            pid: None,
+            started_at: "2026-05-17T00:00:00.000Z".to_string(),
+            stopped_at: None,
+        }
+    }
+
+    #[test]
+    fn review_session_target_accepts_non_codex_worker_sessions() {
+        let codex_cwd = PathBuf::from("/tmp/codex-task");
+        let claude_cwd = PathBuf::from("/tmp/claude-task");
+        let codex_session = session("codex-session", 7);
+        let claude_session = session("claude-session", 42);
+
+        let target = review_session_target(
+            [(&codex_session, &codex_cwd), (&claude_session, &claude_cwd)].into_iter(),
+            42,
+        )
+        .expect("review session target should exist");
+
+        assert_eq!(target.session_id, "claude-session");
+        assert_eq!(target.cwd, claude_cwd);
     }
 }
 

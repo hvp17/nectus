@@ -113,7 +113,7 @@ Current commands:
 | `list_agent_profiles` | Load agent profiles. |
 | `upsert_agent_profile` | Create or update an agent profile. |
 | `start_pair_loop` | Enable reviewer automation for a task. |
-| `run_pair_review` | Trigger an immediate reviewer pass for a task with a running Codex session. |
+| `run_pair_review` | Trigger an immediate reviewer pass for a task with a running worker session. |
 | `stop_pair_loop` | Stop reviewer automation for a task. |
 | `get_task_review_loop` | Load a task's current review loop. |
 | `list_task_review_runs` | Load stored reviewer runs for a task. |
@@ -342,8 +342,9 @@ shipping.
 Check:
 
 - The review loop status is `running` or `reviewing`.
-- The worker session is a Codex session that emits `session_idle`.
-- Manual `Start review` should emit `review_loop_updated` with status
+- Manual review runs have a running worker session for the task. Automatic review
+  after idle still requires a Codex session that emits `session_idle`.
+- Manual review runs should emit `review_loop_updated` with status
   `reviewing` before the reviewer command finishes.
 - The reviewer profile command resolves and exits successfully.
 - Claude and Gemini reviewer profiles can run headless with `-p`; custom
@@ -351,7 +352,7 @@ Check:
 - Reviewer output contains an exact first-line verdict token:
   `NECTUS_NO_BLOCKERS`, `NECTUS_BLOCKERS`, or `NECTUS_FEEDBACK`. Legacy `PASS`
   and blocking-review phrase parsing are still accepted.
-- Worker feedback is written to the Codex PTY and submitted with carriage
+- Worker feedback is written to the active worker PTY and submitted with carriage
   return (`\r`), matching the terminal Enter key.
 
 Relevant code:
