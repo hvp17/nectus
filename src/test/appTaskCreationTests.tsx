@@ -216,16 +216,44 @@ export function defineAppTaskCreationTests() {
       target: { value: "Create prefixed branch" },
     });
     fireEvent.click(screen.getByRole("radio", { name: /new worktree/i }));
+    const branchInput = screen.getByLabelText(/branch name/i);
+    const suggestedBranchName = branchInput.getAttribute("placeholder");
+
+    expect(suggestedBranchName).toMatch(/^feat\/task-[a-z0-9-]+$/);
     fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
 
     await waitFor(() => {
       expect(mockedApi.createTask).toHaveBeenCalledWith(
         expect.objectContaining({
           hasWorktree: true,
-          branchName: expect.stringMatching(/^feat\/task-[a-z0-9-]+$/),
+          branchName: suggestedBranchName,
         }),
       );
     });
+  });
+
+  it("shows the generated prefixed worktree branch as the branch placeholder", async () => {
+    mockProject();
+    mockedApi.getAppSettings.mockResolvedValue({
+      defaultAgentProfileId: 1,
+      defaultWorktreeRootPattern: "../{repoName}-worktrees",
+      defaultBranchPrefix: "feat/",
+      theme: "system",
+      density: "comfortable",
+      updatedAt: "2026-05-14T00:00:00.000Z",
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+    fireEvent.click(screen.getByRole("radio", { name: /new worktree/i }));
+
+    const branchInput = screen.getByLabelText(/branch name/i);
+    const placeholder = branchInput.getAttribute("placeholder");
+
+    expect(branchInput).toHaveValue("");
+    expect(placeholder).toMatch(/^feat\/task-[a-z0-9-]+$/);
+    expect(placeholder).not.toBe("feat/task-identifier");
   });
 
   it("dismisses the toast when the close button is clicked", async () => {

@@ -8,7 +8,15 @@ export function createBranchIdentifier() {
   return `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function resolveWorktreeBranchName(branchName: string, defaultBranchPrefix?: string | null) {
+export function getSuggestedWorktreeBranchName(defaultBranchPrefix: string | null | undefined, branchIdentifier: string) {
+  return `${defaultBranchPrefix?.trim() ?? ""}${branchIdentifier}`;
+}
+
+export function resolveWorktreeBranchName(
+  branchName: string,
+  defaultBranchPrefix?: string | null,
+  branchIdentifier = createBranchIdentifier(),
+) {
   const trimmedBranchName = branchName.trim();
   const trimmedDefaultPrefix = defaultBranchPrefix?.trim() ?? "";
 
@@ -16,7 +24,7 @@ export function resolveWorktreeBranchName(branchName: string, defaultBranchPrefi
     return trimmedBranchName;
   }
 
-  return `${trimmedDefaultPrefix}${createBranchIdentifier()}`;
+  return getSuggestedWorktreeBranchName(trimmedDefaultPrefix, branchIdentifier);
 }
 
 export function useCreateTaskForm(defaultAgentProfileId?: number) {
@@ -24,6 +32,7 @@ export function useCreateTaskForm(defaultAgentProfileId?: number) {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskPrompt, setNewTaskPrompt] = useState("");
   const [newTaskBranchName, setNewTaskBranchName] = useState("");
+  const [newTaskBranchIdentifier, setNewTaskBranchIdentifier] = useState(() => createBranchIdentifier());
   const [newTaskHasWorktree, setNewTaskHasWorktree] = useState(false);
   const [newTaskAgentProfileId, setNewTaskAgentProfileId] = useState<number | undefined>(defaultAgentProfileId);
 
@@ -31,6 +40,7 @@ export function useCreateTaskForm(defaultAgentProfileId?: number) {
     setNewTaskTitle("");
     setNewTaskPrompt("");
     setNewTaskBranchName("");
+    setNewTaskBranchIdentifier(createBranchIdentifier());
     setNewTaskHasWorktree(false);
     setNewTaskAgentProfileId(agentProfileId);
   };
@@ -53,6 +63,12 @@ export function useCreateTaskForm(defaultAgentProfileId?: number) {
     return firstPromptLine ? firstPromptLine.slice(0, 80) : "Untitled task";
   };
 
+  const getSuggestedBranchName = (defaultBranchPrefix?: string | null) =>
+    getSuggestedWorktreeBranchName(defaultBranchPrefix, newTaskBranchIdentifier);
+
+  const resolveBranchName = (branchName: string, defaultBranchPrefix?: string | null) =>
+    resolveWorktreeBranchName(branchName, defaultBranchPrefix, newTaskBranchIdentifier);
+
   return {
     createTaskOpen,
     setCreateTaskOpen,
@@ -69,6 +85,7 @@ export function useCreateTaskForm(defaultAgentProfileId?: number) {
     resetCreateTaskForm,
     closeCreateTaskModal,
     getGeneratedTaskTitle,
-    resolveWorktreeBranchName,
+    getSuggestedBranchName,
+    resolveWorktreeBranchName: resolveBranchName,
   };
 }

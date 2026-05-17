@@ -64,6 +64,7 @@ function App() {
     setNewTaskHasWorktree,
     newTaskAgentProfileId,
     setNewTaskAgentProfileId,
+    suggestedBranchName,
     createTask,
     closeCreateTaskModal,
     updateStatus,
@@ -223,7 +224,7 @@ function App() {
             setNewTaskBranchName={setNewTaskBranchName}
             newTaskHasWorktree={newTaskHasWorktree}
             setNewTaskHasWorktree={setNewTaskHasWorktree}
-            defaultBranchPrefix={settings?.defaultBranchPrefix}
+            suggestedBranchName={suggestedBranchName}
             newTaskAgentProfileId={newTaskAgentProfileId}
             setNewTaskAgentProfileId={setNewTaskAgentProfileId}
           />

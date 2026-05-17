@@ -38,7 +38,7 @@ interface CreateTaskModalProps {
   setNewTaskBranchName: (val: string) => void;
   newTaskHasWorktree: boolean;
   setNewTaskHasWorktree: (val: boolean) => void;
-  defaultBranchPrefix?: string | null;
+  suggestedBranchName: string;
   newTaskAgentProfileId: number | undefined;
   setNewTaskAgentProfileId: (val: number) => void;
 }
@@ -56,7 +56,7 @@ export function CreateTaskModal({
   setNewTaskBranchName,
   newTaskHasWorktree,
   setNewTaskHasWorktree,
-  defaultBranchPrefix,
+  suggestedBranchName,
   newTaskAgentProfileId,
   setNewTaskAgentProfileId,
 }: CreateTaskModalProps) {
@@ -131,11 +131,7 @@ export function CreateTaskModal({
               <RadioGroup
                 value={newTaskHasWorktree ? "worktree" : "direct"}
                 onValueChange={(value) => {
-                  const nextHasWorktree = value === "worktree";
-                  setNewTaskHasWorktree(nextHasWorktree);
-                  if (nextHasWorktree && !newTaskBranchName.trim() && defaultBranchPrefix) {
-                    setNewTaskBranchName(defaultBranchPrefix);
-                  }
+                  setNewTaskHasWorktree(value === "worktree");
                 }}
                 className="grid grid-cols-2 gap-3"
               >
@@ -159,7 +155,7 @@ export function CreateTaskModal({
                 <FieldLabel htmlFor="new-task-branch">Branch Name (Optional)</FieldLabel>
                 <Input
                   id="new-task-branch"
-                  placeholder={`${defaultBranchPrefix ?? "feat/"}task-identifier`}
+                  placeholder={suggestedBranchName}
                   value={newTaskBranchName}
                   onChange={(e) => setNewTaskBranchName(e.target.value)}
                   className="h-10 font-mono text-xs"

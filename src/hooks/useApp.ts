@@ -55,6 +55,7 @@ export function useApp() {
     resetCreateTaskForm,
     closeCreateTaskModal,
     getGeneratedTaskTitle,
+    getSuggestedBranchName,
     resolveWorktreeBranchName,
   } = taskForm;
 
@@ -411,6 +412,7 @@ export function useApp() {
     setNewTaskHasWorktree,
     newTaskAgentProfileId,
     setNewTaskAgentProfileId,
+    suggestedBranchName: getSuggestedBranchName(settings?.defaultBranchPrefix),
     createTask,
     closeCreateTaskModal,
     updateStatus,
