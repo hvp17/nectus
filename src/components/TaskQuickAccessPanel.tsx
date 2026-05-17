@@ -60,6 +60,7 @@ export function TaskQuickAccessPanel({
           const attention = getTaskAttention(taskAttention, task.id);
           const quickStatus = getQuickStatus(attention);
           const location = task.hasWorktree ? task.branchName : "Task only";
+          const locationLabel = task.hasWorktree ? `Worktree: ${location}` : "Task only";
           const agentKind: AgentKind = task.agentKind ?? "custom";
 
           return (
@@ -83,15 +84,19 @@ export function TaskQuickAccessPanel({
                   <span className="task-quick-access-title">{task.title}</span>
                   <span className="task-quick-access-meta">
                     <AgentLogo agentKind={agentKind} size="sm" />
-                    <span>{task.agentName ?? task.lastSessionAgent ?? "Agent"}</span>
-                    <span aria-hidden="true">/</span>
                     <span>{quickStatus.label}</span>
                     <span aria-hidden="true">/</span>
                     <span>{taskStatusLabels[task.status]}</span>
-                  </span>
-                  <span className="task-quick-access-location">
-                    <GitBranch size={11} aria-hidden="true" />
-                    <span>{location}</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="task-quick-access-location" aria-label={locationLabel} tabIndex={0}>
+                          <GitBranch size={12} aria-hidden="true" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs">
+                        {location}
+                      </TooltipContent>
+                    </Tooltip>
                   </span>
                   {quickStatus.detail && <span className="task-quick-access-detail">{quickStatus.detail}</span>}
                 </span>
