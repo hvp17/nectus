@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { type CSSProperties, useEffect } from "react";
 import { toast } from "sonner";
+import { SidebarInset, SidebarProvider } from "./components/ui/sidebar";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { Sidebar } from "./components/Sidebar";
@@ -96,7 +97,10 @@ function App() {
 
   return (
     <TooltipProvider>
-      <main className={`app-shell bg-background text-foreground density-${settings?.density ?? "comfortable"}`}>
+      <SidebarProvider
+        className={`app-shell bg-background text-foreground density-${settings?.density ?? "comfortable"}`}
+        style={{ "--sidebar-width": "260px" } as CSSProperties}
+      >
         <Sidebar
           repos={repos}
           selectedRepoId={selectedRepoId}
@@ -127,7 +131,7 @@ function App() {
           loading={loading}
         />
 
-        <div className="content-shell">
+        <SidebarInset className="content-shell">
           {currentView === "settings" ? (
             <SettingsPage
               settings={settings}
@@ -192,7 +196,7 @@ function App() {
           )}
 
           <Toaster closeButton theme={settings?.theme ?? "system"} />
-        </div>
+        </SidebarInset>
 
         {createTaskOpen && (
           <CreateTaskModal
@@ -216,7 +220,7 @@ function App() {
             setNewTaskAgentProfileId={setNewTaskAgentProfileId}
           />
         )}
-      </main>
+      </SidebarProvider>
     </TooltipProvider>
   );
 }

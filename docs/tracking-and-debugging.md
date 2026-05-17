@@ -39,7 +39,7 @@ The frontend keeps transient UI state in React:
 
 - Selected project and selected task.
 - Task attention markers.
-- Sidebar active-session quick access derived from `tasks.activeSessionId` and
+- Sidebar active-session Tasks section derived from `tasks.activeSessionId` and
   task attention markers.
 - Create-task modal drafts.
 - Settings/profile edit drafts.
@@ -57,8 +57,10 @@ Focused state hooks:
 - `src/hooks/useSessionEvents.ts`: session attention events and notifications.
 - `src/hooks/useSessionAttentionControls.ts`: session controls that clear stale
   attention before start, resume, stop, and input flows.
-- `src/components/TaskQuickAccessPanel.tsx`: sidebar list of tasks with active
-  sessions, including open and stop actions.
+- `src/components/Sidebar.tsx`: shadcn/sidebar shell, Projects section, and
+  Settings footer action.
+- `src/components/TaskQuickAccessPanel.tsx`: shadcn/sidebar Tasks section for
+  tasks with active sessions, including open and stop actions.
 - `src/hooks/useTaskDeletion.ts`: task deletion workflow and deletion toasts.
 - `src/hooks/useTaskReviewLoop.ts`: selected-task review-loop data and
   `review_loop_updated` events, including board-summary updates for any task.
