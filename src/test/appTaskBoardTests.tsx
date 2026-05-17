@@ -71,6 +71,45 @@ export function defineAppTaskBoardTests() {
     expect(screen.queryByRole("button", { name: /remove old worktree/i })).not.toBeInTheDocument();
   });
 
+  it("deletes the selected task from the task inspector sidebar", async () => {
+    const deletion = deferred<void>();
+
+    mockedApi.listRepos.mockResolvedValue([appRepo]);
+    mockedApi.listTasks.mockResolvedValue([
+      appTask({
+        id: 32,
+        title: "Delete from sidebar",
+        hasWorktree: false,
+      }),
+    ]);
+    mockedApi.deleteTask.mockReturnValue(deletion.promise);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /delete from sidebar/i }));
+    expect(await screen.findByLabelText(/task inspector/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^delete task$/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^delete task$/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Delete task?")).not.toBeInTheDocument();
+    });
+    expect(await screen.findByText("Deleting Delete from sidebar")).toBeInTheDocument();
+    expect(screen.getByText("Removing task in the background.")).toBeInTheDocument();
+    expect(mockedApi.deleteTask).toHaveBeenCalledWith(32);
+
+    await act(async () => {
+      deletion.resolve();
+      await deletion.promise;
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Deleted Delete from sidebar")).toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText(/task inspector/i)).not.toBeInTheDocument();
+  });
+
   it("moves a task to a new status column when dropped there", async () => {
     mockProjectWithTask("Wire task drag and drop");
     mockTaskStatusUpdate("Wire task drag and drop");

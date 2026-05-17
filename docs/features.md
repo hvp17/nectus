@@ -25,6 +25,7 @@ Direct-edit tasks:
 - Store no branch or worktree path.
 - Run the agent in the project repository path.
 - Do not delete files when the task is deleted.
+- Can be deleted from the board card or the selected-task inspector.
 
 Worktree-backed tasks:
 
@@ -32,6 +33,7 @@ Worktree-backed tasks:
 - Create a sibling worktree path from the project worktree root pattern.
 - Run the agent in that worktree path.
 - Remove the git worktree when the task is deleted.
+- Can be deleted from the board card or the selected-task inspector.
 
 Task status values are:
 
@@ -47,6 +49,7 @@ Key files:
 - Task card: `src/components/TaskCard.tsx`
 - Task-card pointer drag tracking: `src/hooks/useTaskCardPointerDrag.ts`
 - Selected-task workspace and inspector rail: `src/components/TaskWorkspace.tsx`
+- Shared task deletion confirmation: `src/components/TaskDeleteDialog.tsx`
 - Dashboard layout and board scrolling: `src/styles.css`
 - Frontend state orchestration: `src/hooks/useApp.ts`
 - Backend commands: `create_task`, `list_tasks`, `update_task_metadata`,
@@ -108,8 +111,8 @@ Current behavior:
   across projects with icon-only agent context, attention and task-status text,
   shows a worktree identifier icon only for worktree-backed tasks, and provides
   open and stop actions for active sessions.
-- Task metadata, status, prompt, workflow, review controls, and review feedback
-  live in the persistent right inspector rail.
+- Task metadata, status, deletion, prompt, workflow, review controls, and review
+  feedback live in the persistent right inspector rail.
 - Terminal output is streamed through the `session_output` Tauri event.
 - Recent terminal output is buffered in memory for snapshot restore.
 - Closing the app stops owned sessions and clears active session ids.

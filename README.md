@@ -16,6 +16,8 @@ git, SQLite, and PTY work lives in the Rust backend.
   terminal.
 - Open a selected task into a focused terminal workspace with task details in a
   persistent right inspector.
+- Delete tasks from board cards or the selected-task inspector with background
+  progress toasts.
 - Use the sidebar Tasks section to see the total task count, create tasks, and
   jump to or stop active sessions.
 - Send the task prompt into a new agent session automatically.
@@ -157,6 +159,7 @@ Important frontend files:
 - `src/TerminalPane.tsx`: xterm.js lifecycle, PTY input/output, and dropped
   file-path insertion
 - `src/components/`: board, task workspace, settings, and modal UI
+- `src/components/TaskDeleteDialog.tsx`: shared task deletion confirmation UI
 - `src/styles.css`: Tailwind imports, theme tokens, and global base rules
 - `src/styles/`: focused CSS files imported by `src/main.tsx`
 - `src/test/testUtils.tsx`: shared DOM, pointer-event, tooltip-provider, and

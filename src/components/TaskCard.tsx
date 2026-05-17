@@ -1,21 +1,7 @@
-import { useState } from "react";
-import { GitBranch, Bot, Trash2, AlertTriangle, CircleCheckBig, Radio } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogMedia,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "./ui/alert-dialog";
+import { GitBranch, Bot, AlertTriangle, CircleCheckBig, Radio } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Card } from "./ui/card";
-import { Button } from "./ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { truncateFinishedAttentionPreview } from "./attentionPreview";
 import { useTaskCardPointerDrag } from "../hooks/useTaskCardPointerDrag";
 import { formatAttentionReason, type TaskAttention } from "../sessionAttention";
@@ -76,12 +62,6 @@ export function TaskCard({
     onPointerDragEnd,
     onDragEnd,
   });
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const deleteDisabled = busy || isDeleting || Boolean(task.activeSessionId);
-  const deleteLabel = task.activeSessionId ? "Stop session first" : isDeleting ? "Deleting task" : "Delete task";
-  const deleteDescription = task.hasWorktree
-    ? `This removes "${task.title}" and its worktree from Nectus and disk.`
-    : `This removes "${task.title}" from Nectus. No files are deleted.`;
   const cardState = attention?.kind ?? (task.activeSessionId ? "running" : task.isDirty ? "dirty" : "normal");
   const attentionDetail = attention?.prompt ?? attention?.message;
   const displayedAttentionDetail =
@@ -141,48 +121,13 @@ export function TaskCard({
           )}
 
           <div className="opacity-0 transition-opacity group-hover:opacity-100">
-            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-7 text-destructive hover:bg-destructive/10"
-                      disabled={deleteDisabled}
-                      aria-label={deleteLabel}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Trash2 />
-                    </Button>
-                  </AlertDialogTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  {deleteLabel}
-                </TooltipContent>
-              </Tooltip>
-              <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-                <AlertDialogHeader>
-                  <AlertDialogMedia className="bg-destructive/10 text-destructive">
-                    <Trash2 size={16} />
-                  </AlertDialogMedia>
-                  <AlertDialogTitle>Delete task?</AlertDialogTitle>
-                  <AlertDialogDescription>{deleteDescription}</AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    variant="destructive"
-                    onClick={() => {
-                      setDeleteDialogOpen(false);
-                      onDelete(task);
-                    }}
-                  >
-                    Delete Task
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <TaskDeleteDialog
+              task={task}
+              busy={busy}
+              isDeleting={isDeleting}
+              onDelete={onDelete}
+              buttonClassName="text-destructive hover:bg-destructive/10"
+            />
           </div>
         </div>
       </div>

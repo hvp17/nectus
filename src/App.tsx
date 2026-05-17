@@ -175,8 +175,11 @@ function App() {
                   onStartReview={startReview}
                   onCreatePullRequest={createPullRequest}
                   onUpdateStatus={updateStatus}
+                  onDeleteTask={requestDeleteTask}
                   onSessionExit={onSessionExit}
                   onSessionInput={onSessionInput}
+                  busy={busy}
+                  isDeleting={deletingTaskIds.has(selectedTask.id)}
                 />
               ) : (
                 <div className="workspace-frame">

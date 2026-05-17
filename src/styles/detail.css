@@ -192,6 +192,14 @@
   justify-content: space-between;
 }
 
+.task-delete-row {
+  align-items: center;
+}
+
+.task-delete-action {
+  flex: 0 0 auto;
+}
+
 .task-meta-label {
   flex: 0 0 auto;
   color: var(--muted-foreground);

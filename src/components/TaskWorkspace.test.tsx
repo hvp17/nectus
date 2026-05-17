@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { TaskAttention } from "../sessionAttention";
+import { renderWithTooltipProvider } from "../test/testUtils";
 import type { AgentProfile, ReviewLoop, ReviewRun, TaskSummary } from "../types";
 import { TaskWorkspace } from "./TaskWorkspace";
 
@@ -74,8 +75,9 @@ function renderTaskWorkspace(input?: {
   onStartReview?: (task: TaskSummary, reviewerProfileId: number) => void;
   onCreatePullRequest?: (task: TaskSummary) => void;
   onUpdateStatus?: (task: TaskSummary, status: TaskSummary["status"]) => void;
+  onDeleteTask?: (task: TaskSummary) => void;
 }) {
-  return render(
+  return renderWithTooltipProvider(
     <TaskWorkspace
       task={input?.task ?? task}
       attention={input?.attention}
@@ -89,6 +91,7 @@ function renderTaskWorkspace(input?: {
       onStartReview={input?.onStartReview ?? vi.fn()}
       onCreatePullRequest={input?.onCreatePullRequest ?? vi.fn()}
       onUpdateStatus={input?.onUpdateStatus ?? vi.fn()}
+      onDeleteTask={input?.onDeleteTask ?? vi.fn()}
       onSessionExit={vi.fn()}
       onSessionInput={vi.fn()}
     />,
@@ -107,7 +110,7 @@ describe("TaskWorkspace", () => {
 
     renderTaskWorkspace({ task: runningTask, onStopSession });
 
-    screen.getByRole("button", { name: /stop session/i }).click();
+    screen.getByRole("button", { name: /^stop session$/i }).click();
 
     expect(onStopSession).toHaveBeenCalledWith("session-123");
     expect(screen.getByLabelText(/task inspector/i)).toBeInTheDocument();

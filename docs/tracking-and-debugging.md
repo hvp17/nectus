@@ -62,6 +62,8 @@ Focused state hooks:
 - `src/components/TaskQuickAccessPanel.tsx`: shadcn/sidebar Tasks section,
   including total task count, add-task, active-session open, and stop actions.
 - `src/hooks/useTaskDeletion.ts`: task deletion workflow and deletion toasts.
+- `src/components/TaskDeleteDialog.tsx`: shared delete confirmation used by
+  task cards and the selected-task inspector.
 - `src/hooks/useTaskReviewLoop.ts`: selected-task review-loop data and
   `review_loop_updated` events, including board-summary updates for any task.
 - `src/components/TaskCard.tsx`: board card review-loop status label.
