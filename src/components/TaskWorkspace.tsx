@@ -398,9 +398,7 @@ export function TaskWorkspace({
                         <div className="task-review-action">
                           <Button
                             type="button"
-                            size="xs"
                             aria-label={reviewActionLabel}
-                            className="task-review-action-main"
                             disabled={startReviewDisabled}
                             onClick={startReview}
                           >
@@ -413,7 +411,6 @@ export function TaskWorkspace({
                             <DropdownMenuTrigger asChild>
                               <Button
                                 type="button"
-                                size="xs"
                                 variant="outline"
                                 aria-label="Change reviewer"
                                 className="task-reviewer-menu"
@@ -459,10 +456,8 @@ export function TaskWorkspace({
                         <div className="task-review-action">
                           <Button
                             type="button"
-                            size="xs"
                             variant="outline"
                             aria-label="Ask agent to create pull request"
-                            className="task-review-action-main"
                             disabled={!task.activeSessionId}
                             onClick={() => onCreatePullRequest(task)}
                           >
