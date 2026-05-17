@@ -26,6 +26,7 @@ interface SidebarProps {
   taskAttention: TaskAttention[];
   onSelectRepo: (id: number) => void;
   onOpenTask: (id: number) => void;
+  onCreateTask: () => void;
   onAddProject: () => void;
   onOpenSettings: () => void;
   onStopSession: (sessionId: string) => void;
@@ -42,6 +43,7 @@ export function Sidebar({
   taskAttention,
   onSelectRepo,
   onOpenTask,
+  onCreateTask,
   onAddProject,
   onOpenSettings,
   onStopSession,
@@ -101,7 +103,9 @@ export function Sidebar({
           taskAttention={taskAttention}
           selectedTaskId={selectedTaskId}
           onOpenTask={onOpenTask}
+          onCreateTask={onCreateTask}
           onStopSession={onStopSession}
+          createTaskDisabled={busy || !selectedRepoId}
         />
       </SidebarContent>
 

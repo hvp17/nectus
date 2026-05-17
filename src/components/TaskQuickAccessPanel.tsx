@@ -1,7 +1,15 @@
-import { Alert01Icon, CheckmarkCircle02Icon, GitBranchIcon, RadioIcon, StopCircleIcon } from "@hugeicons/core-free-icons";
+import {
+  Alert01Icon,
+  CheckmarkCircle02Icon,
+  GitBranchIcon,
+  RadioIcon,
+  StopCircleIcon,
+  TaskAdd01Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { ReactNode } from "react";
 import { AgentLogo } from "./AgentBrand";
+import { Button } from "./ui/button";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -35,7 +43,9 @@ interface TaskQuickAccessPanelProps {
   taskAttention: TaskAttention[];
   selectedTaskId?: number;
   onOpenTask: (taskId: number) => void;
+  onCreateTask: () => void;
   onStopSession: (sessionId: string) => void;
+  createTaskDisabled?: boolean;
 }
 
 export function TaskQuickAccessPanel({
@@ -43,7 +53,9 @@ export function TaskQuickAccessPanel({
   taskAttention,
   selectedTaskId,
   onOpenTask,
+  onCreateTask,
   onStopSession,
+  createTaskDisabled = false,
 }: TaskQuickAccessPanelProps) {
   const activeTasks = tasks
     .filter((task) => Boolean(task.activeSessionId))
@@ -53,7 +65,7 @@ export function TaskQuickAccessPanel({
       return quickStatusPriority[leftTone] - quickStatusPriority[rightTone];
     });
 
-  if (activeTasks.length === 0) {
+  if (tasks.length === 0) {
     return null;
   }
 
@@ -61,78 +73,102 @@ export function TaskQuickAccessPanel({
     <SidebarGroup className="task-quick-access" role="region" aria-label="Tasks quick access">
       <div className="task-quick-access-header">
         <SidebarGroupLabel>Tasks</SidebarGroupLabel>
-        <span className="task-quick-access-count">{activeTasks.length}</span>
+        <div className="task-quick-access-header-actions">
+          <span className="task-quick-access-count" aria-label={`${tasks.length} total tasks`}>
+            {tasks.length}
+          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="task-quick-access-add"
+                aria-label="Add task"
+                disabled={createTaskDisabled}
+                onClick={onCreateTask}
+              >
+                <HugeiconsIcon icon={TaskAdd01Icon} strokeWidth={2} aria-hidden="true" data-icon="inline-start" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              Add task
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
-      <SidebarGroupContent>
-        <SidebarMenu className="task-quick-access-list">
-          {activeTasks.map((task) => {
-            const attention = getTaskAttention(taskAttention, task.id);
-            const quickStatus = getQuickStatus(attention);
-            const agentKind: AgentKind = task.agentKind ?? "custom";
+      {activeTasks.length > 0 && (
+        <SidebarGroupContent>
+          <SidebarMenu className="task-quick-access-list">
+            {activeTasks.map((task) => {
+              const attention = getTaskAttention(taskAttention, task.id);
+              const quickStatus = getQuickStatus(attention);
+              const agentKind: AgentKind = task.agentKind ?? "custom";
 
-            return (
-              <SidebarMenuItem className="task-quick-access-item" data-tone={quickStatus.tone} key={task.id}>
-                <SidebarMenuButton
-                  type="button"
-                  size="lg"
-                  isActive={selectedTaskId === task.id}
-                  className="task-quick-access-open"
-                  aria-label={`Open ${task.title}`}
-                  onClick={() => onOpenTask(task.id)}
-                >
-                  <span className="task-quick-access-status-icon" aria-hidden="true">
-                    {quickStatus.icon}
-                  </span>
-                  <span className="task-quick-access-main">
-                    <span className="task-quick-access-title">{task.title}</span>
-                    <span className="task-quick-access-meta">
-                      <AgentLogo agentKind={agentKind} size="sm" />
-                      <span>{quickStatus.label}</span>
-                      <span aria-hidden="true">/</span>
-                      <span>{taskStatusLabels[task.status]}</span>
-                      {task.hasWorktree && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span
-                              className="task-quick-access-location"
-                              aria-label={`Worktree: ${task.branchName}`}
-                              tabIndex={0}
-                            >
-                              <HugeiconsIcon icon={GitBranchIcon} strokeWidth={2} aria-hidden="true" />
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="text-xs">
-                            {task.branchName}
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
+              return (
+                <SidebarMenuItem className="task-quick-access-item" data-tone={quickStatus.tone} key={task.id}>
+                  <SidebarMenuButton
+                    type="button"
+                    size="lg"
+                    isActive={selectedTaskId === task.id}
+                    className="task-quick-access-open"
+                    aria-label={`Open ${task.title}`}
+                    onClick={() => onOpenTask(task.id)}
+                  >
+                    <span className="task-quick-access-status-icon" aria-hidden="true">
+                      {quickStatus.icon}
                     </span>
-                    {quickStatus.detail && <span className="task-quick-access-detail">{quickStatus.detail}</span>}
-                  </span>
-                </SidebarMenuButton>
+                    <span className="task-quick-access-main">
+                      <span className="task-quick-access-title">{task.title}</span>
+                      <span className="task-quick-access-meta">
+                        <AgentLogo agentKind={agentKind} size="sm" />
+                        <span>{quickStatus.label}</span>
+                        <span aria-hidden="true">/</span>
+                        <span>{taskStatusLabels[task.status]}</span>
+                        {task.hasWorktree && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span
+                                className="task-quick-access-location"
+                                aria-label={`Worktree: ${task.branchName}`}
+                                tabIndex={0}
+                              >
+                                <HugeiconsIcon icon={GitBranchIcon} strokeWidth={2} aria-hidden="true" />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">
+                              {task.branchName}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </span>
+                      {quickStatus.detail && <span className="task-quick-access-detail">{quickStatus.detail}</span>}
+                    </span>
+                  </SidebarMenuButton>
 
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <SidebarMenuAction
-                      type="button"
-                      showOnHover
-                      className="task-quick-access-stop"
-                      aria-label={`Stop ${task.title}`}
-                      onClick={() => task.activeSessionId && onStopSession(task.activeSessionId)}
-                    >
-                      <HugeiconsIcon icon={StopCircleIcon} strokeWidth={2} aria-hidden="true" />
-                    </SidebarMenuAction>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    Stop session
-                  </TooltipContent>
-                </Tooltip>
-              </SidebarMenuItem>
-            );
-          })}
-        </SidebarMenu>
-      </SidebarGroupContent>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SidebarMenuAction
+                        type="button"
+                        showOnHover
+                        className="task-quick-access-stop"
+                        aria-label={`Stop ${task.title}`}
+                        onClick={() => task.activeSessionId && onStopSession(task.activeSessionId)}
+                      >
+                        <HugeiconsIcon icon={StopCircleIcon} strokeWidth={2} aria-hidden="true" />
+                      </SidebarMenuAction>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      Stop session
+                    </TooltipContent>
+                  </Tooltip>
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        </SidebarGroupContent>
+      )}
     </SidebarGroup>
   );
 }

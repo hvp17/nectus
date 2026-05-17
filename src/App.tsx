@@ -95,6 +95,16 @@ function App() {
     setMessage(null);
   }, [message, setMessage]);
 
+  const openCreateTaskModal = () => {
+    if (!newTaskAgentProfileId) {
+      const defaultAgentProfileId = settings?.defaultAgentProfileId ?? agentProfiles[0]?.id;
+      if (defaultAgentProfileId) {
+        setNewTaskAgentProfileId(defaultAgentProfileId);
+      }
+    }
+    setCreateTaskOpen(true);
+  };
+
   return (
     <TooltipProvider>
       <SidebarProvider
@@ -120,6 +130,7 @@ function App() {
             }
             setSelectedTaskId(taskId);
           }}
+          onCreateTask={openCreateTaskModal}
           onAddProject={addProject}
           onOpenSettings={() => {
             setCurrentView("settings");
@@ -174,15 +185,7 @@ function App() {
                     taskAttention={taskAttention}
                     onSelectTask={setSelectedTaskId}
                     onRefresh={refresh}
-                    onCreateTask={() => {
-                      if (!newTaskAgentProfileId) {
-                        const defaultAgentProfileId = settings?.defaultAgentProfileId ?? agentProfiles[0]?.id;
-                        if (defaultAgentProfileId) {
-                          setNewTaskAgentProfileId(defaultAgentProfileId);
-                        }
-                      }
-                      setCreateTaskOpen(true);
-                    }}
+                    onCreateTask={openCreateTaskModal}
                     onDeleteTask={requestDeleteTask}
                     onUpdateStatus={updateStatus}
                     deletingTaskIds={deletingTaskIds}
