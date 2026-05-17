@@ -25,6 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import {
   Stepper,
   StepperDescription,
@@ -55,8 +56,11 @@ export interface TaskWorkspaceProps {
   onStartReview: (task: TaskSummary, reviewerProfileId: number) => void;
   onCreatePullRequest: (task: TaskSummary) => void;
   onUpdateStatus: (task: TaskSummary, status: TaskStatus) => void;
+  onDeleteTask: (task: TaskSummary) => void;
   onSessionExit: (sessionId: string) => void;
   onSessionInput: (sessionId: string) => void;
+  busy?: boolean;
+  isDeleting?: boolean;
 }
 
 const statusOrder: TaskStatus[] = ["planned", "in_progress", "review", "done"];
@@ -94,8 +98,11 @@ export function TaskWorkspace({
   onStartReview,
   onCreatePullRequest,
   onUpdateStatus,
+  onDeleteTask,
   onSessionExit,
   onSessionInput,
+  busy = false,
+  isDeleting = false,
 }: TaskWorkspaceProps) {
   const reviewerProfiles = useMemo(() => agentProfiles, [agentProfiles]);
   const defaultReviewerProfileId =
@@ -291,6 +298,20 @@ export function TaskWorkspace({
             <div className="task-meta-row">
               <span className="task-meta-label">Agent:</span>
               <span className="truncate">{sessionAgentLabel}</span>
+            </div>
+
+            <div className="task-meta-row task-delete-row">
+              <span className="task-meta-label">Actions:</span>
+              <TaskDeleteDialog
+                task={task}
+                busy={busy}
+                isDeleting={isDeleting}
+                onDelete={onDeleteTask}
+                buttonVariant="destructive"
+                buttonSize="sm"
+                buttonClassName="task-delete-action"
+                showButtonText
+              />
             </div>
           </section>
 
