@@ -154,6 +154,9 @@ export const api = {
   async sendSessionInput(sessionId: string, data: string): Promise<void> {
     return invoke("send_session_input", { sessionId, data });
   },
+  async submitSessionInput(sessionId: string, data: string): Promise<void> {
+    return invoke("submit_session_input", { sessionId, data });
+  },
   async sessionOutputSnapshot(sessionId: string): Promise<SessionOutputSnapshot> {
     return invoke("session_output_snapshot", { sessionId });
   },

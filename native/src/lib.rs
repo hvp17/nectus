@@ -290,6 +290,15 @@ fn send_session_input(
 }
 
 #[tauri::command]
+fn submit_session_input(
+    session_id: String,
+    data: String,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    app_result(state.sessions.submit_input(&session_id, &data))
+}
+
+#[tauri::command]
 fn session_output_snapshot(
     session_id: String,
     state: State<'_, AppState>,
@@ -347,6 +356,7 @@ pub fn run() {
             stop_session,
             resize_session,
             send_session_input,
+            submit_session_input,
             session_output_snapshot
         ])
         .run(tauri::generate_context!())

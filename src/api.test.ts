@@ -104,6 +104,15 @@ describe("api", () => {
     });
   });
 
+  it("submits terminal input through the app-authored prompt command", async () => {
+    await api.submitSessionInput("session-21", "Create a pull request");
+
+    expect(mockedInvoke).toHaveBeenCalledWith("submit_session_input", {
+      sessionId: "session-21",
+      data: "Create a pull request",
+    });
+  });
+
   it("truncates long system notification bodies sent to Tauri", async () => {
     vi.resetModules();
     Object.defineProperty(window, "__TAURI_INTERNALS__", {

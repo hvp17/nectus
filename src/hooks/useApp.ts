@@ -192,7 +192,7 @@ export function useApp() {
       setTaskAttention((current) => clearTaskAttention(current, task.id));
 
       try {
-        await api.sendSessionInput(task.activeSessionId, `${CREATE_PULL_REQUEST_PROMPT}\r`);
+        await api.submitSessionInput(task.activeSessionId, CREATE_PULL_REQUEST_PROMPT);
       } catch (error) {
         setMessage(String(error));
       }

@@ -133,7 +133,8 @@ Current commands:
 | `resume_session` | Resume a Codex or Claude saved session. |
 | `stop_session` | Stop a running PTY child process. |
 | `resize_session` | Resize the PTY. |
-| `send_session_input` | Write keyboard input, terminal-dropped file paths, or app-authored prompts into the PTY. The task workflow `Create PR` action uses this command to ask the running agent to open a pull request; Nectus does not call GitHub or store GitHub credentials for that flow. |
+| `send_session_input` | Write keyboard input or terminal-dropped file paths into the PTY without appending an Enter sequence. |
+| `submit_session_input` | Submit an app-authored prompt into the PTY with the same Enter sequence used by review feedback. The task workflow `Create PR` action uses this command to ask the running agent to open a pull request; Nectus does not call GitHub or store GitHub credentials for that flow. |
 | `session_output_snapshot` | Load buffered terminal output for a running session. |
 
 ## Events

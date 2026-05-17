@@ -344,6 +344,15 @@ impl SessionManager {
             .map_err(|error| format!("Failed to write to PTY: {error}"))
     }
 
+    pub fn submit_input(&self, session_id: &str, data: &str) -> Result<(), String> {
+        let mut sessions = self.sessions.lock();
+        let running = sessions
+            .get_mut(session_id)
+            .ok_or_else(|| "Session is not running".to_string())?;
+        write_agent_submission(running.writer.as_mut(), data)
+            .map_err(|error| format!("Failed to submit PTY input: {error}"))
+    }
+
     pub fn run_pair_review(
         &self,
         app: AppHandle,
