@@ -90,15 +90,19 @@ The watcher:
   `event_msg.payload.type == "turn_complete"`.
 - Attempts to emit `session_needs_input` for explicit approval, permission,
   user-input, elicitation, patch-approval, confirmation, or needs-input event
-  names.
+  names in `event_msg` entries.
+- Emits `session_needs_input` for persisted `response_item` function calls where
+  `payload.name == "request_user_input"`. The watcher extracts
+  `questions[].question` from the function-call `arguments` string when
+  available and sends it as the prompt preview.
 
 The JSONL protocol details and caveats are in
 [codex-session-jsonl.md](codex-session-jsonl.md).
 
-Important limitation: several approval and input request events are defined by
-Codex but are not persisted by default in the checked rollout policy. Treat
-`session_idle` as high confidence. Treat input-needed detection as a feature that
-must be verified against the Codex version and launch mode being used.
+Important limitation: several approval and input request `event_msg` variants
+are defined by Codex but are not persisted by default in the checked rollout
+policy. Treat `session_idle` as high confidence. Treat input-needed detection as
+best effort across Codex versions and launch modes.
 
 ## Tauri Commands
 
