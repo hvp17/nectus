@@ -1,5 +1,63 @@
 use super::*;
+use std::path::Path;
 use tempfile::tempdir;
+
+fn run_git(repo_path: &Path, args: &[&str]) {
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo_path)
+        .args(args)
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "git {:?} failed: {}",
+        args,
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn add_repo_with_remote(db: &Database) -> (tempfile::TempDir, Repo) {
+    let dir = tempdir().unwrap();
+    let remote_dir = dir.path().join("remote.git");
+    let seed_dir = dir.path().join("seed");
+    let local_dir = dir.path().join("local");
+
+    std::process::Command::new("git")
+        .args(["init", "--bare", "--initial-branch=main"])
+        .arg(&remote_dir)
+        .output()
+        .unwrap();
+    std::process::Command::new("git")
+        .args(["init", "--initial-branch=main"])
+        .arg(&seed_dir)
+        .output()
+        .unwrap();
+    run_git(&seed_dir, &["config", "user.email", "test@example.com"]);
+    run_git(&seed_dir, &["config", "user.name", "Test User"]);
+    run_git(
+        &seed_dir,
+        &["remote", "add", "origin", &remote_dir.to_string_lossy()],
+    );
+
+    std::fs::write(seed_dir.join("README.md"), "# Test\n").unwrap();
+    run_git(&seed_dir, &["add", "README.md"]);
+    run_git(&seed_dir, &["commit", "-m", "Initial"]);
+    run_git(&seed_dir, &["push", "-u", "origin", "main"]);
+
+    std::process::Command::new("git")
+        .arg("clone")
+        .arg(&remote_dir)
+        .arg(&local_dir)
+        .output()
+        .unwrap();
+
+    let repo = db
+        .add_repo(local_dir.to_string_lossy().to_string())
+        .unwrap();
+    (dir, repo)
+}
 
 #[test]
 fn seeds_default_agent_profiles() {
@@ -421,6 +479,34 @@ fn creates_task_without_worktree() {
     assert!(!task.has_worktree);
     assert_eq!(task.branch_name, None);
     assert_eq!(task.worktree_path, None);
+}
+
+#[test]
+fn creates_worktree_task_with_generated_branch_when_branch_name_is_blank() {
+    let db = Database::open_in_memory().unwrap();
+    let (_dir, repo) = add_repo_with_remote(&db);
+
+    let task = db
+        .create_task_record(
+            repo.id,
+            "Review dependency updates".to_string(),
+            None,
+            None,
+            true,
+            None,
+        )
+        .unwrap();
+
+    let branch_name = task.branch_name.as_deref().unwrap();
+    let expected_worktree_path = PathBuf::from(&repo.default_worktree_root).join(branch_name);
+
+    assert!(task.has_worktree);
+    assert!(branch_name.starts_with("task-"), "{branch_name}");
+    assert_eq!(
+        task.worktree_path.as_deref(),
+        Some(expected_worktree_path.to_string_lossy().as_ref())
+    );
+    assert!(expected_worktree_path.exists());
 }
 
 #[test]

@@ -170,7 +170,8 @@ Important `tasks` columns:
 - `prompt`: optional task instructions sent to a new session.
 - `agent_profile_id`: preferred agent profile for the task.
 - `has_worktree`: whether the task owns a git worktree.
-- `branch_name`: set only when `has_worktree = 1`.
+- `branch_name`: set only when `has_worktree = 1`; blank worktree creation
+  generates a `task-...` branch name.
 - `worktree_path`: set only when `has_worktree = 1`.
 - `active_session_id`: running session lock. Cleared on app startup, session
   stop, natural exit, and app close.
@@ -240,7 +241,8 @@ Relevant code:
 
 Check:
 
-- Branch name is not empty.
+- Blank branch names generate a `task-...` branch; entered branch names must
+  pass git-safe validation.
 - Branch name does not contain whitespace, `..`, `~`, `^`, `:`, `?`, `*`, `[`,
   backslash, `//`, trailing `/`, or `.lock`.
 - The worktree path does not already exist.

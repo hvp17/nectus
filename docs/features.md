@@ -29,7 +29,7 @@ Direct-edit tasks:
 
 Worktree-backed tasks:
 
-- Require a branch name.
+- Accept a branch name or generate a `task-...` branch when the field is blank.
 - Create a sibling worktree path from the project worktree root pattern.
 - Run the agent in that worktree path.
 - Remove the git worktree when the task is deleted.

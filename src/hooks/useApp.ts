@@ -55,6 +55,7 @@ export function useApp() {
     resetCreateTaskForm,
     closeCreateTaskModal,
     getGeneratedTaskTitle,
+    resolveWorktreeBranchName,
   } = taskForm;
 
   const selectedRepoIdRef = useRef<number | undefined>(undefined);
@@ -225,21 +226,20 @@ export function useApp() {
       setMessage("Select an agent before creating a task.");
       return;
     }
-    if (newTaskHasWorktree && !newTaskBranchName.trim()) {
-      setMessage("Enter a branch name to create a worktree.");
-      return;
-    }
     setBusy(true);
     setMessage(null);
 
     try {
+      const branchName = newTaskHasWorktree
+        ? resolveWorktreeBranchName(newTaskBranchName, settings?.defaultBranchPrefix)
+        : null;
       const task = await api.createTask({
         repoId: selectedRepoId,
         title: getGeneratedTaskTitle(),
         prompt: newTaskPrompt.trim() || null,
         agentProfileId: newTaskAgentProfileId,
         hasWorktree: newTaskHasWorktree,
-        branchName: newTaskHasWorktree ? newTaskBranchName.trim() : null,
+        branchName,
       });
       resetCreateTaskForm();
       setCreateTaskOpen(false);

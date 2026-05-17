@@ -163,6 +163,71 @@ export function defineAppTaskCreationTests() {
     });
   });
 
+  it("generates a worktree branch identifier when the branch name is blank", async () => {
+    mockProject();
+    createTaskMock("Create generated branch", {
+      hasWorktree: true,
+      branchName: "task-generated",
+      worktreePath: "/tmp/nectus-desktop-worktrees/task-generated",
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+    fireEvent.change(screen.getByLabelText(/title/i), {
+      target: { value: "Create generated branch" },
+    });
+    fireEvent.click(screen.getByRole("radio", { name: /new worktree/i }));
+
+    const branchInput = screen.getByLabelText(/branch name/i);
+    fireEvent.change(branchInput, { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          hasWorktree: true,
+          branchName: expect.stringMatching(/^task-[a-z0-9-]+$/),
+        }),
+      );
+    });
+  });
+
+  it("appends a generated worktree identifier when the branch name only contains the default prefix", async () => {
+    mockProject();
+    mockedApi.getAppSettings.mockResolvedValue({
+      defaultAgentProfileId: 1,
+      defaultWorktreeRootPattern: "../{repoName}-worktrees",
+      defaultBranchPrefix: "feat/",
+      theme: "system",
+      density: "comfortable",
+      updatedAt: "2026-05-14T00:00:00.000Z",
+    });
+    createTaskMock("Create prefixed branch", {
+      hasWorktree: true,
+      branchName: "feat/task-generated",
+      worktreePath: "/tmp/nectus-desktop-worktrees/feat/task-generated",
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+    fireEvent.change(screen.getByLabelText(/title/i), {
+      target: { value: "Create prefixed branch" },
+    });
+    fireEvent.click(screen.getByRole("radio", { name: /new worktree/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          hasWorktree: true,
+          branchName: expect.stringMatching(/^feat\/task-[a-z0-9-]+$/),
+        }),
+      );
+    });
+  });
+
   it("dismisses the toast when the close button is clicked", async () => {
     mockProject();
     createTaskMock("Review modal task flow");

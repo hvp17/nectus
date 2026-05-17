@@ -60,7 +60,7 @@ export function CreateTaskModal({
   newTaskAgentProfileId,
   setNewTaskAgentProfileId,
 }: CreateTaskModalProps) {
-  const submitDisabled = busy || !newTaskAgentProfileId || (newTaskHasWorktree && !newTaskBranchName.trim());
+  const submitDisabled = busy || !newTaskAgentProfileId;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -156,10 +156,10 @@ export function CreateTaskModal({
 
             {newTaskHasWorktree && (
               <Field className="animate-in slide-in-from-top-2 duration-200">
-                <FieldLabel htmlFor="new-task-branch">Branch Name</FieldLabel>
+                <FieldLabel htmlFor="new-task-branch">Branch Name (Optional)</FieldLabel>
                 <Input
                   id="new-task-branch"
-                  placeholder={`${defaultBranchPrefix ?? "feat/"}refactor-auth`}
+                  placeholder={`${defaultBranchPrefix ?? "feat/"}task-identifier`}
                   value={newTaskBranchName}
                   onChange={(e) => setNewTaskBranchName(e.target.value)}
                   className="h-10 font-mono text-xs"

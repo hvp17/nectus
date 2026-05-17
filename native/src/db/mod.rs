@@ -10,6 +10,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 #[cfg(test)]
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use uuid::Uuid;
 
 mod agent_profiles;
 mod review_loops;
@@ -201,7 +202,7 @@ impl Database {
             let branch_name = branch_name
                 .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty())
-                .ok_or_else(|| "Branch name is required".to_string())?;
+                .unwrap_or_else(generated_branch_name);
             git_ops::validate_branch_name(&branch_name)?;
             let worktree_path = PathBuf::from(&repo.default_worktree_root).join(&branch_name);
             git_ops::create_worktree(
@@ -450,6 +451,10 @@ impl Database {
 
 fn now() -> String {
     Utc::now().to_rfc3339()
+}
+
+fn generated_branch_name() -> String {
+    format!("task-{}", Uuid::new_v4())
 }
 
 #[cfg(test)]
