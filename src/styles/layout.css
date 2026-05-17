@@ -1,42 +1,42 @@
 .app-shell {
-  display: grid;
-  grid-template-columns: 260px minmax(560px, 1fr);
   min-height: 100vh;
 }
 
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 24px;
+.nectus-sidebar {
   height: 100vh;
-  min-height: 0;
-  padding: 22px;
   border-right: 1px solid var(--sidebar-border);
-  background: var(--sidebar);
+}
+
+.nectus-sidebar-header {
+  padding: 22px 22px 14px;
+}
+
+.nectus-sidebar-content {
+  gap: 14px;
+  padding: 0 14px 8px;
+}
+
+.nectus-sidebar-menu-button {
+  height: 38px;
+  gap: 10px;
+  border-radius: var(--radius-md);
   color: var(--sidebar-foreground);
+  font-size: 14px;
+  font-weight: 650;
+  opacity: 0.72;
 }
 
-.sidebar-main {
-  min-height: 0;
-  overflow: auto;
-  padding-bottom: 4px;
+.nectus-sidebar-menu-button:hover,
+.nectus-sidebar-menu-button[data-active="true"] {
+  opacity: 1;
 }
 
-.sidebar-footer {
-  display: grid;
-  gap: 8px;
-  flex-shrink: 0;
+.nectus-sidebar-menu-button[data-active="true"] svg {
+  color: var(--primary);
 }
 
 .task-quick-access {
-  display: grid;
-  gap: 6px;
-  padding: 8px;
-  border: 1px solid color-mix(in srgb, var(--sidebar-border) 82%, transparent);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--sidebar-accent) 36%, transparent);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 32%, transparent);
+  min-height: 0;
 }
 
 .task-quick-access-header {
@@ -51,8 +51,8 @@
   min-width: 20px;
   height: 20px;
   border-radius: 999px;
-  background: var(--sidebar-primary);
-  color: var(--sidebar-primary-foreground);
+  background: color-mix(in srgb, var(--sidebar-accent) 72%, transparent);
+  color: var(--muted-foreground);
   font-size: 11px;
   font-weight: 800;
   line-height: 1;
@@ -60,36 +60,17 @@
 }
 
 .task-quick-access-list {
-  display: grid;
-  gap: 6px;
-  max-height: min(34vh, 260px);
+  max-height: min(34vh, 280px);
   overflow: auto;
-  padding-right: 1px;
 }
 
 .task-quick-access-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 28px;
-  align-items: stretch;
-  gap: 3px;
-  border: 1px solid color-mix(in srgb, var(--sidebar-border) 70%, transparent);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--background) 58%, transparent);
+  color: var(--sidebar-foreground);
 }
 
-.task-quick-access-item[data-selected="true"] {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 28%, transparent);
-}
-
-.task-quick-access-item[data-tone="needs_input"] {
-  border-color: color-mix(in srgb, oklch(0.68 0.16 56) 46%, var(--sidebar-border));
-  background: color-mix(in srgb, oklch(0.78 0.15 72) 12%, var(--background));
-}
-
-.task-quick-access-item[data-tone="idle"] {
-  border-color: color-mix(in srgb, oklch(0.58 0.12 150) 38%, var(--sidebar-border));
-  background: color-mix(in srgb, oklch(0.72 0.12 152) 10%, var(--background));
+.task-quick-access-open[data-active="true"] .task-quick-access-title,
+.task-quick-access-open[data-active="true"] .task-quick-access-status-icon {
+  color: var(--primary);
 }
 
 .task-quick-access-open {
@@ -98,9 +79,9 @@
   align-items: start;
   gap: 7px;
   height: auto;
-  min-height: 62px;
+  min-height: 52px;
   justify-content: start;
-  padding: 7px;
+  padding: 7px 32px 7px 8px;
   color: inherit;
   text-align: left;
   white-space: normal;
@@ -116,11 +97,11 @@
 }
 
 .task-quick-access-item[data-tone="needs_input"] .task-quick-access-status-icon {
-  color: oklch(0.68 0.16 56);
+  color: var(--destructive);
 }
 
 .task-quick-access-item[data-tone="idle"] .task-quick-access-status-icon {
-  color: oklch(0.58 0.12 150);
+  color: var(--primary);
 }
 
 .task-quick-access-main {
@@ -181,11 +162,13 @@
 }
 
 .task-quick-access-stop {
-  align-self: stretch;
-  width: 28px;
-  height: auto;
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  top: 50%;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-md);
   color: var(--muted-foreground);
+  transform: translateY(-50%);
 }
 
 .task-quick-access-stop:hover {
@@ -231,31 +214,7 @@
   text-transform: uppercase;
 }
 
-.sidebar-section {
-  display: grid;
-  gap: 8px;
-}
-
-.project-section-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.project-section-title button {
-  color: var(--sidebar-foreground);
-}
-
-.repo-item {
-  width: 100%;
-  justify-content: flex-start;
-  color: inherit;
-}
-
 .content-shell {
-  position: relative;
-  display: flex;
-  flex-direction: column;
   min-width: 0;
   min-height: 100vh;
   overflow: hidden;

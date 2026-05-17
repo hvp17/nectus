@@ -4,6 +4,7 @@ import type { TaskAttention } from "../sessionAttention";
 import { appTask } from "../test/appFixtures";
 import { renderWithTooltipProvider } from "../test/testUtils";
 import { TaskQuickAccessPanel } from "./TaskQuickAccessPanel";
+import { SidebarProvider } from "./ui/sidebar";
 
 const activeTask = appTask({
   id: 31,
@@ -20,19 +21,29 @@ const inactiveTask = appTask({
   activeSessionId: null,
 });
 
+const directActiveTask = appTask({
+  id: 33,
+  title: "Task-only session",
+  activeSessionId: "session-33",
+  hasWorktree: false,
+  branchName: "",
+});
+
 function renderPanel(input?: {
   attention?: TaskAttention[];
   onOpenTask?: (taskId: number) => void;
   onStopSession?: (sessionId: string) => void;
 }) {
   return renderWithTooltipProvider(
-    <TaskQuickAccessPanel
-      tasks={[activeTask, inactiveTask]}
-      taskAttention={input?.attention ?? []}
-      selectedTaskId={undefined}
-      onOpenTask={input?.onOpenTask ?? vi.fn()}
-      onStopSession={input?.onStopSession ?? vi.fn()}
-    />,
+    <SidebarProvider>
+      <TaskQuickAccessPanel
+        tasks={[activeTask, directActiveTask, inactiveTask]}
+        taskAttention={input?.attention ?? []}
+        selectedTaskId={undefined}
+        onOpenTask={input?.onOpenTask ?? vi.fn()}
+        onStopSession={input?.onStopSession ?? vi.fn()}
+      />
+    </SidebarProvider>,
   );
 }
 
@@ -54,6 +65,7 @@ it("shows only tasks with active sessions and their live status context", () => 
   const panel = screen.getByRole("region", { name: /tasks quick access/i });
 
   expect(within(panel).getByText("Wire running session")).toBeInTheDocument();
+  expect(within(panel).getByText("Task-only session")).toBeInTheDocument();
   expect(within(panel).queryByText("Parked task")).not.toBeInTheDocument();
   expect(within(panel).getByText("Needs input")).toBeInTheDocument();
   expect(within(panel).getByText("User Confirmation")).toBeInTheDocument();
@@ -61,6 +73,7 @@ it("shows only tasks with active sessions and their live status context", () => 
   expect(within(panel).queryByText("Codex")).not.toBeInTheDocument();
   expect(within(panel).queryByText("feat/running-session")).not.toBeInTheDocument();
   expect(within(panel).getByLabelText("Worktree: feat/running-session")).toBeInTheDocument();
+  expect(within(panel).queryByLabelText("Task only")).not.toBeInTheDocument();
 });
 
 it("opens and stops active sessions from the quick access panel", () => {

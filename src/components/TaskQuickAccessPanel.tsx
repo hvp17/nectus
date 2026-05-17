@@ -1,7 +1,16 @@
-import { AlertTriangle, CircleCheckBig, CircleStop, GitBranch, Radio } from "lucide-react";
+import { Alert01Icon, CheckmarkCircle02Icon, GitBranchIcon, RadioIcon, StopCircleIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import type { ReactNode } from "react";
 import { AgentLogo } from "./AgentBrand";
-import { Button } from "./ui/button";
+import {
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "./ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { formatAttentionReason, getTaskAttention, type TaskAttention } from "../sessionAttention";
 import type { AgentKind, TaskStatus, TaskSummary } from "../types";
@@ -49,81 +58,82 @@ export function TaskQuickAccessPanel({
   }
 
   return (
-    <section className="task-quick-access" aria-label="Tasks quick access">
+    <SidebarGroup className="task-quick-access" role="region" aria-label="Tasks quick access">
       <div className="task-quick-access-header">
-        <span className="eyebrow">Tasks</span>
+        <SidebarGroupLabel>Tasks</SidebarGroupLabel>
         <span className="task-quick-access-count">{activeTasks.length}</span>
       </div>
 
-      <div className="task-quick-access-list">
-        {activeTasks.map((task) => {
-          const attention = getTaskAttention(taskAttention, task.id);
-          const quickStatus = getQuickStatus(attention);
-          const location = task.hasWorktree ? task.branchName : "Task only";
-          const locationLabel = task.hasWorktree ? `Worktree: ${location}` : "Task only";
-          const agentKind: AgentKind = task.agentKind ?? "custom";
+      <SidebarGroupContent>
+        <SidebarMenu className="task-quick-access-list">
+          {activeTasks.map((task) => {
+            const attention = getTaskAttention(taskAttention, task.id);
+            const quickStatus = getQuickStatus(attention);
+            const agentKind: AgentKind = task.agentKind ?? "custom";
 
-          return (
-            <div
-              className="task-quick-access-item"
-              data-tone={quickStatus.tone}
-              data-selected={selectedTaskId === task.id ? "true" : undefined}
-              key={task.id}
-            >
-              <Button
-                type="button"
-                variant="ghost"
-                className="task-quick-access-open"
-                aria-label={`Open ${task.title}`}
-                onClick={() => onOpenTask(task.id)}
-              >
-                <span className="task-quick-access-status-icon" aria-hidden="true">
-                  {quickStatus.icon}
-                </span>
-                <span className="task-quick-access-main">
-                  <span className="task-quick-access-title">{task.title}</span>
-                  <span className="task-quick-access-meta">
-                    <AgentLogo agentKind={agentKind} size="sm" />
-                    <span>{quickStatus.label}</span>
-                    <span aria-hidden="true">/</span>
-                    <span>{taskStatusLabels[task.status]}</span>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="task-quick-access-location" aria-label={locationLabel} tabIndex={0}>
-                          <GitBranch size={12} aria-hidden="true" />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="text-xs">
-                        {location}
-                      </TooltipContent>
-                    </Tooltip>
+            return (
+              <SidebarMenuItem className="task-quick-access-item" data-tone={quickStatus.tone} key={task.id}>
+                <SidebarMenuButton
+                  type="button"
+                  size="lg"
+                  isActive={selectedTaskId === task.id}
+                  className="task-quick-access-open"
+                  aria-label={`Open ${task.title}`}
+                  onClick={() => onOpenTask(task.id)}
+                >
+                  <span className="task-quick-access-status-icon" aria-hidden="true">
+                    {quickStatus.icon}
                   </span>
-                  {quickStatus.detail && <span className="task-quick-access-detail">{quickStatus.detail}</span>}
-                </span>
-              </Button>
+                  <span className="task-quick-access-main">
+                    <span className="task-quick-access-title">{task.title}</span>
+                    <span className="task-quick-access-meta">
+                      <AgentLogo agentKind={agentKind} size="sm" />
+                      <span>{quickStatus.label}</span>
+                      <span aria-hidden="true">/</span>
+                      <span>{taskStatusLabels[task.status]}</span>
+                      {task.hasWorktree && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span
+                              className="task-quick-access-location"
+                              aria-label={`Worktree: ${task.branchName}`}
+                              tabIndex={0}
+                            >
+                              <HugeiconsIcon icon={GitBranchIcon} strokeWidth={2} aria-hidden="true" />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs">
+                            {task.branchName}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </span>
+                    {quickStatus.detail && <span className="task-quick-access-detail">{quickStatus.detail}</span>}
+                  </span>
+                </SidebarMenuButton>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="task-quick-access-stop"
-                    aria-label={`Stop ${task.title}`}
-                    onClick={() => task.activeSessionId && onStopSession(task.activeSessionId)}
-                  >
-                    <CircleStop size={14} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  Stop session
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          );
-        })}
-      </div>
-    </section>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <SidebarMenuAction
+                      type="button"
+                      showOnHover
+                      className="task-quick-access-stop"
+                      aria-label={`Stop ${task.title}`}
+                      onClick={() => task.activeSessionId && onStopSession(task.activeSessionId)}
+                    >
+                      <HugeiconsIcon icon={StopCircleIcon} strokeWidth={2} aria-hidden="true" />
+                    </SidebarMenuAction>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    Stop session
+                  </TooltipContent>
+                </Tooltip>
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
   );
 }
 
@@ -144,7 +154,7 @@ function getQuickStatus(attention?: TaskAttention): {
       tone: "needs_input",
       label: "Needs input",
       detail: formatAttentionReason(attention.reason),
-      icon: <AlertTriangle size={13} />,
+      icon: <HugeiconsIcon icon={Alert01Icon} strokeWidth={2} aria-hidden="true" />,
     };
   }
 
@@ -153,13 +163,13 @@ function getQuickStatus(attention?: TaskAttention): {
       tone: "idle",
       label: "Finished",
       detail: attention.message ?? undefined,
-      icon: <CircleCheckBig size={13} />,
+      icon: <HugeiconsIcon icon={CheckmarkCircle02Icon} strokeWidth={2} aria-hidden="true" />,
     };
   }
 
   return {
     tone: "running",
     label: "Running",
-    icon: <Radio size={13} />,
+    icon: <HugeiconsIcon icon={RadioIcon} strokeWidth={2} aria-hidden="true" />,
   };
 }

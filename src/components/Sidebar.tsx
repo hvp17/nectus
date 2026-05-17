@@ -1,6 +1,19 @@
-import { FolderPlus, FolderGit2, Settings } from "lucide-react";
-import { Button } from "./ui/button";
+import { FolderAddIcon, FolderGitIcon, Settings02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { TaskQuickAccessPanel } from "./TaskQuickAccessPanel";
+import {
+  Sidebar as SidebarRoot,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupAction,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "./ui/sidebar";
 import type { TaskAttention } from "../sessionAttention";
 import type { Repo, TaskSummary } from "../types";
 
@@ -36,8 +49,8 @@ export function Sidebar({
   loading,
 }: SidebarProps) {
   return (
-    <aside className="sidebar">
-      <div className="sidebar-main">
+    <SidebarRoot collapsible="none" className="nectus-sidebar">
+      <SidebarHeader className="nectus-sidebar-header">
         <div className="brand">
           <div className="brand-mark">N</div>
           <div>
@@ -45,47 +58,40 @@ export function Sidebar({
             <span className="text-[10px] uppercase tracking-widest font-extrabold opacity-50">Parallel Agents</span>
           </div>
         </div>
+      </SidebarHeader>
 
-        <div className="sidebar-section mt-4">
-          <div className="project-section-title flex items-center justify-between mb-2">
-            <span className="eyebrow">Projects</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={onAddProject}
-              disabled={busy}
-              title="Add project"
-            >
-              <FolderPlus size={14} />
-            </Button>
-          </div>
-          <div className="space-y-1">
+      <SidebarContent className="nectus-sidebar-content">
+        <SidebarGroup>
+          <SidebarGroupLabel>Projects</SidebarGroupLabel>
+          <SidebarGroupAction type="button" onClick={onAddProject} disabled={busy} aria-label="Add project">
+            <HugeiconsIcon icon={FolderAddIcon} strokeWidth={2} aria-hidden="true" />
+          </SidebarGroupAction>
+          <SidebarGroupContent>
             {repos.length === 0 ? (
               <div className="empty-mini px-2 py-4 text-xs opacity-50">
                 {loading ? "Loading projects..." : "No projects yet"}
               </div>
             ) : (
-              repos.map((repo) => (
-                <Button
-                  key={repo.id}
-                  variant={!settingsActive && repo.id === selectedRepoId ? "secondary" : "ghost"}
-                  className={`w-full justify-start gap-2 h-9 text-sm font-medium transition-all ${
-                    !settingsActive && repo.id === selectedRepoId ? "bg-secondary shadow-sm" : "opacity-70 hover:opacity-100"
-                  }`}
-                  onClick={() => onSelectRepo(repo.id)}
-                >
-                  <FolderGit2 size={16} className={!settingsActive && repo.id === selectedRepoId ? "text-primary" : ""} />
-                  <span className="truncate">{repo.name}</span>
-                </Button>
-              ))
+              <SidebarMenu>
+                {repos.map((repo) => (
+                  <SidebarMenuItem key={repo.id}>
+                    <SidebarMenuButton
+                      type="button"
+                      size="lg"
+                      isActive={!settingsActive && repo.id === selectedRepoId}
+                      className="nectus-sidebar-menu-button"
+                      onClick={() => onSelectRepo(repo.id)}
+                    >
+                      <HugeiconsIcon icon={FolderGitIcon} strokeWidth={2} aria-hidden="true" />
+                      <span>{repo.name}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
             )}
-          </div>
-        </div>
-      </div>
+          </SidebarGroupContent>
+        </SidebarGroup>
 
-      <div className="sidebar-footer">
         <TaskQuickAccessPanel
           tasks={tasks}
           taskAttention={taskAttention}
@@ -93,18 +99,24 @@ export function Sidebar({
           onOpenTask={onOpenTask}
           onStopSession={onStopSession}
         />
-        <Button
-          type="button"
-          variant={settingsActive ? "secondary" : "ghost"}
-          className={`w-full justify-start gap-2 h-9 text-sm font-medium ${
-            settingsActive ? "bg-secondary shadow-sm" : "opacity-70 hover:opacity-100"
-          }`}
-          onClick={onOpenSettings}
-        >
-          <Settings size={16} className={settingsActive ? "text-primary" : ""} />
-          <span>Settings</span>
-        </Button>
-      </div>
-    </aside>
+      </SidebarContent>
+
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              type="button"
+              size="lg"
+              isActive={settingsActive}
+              className="nectus-sidebar-menu-button"
+              onClick={onOpenSettings}
+            >
+              <HugeiconsIcon icon={Settings02Icon} strokeWidth={2} aria-hidden="true" />
+              <span>Settings</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </SidebarRoot>
   );
 }

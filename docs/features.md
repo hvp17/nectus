@@ -102,9 +102,11 @@ Current behavior:
 - Selecting a task replaces the board with a focused terminal workspace. Running
   sessions render the live terminal front and center; tasks without an active
   session show launcher controls in the terminal stage.
-- The sidebar shows a Tasks quick access panel above Settings whenever active
-  sessions exist. It lists running tasks across projects with agent, attention,
-  task-status, and branch/task-only context, and provides open and stop actions.
+- The shadcn/sidebar left rail groups Projects and active Tasks as sibling
+  sections. The Tasks section appears whenever active sessions exist, lists
+  running tasks across projects with icon-only agent context, attention and
+  task-status text, shows a worktree identifier icon only for worktree-backed
+  tasks, and provides open and stop actions.
 - Task metadata, status, prompt, workflow, review controls, and review feedback
   live in the persistent right inspector rail.
 - Terminal output is streamed through the `session_output` Tauri event.
@@ -113,7 +115,9 @@ Current behavior:
 
 Key files:
 
-- Active-session quick access: `src/components/TaskQuickAccessPanel.tsx`
+- Sidebar shell and Projects section: `src/components/Sidebar.tsx`
+- Active-session Tasks section: `src/components/TaskQuickAccessPanel.tsx`
+- shadcn/sidebar primitives: `src/components/ui/sidebar.tsx`
 - Terminal UI: `src/TerminalPane.tsx`
 - Session controls: `src/hooks/useSessionCommands.ts`
 - Attention-clearing session control wrappers: `src/hooks/useSessionAttentionControls.ts`
