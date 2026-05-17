@@ -22,6 +22,8 @@ import type {
   TaskSummary,
 } from "../types";
 
+const CREATE_PULL_REQUEST_PROMPT = `Create a pull request for this task. Use the current project/worktree branch. Before opening the PR, verify the work as appropriate for this repo, commit relevant changes with a Conventional Commit if needed, push the branch, create the PR against the remote default branch, and report the PR URL here.`;
+
 export function useApp() {
   const [repos, setRepos] = useState<Repo[]>([]);
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
@@ -178,6 +180,25 @@ export function useApp() {
       setTaskAttention,
       sessionCommands,
     });
+
+  const createPullRequest = useCallback(
+    async (task: TaskSummary) => {
+      if (!task.activeSessionId) {
+        setMessage("Start or resume the agent before creating a PR.");
+        return;
+      }
+
+      setMessage(null);
+      setTaskAttention((current) => clearTaskAttention(current, task.id));
+
+      try {
+        await api.sendSessionInput(task.activeSessionId, `${CREATE_PULL_REQUEST_PROMPT}\r`);
+      } catch (error) {
+        setMessage(String(error));
+      }
+    },
+    [setMessage, setTaskAttention],
+  );
 
   const addProject = async () => {
     setMessage(null);
@@ -397,6 +418,7 @@ export function useApp() {
     startSession,
     stopSession,
     resumeSession,
+    createPullRequest,
     startPairLoop,
     startReview,
     stopPairLoop,

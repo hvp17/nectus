@@ -193,8 +193,13 @@ Current behavior:
   adjacent dropdown to switch reviewer profiles before starting the pass.
 - The review action switches the selected task UI to `reviewing` while the reviewer
   command runs, and the task workflow stepper shows the in-progress state.
-- The task workflow stepper also shows a placeholder `Create PR` step and a
-  `Move to done` step that marks the task complete.
+- The task workflow stepper enables `Create PR` when the worker session is
+  running. That action submits a structured prompt into the active PTY asking
+  the agent to verify, commit, push, create the PR, and report the URL.
+- The task workflow stepper also shows a `Move to done` step that marks the
+  task complete.
+- PR URLs are still stored through task metadata when linked, but the first
+  `Create PR` flow does not call GitHub APIs or discover the URL automatically.
 - Manual review runs require a running worker session so blockers or
   feedback can be written back into that session.
 - Claude and Gemini reviewers are run in headless prompt mode with `-p` and the
@@ -218,6 +223,7 @@ Current behavior:
 Key files:
 
 - UI controls and latest run summary: `src/components/TaskWorkspace.tsx`
+- Agent-driven `Create PR` prompt: `src/hooks/useApp.ts`
 - Board review status label: `src/components/TaskCard.tsx`
 - Frontend review-loop loading and event subscription: `src/hooks/useTaskReviewLoop.ts`
 - Frontend API: `src/api.ts`

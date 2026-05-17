@@ -7,6 +7,7 @@ import {
   CircleCheckBig,
   ExternalLink,
   GitBranch,
+  GitPullRequest,
   LoaderCircle,
   Play,
   RotateCcw,
@@ -52,6 +53,7 @@ export interface TaskWorkspaceProps {
   onResumeSession: (task: TaskSummary) => void;
   onStartSession: (task: TaskSummary) => void;
   onStartReview: (task: TaskSummary, reviewerProfileId: number) => void;
+  onCreatePullRequest: (task: TaskSummary) => void;
   onUpdateStatus: (task: TaskSummary, status: TaskStatus) => void;
   onSessionExit: (sessionId: string) => void;
   onSessionInput: (sessionId: string) => void;
@@ -90,6 +92,7 @@ export function TaskWorkspace({
   onResumeSession,
   onStartSession,
   onStartReview,
+  onCreatePullRequest,
   onUpdateStatus,
   onSessionExit,
   onSessionInput,
@@ -121,6 +124,12 @@ export function TaskWorkspace({
   );
   const startReviewDisabled = !selectedReviewerProfile || reviewerProfiles.length === 0 || reviewInProgress;
   const reviewReadyForNextStep = reviewLoop?.status === "passed";
+  const canCreatePullRequest = Boolean(task.activeSessionId && !task.prUrl);
+  const createPullRequestDescription = task.prUrl
+    ? "Pull request linked"
+    : task.activeSessionId
+      ? "Ask the running agent to open a pull request"
+      : "Start or resume the agent first";
   const workflowStep = task.status === "done" || task.prUrl ? 3 : reviewInProgress ? 1 : reviewReadyForNextStep ? 2 : 1;
   const reviewActionLabel = selectedReviewerProfile
     ? `${reviewInProgress ? "Reviewing with" : "Review with"} ${selectedReviewerProfile.name}`
@@ -144,11 +153,11 @@ export function TaskWorkspace({
     },
     {
       title: "Create PR",
-      description: task.prUrl ? "Pull request linked" : "Placeholder",
+      description: createPullRequestDescription,
       completed: Boolean(task.prUrl),
       loading: false,
-      disabled: true,
-      onClick: undefined,
+      disabled: !canCreatePullRequest,
+      onClick: canCreatePullRequest ? () => onCreatePullRequest(task) : undefined,
     },
     {
       title: "Move to done",
@@ -417,6 +426,22 @@ export function TaskWorkspace({
                               </DropdownMenuGroup>
                             </DropdownMenuContent>
                           </DropdownMenu>
+                        </div>
+                      )}
+
+                      {index === 1 && !task.prUrl && (
+                        <div className="task-review-action">
+                          <Button
+                            type="button"
+                            size="sm"
+                            aria-label="Ask agent to create pull request"
+                            className="task-review-action-main"
+                            disabled={!task.activeSessionId}
+                            onClick={() => onCreatePullRequest(task)}
+                          >
+                            <GitPullRequest data-icon="inline-start" />
+                            Create PR
+                          </Button>
                         </div>
                       )}
                     </div>
