@@ -199,8 +199,9 @@ Current behavior:
 - The review action switches the selected task UI to `reviewing` while the reviewer
   command runs, and the task workflow stepper shows the in-progress state.
 - The task workflow stepper enables `Create PR` when the worker session is
-  running. That action submits a structured prompt into the active PTY asking
-  the agent to verify, commit, push, create the PR, and report the URL.
+  running. That action submits a structured prompt into the active PTY, including
+  the terminal Enter sequence, asking the agent to verify, commit, push, create
+  the PR, and report the URL.
 - The task workflow stepper also shows a `Move to done` step that marks the
   task complete.
 - PR URLs are still stored through task metadata when linked, but the first

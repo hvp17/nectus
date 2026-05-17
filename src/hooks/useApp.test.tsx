@@ -27,6 +27,7 @@ vi.mock("../api", () => ({
     stopPairLoop: vi.fn(),
     getTaskReviewLoop: vi.fn(),
     listTaskReviewRuns: vi.fn(),
+    submitSessionInput: vi.fn(),
     sendSessionInput: vi.fn(),
     sendSystemNotification: vi.fn().mockResolvedValue(true),
   },
@@ -199,8 +200,8 @@ describe("useApp", () => {
     });
   });
 
-  it("sends a structured create-pr prompt to the active session", async () => {
-    mockedApi.sendSessionInput.mockResolvedValue();
+  it("submits a structured create-pr prompt to the active session", async () => {
+    mockedApi.submitSessionInput.mockResolvedValue(undefined);
     render(<Harness />);
 
     await waitFor(() => {
@@ -210,14 +211,15 @@ describe("useApp", () => {
     fireEvent.click(screen.getByRole("button", { name: /create pr/i }));
 
     await waitFor(() => {
-      expect(mockedApi.sendSessionInput).toHaveBeenCalledWith(
+      expect(mockedApi.submitSessionInput).toHaveBeenCalledWith(
         "session-21",
         expect.stringContaining("Create a pull request for this task"),
       );
     });
-    expect(mockedApi.sendSessionInput.mock.calls[0]?.[1]).toContain("Conventional Commit");
-    expect(mockedApi.sendSessionInput.mock.calls[0]?.[1]).toContain("remote default branch");
-    expect(mockedApi.sendSessionInput.mock.calls[0]?.[1]).toMatch(/\r$/);
+    expect(mockedApi.submitSessionInput.mock.calls[0]?.[1]).toContain("Conventional Commit");
+    expect(mockedApi.submitSessionInput.mock.calls[0]?.[1]).toContain("remote default branch");
+    expect(mockedApi.submitSessionInput.mock.calls[0]?.[1]).not.toMatch(/\r$/);
+    expect(mockedApi.sendSessionInput).not.toHaveBeenCalled();
   });
 
   it("marks the selected task done when a review loop passes", async () => {
