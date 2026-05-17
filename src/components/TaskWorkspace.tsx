@@ -398,33 +398,38 @@ export function TaskWorkspace({
                         <div className="task-review-action">
                           <Button
                             type="button"
-                            size="sm"
+                            size="xs"
                             aria-label={reviewActionLabel}
                             className="task-review-action-main"
                             disabled={startReviewDisabled}
                             onClick={startReview}
                           >
-                            <span>{reviewInProgress ? "Reviewing with" : "Review with"}</span>
-                            {selectedReviewerProfile && (
-                              <>
-                                <span aria-hidden="true">
-                                  <AgentLogo agentKind={selectedReviewerProfile.agentKind} size="sm" />
-                                </span>
-                                <span className="truncate">{selectedReviewerProfile.name}</span>
-                              </>
+                            {reviewInProgress && (
+                              <LoaderCircle data-icon="inline-start" className="animate-spin" />
                             )}
+                            <span>{reviewInProgress ? "Reviewing" : "Review"}</span>
                           </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
                                 type="button"
-                                size="sm"
+                                size="xs"
                                 variant="outline"
                                 aria-label="Change reviewer"
-                                className="task-review-action-menu"
+                                className="task-reviewer-menu"
                                 disabled={reviewActive || reviewerProfiles.length === 0}
                               >
-                                <ChevronDown />
+                                {selectedReviewerProfile ? (
+                                  <>
+                                    <span aria-hidden="true">
+                                      <AgentLogo agentKind={selectedReviewerProfile.agentKind} size="sm" />
+                                    </span>
+                                    <span className="task-reviewer-menu-label">{selectedReviewerProfile.name}</span>
+                                  </>
+                                ) : (
+                                  <span className="task-reviewer-menu-label">Reviewer</span>
+                                )}
+                                <ChevronDown data-icon="inline-end" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="min-w-44">
@@ -454,7 +459,8 @@ export function TaskWorkspace({
                         <div className="task-review-action">
                           <Button
                             type="button"
-                            size="sm"
+                            size="xs"
+                            variant="outline"
                             aria-label="Ask agent to create pull request"
                             className="task-review-action-main"
                             disabled={!task.activeSessionId}

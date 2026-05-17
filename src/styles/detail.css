@@ -277,28 +277,32 @@
 
 .task-review-action {
   display: flex;
-  width: min(calc(100% - 34px), 260px);
+  width: fit-content;
+  max-width: calc(100% - 34px);
   min-width: 0;
-  align-items: stretch;
-  margin-top: 10px;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
   margin-left: 34px;
 }
 
 .task-review-action-main {
   min-width: 0;
-  flex: 1;
-  justify-content: flex-start;
-  gap: 7px;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+  flex: 0 0 auto;
+  gap: 5px;
 }
 
-.task-review-action-menu {
-  width: 34px;
-  flex: none;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  border-left: 0;
+.task-reviewer-menu {
+  min-width: 0;
+  max-width: 150px;
+  gap: 5px;
+}
+
+.task-reviewer-menu-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .review-panel {
