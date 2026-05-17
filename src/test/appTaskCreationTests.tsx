@@ -27,6 +27,29 @@ function createTaskMock(title: string, overrides = {}) {
 }
 
 export function defineAppTaskCreationTests() {
+  it("opens the task modal at the larger setup width", async () => {
+    mockProject();
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+
+    expect(screen.getByRole("dialog")).toHaveClass("sm:max-w-3xl");
+  });
+
+  it("renders one brand logo per agent choice", async () => {
+    mockProject();
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+
+    const dialog = screen.getByRole("dialog");
+    const logos = within(dialog).getAllByRole("img", { name: /logo/i });
+    expect(logos).toHaveLength(2);
+    expect(logos.map((logo) => logo.getAttribute("aria-label"))).toEqual(["Codex logo", "Claude logo"]);
+  });
+
   it("opens a task modal and creates a task with an optional title, selected agent, prompt, and worktree choice", async () => {
     mockProject();
     createTaskMock("Review modal task flow");
