@@ -81,6 +81,8 @@ The watcher:
   active. It polls every 500 ms for the first 120 attempts, then backs off to
   every 5 seconds for blank or idle Codex sessions that have not written JSONL
   metadata yet.
+- Skips matching metadata when the rollout is a Codex subagent, auto-review, or
+  guardian session.
 - Reads appended lines every 500 ms.
 - Emits `session_idle` for `event_msg.payload.type == "task_complete"` or
   `event_msg.payload.type == "turn_complete"`.
@@ -307,6 +309,7 @@ Check:
 - Codex JSONL persisted the event you expect.
 - The Nectus session was still active when Codex first wrote matching
   `session_meta` metadata; metadata discovery stops when the task session ends.
+- The matching `session_meta` was not a Codex subagent or auto-review session.
 
 Relevant code:
 

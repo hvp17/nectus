@@ -190,6 +190,8 @@ Current behavior:
 
 - Finds the latest Codex rollout whose `session_meta.payload.cwd` matches the
   launched task cwd.
+- Ignores Codex subagent rollouts, including auto-review or guardian sessions,
+  so approval checks do not become task-level `Finished` attention markers.
 - Keeps discovering the matching rollout while the Nectus task session is active.
   Discovery polls every 500 ms for the first 120 attempts, then every 5 seconds
   until Codex writes metadata or the task session stops.

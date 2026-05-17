@@ -50,6 +50,9 @@ struct CodexSessionMetaPayload {
     id: String,
     cwd: String,
     timestamp: Option<chrono::DateTime<chrono::FixedOffset>>,
+    source: Option<serde_json::Value>,
+    thread_source: Option<String>,
+    model: Option<String>,
     thread_name: Option<String>,
     name: Option<String>,
     title: Option<String>,
@@ -206,6 +209,9 @@ pub(super) fn codex_session_metadata_from_line(
     if payload.cwd != cwd {
         return None;
     }
+    if is_codex_subagent_session(&payload) {
+        return None;
+    }
 
     let timestamp = payload.timestamp.unwrap_or(line.timestamp);
     if timestamp < started_at {
@@ -220,6 +226,15 @@ pub(super) fn codex_session_metadata_from_line(
             path: path.to_path_buf(),
         },
     ))
+}
+
+fn is_codex_subagent_session(payload: &CodexSessionMetaPayload) -> bool {
+    payload.thread_source.as_deref() == Some("subagent")
+        || payload.model.as_deref() == Some("codex-auto-review")
+        || payload
+            .source
+            .as_ref()
+            .is_some_and(|source| source.get("subagent").is_some())
 }
 
 fn codex_session_label(payload: &CodexSessionMetaPayload) -> Option<String> {

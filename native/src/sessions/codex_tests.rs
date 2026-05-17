@@ -142,3 +142,17 @@ fn parses_codex_session_metadata_with_top_level_timestamp() {
     assert_eq!(metadata.id, "codex-session-1");
     assert_eq!(metadata.label.as_deref(), Some("Refactor JSONL parser"));
 }
+
+#[test]
+fn ignores_codex_subagent_session_metadata() {
+    let started_at = chrono::DateTime::parse_from_rfc3339("2026-05-14T10:00:00Z").unwrap();
+    let line = r#"{"timestamp":"2026-05-14T10:00:05.000Z","type":"session_meta","payload":{"id":"codex-guardian-session","timestamp":"2026-05-14T10:00:05.000Z","cwd":"/tmp/project","source":{"subagent":{"other":"guardian"}},"thread_source":"subagent","model":"codex-auto-review"}}"#;
+
+    assert!(codex_session_metadata_from_line(
+        "/tmp/guardian.jsonl".as_ref(),
+        line,
+        "/tmp/project",
+        started_at
+    )
+    .is_none());
+}
