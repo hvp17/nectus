@@ -46,7 +46,7 @@ Key files:
 - Board and drag/drop status updates: `src/components/Workspace.tsx`
 - Task card: `src/components/TaskCard.tsx`
 - Task-card pointer drag tracking: `src/hooks/useTaskCardPointerDrag.ts`
-- Detail pane: `src/components/TaskDetailDrawer.tsx`
+- Selected-task workspace and inspector rail: `src/components/TaskWorkspace.tsx`
 - Dashboard layout and board scrolling: `src/styles.css`
 - Frontend state orchestration: `src/hooks/useApp.ts`
 - Backend commands: `create_task`, `list_tasks`, `update_task_metadata`,
@@ -99,10 +99,11 @@ Current behavior:
 - New task prompts are written to the PTY after launch.
 - Dropping files on the terminal inserts their escaped paths into the active
   session input, matching the local terminal workflow for Codex image/file paths.
-- The task detail terminal can expand full width with the inspector and can be
-  resized vertically from the separator above the terminal. The upper task
-  controls use a compact session/status/metadata strip and scroll when the
-  terminal is enlarged.
+- Selecting a task replaces the board with a focused terminal workspace. Running
+  sessions render the live terminal front and center; tasks without an active
+  session show launcher controls in the terminal stage.
+- Task metadata, status, prompt, workflow, review controls, and review feedback
+  live in the persistent right inspector rail.
 - Terminal output is streamed through the `session_output` Tauri event.
 - Recent terminal output is buffered in memory for snapshot restore.
 - Closing the app stops owned sessions and clears active session ids.
@@ -176,7 +177,7 @@ AI review is a single reviewer pass over the selected task worktree.
 
 Current behavior:
 
-- Choose one reviewer profile in the task detail pane.
+- Choose one reviewer profile in the selected task inspector.
 - Use the task workflow stepper's `Start review` step to run one reviewer pass.
 - `Start review` switches the selected task UI to `reviewing` while the reviewer
   command runs, and the task workflow stepper shows the in-progress state.
@@ -204,7 +205,7 @@ Current behavior:
 
 Key files:
 
-- UI controls and latest run summary: `src/components/TaskDetailDrawer.tsx`
+- UI controls and latest run summary: `src/components/TaskWorkspace.tsx`
 - Board review status label: `src/components/TaskCard.tsx`
 - Frontend review-loop loading and event subscription: `src/hooks/useTaskReviewLoop.ts`
 - Frontend API: `src/api.ts`

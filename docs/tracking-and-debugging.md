@@ -39,12 +39,11 @@ The frontend keeps transient UI state in React:
 
 - Selected project and selected task.
 - Task attention markers.
-- Detail-pane expansion.
 - Create-task modal drafts.
 - Settings/profile edit drafts.
 - Review-loop detail state loaded for the selected task.
 - Review status is included in task summaries so the board can label cards
-  without opening the detail pane. Review is modeled as a single pass.
+  before a task is opened. Review is modeled as a single pass.
 
 The source of truth for saved project, task, profile, settings, and review-loop
 data remains SQLite through Tauri commands.
@@ -264,9 +263,9 @@ Check:
 - `session_output` events are being emitted.
 - `send_session_input` is called from keyboard input and from file drops over
   the terminal host.
-- Dragging the task-detail terminal resize separator changes the terminal host
-  height; `src/TerminalPane.tsx` observes that host resize and sends
-  `resize_session` with the fitted PTY rows and columns.
+- The selected task is open in the focused terminal workspace and the terminal
+  host has nonzero height; `src/TerminalPane.tsx` observes that host resize and
+  sends `resize_session` with the fitted PTY rows and columns.
 - `session_output_snapshot` only works for running sessions.
 
 Relevant code:
@@ -289,7 +288,7 @@ Check:
 
 Relevant code:
 
-- `src/components/TaskDetailDrawer.tsx`
+- `src/components/TaskWorkspace.tsx`
 - `native/src/lib.rs`
 - `native/src/sessions/codex.rs`
 
@@ -359,7 +358,7 @@ Relevant code:
 
 - `native/src/sessions/codex.rs`
 - `native/src/sessions/review_loop.rs`
-- `src/components/TaskDetailDrawer.tsx`
+- `src/components/TaskWorkspace.tsx`
 
 ## Verification Commands
 
