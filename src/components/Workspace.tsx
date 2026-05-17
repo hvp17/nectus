@@ -3,6 +3,7 @@ import { RefreshCw, Plus, Activity, GitBranch, CheckCircle2, AlertTriangle, Circ
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardAction } from "./ui/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
 import { TaskCard } from "./TaskCard";
 import { getTaskAttention, type TaskAttention } from "../sessionAttention";
 import { TaskStatus, TaskSummary, Repo } from "../types";
@@ -161,7 +162,7 @@ export function Workspace({
           </h2>
         </div>
         <Button variant="outline" size="sm" onClick={onRefresh} title="Refresh" className="h-9 gap-2">
-          <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+          <RefreshCw data-icon="inline-start" className={loading ? "animate-spin" : undefined} />
           Refresh
         </Button>
       </header>
@@ -178,52 +179,72 @@ export function Workspace({
         <h3 className="text-sm font-bold uppercase tracking-widest opacity-50">Task Board</h3>
         {selectedRepo && (
           <Button type="button" size="sm" onClick={onCreateTask} disabled={busy} className="h-9 gap-2">
-            <Plus size={16} />
+            <Plus data-icon="inline-start" />
             New Task
           </Button>
         )}
       </div>
 
-      <div className="columns overflow-x-auto pb-4">
-        {statusOrder.map((status) => {
-          const tasksInColumn = visibleTasks.filter((t) => t.status === status);
-          const acceptsDraggedTask = Boolean(draggingTask && draggingTask.status !== status);
-          return (
-            <StatusColumn
-              key={status}
-              status={status}
-              isDropAvailable={acceptsDraggedTask}
-              isDropTarget={acceptsDraggedTask && dropTargetStatus === status}
-            >
-              <div className="column-heading px-1 mb-1">
-                <span className="text-xs font-bold uppercase tracking-wider">{statusLabels[status]}</span>
-                <Badge variant="secondary" className="text-[10px] h-5 min-w-5 justify-center font-bold">
-                  {tasksInColumn.length}
-                </Badge>
-              </div>
-              <div className="flex flex-col gap-3">
-                {tasksInColumn.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    attention={getTaskAttention(taskAttention, task.id)}
-                    isSelected={selectedTaskId === task.id}
-                    busy={busy}
-                    isDeleting={deletingTaskIds.has(task.id)}
-                    isDragging={draggingTaskId === task.id}
-                    onSelect={onSelectTask}
-                    onDelete={onDeleteTask}
-                    onDragStart={startTaskDrag}
-                    onPointerDragMove={markPointerDragPosition}
-                    onPointerDragEnd={movePointerDroppedTask}
-                    onDragEnd={clearTaskDrag}
-                  />
-                ))}
-              </div>
-            </StatusColumn>
-          );
-        })}
-      </div>
+      {!selectedRepo && !loading ? (
+        <Empty className="min-h-[360px] border bg-muted/20">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <GitBranch size={16} />
+            </EmptyMedia>
+            <EmptyTitle>Connect a Project</EmptyTitle>
+            <EmptyDescription>Add an existing local git repo from the Projects sidebar.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <div className="columns overflow-x-auto pb-4">
+          {statusOrder.map((status) => {
+            const tasksInColumn = visibleTasks.filter((t) => t.status === status);
+            const acceptsDraggedTask = Boolean(draggingTask && draggingTask.status !== status);
+            return (
+              <StatusColumn
+                key={status}
+                status={status}
+                isDropAvailable={acceptsDraggedTask}
+                isDropTarget={acceptsDraggedTask && dropTargetStatus === status}
+              >
+                <div className="column-heading px-1 mb-1">
+                  <span className="text-xs font-bold uppercase tracking-wider">{statusLabels[status]}</span>
+                  <Badge variant="secondary" className="text-[10px] h-5 min-w-5 justify-center font-bold">
+                    {tasksInColumn.length}
+                  </Badge>
+                </div>
+                <div className="flex flex-col gap-3">
+                  {tasksInColumn.map((task) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      attention={getTaskAttention(taskAttention, task.id)}
+                      isSelected={selectedTaskId === task.id}
+                      busy={busy}
+                      isDeleting={deletingTaskIds.has(task.id)}
+                      isDragging={draggingTaskId === task.id}
+                      onSelect={onSelectTask}
+                      onDelete={onDeleteTask}
+                      onDragStart={startTaskDrag}
+                      onPointerDragMove={markPointerDragPosition}
+                      onPointerDragEnd={movePointerDroppedTask}
+                      onDragEnd={clearTaskDrag}
+                    />
+                  ))}
+                  {selectedRepo && tasksInColumn.length === 0 && (
+                    <Empty className="min-h-32 border-0 bg-background/40 p-4">
+                      <EmptyHeader>
+                        <EmptyTitle>No tasks</EmptyTitle>
+                        <EmptyDescription>No {statusLabels[status].toLowerCase()} tasks.</EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                  )}
+                </div>
+              </StatusColumn>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

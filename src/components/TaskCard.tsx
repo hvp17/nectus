@@ -134,7 +134,7 @@ export function TaskCard({
             </Badge>
           )}
           {task.activeSessionId && (
-            <Badge variant="default" className="h-5 px-1.5 text-[10px] animate-pulse">
+            <Badge variant="default" className="h-5 px-1.5 text-[10px]">
               <Radio size={10} />
               LIVE
             </Badge>
@@ -148,12 +148,12 @@ export function TaskCard({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                      className="size-7 text-destructive hover:bg-destructive/10"
                       disabled={deleteDisabled}
                       aria-label={deleteLabel}
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <Trash2 size={14} />
+                      <Trash2 />
                     </Button>
                   </AlertDialogTrigger>
                 </TooltipTrigger>

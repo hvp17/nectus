@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { GitBranch, Palette, Plus, Save, Terminal } from "lucide-react";
 import { AgentLogo } from "./AgentBrand";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
+import { Card, CardContent } from "./ui/card";
+import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "./ui/field";
 import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import type { AgentProfile, AppSettings, AppSettingsInput } from "../types";
 import { ProfileEditor } from "./settings/ProfileEditor";
@@ -91,10 +92,7 @@ export function SettingsPage({
           <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
         </div>
         <div className="settings-hero-actions">
-          <div className="settings-profile-count" aria-label={profileCountLabel}>
-            <strong>{profileDrafts.length}</strong>
-            <span>{profileDrafts.length === 1 ? "profile" : "profiles"}</span>
-          </div>
+          <Badge variant="secondary" aria-label={profileCountLabel}>{profileCountLabel}</Badge>
           <Button variant="outline" size="sm" onClick={onBack} className="h-9">
             Back to dashboard
           </Button>
@@ -102,33 +100,18 @@ export function SettingsPage({
       </header>
 
       <div className="settings-overview" aria-label="Settings summary">
-        <div className="settings-overview-item">
-          <span className="settings-overview-icon">
-            {selectedDefaultProfile ? <AgentLogo agentKind={selectedDefaultProfile.agentKind} size="sm" /> : <Terminal size={15} />}
-          </span>
-          <span>
-            <small>Default agent</small>
-            <strong>{selectedDefaultProfile?.name ?? "No default"}</strong>
-          </span>
-        </div>
-        <div className="settings-overview-item">
-          <span className="settings-overview-icon">
-            <GitBranch size={15} />
-          </span>
-          <span>
-            <small>Worktree root</small>
-            <strong className="font-mono">{settingsDraft.defaultWorktreeRootPattern || "Unset"}</strong>
-          </span>
-        </div>
-        <div className="settings-overview-item">
-          <span className="settings-overview-icon">
-            <Palette size={15} />
-          </span>
-          <span>
-            <small>Interface</small>
-            <strong>{themeLabel} / {densityLabel}</strong>
-          </span>
-        </div>
+        <SettingsOverviewCard
+          icon={selectedDefaultProfile ? <AgentLogo agentKind={selectedDefaultProfile.agentKind} size="sm" /> : <Terminal size={15} />}
+          label="Default agent"
+          value={selectedDefaultProfile?.name ?? "No default"}
+        />
+        <SettingsOverviewCard
+          icon={<GitBranch size={15} />}
+          label="Worktree root"
+          value={settingsDraft.defaultWorktreeRootPattern || "Unset"}
+          valueClassName="font-mono"
+        />
+        <SettingsOverviewCard icon={<Palette size={15} />} label="Interface" value={`${themeLabel} / ${densityLabel}`} />
       </div>
 
       <div className="settings-stack">
@@ -141,7 +124,7 @@ export function SettingsPage({
             <div className="settings-section-actions">
               <Badge variant="outline">{profileCountLabel}</Badge>
               <Button type="button" variant="outline" size="sm" className="gap-2" onClick={addProfileDraft}>
-                <Plus size={14} />
+                <Plus data-icon="inline-start" />
                 Add Profile
               </Button>
             </div>
@@ -172,15 +155,17 @@ export function SettingsPage({
                   </span>
                 </SelectTrigger>
                 <SelectContent position="popper">
-                  <SelectItem value={noDefaultProfileValue}>No default</SelectItem>
-                  {defaultProfileOptions.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id!.toString()} textValue={profile.name}>
-                      <span className="select-option-with-logo">
-                        <AgentLogo agentKind={profile.agentKind} size="sm" />
-                        {profile.name}
-                      </span>
-                    </SelectItem>
-                  ))}
+                  <SelectGroup>
+                    <SelectItem value={noDefaultProfileValue}>No default</SelectItem>
+                    {defaultProfileOptions.map((profile) => (
+                      <SelectItem key={profile.id} value={profile.id!.toString()} textValue={profile.name}>
+                        <span className="select-option-with-logo">
+                          <AgentLogo agentKind={profile.agentKind} size="sm" />
+                          {profile.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 </SelectContent>
               </Select>
             </div>
@@ -207,9 +192,9 @@ export function SettingsPage({
               <h3>Projects & Worktrees</h3>
             </div>
           </div>
-          <div className="settings-grid">
-            <div className="settings-field">
-              <Label htmlFor="worktree-root-pattern">Worktree root pattern</Label>
+          <FieldGroup className="settings-grid">
+            <Field>
+              <FieldLabel htmlFor="worktree-root-pattern">Worktree root pattern</FieldLabel>
               <Input
                 id="worktree-root-pattern"
                 value={settingsDraft.defaultWorktreeRootPattern}
@@ -222,10 +207,10 @@ export function SettingsPage({
                 placeholder="../{repoName}-worktrees"
                 className="font-mono"
               />
-              <p className="settings-help">Use {"{repoName}"} to place each project in its own global worktree folder.</p>
-            </div>
-            <div className="settings-field">
-              <Label htmlFor="branch-prefix">Default branch prefix</Label>
+              <FieldDescription>Use {"{repoName}"} to place each project in its own global worktree folder.</FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="branch-prefix">Default branch prefix</FieldLabel>
               <Input
                 id="branch-prefix"
                 value={settingsDraft.defaultBranchPrefix ?? ""}
@@ -238,8 +223,8 @@ export function SettingsPage({
                 placeholder="feat/"
                 className="font-mono"
               />
-            </div>
-          </div>
+            </Field>
+          </FieldGroup>
         </section>
 
         <section className="settings-section">
@@ -249,7 +234,7 @@ export function SettingsPage({
               <h3>Appearance</h3>
             </div>
           </div>
-          <div className="settings-grid">
+          <FieldGroup className="settings-grid">
             <SegmentedRadioGroup
               label="Theme"
               name="theme"
@@ -271,7 +256,7 @@ export function SettingsPage({
               ]}
               onChange={(density) => setSettingsDraft((current) => ({ ...current, density }))}
             />
-          </div>
+          </FieldGroup>
         </section>
       </div>
 
@@ -282,11 +267,35 @@ export function SettingsPage({
           disabled={busy || !settingsDraft.defaultWorktreeRootPattern.includes("{repoName}")}
           className="gap-2"
         >
-          <Save size={16} />
+          <Save data-icon="inline-start" />
           Save Settings
         </Button>
       </div>
     </section>
+  );
+}
+
+function SettingsOverviewCard({
+  icon,
+  label,
+  value,
+  valueClassName,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
+  return (
+    <Card size="sm" className="settings-overview-item shadow-none">
+      <CardContent className="settings-overview-content p-0">
+        <span className="settings-overview-icon">{icon}</span>
+        <span>
+          <small>{label}</small>
+          <strong className={valueClassName}>{value}</strong>
+        </span>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -304,8 +313,8 @@ function SegmentedRadioGroup<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <fieldset className="settings-field">
-      <legend className="settings-label">{label}</legend>
+    <FieldSet>
+      <FieldLegend variant="label">{label}</FieldLegend>
       <ToggleGroup
         type="single"
         value={value}
@@ -326,6 +335,6 @@ function SegmentedRadioGroup<T extends string>({
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
-    </fieldset>
+    </FieldSet>
   );
 }

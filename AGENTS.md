@@ -32,6 +32,33 @@ Use Context7 MCP to fetch current documentation for libraries, frameworks, SDKs,
 
 Prefer Context7 results over memory for library-specific API usage. For shadcn/ui, use the Context7 library ID `/shadcn-ui/ui` when needed.
 
+## shadcn/UI Frontend Work
+
+For every frontend UI change, read the current shadcn/ui documentation before choosing or composing primitives. Use Context7 with `/shadcn-ui/ui` for docs context, and use the local shadcn workflow to inspect project state and component docs:
+
+```bash
+pnpm exec shadcn info --json
+pnpm exec shadcn docs <component>
+```
+
+Prefer shadcn primitives from `src/components/ui/` over custom markup and styling. Before creating a custom component, check whether an installed shadcn primitive or official registry item already covers the need:
+
+- actions: `Button`
+- forms: `Field`, `Input`, `Textarea`, `Select`, `RadioGroup`, `ToggleGroup`
+- overlays: `Dialog`, `AlertDialog`, `Sheet`, `Tooltip`, `DropdownMenu`
+- structure and display: `Card`, `Badge`, `Separator`, `Sidebar`, `ScrollArea`
+- feedback and states: `Alert`, `Empty`, `Skeleton`, `sonner`
+
+Add or update shadcn components through the CLI rather than copying component source by hand:
+
+```bash
+pnpm dlx shadcn@latest add @shadcn/<component>
+```
+
+When the CLI reports that existing UI files would be overwritten, inspect the impact first and only use `--overwrite` after explicit user approval. After adding a component, read the generated files and update app code to use the exported primitive APIs instead of preserving parallel custom implementations.
+
+Keep custom React components focused on Nectus-specific composition, data flow, drag behavior, terminal behavior, and product workflow. Do not reimplement generic buttons, forms, empty states, badges, alerts, dialogs, menus, tooltips, cards, separators, or sidebars when shadcn provides the primitive.
+
 ## Development Flow
 
 Use Conventional Commits for all commit messages.
@@ -198,7 +225,7 @@ Important frontend files:
 
 Do not call shell/git directly from the frontend. Add Rust commands instead.
 
-Prefer shadcn/ui components for UI primitives as much as possible. Keep custom components to a minimum, and use custom code mainly for app-specific layout, orchestration, and composition around shadcn components rather than reimplementing buttons, alerts, dialogs, inputs, menus, tooltips, cards, or similar primitives.
+Use the shadcn/UI Frontend Work rules above for all visible React UI changes.
 
 ## Product Defaults
 

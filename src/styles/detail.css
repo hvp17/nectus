@@ -169,7 +169,6 @@
 
 .task-status-control,
 .task-meta-row,
-.task-meta-pill,
 .task-meta-branch {
   display: flex;
   align-items: center;
@@ -200,15 +199,6 @@
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-
-.task-meta-pill {
-  flex: 0 0 auto;
-  min-height: 26px;
-  padding: 0 8px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--card) 72%, var(--background));
 }
 
 .task-meta-branch,
@@ -245,11 +235,6 @@
 
 .task-meta-link:hover {
   text-decoration: underline;
-}
-
-.task-meta-muted {
-  color: color-mix(in srgb, var(--foreground) 78%, var(--muted-foreground));
-  font-size: 12px;
 }
 
 .task-brief-panel {
