@@ -9,15 +9,177 @@
   flex-direction: column;
   justify-content: space-between;
   gap: 24px;
+  height: 100vh;
+  min-height: 0;
   padding: 22px;
   border-right: 1px solid var(--sidebar-border);
   background: var(--sidebar);
   color: var(--sidebar-foreground);
 }
 
+.sidebar-main {
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: 4px;
+}
+
 .sidebar-footer {
   display: grid;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.task-quick-access {
+  display: grid;
   gap: 8px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--sidebar-border) 82%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--sidebar-accent) 36%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 32%, transparent);
+}
+
+.task-quick-access-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.task-quick-access-count {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--sidebar-primary);
+  color: var(--sidebar-primary-foreground);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.task-quick-access-list {
+  display: grid;
+  gap: 7px;
+  max-height: min(34vh, 292px);
+  overflow: auto;
+  padding-right: 1px;
+}
+
+.task-quick-access-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  align-items: stretch;
+  gap: 4px;
+  border: 1px solid color-mix(in srgb, var(--sidebar-border) 70%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--background) 58%, transparent);
+}
+
+.task-quick-access-item[data-selected="true"] {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 28%, transparent);
+}
+
+.task-quick-access-item[data-tone="needs_input"] {
+  border-color: color-mix(in srgb, oklch(0.68 0.16 56) 46%, var(--sidebar-border));
+  background: color-mix(in srgb, oklch(0.78 0.15 72) 12%, var(--background));
+}
+
+.task-quick-access-item[data-tone="idle"] {
+  border-color: color-mix(in srgb, oklch(0.58 0.12 150) 38%, var(--sidebar-border));
+  background: color-mix(in srgb, oklch(0.72 0.12 152) 10%, var(--background));
+}
+
+.task-quick-access-open {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  height: auto;
+  min-height: 78px;
+  justify-content: start;
+  padding: 9px 8px;
+  color: inherit;
+  text-align: left;
+  white-space: normal;
+}
+
+.task-quick-access-status-icon {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  color: var(--primary);
+}
+
+.task-quick-access-item[data-tone="needs_input"] .task-quick-access-status-icon {
+  color: oklch(0.68 0.16 56);
+}
+
+.task-quick-access-item[data-tone="idle"] .task-quick-access-status-icon {
+  color: oklch(0.58 0.12 150);
+}
+
+.task-quick-access-main {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.task-quick-access-title {
+  overflow: hidden;
+  color: var(--sidebar-foreground);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+}
+
+.task-quick-access-meta,
+.task-quick-access-location,
+.task-quick-access-detail {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.task-quick-access-meta span,
+.task-quick-access-location span,
+.task-quick-access-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-quick-access-location {
+  font-family: var(--font-mono, "SFMono-Regular", Menlo, monospace);
+}
+
+.task-quick-access-detail {
+  display: block;
+  white-space: nowrap;
+}
+
+.task-quick-access-stop {
+  align-self: stretch;
+  width: 30px;
+  height: auto;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  color: var(--muted-foreground);
+}
+
+.task-quick-access-stop:hover {
+  color: var(--destructive);
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
 }
 
 .brand {

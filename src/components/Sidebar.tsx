@@ -1,13 +1,20 @@
 import { FolderPlus, FolderGit2, Settings } from "lucide-react";
 import { Button } from "./ui/button";
-import { Repo } from "../types";
+import { TaskQuickAccessPanel } from "./TaskQuickAccessPanel";
+import type { TaskAttention } from "../sessionAttention";
+import type { Repo, TaskSummary } from "../types";
 
 interface SidebarProps {
   repos: Repo[];
   selectedRepoId?: number;
+  selectedTaskId?: number;
+  tasks: TaskSummary[];
+  taskAttention: TaskAttention[];
   onSelectRepo: (id: number) => void;
+  onOpenTask: (id: number) => void;
   onAddProject: () => void;
   onOpenSettings: () => void;
+  onStopSession: (sessionId: string) => void;
   settingsActive: boolean;
   busy: boolean;
   loading: boolean;
@@ -16,16 +23,21 @@ interface SidebarProps {
 export function Sidebar({
   repos,
   selectedRepoId,
+  selectedTaskId,
+  tasks,
+  taskAttention,
   onSelectRepo,
+  onOpenTask,
   onAddProject,
   onOpenSettings,
+  onStopSession,
   settingsActive,
   busy,
   loading,
 }: SidebarProps) {
   return (
     <aside className="sidebar">
-      <div>
+      <div className="sidebar-main">
         <div className="brand">
           <div className="brand-mark">N</div>
           <div>
@@ -74,6 +86,13 @@ export function Sidebar({
       </div>
 
       <div className="sidebar-footer">
+        <TaskQuickAccessPanel
+          tasks={tasks}
+          taskAttention={taskAttention}
+          selectedTaskId={selectedTaskId}
+          onOpenTask={onOpenTask}
+          onStopSession={onStopSession}
+        />
         <Button
           type="button"
           variant={settingsActive ? "secondary" : "ghost"}

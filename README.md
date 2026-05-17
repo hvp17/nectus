@@ -16,6 +16,7 @@ git, SQLite, and PTY work lives in the Rust backend.
   terminal.
 - Open a selected task into a focused terminal workspace with task details in a
   persistent right inspector.
+- Use the sidebar Tasks quick access panel to jump to or stop active sessions.
 - Send the task prompt into a new agent session automatically.
 - Resume Codex and Claude sessions when a saved session id is available.
 - Track task status across `Planned`, `In progress`, `Review`, and `Done`.

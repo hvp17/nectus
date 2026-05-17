@@ -31,6 +31,7 @@ function getToastContent(message: string) {
 function App() {
   const {
     repos,
+    tasks,
     visibleTasks,
     selectedRepoId,
     setSelectedRepoId,
@@ -99,16 +100,28 @@ function App() {
         <Sidebar
           repos={repos}
           selectedRepoId={selectedRepoId}
+          selectedTaskId={selectedTaskId}
+          tasks={tasks}
+          taskAttention={taskAttention}
           onSelectRepo={(id) => {
             setCurrentView("dashboard");
             setSelectedRepoId(id);
             setSelectedTaskId(undefined);
+          }}
+          onOpenTask={(taskId) => {
+            const task = tasks.find((item) => item.id === taskId);
+            setCurrentView("dashboard");
+            if (task) {
+              setSelectedRepoId(task.repoId);
+            }
+            setSelectedTaskId(taskId);
           }}
           onAddProject={addProject}
           onOpenSettings={() => {
             setCurrentView("settings");
             setSelectedTaskId(undefined);
           }}
+          onStopSession={stopSession}
           settingsActive={currentView === "settings"}
           busy={busy}
           loading={loading}
