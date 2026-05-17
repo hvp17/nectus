@@ -8,12 +8,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+  FieldTitle,
+} from "./ui/field";
 import { Input } from "./ui/input";
-import { Label } from "./ui/label";
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { Textarea } from "./ui/textarea";
 import { AgentLogo, ModelLogo } from "./AgentBrand";
-import { cn } from "../lib/utils";
 import { AgentProfile } from "../types";
 
 interface CreateTaskModalProps {
@@ -68,11 +76,9 @@ export function CreateTaskModal({
             </div>
           </DialogHeader>
 
-          <div className="grid gap-6 p-6">
-            <div className="field">
-              <Label htmlFor="new-task-title" className="text-xs font-bold uppercase tracking-wider opacity-60">
-                Title (Optional)
-              </Label>
+          <FieldGroup className="gap-6 p-6">
+            <Field>
+              <FieldLabel htmlFor="new-task-title">Title (Optional)</FieldLabel>
               <Input
                 id="new-task-title"
                 placeholder="Refactor auth logic..."
@@ -80,39 +86,39 @@ export function CreateTaskModal({
                 onChange={(e) => setNewTaskTitle(e.target.value)}
                 className="h-10"
               />
-            </div>
+            </Field>
 
-            <div className="field">
-              <Label className="text-xs font-bold uppercase tracking-wider opacity-60 mb-2 block">Choose Agent</Label>
+            <FieldSet>
+              <FieldLegend variant="label">Choose Agent</FieldLegend>
               <RadioGroup
                 value={newTaskAgentProfileId?.toString()}
                 onValueChange={(value) => setNewTaskAgentProfileId(Number(value))}
                 className="grid grid-cols-2 gap-3"
               >
                 {agentProfiles.map((profile) => (
-                  <RadioChoice
-                    key={profile.id}
-                    htmlFor={`agent-profile-${profile.id}`}
-                    checked={newTaskAgentProfileId === profile.id}
-                  >
-                    <RadioGroupItem id={`agent-profile-${profile.id}`} value={profile.id.toString()} />
-                    <AgentLogo agentKind={profile.agentKind} size="md" className="agent-choice-logo" />
-                    <span className="agent-choice-text">
-                      <span>{profile.name}</span>
-                      <span>
-                        <ModelLogo agentKind={profile.agentKind} model={profile.model} size="sm" />
-                        {profile.model ?? "CLI default"}
-                      </span>
-                    </span>
-                  </RadioChoice>
+                  <FieldLabel key={profile.id} htmlFor={`agent-profile-${profile.id}`}>
+                    <Field
+                      orientation="horizontal"
+                      data-checked={newTaskAgentProfileId === profile.id ? true : undefined}
+                      className="items-center gap-3"
+                    >
+                      <RadioGroupItem id={`agent-profile-${profile.id}`} value={profile.id.toString()} />
+                      <AgentLogo agentKind={profile.agentKind} size="md" className="agent-choice-logo" />
+                      <FieldContent>
+                        <FieldTitle>{profile.name}</FieldTitle>
+                        <FieldDescription className="flex items-center gap-1.5">
+                          <ModelLogo agentKind={profile.agentKind} model={profile.model} size="sm" />
+                          {profile.model ?? "CLI default"}
+                        </FieldDescription>
+                      </FieldContent>
+                    </Field>
+                  </FieldLabel>
                 ))}
               </RadioGroup>
-            </div>
+            </FieldSet>
 
-            <div className="field">
-              <Label htmlFor="new-task-prompt" className="text-xs font-bold uppercase tracking-wider opacity-60">
-                Instructions (Optional)
-              </Label>
+            <Field>
+              <FieldLabel htmlFor="new-task-prompt">Instructions (Optional)</FieldLabel>
               <Textarea
                 id="new-task-prompt"
                 value={newTaskPrompt}
@@ -121,10 +127,10 @@ export function CreateTaskModal({
                 rows={4}
                 className="min-h-[120px] resize-none"
               />
-            </div>
+            </Field>
 
-            <div className="field">
-              <Label className="text-xs font-bold uppercase tracking-wider opacity-60 mb-2 block">Git Integration</Label>
+            <FieldSet>
+              <FieldLegend variant="label">Git Integration</FieldLegend>
               <RadioGroup
                 value={newTaskHasWorktree ? "worktree" : "direct"}
                 onValueChange={(value) => {
@@ -136,22 +142,24 @@ export function CreateTaskModal({
                 }}
                 className="grid grid-cols-2 gap-3"
               >
-                <RadioChoice htmlFor="task-mode-direct" checked={!newTaskHasWorktree}>
-                  <RadioGroupItem id="task-mode-direct" value="direct" />
-                  Direct Edit
-                </RadioChoice>
-                <RadioChoice htmlFor="task-mode-worktree" checked={newTaskHasWorktree}>
-                  <RadioGroupItem id="task-mode-worktree" value="worktree" />
-                  New Worktree
-                </RadioChoice>
+                <FieldLabel htmlFor="task-mode-direct">
+                  <Field orientation="horizontal" data-checked={!newTaskHasWorktree ? true : undefined}>
+                    <RadioGroupItem id="task-mode-direct" value="direct" />
+                    <FieldTitle>Direct Edit</FieldTitle>
+                  </Field>
+                </FieldLabel>
+                <FieldLabel htmlFor="task-mode-worktree">
+                  <Field orientation="horizontal" data-checked={newTaskHasWorktree ? true : undefined}>
+                    <RadioGroupItem id="task-mode-worktree" value="worktree" />
+                    <FieldTitle>New Worktree</FieldTitle>
+                  </Field>
+                </FieldLabel>
               </RadioGroup>
-            </div>
+            </FieldSet>
 
             {newTaskHasWorktree && (
-              <div className="field animate-in slide-in-from-top-2 duration-200">
-                <Label htmlFor="new-task-branch" className="text-xs font-bold uppercase tracking-wider opacity-60">
-                  Branch Name
-                </Label>
+              <Field className="animate-in slide-in-from-top-2 duration-200">
+                <FieldLabel htmlFor="new-task-branch">Branch Name</FieldLabel>
                 <Input
                   id="new-task-branch"
                   placeholder={`${defaultBranchPrefix ?? "feat/"}refactor-auth`}
@@ -159,43 +167,21 @@ export function CreateTaskModal({
                   onChange={(e) => setNewTaskBranchName(e.target.value)}
                   className="h-10 font-mono text-xs"
                 />
-              </div>
+              </Field>
             )}
-          </div>
+          </FieldGroup>
 
           <DialogFooter className="border-t bg-muted/20 p-6">
             <Button type="button" variant="ghost" size="lg" onClick={onClose} className="h-11">
               Cancel
             </Button>
             <Button type="submit" size="lg" disabled={submitDisabled} className="h-11 px-8 gap-2">
-              <Plus size={18} />
+              <Plus data-icon="inline-start" />
               Create Task
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function RadioChoice({
-  htmlFor,
-  checked,
-  children,
-}: {
-  htmlFor: string;
-  checked: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Label
-      htmlFor={htmlFor}
-      className={cn(
-        "flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm font-semibold transition-all",
-        checked ? "border-primary bg-primary/5 ring-1 ring-primary/20 shadow-sm" : "border-border hover:bg-accent/50",
-      )}
-    >
-      {children}
-    </Label>
   );
 }

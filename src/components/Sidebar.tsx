@@ -1,6 +1,7 @@
 import { FolderAddIcon, FolderGitIcon, Settings02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { TaskQuickAccessPanel } from "./TaskQuickAccessPanel";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty";
 import {
   Sidebar as SidebarRoot,
   SidebarContent,
@@ -68,9 +69,12 @@ export function Sidebar({
           </SidebarGroupAction>
           <SidebarGroupContent>
             {repos.length === 0 ? (
-              <div className="empty-mini px-2 py-4 text-xs opacity-50">
-                {loading ? "Loading projects..." : "No projects yet"}
-              </div>
+              <Empty className="empty-mini border-0 p-2 text-left">
+                <EmptyHeader className="items-start">
+                  <EmptyTitle>{loading ? "Loading projects..." : "No projects yet"}</EmptyTitle>
+                  {!loading && <EmptyDescription>Add a local git project to begin.</EmptyDescription>}
+                </EmptyHeader>
+              </Empty>
             ) : (
               <SidebarMenu>
                 {repos.map((repo) => (

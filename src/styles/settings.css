@@ -18,26 +18,6 @@
   gap: 12px;
 }
 
-.settings-profile-count {
-  display: inline-flex;
-  height: 36px;
-  align-items: center;
-  gap: 7px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--card) 84%, var(--muted));
-  color: var(--muted-foreground);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.settings-profile-count strong {
-  color: var(--foreground);
-  font-size: 16px;
-  line-height: 1;
-}
-
 .settings-overview {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -50,16 +30,22 @@
 }
 
 .settings-overview-item {
-  display: flex;
   min-width: 0;
-  align-items: center;
-  gap: 10px;
   padding: 14px 16px;
   border-right: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .settings-overview-item:last-child {
   border-right: 0;
+}
+
+.settings-overview-content {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
 }
 
 .settings-overview-icon {
@@ -152,33 +138,6 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
-}
-
-.settings-field {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-
-.settings-field label,
-.settings-label {
-  color: var(--muted-foreground);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.settings-field-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.settings-help {
-  margin: 0;
-  color: var(--muted-foreground);
-  font-size: 12px;
 }
 
 .default-agent-strip {
@@ -393,28 +352,6 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--background);
-}
-
-.agent-choice-text {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.agent-choice-text > span:first-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.agent-choice-text > span:last-child {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: 5px;
-  color: var(--muted-foreground);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.2;
 }
 
 .density-compact .settings-stack,

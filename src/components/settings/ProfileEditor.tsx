@@ -3,9 +3,9 @@ import { AgentLogo, ModelLogo } from "../AgentBrand";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader } from "../ui/card";
+import { Field, FieldGroup, FieldLabel } from "../ui/field";
 import { Input } from "../ui/input";
-import { Label } from "../ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import type { AgentKind } from "../../types";
 import {
@@ -78,107 +78,120 @@ export function ProfileEditor({ profile, isDefault, busy, onChange, onSave }: Pr
               </span>
             </SelectTrigger>
             <SelectContent position="popper">
-              {Object.entries(agentKindLabels).map(([value, label]) => (
-                <SelectItem key={value} value={value} textValue={label}>
-                  <span className="select-option-with-logo">
-                    <AgentLogo agentKind={value as AgentKind} size="sm" />
-                    {label}
-                  </span>
-                </SelectItem>
-              ))}
+              <SelectGroup>
+                {Object.entries(agentKindLabels).map(([value, label]) => (
+                  <SelectItem key={value} value={value} textValue={label}>
+                    <span className="select-option-with-logo">
+                      <AgentLogo agentKind={value as AgentKind} size="sm" />
+                      {label}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             </SelectContent>
           </Select>
           <Button type="button" size="sm" className="gap-2" onClick={onSave} disabled={saveDisabled}>
-            <Check size={14} />
+            <Check data-icon="inline-start" />
             Save
           </Button>
         </div>
       </CardHeader>
 
-      <CardContent className="profile-editor-grid p-0">
-        <div className="settings-field">
-          <Label className="settings-field-label">
-            <Terminal size={13} />
-            Command
-          </Label>
-          <Input value={profile.command} onChange={(event) => onChange({ command: event.target.value })} className="font-mono" />
-        </div>
-        <div className="settings-field">
-          <Label className="settings-field-label">
-            <Cpu size={13} />
-            Model
-          </Label>
-          <Select
-            value={modelValue}
-            onValueChange={(value) => {
-              onChange({
-                model: value === cliDefaultModelValue ? "" : value,
-                customModel: value === customModelValue ? profile.customModel : "",
-              });
-            }}
-          >
-            <SelectTrigger className="h-8 w-full justify-between">
-              <span className="select-value-with-logo">
-                <SelectValue />
-              </span>
-            </SelectTrigger>
-            <SelectContent position="popper">
-              <SelectItem value={cliDefaultModelValue} textValue="CLI default">
-                <span className="select-option-with-logo">
-                  <ModelLogo agentKind={profile.agentKind} model={null} size="sm" />
-                  CLI default
-                </span>
-              </SelectItem>
-              {presets.map((preset) => (
-                <SelectItem key={preset} value={preset} textValue={preset}>
-                  <span className="select-option-with-logo">
-                    <ModelLogo agentKind={profile.agentKind} model={preset} size="sm" />
-                    {preset}
-                  </span>
-                </SelectItem>
-              ))}
-              <SelectItem value={customModelValue} textValue="Custom...">
-                <span className="select-option-with-logo">
-                  <ModelLogo agentKind="custom" model={profile.customModel || "custom"} size="sm" />
-                  Custom...
-                </span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          {modelValue === customModelValue && (
+      <CardContent className="p-0">
+        <FieldGroup className="profile-editor-grid">
+          <Field>
+            <FieldLabel htmlFor={`profile-command-${profile.id ?? "new"}`}>
+              <Terminal size={13} />
+              Command
+            </FieldLabel>
             <Input
-              aria-label="Custom model"
-              value={profile.customModel}
-              onChange={(event) => onChange({ customModel: event.target.value })}
-              placeholder="model-id"
-              className="mt-2 font-mono"
+              id={`profile-command-${profile.id ?? "new"}`}
+              value={profile.command}
+              onChange={(event) => onChange({ command: event.target.value })}
+              className="font-mono"
             />
-          )}
-        </div>
-        <div className="settings-field">
-          <Label className="settings-field-label">
-            <Terminal size={13} />
-            Args
-          </Label>
-          <Textarea
-            value={profile.argsText}
-            onChange={(event) => onChange({ argsText: event.target.value })}
-            placeholder="One CLI argument per line"
-            className="min-h-[82px] resize-y font-mono"
-          />
-        </div>
-        <div className="settings-field">
-          <Label className="settings-field-label">
-            <Cpu size={13} />
-            Environment
-          </Label>
-          <Textarea
-            value={profile.envText}
-            onChange={(event) => onChange({ envText: event.target.value })}
-            placeholder="KEY=value"
-            className="min-h-[82px] resize-y font-mono"
-          />
-        </div>
+          </Field>
+          <Field>
+            <FieldLabel>
+              <Cpu size={13} />
+              Model
+            </FieldLabel>
+            <Select
+              value={modelValue}
+              onValueChange={(value) => {
+                onChange({
+                  model: value === cliDefaultModelValue ? "" : value,
+                  customModel: value === customModelValue ? profile.customModel : "",
+                });
+              }}
+            >
+              <SelectTrigger className="h-8 w-full justify-between">
+                <span className="select-value-with-logo">
+                  <SelectValue />
+                </span>
+              </SelectTrigger>
+              <SelectContent position="popper">
+                <SelectGroup>
+                  <SelectItem value={cliDefaultModelValue} textValue="CLI default">
+                    <span className="select-option-with-logo">
+                      <ModelLogo agentKind={profile.agentKind} model={null} size="sm" />
+                      CLI default
+                    </span>
+                  </SelectItem>
+                  {presets.map((preset) => (
+                    <SelectItem key={preset} value={preset} textValue={preset}>
+                      <span className="select-option-with-logo">
+                        <ModelLogo agentKind={profile.agentKind} model={preset} size="sm" />
+                        {preset}
+                      </span>
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={customModelValue} textValue="Custom...">
+                    <span className="select-option-with-logo">
+                      <ModelLogo agentKind="custom" model={profile.customModel || "custom"} size="sm" />
+                      Custom...
+                    </span>
+                  </SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            {modelValue === customModelValue && (
+              <Input
+                aria-label="Custom model"
+                value={profile.customModel}
+                onChange={(event) => onChange({ customModel: event.target.value })}
+                placeholder="model-id"
+                className="mt-2 font-mono"
+              />
+            )}
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`profile-args-${profile.id ?? "new"}`}>
+              <Terminal size={13} />
+              Args
+            </FieldLabel>
+            <Textarea
+              id={`profile-args-${profile.id ?? "new"}`}
+              value={profile.argsText}
+              onChange={(event) => onChange({ argsText: event.target.value })}
+              placeholder="One CLI argument per line"
+              className="min-h-[82px] resize-y font-mono"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`profile-env-${profile.id ?? "new"}`}>
+              <Cpu size={13} />
+              Environment
+            </FieldLabel>
+            <Textarea
+              id={`profile-env-${profile.id ?? "new"}`}
+              value={profile.envText}
+              onChange={(event) => onChange({ envText: event.target.value })}
+              placeholder="KEY=value"
+              className="min-h-[82px] resize-y font-mono"
+            />
+          </Field>
+        </FieldGroup>
       </CardContent>
     </Card>
   );

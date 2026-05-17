@@ -20,6 +20,7 @@ import { Button } from "./ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
@@ -33,7 +34,7 @@ import {
   StepperTitle,
   StepperTrigger,
 } from "./reui/stepper";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { truncateFinishedAttentionPreview } from "./attentionPreview";
 import { TerminalPane } from "../TerminalPane";
 import { cn } from "../lib/utils";
@@ -170,7 +171,7 @@ export function TaskWorkspace({
               aria-label="Back to task board"
               className="-ml-3 h-8 gap-2 px-3 text-muted-foreground hover:text-foreground"
             >
-              <ArrowLeft size={16} />
+              <ArrowLeft data-icon="inline-start" />
               Task Board
             </Button>
             <div className="min-w-0">
@@ -214,7 +215,7 @@ export function TaskWorkspace({
                   className="task-session-button"
                   onClick={() => onStopSession(task.activeSessionId!)}
                 >
-                  <Square size={14} fill="currentColor" />
+                  <Square data-icon="inline-start" fill="currentColor" />
                   Stop
                 </Button>
               </div>
@@ -232,18 +233,20 @@ export function TaskWorkspace({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {statusOrder.map((status) => (
-                    <SelectItem key={status} value={status} className="text-xs">
-                      {statusLabels[status]}
-                    </SelectItem>
-                  ))}
+                  <SelectGroup>
+                    {statusOrder.map((status) => (
+                      <SelectItem key={status} value={status} className="text-xs">
+                        {statusLabels[status]}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="task-meta-row">
               <span className="task-meta-label">Mode:</span>
-              <span className="task-meta-pill">{task.hasWorktree ? "Worktree" : "Task only"}</span>
+              <Badge variant="outline">{task.hasWorktree ? "Worktree" : "Task only"}</Badge>
             </div>
 
             {task.hasWorktree && task.branchName && (
@@ -272,7 +275,7 @@ export function TaskWorkspace({
                   Open <ExternalLink size={12} />
                 </a>
               ) : (
-                <span className="task-meta-muted">Not linked</span>
+                <Badge variant="outline">Not linked</Badge>
               )}
             </div>
 
@@ -391,25 +394,27 @@ export function TaskWorkspace({
                                 className="task-review-action-menu"
                                 disabled={reviewActive || reviewerProfiles.length === 0}
                               >
-                                <ChevronDown size={14} />
+                                <ChevronDown />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="min-w-44">
-                              {reviewerProfiles.map((profile) => (
-                                <DropdownMenuItem
-                                  key={profile.id}
-                                  onSelect={() => setReviewerProfileId(profile.id)}
-                                  className="justify-between"
-                                >
-                                  <span className="select-option-with-logo">
-                                    <span aria-hidden="true">
-                                      <AgentLogo agentKind={profile.agentKind} size="sm" />
+                              <DropdownMenuGroup>
+                                {reviewerProfiles.map((profile) => (
+                                  <DropdownMenuItem
+                                    key={profile.id}
+                                    onSelect={() => setReviewerProfileId(profile.id)}
+                                    className="justify-between"
+                                  >
+                                    <span className="select-option-with-logo">
+                                      <span aria-hidden="true">
+                                        <AgentLogo agentKind={profile.agentKind} size="sm" />
+                                      </span>
+                                      <span className="truncate">{profile.name}</span>
                                     </span>
-                                    <span className="truncate">{profile.name}</span>
-                                  </span>
-                                  {profile.id === reviewerProfileId && <Check className="ml-2 size-3.5 text-primary" />}
-                                </DropdownMenuItem>
-                              ))}
+                                    {profile.id === reviewerProfileId && <Check className="ml-2 size-3.5 text-primary" />}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuGroup>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -505,7 +510,7 @@ function TaskTerminalLauncher({
       <div className="terminal-launcher-actions">
         {canResume && (
           <Button type="button" variant="outline" aria-label="Resume session" onClick={() => onResumeSession(task)}>
-            <RotateCcw size={14} />
+            <RotateCcw data-icon="inline-start" />
             Resume
           </Button>
         )}
@@ -514,7 +519,7 @@ function TaskTerminalLauncher({
           aria-label={task.lastSessionId ? "Restart agent" : "Start agent"}
           onClick={() => onStartSession(task)}
         >
-          <Play size={14} fill="currentColor" />
+          <Play data-icon="inline-start" fill="currentColor" />
           {task.lastSessionId ? "Restart" : "Start"}
         </Button>
       </div>
