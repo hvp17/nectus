@@ -136,7 +136,7 @@ Current commands:
 | `stop_session` | Stop a running PTY child process. |
 | `resize_session` | Resize the PTY. |
 | `send_session_input` | Write keyboard input or terminal-dropped file paths into the PTY without appending an Enter sequence. |
-| `submit_session_input` | Submit an app-authored prompt into the PTY with the same Enter sequence used by review feedback. The task workflow `Create PR` action uses this command to ask the running agent to open a pull request; Nectus does not call GitHub or store GitHub credentials for that flow. |
+| `submit_session_input` | Submit an app-authored prompt into the PTY, flush it, then send a separate terminal Enter sequence shared with review feedback. The task workflow `Create PR` action uses this command to ask the running agent to open a pull request; Nectus does not call GitHub or store GitHub credentials for that flow. |
 | `session_output_snapshot` | Load buffered terminal output for a running session. |
 
 ## Events
@@ -278,6 +278,9 @@ Check:
 - `session_output` events are being emitted.
 - `send_session_input` is called from keyboard input and from file drops over
   the terminal host.
+- App-authored prompts such as review feedback and `Create PR` use
+  `submit_session_input`; the backend writes and flushes the prompt before
+  sending terminal Enter so Codex sees submission as a separate key action.
 - The selected task is open in the focused terminal workspace and the terminal
   host has nonzero height; `src/TerminalPane.tsx` observes that host resize and
   sends `resize_session` with the fitted PTY rows and columns.
