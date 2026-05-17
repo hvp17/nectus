@@ -53,6 +53,9 @@ Install dependencies:
 pnpm install
 ```
 
+Fresh git worktrees do not share `node_modules`. Run `pnpm install` before
+using `pnpm exec shadcn ...`, `pnpm test`, or `pnpm build` in a new worktree.
+
 Run the web UI only:
 
 ```bash
