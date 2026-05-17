@@ -21,7 +21,7 @@ import {
 import { Input } from "./ui/input";
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { Textarea } from "./ui/textarea";
-import { AgentLogo, ModelLogo } from "./AgentBrand";
+import { AgentLogo } from "./AgentBrand";
 import { AgentProfile } from "../types";
 
 interface CreateTaskModalProps {
@@ -64,7 +64,7 @@ export function CreateTaskModal({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[calc(100vh-48px)] max-w-xl gap-0 overflow-y-auto p-0">
+      <DialogContent className="max-h-[calc(100vh-32px)] max-w-[calc(100vw-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-3xl lg:max-w-4xl">
         <form onSubmit={onSubmit}>
           <DialogHeader className="border-b p-6 pr-12">
             <div>
@@ -106,10 +106,7 @@ export function CreateTaskModal({
                       <AgentLogo agentKind={profile.agentKind} size="md" className="agent-choice-logo" />
                       <FieldContent>
                         <FieldTitle>{profile.name}</FieldTitle>
-                        <FieldDescription className="flex items-center gap-1.5">
-                          <ModelLogo agentKind={profile.agentKind} model={profile.model} size="sm" />
-                          {profile.model ?? "CLI default"}
-                        </FieldDescription>
+                        <FieldDescription>{profile.model ?? "CLI default"}</FieldDescription>
                       </FieldContent>
                     </Field>
                   </FieldLabel>
