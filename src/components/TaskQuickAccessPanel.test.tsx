@@ -58,7 +58,9 @@ it("shows only tasks with active sessions and their live status context", () => 
   expect(within(panel).getByText("Needs input")).toBeInTheDocument();
   expect(within(panel).getByText("User Confirmation")).toBeInTheDocument();
   expect(within(panel).getByText("In progress")).toBeInTheDocument();
-  expect(within(panel).getByText("feat/running-session")).toBeInTheDocument();
+  expect(within(panel).queryByText("Codex")).not.toBeInTheDocument();
+  expect(within(panel).queryByText("feat/running-session")).not.toBeInTheDocument();
+  expect(within(panel).getByLabelText("Worktree: feat/running-session")).toBeInTheDocument();
 });
 
 it("opens and stops active sessions from the quick access panel", () => {
