@@ -160,6 +160,8 @@ Attention tracking is UI state derived from backend events.
 - Codex rollout metadata discovery stays active for the life of the running
   task session, so blank sessions can still emit attention markers after their
   first user turn writes JSONL metadata.
+- Codex subagent metadata, including auto-review or guardian approval sessions,
+  is ignored so those internal completions do not mark the user task finished.
 - Codex `session_needs_input` is best-effort because several input-request event
   names are defined by Codex but are not persisted by default.
 - Starting, resuming, stopping, marking done, or sending input clears the marker
