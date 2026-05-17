@@ -11,7 +11,8 @@ git, SQLite, and PTY work lives in the Rust backend.
 ## Features
 
 - Add existing local git repositories as Projects.
-- Create Tasks against a project in direct-edit mode or with a new git worktree.
+- Create Tasks against a project in direct-edit mode or with a new git worktree;
+  blank worktree branch names become generated `task-...` branches.
 - Launch Codex, Claude, Gemini, or custom CLI agent profiles in an embedded
   terminal.
 - Open a selected task into a focused terminal workspace with task details in a
