@@ -151,6 +151,9 @@ Attention tracking is UI state derived from backend events.
 - `session_needs_input` creates a needs-input marker.
 - Codex `session_idle` comes from persisted JSONL `task_complete` or
   `turn_complete` events.
+- Codex rollout metadata discovery stays active for the life of the running
+  task session, so blank sessions can still emit attention markers after their
+  first user turn writes JSONL metadata.
 - Codex `session_needs_input` is best-effort because several input-request event
   names are defined by Codex but are not persisted by default.
 - Starting, resuming, stopping, marking done, or sending input clears the marker

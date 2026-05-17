@@ -74,6 +74,10 @@ The watcher:
 
 - Finds the latest file whose `session_meta.payload.cwd` matches the task cwd
   and whose timestamp is after the Nectus session start.
+- Keeps looking for matching Codex metadata while the Nectus task session remains
+  active. It polls every 500 ms for the first 120 attempts, then backs off to
+  every 5 seconds for blank or idle Codex sessions that have not written JSONL
+  metadata yet.
 - Reads appended lines every 500 ms.
 - Emits `session_idle` for `event_msg.payload.type == "task_complete"` or
   `event_msg.payload.type == "turn_complete"`.
@@ -298,6 +302,8 @@ Check:
 - Starting, resuming, stopping, sending input, or marking done may have cleared
   the attention marker.
 - Codex JSONL persisted the event you expect.
+- The Nectus session was still active when Codex first wrote matching
+  `session_meta` metadata; metadata discovery stops when the task session ends.
 
 Relevant code:
 
