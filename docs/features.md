@@ -101,7 +101,8 @@ Current behavior:
   session input, matching the local terminal workflow for Codex image/file paths.
 - The task detail terminal can expand full width with the inspector and can be
   resized vertically from the separator above the terminal. The upper task
-  metadata area scrolls when the terminal is enlarged.
+  controls use a compact session/status/metadata strip and scroll when the
+  terminal is enlarged.
 - Terminal output is streamed through the `session_output` Tauri event.
 - Recent terminal output is buffered in memory for snapshot restore.
 - Closing the app stops owned sessions and clears active session ids.

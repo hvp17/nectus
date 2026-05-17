@@ -74,16 +74,128 @@
   text-decoration: none;
 }
 
+.task-control-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 10px 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.task-session-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-session-button {
+  gap: 6px;
+}
+
+.task-meta-strip {
+  display: flex;
+  flex: 1 1 260px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.task-status-control,
+.task-meta-pill,
+.task-meta-branch,
+.task-meta-pair {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 26px;
+  gap: 6px;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.task-status-control {
+  gap: 5px;
+}
+
+.task-status-trigger {
+  min-height: 26px;
+  padding-inline: 8px;
+}
+
+.task-meta-label {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.task-meta-pill {
+  flex: 0 0 auto;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card) 72%, var(--background));
+}
+
+.task-meta-branch {
+  flex: 1 1 140px;
+  max-width: 100%;
+  color: var(--foreground);
+  font-family: "SFMono-Regular", Menlo, monospace;
+  font-size: 12px;
+}
+
+.task-meta-branch span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-meta-pair {
+  flex: 0 1 auto;
+  color: color-mix(in srgb, var(--foreground) 82%, var(--muted-foreground));
+}
+
+.task-meta-pair a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--foreground);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.task-meta-pair a:hover {
+  text-decoration: underline;
+}
+
+.task-brief-panel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
 .task-brief {
   overflow-wrap: anywhere;
   color: var(--foreground);
   font-size: 12px;
   line-height: 1.45;
+  margin: 0;
 }
 
 .task-workflow-panel {
-  margin-top: 18px;
-  padding-top: 18px;
+  margin-top: 14px;
+  padding-top: 14px;
   border-top: 1px solid var(--border);
 }
 
