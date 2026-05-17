@@ -28,6 +28,7 @@ git, SQLite, and PTY work lives in the Rust backend.
 - Send macOS notifications for session attention events.
 - Run a single AI review with another agent profile and feed blockers or
   implementation feedback back to the worker session.
+- Ask a running agent session to create a pull request from the task workflow.
 - Configure agent commands, model arguments, environment variables, theme,
   density, branch prefixes, and worktree root patterns.
 

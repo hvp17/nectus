@@ -71,6 +71,7 @@ function App() {
     startSession,
     stopSession,
     resumeSession,
+    createPullRequest,
     startReview,
     onSessionExit,
     onSessionInput,
@@ -172,6 +173,7 @@ function App() {
                   onResumeSession={resumeSession}
                   onStartSession={startSession}
                   onStartReview={startReview}
+                  onCreatePullRequest={createPullRequest}
                   onUpdateStatus={updateStatus}
                   onSessionExit={onSessionExit}
                   onSessionInput={onSessionInput}

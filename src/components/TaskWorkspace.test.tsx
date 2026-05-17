@@ -72,6 +72,7 @@ function renderTaskWorkspace(input?: {
   onResumeSession?: (task: TaskSummary) => void;
   onStartSession?: (task: TaskSummary) => void;
   onStartReview?: (task: TaskSummary, reviewerProfileId: number) => void;
+  onCreatePullRequest?: (task: TaskSummary) => void;
   onUpdateStatus?: (task: TaskSummary, status: TaskSummary["status"]) => void;
 }) {
   return render(
@@ -86,6 +87,7 @@ function renderTaskWorkspace(input?: {
       onResumeSession={input?.onResumeSession ?? vi.fn()}
       onStartSession={input?.onStartSession ?? vi.fn()}
       onStartReview={input?.onStartReview ?? vi.fn()}
+      onCreatePullRequest={input?.onCreatePullRequest ?? vi.fn()}
       onUpdateStatus={input?.onUpdateStatus ?? vi.fn()}
       onSessionExit={vi.fn()}
       onSessionInput={vi.fn()}
@@ -216,6 +218,40 @@ describe("TaskWorkspace", () => {
 
     screen.getByRole("tab", { name: /move to done/i }).click();
     expect(onUpdateStatus).toHaveBeenCalledWith(inReviewTask, "done");
+  });
+
+  it("asks the active agent to create a pull request from the workflow", () => {
+    const onCreatePullRequest = vi.fn();
+    const runningTask: TaskSummary = {
+      ...task,
+      status: "review",
+      activeSessionId: "session-123",
+    };
+
+    renderTaskWorkspace({ task: runningTask, onCreatePullRequest });
+
+    const createPrStep = screen.getByRole("tab", { name: /create pr/i });
+    expect(createPrStep).not.toBeDisabled();
+    expect(screen.getByText(/ask the running agent to open a pull request/i)).toBeInTheDocument();
+
+    screen.getByRole("button", { name: /ask agent to create pull request/i }).click();
+
+    expect(onCreatePullRequest).toHaveBeenCalledWith(runningTask);
+  });
+
+  it("keeps the create pr step completed when a pull request is linked", () => {
+    const onCreatePullRequest = vi.fn();
+    const linkedTask: TaskSummary = {
+      ...task,
+      activeSessionId: "session-123",
+      prUrl: "https://github.com/hvp17/nectus/pull/123",
+    };
+
+    renderTaskWorkspace({ task: linkedTask, onCreatePullRequest });
+
+    expect(screen.getByRole("tab", { name: /create pr/i })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /ask agent to create pull request/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/pull request linked/i)).toBeInTheDocument();
   });
 
   it("shows review progress in the workflow stepper", () => {
