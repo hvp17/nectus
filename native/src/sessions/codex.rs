@@ -13,6 +13,10 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use walkdir::WalkDir;
 
+const CODEX_METADATA_FAST_POLL_ATTEMPTS: usize = 120;
+const CODEX_METADATA_FAST_POLL_INTERVAL: Duration = Duration::from_millis(500);
+const CODEX_METADATA_IDLE_POLL_INTERVAL: Duration = Duration::from_secs(5);
+
 #[derive(Debug, Clone)]
 pub(super) struct CodexSessionMetadata {
     pub id: String,
@@ -257,25 +261,25 @@ pub(super) fn spawn_codex_event_watcher(
                 return;
             }
         };
-        let mut metadata = None;
-        for _ in 0..120 {
+        let mut metadata_attempts = 0_usize;
+        let metadata = loop {
             if !sessions.lock().contains_key(&session_id) {
                 return;
             }
             if let Some(found) = latest_codex_session_metadata(&cwd, &started_at.to_rfc3339()) {
-                metadata = Some(found);
-                break;
+                break found;
             }
-            std::thread::sleep(Duration::from_millis(500));
-        }
-        let Some(metadata) = metadata else {
-            tracing::warn!(
-                session_id = %session_id,
-                task_id,
-                cwd = %cwd.display(),
-                "timed out waiting for Codex session metadata"
-            );
-            return;
+            if metadata_attempts == CODEX_METADATA_FAST_POLL_ATTEMPTS {
+                tracing::info!(
+                    session_id = %session_id,
+                    task_id,
+                    cwd = %cwd.display(),
+                    "continuing Codex metadata discovery while session is active"
+                );
+            }
+            let delay = codex_metadata_discovery_delay(metadata_attempts);
+            metadata_attempts = metadata_attempts.saturating_add(1);
+            std::thread::sleep(delay);
         };
         tracing::info!(
             session_id = %session_id,
@@ -360,6 +364,14 @@ pub(super) fn spawn_codex_event_watcher(
             std::thread::sleep(Duration::from_millis(500));
         }
     });
+}
+
+pub(super) fn codex_metadata_discovery_delay(attempt: usize) -> Duration {
+    if attempt < CODEX_METADATA_FAST_POLL_ATTEMPTS {
+        CODEX_METADATA_FAST_POLL_INTERVAL
+    } else {
+        CODEX_METADATA_IDLE_POLL_INTERVAL
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]

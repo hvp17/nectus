@@ -1,6 +1,8 @@
 use super::codex::{
-    codex_session_event_from_line, codex_session_metadata_from_line, CodexSessionEvent,
+    codex_metadata_discovery_delay, codex_session_event_from_line,
+    codex_session_metadata_from_line, CodexSessionEvent,
 };
+use std::time::Duration;
 
 #[test]
 fn recognizes_codex_task_complete_as_idle_event() {
@@ -13,6 +15,23 @@ fn recognizes_codex_task_complete_as_idle_event() {
             turn_id: Some("turn-1".to_string()),
             message: Some("Done.".to_string()),
         })
+    );
+}
+
+#[test]
+fn keeps_codex_metadata_discovery_alive_after_initial_window() {
+    assert_eq!(
+        codex_metadata_discovery_delay(0),
+        Duration::from_millis(500)
+    );
+    assert_eq!(
+        codex_metadata_discovery_delay(119),
+        Duration::from_millis(500)
+    );
+    assert_eq!(codex_metadata_discovery_delay(120), Duration::from_secs(5));
+    assert_eq!(
+        codex_metadata_discovery_delay(10_000),
+        Duration::from_secs(5)
     );
 }
 
