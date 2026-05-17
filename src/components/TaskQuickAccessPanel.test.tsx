@@ -32,6 +32,7 @@ const directActiveTask = appTask({
 function renderPanel(input?: {
   attention?: TaskAttention[];
   onOpenTask?: (taskId: number) => void;
+  onCreateTask?: () => void;
   onStopSession?: (sessionId: string) => void;
 }) {
   return renderWithTooltipProvider(
@@ -41,6 +42,7 @@ function renderPanel(input?: {
         taskAttention={input?.attention ?? []}
         selectedTaskId={undefined}
         onOpenTask={input?.onOpenTask ?? vi.fn()}
+        onCreateTask={input?.onCreateTask ?? vi.fn()}
         onStopSession={input?.onStopSession ?? vi.fn()}
       />
     </SidebarProvider>,
@@ -74,6 +76,19 @@ it("shows only tasks with active sessions and their live status context", () => 
   expect(within(panel).queryByText("feat/running-session")).not.toBeInTheDocument();
   expect(within(panel).getByLabelText("Worktree: feat/running-session")).toBeInTheDocument();
   expect(within(panel).queryByLabelText("Task only")).not.toBeInTheDocument();
+});
+
+it("shows the total task count and opens task creation from the header", () => {
+  const onCreateTask = vi.fn();
+
+  renderPanel({ onCreateTask });
+
+  const panel = screen.getByRole("region", { name: /tasks quick access/i });
+  expect(within(panel).getByText("3")).toBeInTheDocument();
+
+  fireEvent.click(within(panel).getByRole("button", { name: /add task/i }));
+
+  expect(onCreateTask).toHaveBeenCalledOnce();
 });
 
 it("opens and stops active sessions from the quick access panel", () => {

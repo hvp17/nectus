@@ -141,7 +141,9 @@ export function defineAppSmokeTests() {
       expect(mockedApi.stopSession).toHaveBeenCalledWith("session-31");
     });
     await waitFor(() => {
-      expect(screen.queryByRole("region", { name: /tasks quick access/i })).not.toBeInTheDocument();
+      const panel = screen.getByRole("region", { name: /tasks quick access/i });
+      expect(within(panel).getByText("1")).toBeInTheDocument();
+      expect(within(panel).queryByRole("button", { name: /stop stop from sidebar/i })).not.toBeInTheDocument();
     });
   });
 

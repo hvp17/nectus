@@ -56,6 +56,26 @@ export function defineAppTaskCreationTests() {
     });
   });
 
+  it("opens the task modal from the sidebar task header", async () => {
+    mockProject();
+    mockedApi.listTasks.mockResolvedValue([
+      appTask({
+        id: 31,
+        title: "Keep terminal handy",
+        activeSessionId: "session-31",
+      }),
+    ]);
+
+    render(<App />);
+
+    const panel = await screen.findByRole("region", { name: /tasks quick access/i });
+    expect(within(panel).getByText("1")).toBeInTheDocument();
+
+    fireEvent.click(within(panel).getByRole("button", { name: /add task/i }));
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
   it("creates a task when instructions are blank", async () => {
     mockProject();
     createTaskMock("Create title-only task", {

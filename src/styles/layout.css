@@ -45,6 +45,12 @@
   justify-content: space-between;
 }
 
+.task-quick-access-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .task-quick-access-count {
   display: grid;
   place-items: center;
@@ -57,6 +63,14 @@
   font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+}
+
+.task-quick-access-add {
+  color: var(--muted-foreground);
+}
+
+.task-quick-access-add:hover {
+  color: var(--sidebar-foreground);
 }
 
 .task-quick-access-list {
