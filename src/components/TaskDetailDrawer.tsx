@@ -215,6 +215,7 @@ export function TaskDetailDrawer({
   const reviewInProgress = reviewLoop?.status === "reviewing";
   if (!task) return null;
   const canResumeSession = task.agentKind === "codex" || task.agentKind === "claude";
+  const sessionAgentLabel = task.lastSessionAgent ?? task.agentName ?? "None";
   const attentionDetail = attention?.prompt ?? attention?.message;
   const displayedAttentionDetail =
     attention?.kind === "idle" && attentionDetail ? truncateFinishedAttentionPreview(attentionDetail) : attentionDetail;
@@ -306,32 +307,100 @@ export function TaskDetailDrawer({
 
         <div ref={detailBodyRef} data-testid="task-detail-body" className="detail-body flex flex-1 min-h-0 flex-col overflow-hidden">
           <div className="detail-scroll min-h-0 flex-1 overflow-auto px-6 pb-6">
-             <div className="flex gap-2 mb-6">
+             <section className="task-control-strip" aria-label="Task controls">
+               <div className="task-session-actions">
                 {task.activeSessionId ? (
-                  <Button variant="destructive" className="w-full gap-2" onClick={() => onStopSession(task.activeSessionId!)}>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    aria-label="Stop session"
+                    className="task-session-button"
+                    onClick={() => onStopSession(task.activeSessionId!)}
+                  >
                     <Square size={14} fill="currentColor" />
-                    Stop Session
+                    Stop
                   </Button>
                 ) : (
                   <>
                     {task.lastSessionId && canResumeSession && (
-                      <Button variant="outline" className="flex-1 gap-2" onClick={() => onResumeSession(task)}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-label="Resume session"
+                        className="task-session-button"
+                        onClick={() => onResumeSession(task)}
+                      >
                         <RotateCcw size={14} />
                         Resume
                       </Button>
                     )}
-                    <Button className="flex-1 gap-2" onClick={() => onStartSession(task)}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      aria-label={task.lastSessionId ? "Restart agent" : "Start agent"}
+                      className="task-session-button"
+                      onClick={() => onStartSession(task)}
+                    >
                       <Play size={14} fill="currentColor" />
-                      {task.lastSessionId ? "Restart" : "Start Agent"}
+                      {task.lastSessionId ? "Restart" : "Start"}
                     </Button>
                   </>
                 )}
-             </div>
+               </div>
+
+               <div className="task-meta-strip" aria-label="Task metadata">
+                 <div className="task-status-control">
+                   <span className="task-meta-label">Status:</span>
+                   <Select value={task.status} onValueChange={(val) => onUpdateStatus(task, val as TaskStatus)}>
+                     <SelectTrigger
+                       aria-label="Task status"
+                       className="task-status-trigger h-7 w-fit border-none bg-accent/50 text-xs font-medium hover:bg-accent focus:ring-0"
+                     >
+                       <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                       {statusOrder.map((s) => (
+                         <SelectItem key={s} value={s} className="text-xs">
+                           {statusLabels[s]}
+                         </SelectItem>
+                       ))}
+                     </SelectContent>
+                   </Select>
+                 </div>
+
+                 <span className="task-meta-pill">{task.hasWorktree ? "Worktree" : "Task only"}</span>
+
+                 {task.hasWorktree && task.branchName && (
+                   <span className="task-meta-branch" title={task.branchName}>
+                     <GitBranch size={12} />
+                     <span>{task.branchName}</span>
+                   </span>
+                 )}
+
+                 <span className="task-meta-pair">
+                   <span className="task-meta-label">PR:</span>
+                   {task.prUrl ? (
+                     <a href={task.prUrl} target="_blank" rel="noreferrer">
+                       Open <ExternalLink size={12} />
+                     </a>
+                   ) : (
+                     <span>Not linked</span>
+                   )}
+                 </span>
+
+                 <span className="task-meta-pair">
+                   <span className="task-meta-label">Agent:</span>
+                   <span className="truncate">{sessionAgentLabel}</span>
+                 </span>
+               </div>
+             </section>
 
              {attention && (
                <Alert
                  className={cn(
-                   "mb-6 border-primary/25 bg-primary/5 px-3 py-3",
+                   "mt-4 border-primary/25 bg-primary/5 px-3 py-3",
                    attention.kind === "needs_input" && "border-amber-500/35 bg-amber-500/10",
                  )}
                >
@@ -350,53 +419,12 @@ export function TaskDetailDrawer({
                </Alert>
              )}
 
-             <dl className="grid grid-cols-[80px_1fr] gap-x-4 gap-y-3 text-sm">
-                <dt className="text-muted-foreground font-semibold">Mode</dt>
-                <dd className="font-medium">{task.hasWorktree ? "With worktree" : "Task only"}</dd>
-
-                {task.hasWorktree && (
-                  <>
-                    <dt className="text-muted-foreground font-semibold">Branch</dt>
-                    <dd className="font-mono text-xs font-medium inline-flex items-center gap-1.5 min-w-0">
-                      <GitBranch size={12} />
-                      <span className="truncate">{task.branchName}</span>
-                    </dd>
-                  </>
-                )}
-
-                <dt className="text-muted-foreground font-semibold">Status</dt>
-                <dd>
-                  <Select value={task.status} onValueChange={(val) => onUpdateStatus(task, val as TaskStatus)}>
-                    <SelectTrigger className="h-8 w-fit text-xs font-medium border-none bg-accent/50 hover:bg-accent focus:ring-0">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {statusOrder.map((s) => (
-                        <SelectItem key={s} value={s} className="text-xs">{statusLabels[s]}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </dd>
-
-                <dt className="text-muted-foreground font-semibold">PR</dt>
-                <dd>
-                  {task.prUrl ? (
-                    <a href={task.prUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 font-bold hover:underline">
-                      Open PR <ExternalLink size={12} />
-                    </a>
-                  ) : <span className="opacity-40 italic">Not linked</span>}
-                </dd>
-
-                <dt className="text-muted-foreground font-semibold">Agent</dt>
-                <dd className="truncate opacity-80">{task.lastSessionAgent ?? task.agentName ?? "None"}</dd>
-
-                {task.prompt && (
-                  <>
-                    <dt className="text-muted-foreground font-semibold">Brief</dt>
-                    <dd className="task-brief">{task.prompt}</dd>
-                  </>
-                )}
-             </dl>
+             {task.prompt && (
+               <section className="task-brief-panel" aria-label="Task brief">
+                 <span className="task-meta-label">Brief:</span>
+                 <p className="task-brief">{task.prompt}</p>
+               </section>
+             )}
 
              <section className="task-workflow-panel" aria-label="Task workflow">
                <div>

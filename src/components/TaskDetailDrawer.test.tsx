@@ -71,6 +71,9 @@ function renderTaskDetailDrawer(input?: {
   attention?: TaskAttention;
   reviewLoop?: ReviewLoop | null;
   reviewRuns?: ReviewRun[];
+  onStopSession?: (sessionId: string) => void;
+  onResumeSession?: (task: TaskSummary) => void;
+  onStartSession?: (task: TaskSummary) => void;
   onStartReview?: (task: TaskSummary, reviewerProfileId: number) => void;
   onUpdateStatus?: (task: TaskSummary, status: TaskSummary["status"]) => void;
 }) {
@@ -84,9 +87,9 @@ function renderTaskDetailDrawer(input?: {
       isExpanded={false}
       onClose={vi.fn()}
       onToggleExpanded={vi.fn()}
-      onStopSession={vi.fn()}
-      onResumeSession={vi.fn()}
-      onStartSession={vi.fn()}
+      onStopSession={input?.onStopSession ?? vi.fn()}
+      onResumeSession={input?.onResumeSession ?? vi.fn()}
+      onStartSession={input?.onStartSession ?? vi.fn()}
       onStartReview={input?.onStartReview ?? vi.fn()}
       onUpdateStatus={input?.onUpdateStatus ?? vi.fn()}
       onSessionExit={vi.fn()}
@@ -96,6 +99,58 @@ function renderTaskDetailDrawer(input?: {
 }
 
 describe("TaskDetailDrawer", () => {
+  it("shows compact running controls and task metadata", () => {
+    const onStopSession = vi.fn();
+    const runningTask: TaskSummary = {
+      ...task,
+      status: "planned",
+      activeSessionId: "session-123",
+      lastSessionAgent: "codex",
+    };
+
+    renderTaskDetailDrawer({ task: runningTask, onStopSession });
+
+    screen.getByRole("button", { name: /stop session/i }).click();
+
+    expect(onStopSession).toHaveBeenCalledWith("session-123");
+    expect(screen.getByRole("combobox", { name: /task status/i })).toBeInTheDocument();
+    expect(screen.getByText("Worktree")).toBeInTheDocument();
+    expect(screen.getByText("feat/card-ellipsis")).toBeInTheDocument();
+    expect(screen.getByText(/PR:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Not linked/i)).toBeInTheDocument();
+    expect(screen.getByText(/Agent:/i)).toBeInTheDocument();
+    expect(screen.getByText("codex")).toBeInTheDocument();
+  });
+
+  it("keeps compact resume and restart controls for saved sessions", () => {
+    const onResumeSession = vi.fn();
+    const onStartSession = vi.fn();
+    const resumableTask: TaskSummary = {
+      ...task,
+      activeSessionId: null,
+      lastSessionId: "saved-session-123",
+    };
+
+    renderTaskDetailDrawer({ task: resumableTask, onResumeSession, onStartSession });
+
+    screen.getByRole("button", { name: /resume session/i }).click();
+    screen.getByRole("button", { name: /restart agent/i }).click();
+
+    expect(onResumeSession).toHaveBeenCalledWith(resumableTask);
+    expect(onStartSession).toHaveBeenCalledWith(resumableTask);
+  });
+
+  it("updates status from the compact metadata strip", async () => {
+    const onUpdateStatus = vi.fn();
+
+    renderTaskDetailDrawer({ onUpdateStatus });
+
+    fireEvent.click(screen.getByRole("combobox", { name: /task status/i }));
+    fireEvent.click(await screen.findByRole("option", { name: "Review" }));
+
+    expect(onUpdateStatus).toHaveBeenCalledWith(task, "review");
+  });
+
   it("truncates long finished attention content in the sidebar panel", () => {
     const message = "A".repeat(220);
 
