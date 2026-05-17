@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import App from "../App";
 import { api } from "../api";
@@ -76,6 +76,72 @@ export function defineAppSmokeTests() {
         theme: "dark",
         density: "compact",
       });
+    });
+  });
+
+  it("shows active session tasks above settings and opens them from the sidebar", async () => {
+    mockedApi.listRepos.mockResolvedValue([appRepo]);
+    mockedApi.listTasks.mockResolvedValue([
+      appTask({
+        id: 31,
+        title: "Keep terminal handy",
+        status: "in_progress",
+        activeSessionId: "session-31",
+        hasWorktree: true,
+        branchName: "feat/sidebar-session",
+      }),
+      appTask({
+        id: 32,
+        title: "No live process",
+        activeSessionId: null,
+      }),
+    ]);
+
+    render(<App />);
+
+    const panel = await screen.findByRole("region", { name: /tasks quick access/i });
+    const settingsButton = screen.getByRole("button", { name: /settings/i });
+    expect(panel.compareDocumentPosition(settingsButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(panel).getByText("Keep terminal handy")).toBeInTheDocument();
+    expect(within(panel).queryByText("No live process")).not.toBeInTheDocument();
+
+    fireEvent.click(within(panel).getByRole("button", { name: /open keep terminal handy/i }));
+
+    expect(await screen.findByRole("region", { name: /agent terminal/i })).toBeInTheDocument();
+    expect(screen.getByTestId("dashboard-layout")).toHaveAttribute("data-task-workspace", "true");
+  });
+
+  it("stops an active session from the sidebar quick access panel", async () => {
+    mockedApi.listRepos.mockResolvedValue([appRepo]);
+    mockedApi.listTasks.mockResolvedValue([
+      appTask({
+        id: 31,
+        title: "Stop from sidebar",
+        activeSessionId: "session-31",
+      }),
+    ]);
+    mockedApi.stopSession.mockResolvedValue({
+      id: "session-31",
+      resumableSessionId: "resume-31",
+      resumableSessionLabel: "Stop from sidebar",
+      taskId: 31,
+      agentProfileId: 1,
+      state: "stopped",
+      pid: null,
+      startedAt: "2026-05-17T12:00:00.000Z",
+      stoppedAt: "2026-05-17T12:05:00.000Z",
+    });
+
+    render(<App />);
+
+    const panel = await screen.findByRole("region", { name: /tasks quick access/i });
+    fireEvent.click(within(panel).getByRole("button", { name: /stop stop from sidebar/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.stopSession).toHaveBeenCalledWith("session-31");
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("region", { name: /tasks quick access/i })).not.toBeInTheDocument();
     });
   });
 

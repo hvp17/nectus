@@ -102,6 +102,9 @@ Current behavior:
 - Selecting a task replaces the board with a focused terminal workspace. Running
   sessions render the live terminal front and center; tasks without an active
   session show launcher controls in the terminal stage.
+- The sidebar shows a Tasks quick access panel above Settings whenever active
+  sessions exist. It lists running tasks across projects with agent, attention,
+  task-status, and branch/task-only context, and provides open and stop actions.
 - Task metadata, status, prompt, workflow, review controls, and review feedback
   live in the persistent right inspector rail.
 - Terminal output is streamed through the `session_output` Tauri event.
@@ -110,6 +113,7 @@ Current behavior:
 
 Key files:
 
+- Active-session quick access: `src/components/TaskQuickAccessPanel.tsx`
 - Terminal UI: `src/TerminalPane.tsx`
 - Session controls: `src/hooks/useSessionCommands.ts`
 - Attention-clearing session control wrappers: `src/hooks/useSessionAttentionControls.ts`
