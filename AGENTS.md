@@ -25,6 +25,8 @@ The app is local-first. Do not add GitHub OAuth/API sync unless explicitly reque
 - Update `AGENTS.md` itself when development workflow, verification gates, important paths, or coding-session rules change.
 - Keep documentation concrete and repo-grounded. Prefer exact commands, file paths, table names, event names, and known caveats over general prose.
 - Do not add placeholder docs such as `TODO`, `TBD`, or speculative behavior unless it is clearly marked as a future idea outside current behavior.
+- Fresh git worktrees usually start without `node_modules`. Before running `pnpm exec shadcn ...`, `pnpm test`, `pnpm build`, or other package-backed commands, check whether dependencies are hydrated and run `pnpm install` first when they are missing.
+- If `pnpm exec shadcn ...` starts dependency hydration or fails with missing packages such as `vite`, stop repeating shadcn probes and run one `pnpm install`; if the install is blocked by sandboxed network or DNS, request escalation for `pnpm install` rather than retrying multiple shadcn commands.
 
 ## Library Documentation
 
@@ -37,6 +39,7 @@ Prefer Context7 results over memory for library-specific API usage. For shadcn/u
 For every frontend UI change, read the current shadcn/ui documentation before choosing or composing primitives. Use Context7 with `/shadcn-ui/ui` for docs context, and use the local shadcn workflow to inspect project state and component docs:
 
 ```bash
+pnpm install
 pnpm exec shadcn info --json
 pnpm exec shadcn docs <component>
 ```
