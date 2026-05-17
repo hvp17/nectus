@@ -11,9 +11,11 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
 const UNCLEAR_REVIEW_ERROR: &str = "Reviewer output did not include a clear verdict";
+const TERMINAL_SUBMIT_KEY_DELAY: Duration = Duration::from_millis(60);
 
 pub(super) fn spawn_review_on_session_idle(
     app: AppHandle,
@@ -192,6 +194,9 @@ fn run_reviewer_command(
 
 pub(super) fn write_agent_submission(writer: &mut dyn Write, input: &str) -> std::io::Result<()> {
     writer.write_all(input.as_bytes())?;
+    // Raw-mode TUIs can treat text plus Enter delivered in one burst as pasted text.
+    writer.flush()?;
+    std::thread::sleep(TERMINAL_SUBMIT_KEY_DELAY);
     writer.write_all(b"\r")?;
     writer.flush()
 }
@@ -303,6 +308,30 @@ fn should_forward_review_feedback(verdict: ReviewVerdict, status: ReviewLoopStat
 mod tests {
     use super::*;
     use crate::models::{AgentKind, AgentProfile, ReviewVerdict, TaskStatus, TaskSummary};
+    use std::io;
+
+    #[derive(Debug, PartialEq)]
+    enum WriteEvent {
+        Write(Vec<u8>),
+        Flush,
+    }
+
+    #[derive(Default)]
+    struct RecordingWriter {
+        events: Vec<WriteEvent>,
+    }
+
+    impl Write for RecordingWriter {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.events.push(WriteEvent::Write(buf.to_vec()));
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            self.events.push(WriteEvent::Flush);
+            Ok(())
+        }
+    }
 
     fn task() -> TaskSummary {
         TaskSummary {
@@ -458,5 +487,22 @@ mod tests {
         write_agent_submission(&mut output, "Line 1\nLine 2").unwrap();
 
         assert_eq!(output, b"Line 1\nLine 2\r");
+    }
+
+    #[test]
+    fn flushes_agent_submission_before_sending_terminal_enter() {
+        let mut output = RecordingWriter::default();
+
+        write_agent_submission(&mut output, "Create the pull request").unwrap();
+
+        assert_eq!(
+            output.events,
+            [
+                WriteEvent::Write(b"Create the pull request".to_vec()),
+                WriteEvent::Flush,
+                WriteEvent::Write(b"\r".to_vec()),
+                WriteEvent::Flush,
+            ]
+        );
     }
 }
