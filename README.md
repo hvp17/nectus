@@ -14,8 +14,8 @@ git, SQLite, and PTY work lives in the Rust backend.
 - Create Tasks against a project in direct-edit mode or with a new git worktree.
 - Launch Codex, Claude, Gemini, or custom CLI agent profiles in an embedded
   terminal.
-- Expand the task inspector full width or resize its terminal vertically while
-  an agent session is running.
+- Open a selected task into a focused terminal workspace with task details in a
+  persistent right inspector.
 - Send the task prompt into a new agent session automatically.
 - Resume Codex and Claude sessions when a saved session id is available.
 - Track task status across `Planned`, `In progress`, `Review`, and `Done`.
@@ -153,7 +153,7 @@ Important frontend files:
 - `src/api.ts`: typed frontend wrapper around Tauri commands
 - `src/TerminalPane.tsx`: xterm.js lifecycle, PTY input/output, and dropped
   file-path insertion
-- `src/components/`: board, task detail, settings, and modal UI
+- `src/components/`: board, task workspace, settings, and modal UI
 - `src/styles.css`: Tailwind imports, theme tokens, and global base rules
 - `src/styles/`: focused CSS files imported by `src/main.tsx`
 - `src/test/testUtils.tsx`: shared DOM, pointer-event, tooltip-provider, and

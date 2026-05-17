@@ -22,7 +22,7 @@ function declarationsFor(selector: string) {
 }
 
 describe("dashboard layout styles", () => {
-  it("keeps the board scroll container bounded when the task detail pane is closed", () => {
+  it("keeps the board scroll container bounded when no task workspace is open", () => {
     const dashboardLayout = declarationsFor(".dashboard-layout");
     const workspaceFrame = declarationsFor(".workspace-frame");
 

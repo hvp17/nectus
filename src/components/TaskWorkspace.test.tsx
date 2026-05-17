@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { TaskAttention } from "../sessionAttention";
 import type { AgentProfile, ReviewLoop, ReviewRun, TaskSummary } from "../types";
-import { TaskDetailDrawer } from "./TaskDetailDrawer";
+import { TaskWorkspace } from "./TaskWorkspace";
 
 const task: TaskSummary = {
   id: 42,
@@ -52,21 +52,7 @@ const agentProfiles: AgentProfile[] = [
   },
 ];
 
-function dispatchPointerEvent(
-  target: Element | Window,
-  type: string,
-  init: { pointerId: number; button?: number; clientY: number },
-) {
-  const event = new Event(type, { bubbles: true, cancelable: true });
-  Object.defineProperties(event, {
-    pointerId: { value: init.pointerId },
-    button: { value: init.button ?? 0 },
-    clientY: { value: init.clientY },
-  });
-  fireEvent(target, event);
-}
-
-function renderTaskDetailDrawer(input?: {
+function renderTaskWorkspace(input?: {
   task?: TaskSummary;
   attention?: TaskAttention;
   reviewLoop?: ReviewLoop | null;
@@ -78,15 +64,13 @@ function renderTaskDetailDrawer(input?: {
   onUpdateStatus?: (task: TaskSummary, status: TaskSummary["status"]) => void;
 }) {
   return render(
-    <TaskDetailDrawer
+    <TaskWorkspace
       task={input?.task ?? task}
       attention={input?.attention}
       agentProfiles={agentProfiles}
       reviewLoop={input?.reviewLoop ?? null}
       reviewRuns={input?.reviewRuns ?? []}
-      isExpanded={false}
       onClose={vi.fn()}
-      onToggleExpanded={vi.fn()}
       onStopSession={input?.onStopSession ?? vi.fn()}
       onResumeSession={input?.onResumeSession ?? vi.fn()}
       onStartSession={input?.onStartSession ?? vi.fn()}
@@ -98,8 +82,8 @@ function renderTaskDetailDrawer(input?: {
   );
 }
 
-describe("TaskDetailDrawer", () => {
-  it("shows compact running controls and task metadata", () => {
+describe("TaskWorkspace", () => {
+  it("shows running controls and task metadata in the inspector rail", () => {
     const onStopSession = vi.fn();
     const runningTask: TaskSummary = {
       ...task,
@@ -108,11 +92,13 @@ describe("TaskDetailDrawer", () => {
       lastSessionAgent: "codex",
     };
 
-    renderTaskDetailDrawer({ task: runningTask, onStopSession });
+    renderTaskWorkspace({ task: runningTask, onStopSession });
 
     screen.getByRole("button", { name: /stop session/i }).click();
 
     expect(onStopSession).toHaveBeenCalledWith("session-123");
+    expect(screen.getByLabelText(/task inspector/i)).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /agent terminal/i })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: /task status/i })).toBeInTheDocument();
     expect(screen.getByText("Worktree")).toBeInTheDocument();
     expect(screen.getByText("feat/card-ellipsis")).toBeInTheDocument();
@@ -122,7 +108,7 @@ describe("TaskDetailDrawer", () => {
     expect(screen.getByText("codex")).toBeInTheDocument();
   });
 
-  it("keeps compact resume and restart controls for saved sessions", () => {
+  it("shows launcher controls for saved sessions when no session is active", () => {
     const onResumeSession = vi.fn();
     const onStartSession = vi.fn();
     const resumableTask: TaskSummary = {
@@ -131,8 +117,9 @@ describe("TaskDetailDrawer", () => {
       lastSessionId: "saved-session-123",
     };
 
-    renderTaskDetailDrawer({ task: resumableTask, onResumeSession, onStartSession });
+    renderTaskWorkspace({ task: resumableTask, onResumeSession, onStartSession });
 
+    expect(screen.getByRole("region", { name: /agent terminal/i })).toHaveTextContent("No active session");
     screen.getByRole("button", { name: /resume session/i }).click();
     screen.getByRole("button", { name: /restart agent/i }).click();
 
@@ -143,7 +130,7 @@ describe("TaskDetailDrawer", () => {
   it("updates status from the compact metadata strip", async () => {
     const onUpdateStatus = vi.fn();
 
-    renderTaskDetailDrawer({ onUpdateStatus });
+    renderTaskWorkspace({ onUpdateStatus });
 
     fireEvent.click(screen.getByRole("combobox", { name: /task status/i }));
     fireEvent.click(await screen.findByRole("option", { name: "Review" }));
@@ -154,7 +141,7 @@ describe("TaskDetailDrawer", () => {
   it("truncates long finished attention content in the sidebar panel", () => {
     const message = "A".repeat(220);
 
-    renderTaskDetailDrawer({
+    renderTaskWorkspace({
       attention: {
         taskId: task.id,
         kind: "idle",
@@ -173,7 +160,7 @@ describe("TaskDetailDrawer", () => {
   });
 
   it("shows single-review controls without rounds", () => {
-    renderTaskDetailDrawer();
+    renderTaskWorkspace();
 
     expect(screen.getByRole("combobox", { name: /reviewer/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /start pair loop/i })).not.toBeInTheDocument();
@@ -184,7 +171,7 @@ describe("TaskDetailDrawer", () => {
   it("starts an immediate review from the workflow stepper", () => {
     const onStartReview = vi.fn();
 
-    renderTaskDetailDrawer({ onStartReview });
+    renderTaskWorkspace({ onStartReview });
 
     screen.getByRole("tab", { name: /start review/i }).click();
 
@@ -196,7 +183,7 @@ describe("TaskDetailDrawer", () => {
     const onUpdateStatus = vi.fn();
     const inReviewTask: TaskSummary = { ...task, status: "review" };
 
-    renderTaskDetailDrawer({ task: inReviewTask, onStartReview, onUpdateStatus });
+    renderTaskWorkspace({ task: inReviewTask, onStartReview, onUpdateStatus });
 
     screen.getByRole("tab", { name: /start review/i }).click();
     expect(onStartReview).toHaveBeenCalledWith(inReviewTask, 2);
@@ -208,7 +195,7 @@ describe("TaskDetailDrawer", () => {
   });
 
   it("shows review progress in the workflow stepper", () => {
-    renderTaskDetailDrawer({
+    renderTaskWorkspace({
       task: { ...task, status: "review" },
       reviewLoop: {
         taskId: task.id,
@@ -226,7 +213,7 @@ describe("TaskDetailDrawer", () => {
   });
 
   it("shows review loop status and latest review output", () => {
-    renderTaskDetailDrawer({
+    renderTaskWorkspace({
       reviewLoop: {
         taskId: task.id,
         reviewerProfileId: 2,
@@ -255,37 +242,12 @@ describe("TaskDetailDrawer", () => {
     expect(screen.getByText("Feedback")).toBeInTheDocument();
   });
 
-  it("lets the terminal panel expand vertically from the resize separator", () => {
-    renderTaskDetailDrawer();
+  it("uses the live terminal stage for an active session", () => {
+    renderTaskWorkspace({ task: { ...task, activeSessionId: "session-123" } });
 
-    const inspectorBody = screen.getByTestId("task-detail-body");
-    vi.spyOn(inspectorBody, "getBoundingClientRect").mockReturnValue({
-      x: 0,
-      y: 0,
-      width: 480,
-      height: 800,
-      top: 0,
-      right: 480,
-      bottom: 800,
-      left: 0,
-      toJSON: () => ({}),
-    } as DOMRect);
-
-    const separator = screen.getByRole("separator", { name: /resize terminal/i });
     const terminalPanel = screen.getByRole("region", { name: /agent terminal/i });
 
-    expect(terminalPanel).toHaveStyle({ height: "360px" });
-
-    separator.focus();
-    fireEvent.keyDown(separator, { key: "ArrowUp" });
-
-    expect(terminalPanel).toHaveStyle({ height: "392px" });
-
-    dispatchPointerEvent(separator, "pointerdown", { pointerId: 1, button: 0, clientY: 430 });
-    dispatchPointerEvent(window, "pointermove", { pointerId: 1, clientY: 300 });
-    dispatchPointerEvent(window, "pointerup", { pointerId: 1, clientY: 300 });
-
-    expect(terminalPanel).toHaveStyle({ height: "500px" });
-    expect(separator).toHaveAttribute("aria-valuenow", "500");
+    expect(terminalPanel).not.toHaveTextContent("No active session");
+    expect(screen.queryByRole("separator", { name: /resize terminal/i })).not.toBeInTheDocument();
   });
 });

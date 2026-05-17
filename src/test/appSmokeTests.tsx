@@ -25,7 +25,7 @@ export function defineAppSmokeTests() {
     expect(screen.queryByRole("heading", { name: "Nectus Demo" })).not.toBeInTheDocument();
   });
 
-  it("keeps the board visible while opening a task inspector that can expand full width", async () => {
+  it("opens a selected task as a focused terminal workspace with an inspector sidebar", async () => {
     mockedApi.listRepos.mockResolvedValue([appRepo]);
     mockedApi.listTasks.mockResolvedValue([
       appTask({
@@ -42,19 +42,16 @@ export function defineAppSmokeTests() {
     fireEvent.click(await screen.findByRole("button", { name: /inspect task detail/i }));
 
     const layout = screen.getByTestId("dashboard-layout");
-    expect(layout).toHaveAttribute("data-detail-open", "true");
-    expect(layout).toHaveAttribute("data-detail-expanded", "false");
-    expect(screen.getByRole("heading", { name: /task board/i })).toBeInTheDocument();
+    expect(layout).toHaveAttribute("data-task-workspace", "true");
+    expect(screen.queryByRole("heading", { name: /task board/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /agent terminal/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/task inspector/i)).toBeInTheDocument();
+    expect(screen.getByText("feat/detail")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /expand terminal/i }));
+    fireEvent.click(screen.getByRole("button", { name: /back to task board/i }));
 
-    expect(layout).toHaveAttribute("data-detail-expanded", "true");
-    expect(screen.getByRole("button", { name: /restore dashboard/i })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /restore dashboard/i }));
-
-    expect(layout).toHaveAttribute("data-detail-expanded", "false");
+    expect(layout).toHaveAttribute("data-task-workspace", "false");
+    expect(screen.getByRole("heading", { name: /task board/i })).toBeInTheDocument();
   });
 
   it("opens settings and saves appearance preferences", async () => {

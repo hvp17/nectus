@@ -1,0 +1,464 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  CircleCheckBig,
+  ExternalLink,
+  GitBranch,
+  LoaderCircle,
+  Play,
+  RotateCcw,
+  Square,
+  TerminalSquare,
+} from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Label } from "./ui/label";
+import {
+  Stepper,
+  StepperDescription,
+  StepperIndicator,
+  StepperItem,
+  StepperNav,
+  StepperSeparator,
+  StepperTitle,
+  StepperTrigger,
+} from "./reui/stepper";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { truncateFinishedAttentionPreview } from "./attentionPreview";
+import { TerminalPane } from "../TerminalPane";
+import { cn } from "../lib/utils";
+import { formatAttentionReason, type TaskAttention } from "../sessionAttention";
+import { AgentProfile, ReviewLoop, ReviewRun, TaskSummary, TaskStatus } from "../types";
+
+export interface TaskWorkspaceProps {
+  task: TaskSummary | undefined;
+  attention?: TaskAttention;
+  agentProfiles: AgentProfile[];
+  reviewLoop?: ReviewLoop | null;
+  reviewRuns: ReviewRun[];
+  onClose: () => void;
+  onStopSession: (sessionId: string) => void;
+  onResumeSession: (task: TaskSummary) => void;
+  onStartSession: (task: TaskSummary) => void;
+  onStartReview: (task: TaskSummary, reviewerProfileId: number) => void;
+  onUpdateStatus: (task: TaskSummary, status: TaskStatus) => void;
+  onSessionExit: (sessionId: string) => void;
+  onSessionInput: (sessionId: string) => void;
+}
+
+const statusOrder: TaskStatus[] = ["planned", "in_progress", "review", "done"];
+const statusLabels: Record<TaskStatus, string> = {
+  planned: "Planned",
+  in_progress: "In progress",
+  review: "Review",
+  done: "Done",
+};
+const reviewLoopStatusLabels: Record<ReviewLoop["status"], string> = {
+  running: "Ready",
+  reviewing: "Reviewing",
+  passed: "Passed",
+  feedback_sent: "Feedback sent",
+  error: "Error",
+  stopped: "Stopped",
+};
+const reviewVerdictLabels: Record<ReviewRun["verdict"], string> = {
+  pass: "Pass",
+  needs_changes: "Needs changes",
+  feedback: "Feedback",
+  unknown: "Unknown",
+};
+
+export function TaskWorkspace({
+  task,
+  attention,
+  agentProfiles,
+  reviewLoop,
+  reviewRuns,
+  onClose,
+  onStopSession,
+  onResumeSession,
+  onStartSession,
+  onStartReview,
+  onUpdateStatus,
+  onSessionExit,
+  onSessionInput,
+}: TaskWorkspaceProps) {
+  const reviewerProfiles = useMemo(() => agentProfiles, [agentProfiles]);
+  const defaultReviewerProfileId =
+    reviewerProfiles.find((profile) => profile.id !== task?.agentProfileId)?.id ?? reviewerProfiles[0]?.id;
+  const [reviewerProfileId, setReviewerProfileId] = useState<number | undefined>(
+    reviewLoop?.reviewerProfileId ?? defaultReviewerProfileId,
+  );
+
+  useEffect(() => {
+    setReviewerProfileId(reviewLoop?.reviewerProfileId ?? defaultReviewerProfileId);
+  }, [defaultReviewerProfileId, reviewLoop?.reviewerProfileId]);
+
+  if (!task) return null;
+
+  const latestReviewRun = reviewRuns.at(-1);
+  const reviewActive = Boolean(reviewLoop && !["passed", "feedback_sent", "error", "stopped"].includes(reviewLoop.status));
+  const reviewInProgress = reviewLoop?.status === "reviewing";
+  const canResumeSession = task.agentKind === "codex" || task.agentKind === "claude";
+  const sessionAgentLabel = task.lastSessionAgent ?? task.agentName ?? "None";
+  const attentionDetail = attention?.prompt ?? attention?.message;
+  const displayedAttentionDetail =
+    attention?.kind === "idle" && attentionDetail ? truncateFinishedAttentionPreview(attentionDetail) : attentionDetail;
+  const isAttentionDetailTruncated = Boolean(
+    attentionDetail && displayedAttentionDetail && displayedAttentionDetail !== attentionDetail,
+  );
+  const startReviewDisabled = !reviewerProfileId || reviewerProfiles.length === 0 || reviewInProgress;
+  const hasReviewResult = Boolean(reviewLoop && !["running", "reviewing"].includes(reviewLoop.status));
+  const workflowStep = task.status === "done" || task.prUrl ? 3 : reviewInProgress ? 1 : hasReviewResult ? 2 : 1;
+  const startReview = () => {
+    if (!reviewerProfileId || startReviewDisabled) return;
+    onStartReview(task, reviewerProfileId);
+  };
+  const workflowSteps = [
+    {
+      title: reviewInProgress ? "Reviewing..." : "Start review",
+      description: reviewInProgress ? "Reviewer is checking the task" : "Run one reviewer pass",
+      completed: hasReviewResult || task.status === "done",
+      loading: reviewInProgress,
+      disabled: startReviewDisabled,
+      onClick: startReview,
+    },
+    {
+      title: "Create PR",
+      description: task.prUrl ? "Pull request linked" : "Placeholder",
+      completed: Boolean(task.prUrl),
+      loading: false,
+      disabled: true,
+      onClick: undefined,
+    },
+    {
+      title: "Move to done",
+      description: task.status === "done" ? "Task is complete" : "Mark task complete",
+      completed: task.status === "done",
+      loading: false,
+      disabled: task.status === "done",
+      onClick: () => onUpdateStatus(task, "done"),
+    },
+  ];
+
+  return (
+    <section className="task-workspace" aria-label="Task workspace">
+      <main className="task-terminal-stage">
+        <header className="task-terminal-header">
+          <div className="task-terminal-heading">
+            <Button
+              variant="ghost"
+              onClick={onClose}
+              aria-label="Back to task board"
+              className="-ml-3 h-8 gap-2 px-3 text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft size={16} />
+              Task Board
+            </Button>
+            <div className="min-w-0">
+              <p className="eyebrow">Agent Terminal</p>
+              <h2 className="truncate text-2xl font-bold tracking-tight">{task.title}</h2>
+            </div>
+          </div>
+          <TaskStatusBadges task={task} />
+        </header>
+
+        <section className="task-terminal-panel" aria-label="Agent terminal">
+          {task.activeSessionId ? (
+            <TerminalPane sessionId={task.activeSessionId} onSessionExit={onSessionExit} onSessionInput={onSessionInput} />
+          ) : (
+            <TaskTerminalLauncher
+              task={task}
+              canResumeSession={canResumeSession}
+              onResumeSession={onResumeSession}
+              onStartSession={onStartSession}
+            />
+          )}
+        </section>
+      </main>
+
+      <aside className="task-inspector-sidebar" aria-label="Task inspector">
+        <div className="task-inspector-header">
+          <p className="eyebrow">Task Detail</p>
+          <h3 className="truncate text-xl font-bold leading-tight">{task.title}</h3>
+          <TaskStatusBadges task={task} />
+        </div>
+
+        <div data-testid="task-detail-body" className="task-inspector-scroll">
+          {task.activeSessionId && (
+            <section className="task-control-strip" aria-label="Task controls">
+              <div className="task-session-actions">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  aria-label="Stop session"
+                  className="task-session-button"
+                  onClick={() => onStopSession(task.activeSessionId!)}
+                >
+                  <Square size={14} fill="currentColor" />
+                  Stop
+                </Button>
+              </div>
+            </section>
+          )}
+
+          <section className="task-inspector-section" aria-label="Task metadata">
+            <div className="task-status-control">
+              <span className="task-meta-label">Status:</span>
+              <Select value={task.status} onValueChange={(val) => onUpdateStatus(task, val as TaskStatus)}>
+                <SelectTrigger
+                  aria-label="Task status"
+                  className="task-status-trigger h-7 w-fit border-none bg-accent/50 text-xs font-medium hover:bg-accent focus:ring-0"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {statusOrder.map((status) => (
+                    <SelectItem key={status} value={status} className="text-xs">
+                      {statusLabels[status]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="task-meta-row">
+              <span className="task-meta-label">Mode:</span>
+              <span className="task-meta-pill">{task.hasWorktree ? "Worktree" : "Task only"}</span>
+            </div>
+
+            {task.hasWorktree && task.branchName && (
+              <div className="task-meta-row">
+                <span className="task-meta-label">Branch:</span>
+                <span className="task-meta-branch" title={task.branchName}>
+                  <GitBranch size={12} />
+                  <span>{task.branchName}</span>
+                </span>
+              </div>
+            )}
+
+            {task.hasWorktree && task.worktreePath && (
+              <div className="task-meta-row">
+                <span className="task-meta-label">Worktree:</span>
+                <span className="task-meta-path" title={task.worktreePath}>
+                  {task.worktreePath}
+                </span>
+              </div>
+            )}
+
+            <div className="task-meta-row">
+              <span className="task-meta-label">PR:</span>
+              {task.prUrl ? (
+                <a className="task-meta-link" href={task.prUrl} target="_blank" rel="noreferrer">
+                  Open <ExternalLink size={12} />
+                </a>
+              ) : (
+                <span className="task-meta-muted">Not linked</span>
+              )}
+            </div>
+
+            <div className="task-meta-row">
+              <span className="task-meta-label">Agent:</span>
+              <span className="truncate">{sessionAgentLabel}</span>
+            </div>
+          </section>
+
+          {attention && (
+            <Alert
+              className={cn(
+                "mt-4 border-primary/25 bg-primary/5 px-3 py-3",
+                attention.kind === "needs_input" && "border-amber-500/35 bg-amber-500/10",
+              )}
+            >
+              {attention.kind === "needs_input" ? <AlertTriangle size={16} /> : <CircleCheckBig size={16} />}
+              <AlertTitle className="font-bold">
+                {attention.kind === "needs_input" ? formatAttentionReason(attention.reason) : "Agent finished"}
+              </AlertTitle>
+              {attentionDetail && (
+                <AlertDescription
+                  className="[overflow-wrap:anywhere]"
+                  title={isAttentionDetailTruncated ? attentionDetail : undefined}
+                >
+                  {displayedAttentionDetail}
+                </AlertDescription>
+              )}
+            </Alert>
+          )}
+
+          {task.prompt && (
+            <section className="task-brief-panel" aria-label="Task brief">
+              <span className="task-meta-label">Brief:</span>
+              <p className="task-brief">{task.prompt}</p>
+            </section>
+          )}
+
+          <section className="task-workflow-panel" aria-label="Task workflow">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Task Workflow</p>
+              <p className="mt-1 text-xs text-muted-foreground">Review, prepare, and close out the task.</p>
+            </div>
+
+            <Stepper
+              className="mt-4"
+              value={workflowStep}
+              orientation="vertical"
+              indicators={{
+                completed: <Check className="size-3.5" />,
+                loading: <LoaderCircle className="size-3.5 animate-spin" />,
+              }}
+            >
+              <StepperNav className="w-full">
+                {workflowSteps.map((step, index) => (
+                  <StepperItem
+                    key={step.title}
+                    step={index + 1}
+                    completed={step.completed}
+                    disabled={step.disabled}
+                    loading={step.loading}
+                    className="relative items-start not-last:flex-1"
+                  >
+                    <StepperTrigger
+                      className={cn(
+                        "w-full items-start gap-2.5 text-left disabled:cursor-not-allowed",
+                        index < workflowSteps.length - 1 ? "pb-10" : "pb-0",
+                      )}
+                      onClick={step.onClick}
+                    >
+                      <StepperIndicator className="data-[state=completed]:bg-primary data-[state=completed]:text-primary-foreground">
+                        {index + 1}
+                      </StepperIndicator>
+                      <div className="mt-0.5 min-w-0 text-left">
+                        <StepperTitle>{step.title}</StepperTitle>
+                        <StepperDescription>{step.description}</StepperDescription>
+                      </div>
+                    </StepperTrigger>
+                    {index < workflowSteps.length - 1 && (
+                      <StepperSeparator className="absolute inset-y-0 left-3 top-7 -order-1 m-0 -translate-x-1/2 group-data-[orientation=vertical]/stepper-nav:h-[calc(100%-2rem)] group-data-[state=completed]/step:bg-primary" />
+                    )}
+                  </StepperItem>
+                ))}
+              </StepperNav>
+            </Stepper>
+          </section>
+
+          <section className="review-panel" aria-label="Task review">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Review</p>
+                <p className="mt-1 text-xs text-muted-foreground">Choose the reviewer for this task.</p>
+              </div>
+              {reviewLoop && (
+                <Badge variant="outline" className="rounded-md">
+                  {reviewLoopStatusLabels[reviewLoop.status]}
+                </Badge>
+              )}
+            </div>
+
+            <div className="mt-3">
+              <Label htmlFor="task-reviewer" className="sr-only">
+                Reviewer
+              </Label>
+              <Select
+                value={reviewerProfileId?.toString()}
+                onValueChange={(value) => setReviewerProfileId(Number(value))}
+                disabled={reviewActive || reviewerProfiles.length === 0}
+              >
+                <SelectTrigger id="task-reviewer" className="h-8 w-full justify-between text-xs">
+                  <SelectValue placeholder="Reviewer" />
+                </SelectTrigger>
+                <SelectContent>
+                  {reviewerProfiles.map((profile) => (
+                    <SelectItem key={profile.id} value={profile.id.toString()} className="text-xs">
+                      {profile.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {latestReviewRun && (
+              <div className="review-run-summary">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold">Review feedback</span>
+                  <Badge variant="outline" className="rounded-md">
+                    {reviewVerdictLabels[latestReviewRun.verdict]}
+                  </Badge>
+                </div>
+                <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-xs text-muted-foreground">
+                  {latestReviewRun.error ?? latestReviewRun.output}
+                </p>
+              </div>
+            )}
+          </section>
+        </div>
+      </aside>
+    </section>
+  );
+}
+
+function TaskStatusBadges({ task }: { task: TaskSummary }) {
+  return (
+    <div className="detail-status-row">
+      <Badge variant="outline" data-status={task.status}>
+        {statusLabels[task.status]}
+      </Badge>
+      {task.activeSessionId && (
+        <Badge variant="outline" className="border-primary/40 text-primary">
+          Running
+        </Badge>
+      )}
+      {task.isDirty && (
+        <Badge variant="outline" className="text-indigo-500">
+          Dirty worktree
+        </Badge>
+      )}
+    </div>
+  );
+}
+
+function TaskTerminalLauncher({
+  task,
+  canResumeSession,
+  onResumeSession,
+  onStartSession,
+}: {
+  task: TaskSummary;
+  canResumeSession: boolean;
+  onResumeSession: (task: TaskSummary) => void;
+  onStartSession: (task: TaskSummary) => void;
+}) {
+  const canResume = Boolean(task.lastSessionId && canResumeSession);
+
+  return (
+    <div className="terminal-launcher">
+      <div className="terminal-launcher-copy">
+        <div className="terminal-launcher-kicker">
+          <TerminalSquare size={15} />
+          <span>{task.lastSessionId ? "Session saved" : "Ready"}</span>
+        </div>
+        <p className="terminal-launcher-title">No active session</p>
+        {task.lastSessionLabel && <p className="terminal-launcher-detail">{task.lastSessionLabel}</p>}
+      </div>
+      <div className="terminal-launcher-actions">
+        {canResume && (
+          <Button type="button" variant="outline" aria-label="Resume session" onClick={() => onResumeSession(task)}>
+            <RotateCcw size={14} />
+            Resume
+          </Button>
+        )}
+        <Button
+          type="button"
+          aria-label={task.lastSessionId ? "Restart agent" : "Start agent"}
+          onClick={() => onStartSession(task)}
+        >
+          <Play size={14} fill="currentColor" />
+          {task.lastSessionId ? "Restart" : "Start"}
+        </Button>
+      </div>
+    </div>
+  );
+}

@@ -189,7 +189,7 @@ Important frontend files:
 - `src/TerminalPane.tsx`: xterm.js setup, terminal event listeners, input forwarding
 - `src/api.ts`: typed Tauri command wrapper
 - `src/types.ts`: frontend data contracts matching Rust serde output
-- `src/components/`: board, task detail, settings, and modal UI
+- `src/components/`: board, task workspace, settings, and modal UI
 - `src/components/settings/`: settings subcomponents and profile-draft helpers
 - `src/test/testUtils.tsx`: shared frontend test helpers for providers, pointer events, DOM rects, and async deferrals
 - `src/test/app*Tests.tsx`: focused App test groups registered by `src/App.test.tsx`
