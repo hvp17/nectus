@@ -286,16 +286,9 @@
   margin-left: 34px;
 }
 
-.task-review-action-main {
-  min-width: 0;
-  flex: 0 0 auto;
-  gap: 5px;
-}
-
 .task-reviewer-menu {
   min-width: 0;
   max-width: 150px;
-  gap: 5px;
 }
 
 .task-reviewer-menu-label {
