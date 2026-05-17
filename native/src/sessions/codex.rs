@@ -16,6 +16,7 @@ use walkdir::WalkDir;
 const CODEX_METADATA_FAST_POLL_ATTEMPTS: usize = 120;
 const CODEX_METADATA_FAST_POLL_INTERVAL: Duration = Duration::from_millis(500);
 const CODEX_METADATA_IDLE_POLL_INTERVAL: Duration = Duration::from_secs(5);
+const CODEX_PROMPT_PREVIEW_LIMIT: usize = 500;
 
 #[derive(Debug, Clone)]
 pub(super) struct CodexSessionMetadata {
@@ -68,6 +69,33 @@ struct CodexEventPayload {
     message: Option<String>,
     prompt: Option<String>,
     reason: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CodexResponseItemPayload {
+    #[serde(rename = "type")]
+    item_type: CodexResponseItemType,
+    name: Option<String>,
+    arguments: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum CodexResponseItemType {
+    FunctionCall,
+    Other(String),
+}
+
+impl<'de> Deserialize<'de> for CodexResponseItemType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Ok(match value.as_str() {
+            "function_call" => Self::FunctionCall,
+            _ => Self::Other(value),
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -417,11 +445,15 @@ pub(super) fn codex_session_event_from_line(
     if line.timestamp < started_at {
         return None;
     }
-    if line.line_type != CodexRolloutLineType::EventMsg {
-        return None;
+    match line.line_type {
+        CodexRolloutLineType::EventMsg => codex_session_event_from_event_payload(line.payload),
+        CodexRolloutLineType::ResponseItem => codex_session_event_from_response_item(line.payload),
+        _ => None,
     }
-    let payload = serde_json::from_value::<CodexEventPayload>(line.payload).ok()?;
+}
 
+fn codex_session_event_from_event_payload(payload: serde_json::Value) -> Option<CodexSessionEvent> {
+    let payload = serde_json::from_value::<CodexEventPayload>(payload).ok()?;
     match payload.event_type {
         CodexEventType::TaskComplete | CodexEventType::TurnComplete => {
             Some(CodexSessionEvent::Idle {
@@ -444,5 +476,69 @@ pub(super) fn codex_session_event_from_line(
             prompt: payload.prompt.or(payload.message).or(payload.reason),
         }),
         _ => None,
+    }
+}
+
+fn codex_session_event_from_response_item(payload: serde_json::Value) -> Option<CodexSessionEvent> {
+    let payload = serde_json::from_value::<CodexResponseItemPayload>(payload).ok()?;
+    if payload.item_type != CodexResponseItemType::FunctionCall {
+        return None;
+    }
+    if payload.name.as_deref() != Some("request_user_input") {
+        return None;
+    }
+
+    Some(CodexSessionEvent::NeedsInput {
+        turn_id: None,
+        reason: "request_user_input".to_string(),
+        prompt: request_user_input_prompt(payload.arguments.as_ref()),
+    })
+}
+
+fn request_user_input_prompt(arguments: Option<&serde_json::Value>) -> Option<String> {
+    let arguments = arguments?;
+    if let Some(arguments) = arguments.as_str() {
+        let arguments = arguments.trim();
+        if arguments.is_empty() {
+            return None;
+        }
+        return serde_json::from_str::<serde_json::Value>(arguments)
+            .ok()
+            .and_then(|value| request_user_input_prompt_from_value(&value))
+            .or_else(|| prompt_preview(arguments));
+    }
+
+    request_user_input_prompt_from_value(arguments)
+}
+
+fn request_user_input_prompt_from_value(value: &serde_json::Value) -> Option<String> {
+    if let Some(question) = value
+        .get("question")
+        .and_then(|question| question.as_str())
+        .and_then(prompt_preview)
+    {
+        return Some(question);
+    }
+
+    let questions = value.get("questions")?.as_array()?;
+    let prompts = questions
+        .iter()
+        .filter_map(|question| question.get("question"))
+        .filter_map(|question| question.as_str())
+        .filter_map(prompt_preview)
+        .collect::<Vec<_>>();
+    if prompts.is_empty() {
+        None
+    } else {
+        prompt_preview(&prompts.join(" "))
+    }
+}
+
+fn prompt_preview(value: &str) -> Option<String> {
+    let value = value.trim();
+    if value.is_empty() {
+        None
+    } else {
+        Some(value.chars().take(CODEX_PROMPT_PREVIEW_LIMIT).collect())
     }
 }

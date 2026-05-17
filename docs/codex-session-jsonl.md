@@ -196,9 +196,9 @@ Current behavior:
   Discovery polls every 500 ms for the first 120 attempts, then every 5 seconds
   until Codex writes metadata or the task session stops.
 - Reads appended lines from that file.
-- Parses the rollout envelope plus the `session_meta` and `event_msg` payloads
-  with tolerant Rust types. Unknown rollout entries and unknown event names are
-  ignored.
+- Parses the rollout envelope plus the `session_meta`, `event_msg`, and
+  selected `response_item` payloads with tolerant Rust types. Unknown rollout
+  entries and unknown event names are ignored.
 - Emits `session_idle` when it sees:
 
 ```text
@@ -212,12 +212,16 @@ type == "event_msg" and payload.type is "task_complete" or "turn_complete"
   `elicitation_request`, `apply_patch_approval_request`, plus the fallback names
   `approval_request`, `confirmation_request`, `needs_input`, and
   `permission_request`.
+- Also emits `session_needs_input` when Codex persists a `response_item` whose
+  `payload.type == "function_call"` and `payload.name == "request_user_input"`.
+  The parser extracts `questions[].question` from the function-call
+  `arguments` string and uses it as the prompt preview.
 
 Important caveat: the checked Codex rollout policy says approval/input request
-events such as `exec_approval_request`, `request_permissions`,
+`event_msg` variants such as `exec_approval_request`, `request_permissions`,
 `request_user_input`, and `apply_patch_approval_request` are defined but not
-persisted by default. Before building features around those from JSONL, verify
-whether the Codex version and launch mode Nectus runs can persist them.
+persisted by default. `response_item` function calls are persisted by default,
+and Nectus handles `request_user_input` there when present.
 
 ## Observed Sample Entries
 
@@ -259,6 +263,8 @@ High-confidence signals from default JSONL:
 - Idle/done: `event_msg.payload.type == "task_complete"`
 - Active turn started: `task_started`
 - Interrupted/aborted: `turn_aborted`
+- User input needed: `response_item.payload.type == "function_call"` and
+  `response_item.payload.name == "request_user_input"`
 - Token/context usage: `token_count`
 - User and assistant transcript: `user_message`, `agent_message`, `response_item.message`
 - Patch completion: `patch_apply_end`

@@ -124,6 +124,24 @@ fn recognizes_codex_elicitation_events_as_needing_input() {
 }
 
 #[test]
+fn recognizes_codex_request_user_input_function_calls_as_needing_input() {
+    let started_at = chrono::DateTime::parse_from_rfc3339("2026-05-14T10:00:00Z").unwrap();
+    let line = r#"{"timestamp":"2026-05-14T10:00:05.000Z","type":"response_item","payload":{"type":"function_call","name":"request_user_input","arguments":"{\"questions\":[{\"header\":\"V1 Scope\",\"id\":\"v1_scope\",\"question\":\"For the first GitHub integration slice, what should the Create PR step do?\",\"options\":[{\"label\":\"Prompt Agent\",\"description\":\"Send a standard Create PR instruction into Codex.\"}]}]}","call_id":"call_p5QlSzNItLF4xUfr2eh0fAEU"}}"#;
+
+    assert_eq!(
+        codex_session_event_from_line(line, started_at),
+        Some(CodexSessionEvent::NeedsInput {
+            turn_id: None,
+            reason: "request_user_input".to_string(),
+            prompt: Some(
+                "For the first GitHub integration slice, what should the Create PR step do?"
+                    .to_string()
+            ),
+        })
+    );
+}
+
+#[test]
 fn parses_codex_session_metadata_with_top_level_timestamp() {
     let started_at = chrono::DateTime::parse_from_rfc3339("2026-05-14T10:00:00Z").unwrap();
     let line = r#"{"timestamp":"2026-05-14T10:00:05.000Z","type":"session_meta","payload":{"id":"codex-session-1","cwd":"/tmp/project","thread_name":" Refactor JSONL parser "}}"#;
