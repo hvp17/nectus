@@ -177,13 +177,15 @@ AI review is a single reviewer pass over the selected task worktree.
 
 Current behavior:
 
-- Choose one reviewer profile in the selected task inspector.
-- Use the task workflow stepper's `Start review` step to run one reviewer pass.
-- `Start review` switches the selected task UI to `reviewing` while the reviewer
+- Use the task workflow stepper's `Review with <reviewer>` action to run one
+  reviewer pass.
+- The review action shows the reviewer profile icon and name inline. Use the
+  adjacent dropdown to switch reviewer profiles before starting the pass.
+- The review action switches the selected task UI to `reviewing` while the reviewer
   command runs, and the task workflow stepper shows the in-progress state.
 - The task workflow stepper also shows a placeholder `Create PR` step and a
   `Move to done` step that marks the task complete.
-- Manual `Start review` requires a running Codex worker session so blockers or
+- Manual review runs require a running worker session so blockers or
   feedback can be written back into that session.
 - Claude and Gemini reviewers are run in headless prompt mode with `-p` and the
   generated review prompt. Custom reviewers receive the prompt on stdin.
@@ -198,7 +200,7 @@ Current behavior:
 - Passing review marks the loop `passed` and moves the task to `done`.
 - Task cards show the saved review status once a review exists, including
   completed `Review passed` state.
-- Blocking review or feedback is written back into the worker PTY and submitted
+- Blocking review or feedback is written back into the active worker PTY and submitted
   with the same Enter sequence as terminal input. That status is persisted as
   `feedback_sent` and shown as review feedback in the UI.
 - Unknown reviewer output marks the loop `error`.

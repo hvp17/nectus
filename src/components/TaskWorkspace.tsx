@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Check,
+  ChevronDown,
   CircleCheckBig,
   ExternalLink,
   GitBranch,
@@ -12,10 +13,16 @@ import {
   Square,
   TerminalSquare,
 } from "lucide-react";
+import { AgentLogo } from "./AgentBrand";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Label } from "./ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 import {
   Stepper,
   StepperDescription,
@@ -100,6 +107,7 @@ export function TaskWorkspace({
   if (!task) return null;
 
   const latestReviewRun = reviewRuns.at(-1);
+  const selectedReviewerProfile = reviewerProfiles.find((profile) => profile.id === reviewerProfileId);
   const reviewActive = Boolean(reviewLoop && !["passed", "feedback_sent", "error", "stopped"].includes(reviewLoop.status));
   const reviewInProgress = reviewLoop?.status === "reviewing";
   const canResumeSession = task.agentKind === "codex" || task.agentKind === "claude";
@@ -110,21 +118,28 @@ export function TaskWorkspace({
   const isAttentionDetailTruncated = Boolean(
     attentionDetail && displayedAttentionDetail && displayedAttentionDetail !== attentionDetail,
   );
-  const startReviewDisabled = !reviewerProfileId || reviewerProfiles.length === 0 || reviewInProgress;
-  const hasReviewResult = Boolean(reviewLoop && !["running", "reviewing"].includes(reviewLoop.status));
-  const workflowStep = task.status === "done" || task.prUrl ? 3 : reviewInProgress ? 1 : hasReviewResult ? 2 : 1;
+  const startReviewDisabled = !selectedReviewerProfile || reviewerProfiles.length === 0 || reviewInProgress;
+  const reviewReadyForNextStep = reviewLoop?.status === "passed";
+  const workflowStep = task.status === "done" || task.prUrl ? 3 : reviewInProgress ? 1 : reviewReadyForNextStep ? 2 : 1;
+  const reviewActionLabel = selectedReviewerProfile
+    ? `${reviewInProgress ? "Reviewing with" : "Review with"} ${selectedReviewerProfile.name}`
+    : "Review with reviewer";
   const startReview = () => {
     if (!reviewerProfileId || startReviewDisabled) return;
     onStartReview(task, reviewerProfileId);
   };
   const workflowSteps = [
     {
-      title: reviewInProgress ? "Reviewing..." : "Start review",
-      description: reviewInProgress ? "Reviewer is checking the task" : "Run one reviewer pass",
-      completed: hasReviewResult || task.status === "done",
+      title: reviewInProgress ? "Reviewing..." : "Review",
+      description: reviewInProgress
+        ? "Reviewer is checking the task"
+        : selectedReviewerProfile
+          ? `${selectedReviewerProfile.name} will inspect this worktree`
+          : "Choose a reviewer profile",
+      completed: reviewReadyForNextStep || task.status === "done",
       loading: reviewInProgress,
-      disabled: startReviewDisabled,
-      onClick: startReview,
+      disabled: reviewerProfiles.length === 0 || reviewInProgress,
+      onClick: undefined,
     },
     {
       title: "Create PR",
@@ -321,21 +336,85 @@ export function TaskWorkspace({
                     loading={step.loading}
                     className="relative items-start not-last:flex-1"
                   >
-                    <StepperTrigger
-                      className={cn(
-                        "w-full items-start gap-2.5 text-left disabled:cursor-not-allowed",
-                        index < workflowSteps.length - 1 ? "pb-10" : "pb-0",
+                    <div className={cn("w-full", index < workflowSteps.length - 1 ? "pb-10" : "pb-0")}>
+                      <StepperTrigger
+                        className="w-full items-start gap-2.5 text-left disabled:cursor-not-allowed"
+                        onClick={step.onClick}
+                      >
+                        <StepperIndicator className="data-[state=completed]:bg-primary data-[state=completed]:text-primary-foreground">
+                          {index + 1}
+                        </StepperIndicator>
+                        <div className="mt-0.5 min-w-0 text-left">
+                          <StepperTitle>{step.title}</StepperTitle>
+                          <StepperDescription>
+                            {selectedReviewerProfile && index === 0 ? (
+                              <span className="task-review-step-description">
+                                <span aria-hidden="true">
+                                  <AgentLogo agentKind={selectedReviewerProfile.agentKind} size="sm" />
+                                </span>
+                                <span>{step.description}</span>
+                              </span>
+                            ) : (
+                              step.description
+                            )}
+                          </StepperDescription>
+                        </div>
+                      </StepperTrigger>
+
+                      {index === 0 && (
+                        <div className="task-review-action">
+                          <Button
+                            type="button"
+                            size="sm"
+                            aria-label={reviewActionLabel}
+                            className="task-review-action-main"
+                            disabled={startReviewDisabled}
+                            onClick={startReview}
+                          >
+                            <span>{reviewInProgress ? "Reviewing with" : "Review with"}</span>
+                            {selectedReviewerProfile && (
+                              <>
+                                <span aria-hidden="true">
+                                  <AgentLogo agentKind={selectedReviewerProfile.agentKind} size="sm" />
+                                </span>
+                                <span className="truncate">{selectedReviewerProfile.name}</span>
+                              </>
+                            )}
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                aria-label="Change reviewer"
+                                className="task-review-action-menu"
+                                disabled={reviewActive || reviewerProfiles.length === 0}
+                              >
+                                <ChevronDown size={14} />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="min-w-44">
+                              {reviewerProfiles.map((profile) => (
+                                <DropdownMenuItem
+                                  key={profile.id}
+                                  onSelect={() => setReviewerProfileId(profile.id)}
+                                  className="justify-between"
+                                >
+                                  <span className="select-option-with-logo">
+                                    <span aria-hidden="true">
+                                      <AgentLogo agentKind={profile.agentKind} size="sm" />
+                                    </span>
+                                    <span className="truncate">{profile.name}</span>
+                                  </span>
+                                  {profile.id === reviewerProfileId && <Check className="ml-2 size-3.5 text-primary" />}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       )}
-                      onClick={step.onClick}
-                    >
-                      <StepperIndicator className="data-[state=completed]:bg-primary data-[state=completed]:text-primary-foreground">
-                        {index + 1}
-                      </StepperIndicator>
-                      <div className="mt-0.5 min-w-0 text-left">
-                        <StepperTitle>{step.title}</StepperTitle>
-                        <StepperDescription>{step.description}</StepperDescription>
-                      </div>
-                    </StepperTrigger>
+                    </div>
                     {index < workflowSteps.length - 1 && (
                       <StepperSeparator className="absolute inset-y-0 left-3 top-7 -order-1 m-0 -translate-x-1/2 group-data-[orientation=vertical]/stepper-nav:h-[calc(100%-2rem)] group-data-[state=completed]/step:bg-primary" />
                     )}
@@ -345,55 +424,35 @@ export function TaskWorkspace({
             </Stepper>
           </section>
 
-          <section className="review-panel" aria-label="Task review">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Review</p>
-                <p className="mt-1 text-xs text-muted-foreground">Choose the reviewer for this task.</p>
-              </div>
-              {reviewLoop && (
-                <Badge variant="outline" className="rounded-md">
-                  {reviewLoopStatusLabels[reviewLoop.status]}
-                </Badge>
-              )}
-            </div>
-
-            <div className="mt-3">
-              <Label htmlFor="task-reviewer" className="sr-only">
-                Reviewer
-              </Label>
-              <Select
-                value={reviewerProfileId?.toString()}
-                onValueChange={(value) => setReviewerProfileId(Number(value))}
-                disabled={reviewActive || reviewerProfiles.length === 0}
-              >
-                <SelectTrigger id="task-reviewer" className="h-8 w-full justify-between text-xs">
-                  <SelectValue placeholder="Reviewer" />
-                </SelectTrigger>
-                <SelectContent>
-                  {reviewerProfiles.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id.toString()} className="text-xs">
-                      {profile.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {latestReviewRun && (
-              <div className="review-run-summary">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-semibold">Review feedback</span>
-                  <Badge variant="outline" className="rounded-md">
-                    {reviewVerdictLabels[latestReviewRun.verdict]}
-                  </Badge>
+          {(reviewLoop || latestReviewRun) && (
+            <section className="review-panel" aria-label="Task review">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Review</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Latest reviewer status and feedback.</p>
                 </div>
-                <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-xs text-muted-foreground">
-                  {latestReviewRun.error ?? latestReviewRun.output}
-                </p>
+                {reviewLoop && (
+                  <Badge variant="outline" className="rounded-md">
+                    {reviewLoopStatusLabels[reviewLoop.status]}
+                  </Badge>
+                )}
               </div>
-            )}
-          </section>
+
+              {latestReviewRun && (
+                <div className="review-run-summary">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold">Review feedback</span>
+                    <Badge variant="outline" className="rounded-md">
+                      {reviewVerdictLabels[latestReviewRun.verdict]}
+                    </Badge>
+                  </div>
+                  <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-xs text-muted-foreground">
+                    {latestReviewRun.error ?? latestReviewRun.output}
+                  </p>
+                </div>
+              )}
+            </section>
+          )}
         </div>
       </aside>
     </section>

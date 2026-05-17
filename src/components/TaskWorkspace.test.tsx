@@ -50,6 +50,17 @@ const agentProfiles: AgentProfile[] = [
     createdAt: "2026-05-15T00:00:00.000Z",
     updatedAt: "2026-05-15T00:00:00.000Z",
   },
+  {
+    id: 3,
+    name: "Gemini",
+    agentKind: "gemini",
+    command: "gemini",
+    model: null,
+    args: [],
+    env: {},
+    createdAt: "2026-05-15T00:00:00.000Z",
+    updatedAt: "2026-05-15T00:00:00.000Z",
+  },
 ];
 
 function renderTaskWorkspace(input?: {
@@ -162,7 +173,8 @@ describe("TaskWorkspace", () => {
   it("shows single-review controls without rounds", () => {
     renderTaskWorkspace();
 
-    expect(screen.getByRole("combobox", { name: /reviewer/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /review with claude review/i })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /reviewer/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /start pair loop/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("spinbutton", { name: /max rounds/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/round/i)).not.toBeInTheDocument();
@@ -173,9 +185,21 @@ describe("TaskWorkspace", () => {
 
     renderTaskWorkspace({ onStartReview });
 
-    screen.getByRole("tab", { name: /start review/i }).click();
+    screen.getByRole("button", { name: /review with claude review/i }).click();
 
     expect(onStartReview).toHaveBeenCalledWith(task, 2);
+  });
+
+  it("changes the reviewer from the review action dropdown", async () => {
+    const onStartReview = vi.fn();
+
+    renderTaskWorkspace({ onStartReview });
+
+    fireEvent.keyDown(screen.getByRole("button", { name: /change reviewer/i }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: /gemini/i }));
+    screen.getByRole("button", { name: /review with gemini/i }).click();
+
+    expect(onStartReview).toHaveBeenCalledWith(task, 3);
   });
 
   it("runs task workflow actions from the sidebar stepper", () => {
@@ -185,7 +209,7 @@ describe("TaskWorkspace", () => {
 
     renderTaskWorkspace({ task: inReviewTask, onStartReview, onUpdateStatus });
 
-    screen.getByRole("tab", { name: /start review/i }).click();
+    screen.getByRole("button", { name: /review with claude review/i }).click();
     expect(onStartReview).toHaveBeenCalledWith(inReviewTask, 2);
 
     expect(screen.getByRole("tab", { name: /create pr/i })).toBeDisabled();
@@ -207,9 +231,26 @@ describe("TaskWorkspace", () => {
       },
     });
 
-    const reviewButton = screen.getByRole("tab", { name: /reviewing/i });
+    const reviewButton = screen.getByRole("button", { name: /reviewing with claude review/i });
 
     expect(reviewButton).toBeDisabled();
+  });
+
+  it("keeps blocker feedback on the review workflow step", () => {
+    renderTaskWorkspace({
+      task: { ...task, status: "review" },
+      reviewLoop: {
+        taskId: task.id,
+        reviewerProfileId: 2,
+        status: "feedback_sent",
+        lastError: null,
+        createdAt: "2026-05-15T00:00:00.000Z",
+        updatedAt: "2026-05-15T00:01:00.000Z",
+      },
+    });
+
+    expect(screen.getByRole("tab", { name: /review/i })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: /create pr/i })).toHaveAttribute("aria-selected", "false");
   });
 
   it("shows review loop status and latest review output", () => {
