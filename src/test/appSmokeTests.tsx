@@ -39,9 +39,9 @@ export function defineAppSmokeTests() {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /inspect task detail/i }));
+    const layout = await screen.findByTestId("dashboard-layout");
+    fireEvent.click(await within(layout).findByRole("button", { name: /inspect task detail/i }));
 
-    const layout = screen.getByTestId("dashboard-layout");
     expect(layout).toHaveAttribute("data-task-workspace", "true");
     expect(screen.queryByRole("heading", { name: /task board/i })).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: /agent terminal/i })).toBeInTheDocument();
@@ -79,7 +79,7 @@ export function defineAppSmokeTests() {
     });
   });
 
-  it("shows active session tasks above settings and opens them from the sidebar", async () => {
+  it("nests all project tasks under the project above settings and opens them from the sidebar", async () => {
     mockedApi.listRepos.mockResolvedValue([appRepo]);
     mockedApi.listTasks.mockResolvedValue([
       appTask({
@@ -99,19 +99,19 @@ export function defineAppSmokeTests() {
 
     render(<App />);
 
-    const panel = await screen.findByRole("region", { name: /tasks quick access/i });
+    const openButton = await screen.findByRole("button", { name: /open keep terminal handy/i });
     const settingsButton = screen.getByRole("button", { name: /settings/i });
-    expect(panel.compareDocumentPosition(settingsButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(within(panel).getByText("Keep terminal handy")).toBeInTheDocument();
-    expect(within(panel).queryByText("No live process")).not.toBeInTheDocument();
+    expect(openButton.compareDocumentPosition(settingsButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The selected project auto-expands, so every task shows regardless of session state.
+    expect(screen.getByRole("button", { name: /open no live process/i })).toBeInTheDocument();
 
-    fireEvent.click(within(panel).getByRole("button", { name: /open keep terminal handy/i }));
+    fireEvent.click(openButton);
 
     expect(await screen.findByRole("region", { name: /agent terminal/i })).toBeInTheDocument();
     expect(screen.getByTestId("dashboard-layout")).toHaveAttribute("data-task-workspace", "true");
   });
 
-  it("stops an active session from the sidebar quick access panel", async () => {
+  it("stops an active session from the sidebar", async () => {
     mockedApi.listRepos.mockResolvedValue([appRepo]);
     mockedApi.listTasks.mockResolvedValue([
       appTask({
@@ -134,17 +134,16 @@ export function defineAppSmokeTests() {
 
     render(<App />);
 
-    const panel = await screen.findByRole("region", { name: /tasks quick access/i });
-    fireEvent.click(within(panel).getByRole("button", { name: /stop stop from sidebar/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /stop stop from sidebar/i }));
 
     await waitFor(() => {
       expect(mockedApi.stopSession).toHaveBeenCalledWith("session-31");
     });
     await waitFor(() => {
-      const panel = screen.getByRole("region", { name: /tasks quick access/i });
-      expect(within(panel).getByText("1")).toBeInTheDocument();
-      expect(within(panel).queryByRole("button", { name: /stop stop from sidebar/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /stop stop from sidebar/i })).not.toBeInTheDocument();
     });
+    // The task row stays in the tree once its session ends; only the stop action is gone.
+    expect(screen.getByRole("button", { name: /open stop from sidebar/i })).toBeInTheDocument();
   });
 
   it("does not render the temporary dummy notification preview on launch", async () => {

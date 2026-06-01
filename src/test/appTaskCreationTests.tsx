@@ -79,7 +79,7 @@ export function defineAppTaskCreationTests() {
     });
   });
 
-  it("opens the task modal from the sidebar task header", async () => {
+  it("opens the task modal from a project's add-task action", async () => {
     mockProject();
     mockedApi.listTasks.mockResolvedValue([
       appTask({
@@ -91,10 +91,7 @@ export function defineAppTaskCreationTests() {
 
     render(<App />);
 
-    const panel = await screen.findByRole("region", { name: /tasks quick access/i });
-    expect(within(panel).getByText("1")).toBeInTheDocument();
-
-    fireEvent.click(within(panel).getByRole("button", { name: /add task/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /add task to nectus-desktop/i }));
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });

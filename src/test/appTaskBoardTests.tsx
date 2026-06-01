@@ -13,6 +13,13 @@ import { appRepo, appTask } from "./appFixtures";
 
 const mockedApi = vi.mocked(api);
 
+// Task titles now appear both as board cards and as nested sidebar rows, so board
+// queries are scoped to the dashboard container (the sidebar is a sibling outside it).
+async function findBoardCard(title: RegExp) {
+  const board = await screen.findByTestId("dashboard-layout");
+  return within(board).findByRole("button", { name: title });
+}
+
 function mockProjectWithTask(title: string, status: "planned" | "done" = "planned") {
   mockedApi.listRepos.mockResolvedValue([appRepo]);
   mockedApi.listTasks.mockResolvedValue([appTask({ title, status })]);
@@ -46,7 +53,7 @@ export function defineAppTaskBoardTests() {
 
     render(<App />);
 
-    const taskCard = await screen.findByRole("button", { name: /remove old worktree/i });
+    const taskCard = await findBoardCard(/remove old worktree/i);
     const deleteButton = within(taskCard).getByRole("button");
     fireEvent.click(deleteButton);
     fireEvent.click(await screen.findByRole("button", { name: /^delete task$/i }));
@@ -86,7 +93,7 @@ export function defineAppTaskBoardTests() {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /delete from sidebar/i }));
+    fireEvent.click(await findBoardCard(/delete from sidebar/i));
     expect(await screen.findByLabelText(/task inspector/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^delete task$/i }));
@@ -116,7 +123,7 @@ export function defineAppTaskBoardTests() {
 
     render(<App />);
 
-    const taskCard = await screen.findByRole("button", { name: /wire task drag and drop/i });
+    const taskCard = await findBoardCard(/wire task drag and drop/i);
     const reviewColumn = screen.getByRole("region", { name: /review/i });
 
     pointerDrag(taskCard, reviewColumn);
@@ -133,7 +140,7 @@ export function defineAppTaskBoardTests() {
 
     render(<App />);
 
-    const taskCard = await screen.findByRole("button", { name: /wire task pointer drag/i });
+    const taskCard = await findBoardCard(/wire task pointer drag/i);
     const reviewColumn = screen.getByRole("region", { name: /review/i });
     const restoreElementsFromPoint = mockElementsFromPoint([reviewColumn]);
 
@@ -158,7 +165,7 @@ export function defineAppTaskBoardTests() {
 
     render(<App />);
 
-    const taskCard = await screen.findByRole("button", { name: /wire task pointer drag/i });
+    const taskCard = await findBoardCard(/wire task pointer drag/i);
     const restoreCardRect = mockElementRect(taskCard, { left: 10, top: 20, width: 220, height: 90 });
 
     dispatchPointerEvent(taskCard, "pointerdown", { pointerId: 1, button: 0, clientX: 10, clientY: 20 });
@@ -180,7 +187,7 @@ export function defineAppTaskBoardTests() {
 
     render(<App />);
 
-    const taskCard = await screen.findByRole("button", { name: /wire task drag and drop/i });
+    const taskCard = await findBoardCard(/wire task drag and drop/i);
     const plannedColumn = screen.getByRole("region", { name: /planned/i });
     const inProgressColumn = screen.getByRole("region", { name: /in progress/i });
     const reviewColumn = screen.getByRole("region", { name: /review/i });
@@ -222,7 +229,7 @@ export function defineAppTaskBoardTests() {
 
     render(<App />);
 
-    const taskCard = await screen.findByRole("button", { name: /wire task drag and drop/i });
+    const taskCard = await findBoardCard(/wire task drag and drop/i);
     const reviewColumn = screen.getByRole("region", { name: /review/i });
     const restoreElementsFromPoint = mockElementsFromPoint([reviewColumn]);
 

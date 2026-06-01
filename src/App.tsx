@@ -132,7 +132,12 @@ function App() {
             }
             setSelectedTaskId(taskId);
           }}
-          onCreateTask={openCreateTaskModal}
+          onCreateTaskInRepo={(repoId) => {
+            setCurrentView("dashboard");
+            setSelectedRepoId(repoId);
+            setSelectedTaskId(undefined);
+            openCreateTaskModal();
+          }}
           onAddProject={addProject}
           onOpenSettings={() => {
             setCurrentView("settings");
