@@ -2,7 +2,7 @@ use super::{review_loop::spawn_review_on_session_idle, RunningSession};
 use crate::db::Database;
 use crate::models::{SessionIdleEvent, SessionNeedsInputEvent};
 use parking_lot::Mutex;
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
@@ -25,29 +25,111 @@ pub(super) struct CodexSessionMetadata {
     path: PathBuf,
 }
 
+// ---------------------------------------------------------------------------
+// Vendored Codex rollout types
+//
+// The types below mirror `codex-protocol` @ `rust-v0.136.0` (github.com/openai/
+// codex, `codex-rs/protocol/src/{protocol,models}.rs`): names, fields and serde
+// attributes match Codex's wire format. They are vendored rather than taken as a
+// crate dependency — `codex-protocol` drags in the whole Codex runtime (a
+// Starlark interpreter, networking, image decoding) just to parse JSONL, and its
+// dependency tree carries a `hashbrown`/`allocative` version conflict that fails
+// to build. Keep these in sync with the installed Codex CLI.
+// ---------------------------------------------------------------------------
+
+/// One line of a rollout file (`codex_protocol::protocol::RolloutLine`). Codex
+/// flattens a `RolloutItem` next to the timestamp; we read the `type`/`payload`
+/// pair and decode the payload per item type. (Codex stores `timestamp` as a
+/// `String`; we decode the RFC 3339 value straight into a `DateTime`.)
 #[derive(Debug, Deserialize)]
-struct CodexRolloutLine {
+struct RolloutLine {
     timestamp: chrono::DateTime<chrono::FixedOffset>,
     #[serde(rename = "type")]
-    line_type: CodexRolloutLineType,
+    item_type: String,
     #[serde(default)]
     payload: serde_json::Value,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-enum CodexRolloutLineType {
-    SessionMeta,
-    ResponseItem,
-    Compacted,
-    TurnContext,
-    EventMsg,
+/// Subset of `codex_protocol::protocol::EventMsg` (internally tagged on `type`).
+/// Only the variants this watcher reacts to are modelled; every other event
+/// decodes into `Other`.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum EventMsg {
+    /// `task_complete` on the v1 wire format; `turn_complete` on v2.
+    #[serde(rename = "task_complete", alias = "turn_complete")]
+    TurnComplete(TurnCompleteEvent),
+    /// `task_started` on v1; `turn_started` on v2.
+    #[serde(rename = "task_started", alias = "turn_started")]
+    TurnStarted(TurnStartedEvent),
+    TurnAborted(TurnAbortedEvent),
+    ExecApprovalRequest(InputRequestEvent),
+    ApplyPatchApprovalRequest(InputRequestEvent),
+    RequestUserInput(InputRequestEvent),
+    ElicitationRequest(InputRequestEvent),
+    RequestPermissions(InputRequestEvent),
     #[serde(other)]
     Other,
 }
 
 #[derive(Debug, Deserialize)]
-struct CodexSessionMetaPayload {
+struct TurnCompleteEvent {
+    turn_id: String,
+    #[serde(default)]
+    last_agent_message: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TurnStartedEvent {
+    turn_id: String,
+}
+
+/// Codex's `TurnAbortedEvent`. Upstream `reason` is the snake_case enum
+/// `TurnAbortReason`; decoded as a string so unrecognised reasons don't break us.
+#[derive(Debug, Deserialize)]
+struct TurnAbortedEvent {
+    #[serde(default)]
+    turn_id: Option<String>,
+    #[serde(default)]
+    reason: Option<String>,
+}
+
+/// Tolerant, shared view of Codex's approval / input-request events
+/// (`ExecApprovalRequestEvent`, `ApplyPatchApprovalRequestEvent`,
+/// `RequestUserInputEvent`, `ElicitationRequestEvent`,
+/// `RequestPermissionsEvent`). Their upstream shapes differ and are field-rich;
+/// the watcher only needs the turn id and a human-readable prompt, so we capture
+/// the fields that carry one and ignore the rest.
+#[derive(Debug, Deserialize)]
+struct InputRequestEvent {
+    #[serde(default)]
+    turn_id: Option<String>,
+    #[serde(default)]
+    prompt: Option<String>,
+    #[serde(default)]
+    message: Option<String>,
+    #[serde(default)]
+    reason: Option<String>,
+}
+
+/// Subset of `codex_protocol::models::ResponseItem` (internally tagged on
+/// `type`). We only act on `request_user_input` tool calls; extra fields on
+/// `function_call` (`id`, `namespace`, `call_id`) are ignored.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum ResponseItem {
+    FunctionCall { name: String, arguments: String },
+    #[serde(other)]
+    Other,
+}
+
+/// `session_meta` payload (`codex_protocol::protocol::SessionMeta`, flattened
+/// into `SessionMetaLine` on the wire). `id`/`cwd` are the fields we rely on;
+/// `thread_name`/`name`/`title`/`initial_prompt` are label hints read when
+/// present (Codex itself exposes no session title), and `model`/`thread_source`/
+/// `source` drive sub-agent filtering.
+#[derive(Debug, Deserialize)]
+struct SessionMeta {
     id: String,
     cwd: String,
     timestamp: Option<chrono::DateTime<chrono::FixedOffset>>,
@@ -58,114 +140,6 @@ struct CodexSessionMetaPayload {
     name: Option<String>,
     title: Option<String>,
     initial_prompt: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct CodexEventPayload {
-    #[serde(rename = "type")]
-    event_type: CodexEventType,
-    turn_id: Option<String>,
-    last_agent_message: Option<String>,
-    message: Option<String>,
-    prompt: Option<String>,
-    reason: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct CodexResponseItemPayload {
-    #[serde(rename = "type")]
-    item_type: CodexResponseItemType,
-    name: Option<String>,
-    arguments: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum CodexResponseItemType {
-    FunctionCall,
-    Other(String),
-}
-
-impl<'de> Deserialize<'de> for CodexResponseItemType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Ok(match value.as_str() {
-            "function_call" => Self::FunctionCall,
-            _ => Self::Other(value),
-        })
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum CodexEventType {
-    TaskComplete,
-    TurnComplete,
-    TaskStarted,
-    TurnStarted,
-    TurnAborted,
-    ExecApprovalRequest,
-    RequestPermissions,
-    RequestUserInput,
-    ElicitationRequest,
-    ApplyPatchApprovalRequest,
-    Other(String),
-}
-
-impl CodexEventType {
-    fn as_str(&self) -> &str {
-        match self {
-            Self::TaskComplete => "task_complete",
-            Self::TurnComplete => "turn_complete",
-            Self::TaskStarted => "task_started",
-            Self::TurnStarted => "turn_started",
-            Self::TurnAborted => "turn_aborted",
-            Self::ExecApprovalRequest => "exec_approval_request",
-            Self::RequestPermissions => "request_permissions",
-            Self::RequestUserInput => "request_user_input",
-            Self::ElicitationRequest => "elicitation_request",
-            Self::ApplyPatchApprovalRequest => "apply_patch_approval_request",
-            Self::Other(value) => value,
-        }
-    }
-
-    fn is_input_request(&self) -> bool {
-        match self {
-            Self::ExecApprovalRequest
-            | Self::RequestPermissions
-            | Self::RequestUserInput
-            | Self::ElicitationRequest
-            | Self::ApplyPatchApprovalRequest => true,
-            Self::Other(value) => matches!(
-                value.as_str(),
-                "approval_request" | "confirmation_request" | "needs_input" | "permission_request"
-            ),
-            _ => false,
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for CodexEventType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Ok(match value.as_str() {
-            "task_complete" => Self::TaskComplete,
-            "turn_complete" => Self::TurnComplete,
-            "task_started" => Self::TaskStarted,
-            "turn_started" => Self::TurnStarted,
-            "turn_aborted" => Self::TurnAborted,
-            "exec_approval_request" => Self::ExecApprovalRequest,
-            "request_permissions" => Self::RequestPermissions,
-            "request_user_input" => Self::RequestUserInput,
-            "elicitation_request" => Self::ElicitationRequest,
-            "apply_patch_approval_request" => Self::ApplyPatchApprovalRequest,
-            _ => Self::Other(value),
-        })
-    }
 }
 
 pub(super) fn latest_codex_session_metadata(
@@ -228,12 +202,12 @@ pub(super) fn codex_session_metadata_from_line(
     cwd: &str,
     started_at: chrono::DateTime<chrono::FixedOffset>,
 ) -> Option<(chrono::DateTime<chrono::FixedOffset>, CodexSessionMetadata)> {
-    let line = serde_json::from_str::<CodexRolloutLine>(line).ok()?;
-    if line.line_type != CodexRolloutLineType::SessionMeta {
+    let line = serde_json::from_str::<RolloutLine>(line).ok()?;
+    if line.item_type != "session_meta" {
         return None;
     }
 
-    let payload = serde_json::from_value::<CodexSessionMetaPayload>(line.payload).ok()?;
+    let payload = serde_json::from_value::<SessionMeta>(line.payload).ok()?;
     if payload.cwd != cwd {
         return None;
     }
@@ -256,7 +230,7 @@ pub(super) fn codex_session_metadata_from_line(
     ))
 }
 
-fn is_codex_subagent_session(payload: &CodexSessionMetaPayload) -> bool {
+fn is_codex_subagent_session(payload: &SessionMeta) -> bool {
     payload.thread_source.as_deref() == Some("subagent")
         || payload.model.as_deref() == Some("codex-auto-review")
         || payload
@@ -265,7 +239,7 @@ fn is_codex_subagent_session(payload: &CodexSessionMetaPayload) -> bool {
             .is_some_and(|source| source.get("subagent").is_some())
 }
 
-fn codex_session_label(payload: &CodexSessionMetaPayload) -> Option<String> {
+fn codex_session_label(payload: &SessionMeta) -> Option<String> {
     for label in [
         payload.thread_name.as_deref(),
         payload.name.as_deref(),
@@ -441,74 +415,85 @@ pub(super) fn codex_session_event_from_line(
     line: &str,
     started_at: chrono::DateTime<chrono::FixedOffset>,
 ) -> Option<CodexSessionEvent> {
-    let line = serde_json::from_str::<CodexRolloutLine>(line).ok()?;
+    let line = serde_json::from_str::<RolloutLine>(line).ok()?;
     if line.timestamp < started_at {
         return None;
     }
-    match line.line_type {
-        CodexRolloutLineType::EventMsg => codex_session_event_from_event_payload(line.payload),
-        CodexRolloutLineType::ResponseItem => codex_session_event_from_response_item(line.payload),
+    // Dispatch on the `RolloutItem` tag, decoding the payload into the vendored
+    // Codex type for that line. Unknown event/response variants decode into their
+    // `Other` arm and are ignored.
+    match line.item_type.as_str() {
+        "event_msg" => serde_json::from_value::<EventMsg>(line.payload)
+            .ok()
+            .and_then(codex_session_event_from_event),
+        "response_item" => serde_json::from_value::<ResponseItem>(line.payload)
+            .ok()
+            .and_then(codex_session_event_from_response_item),
         _ => None,
     }
 }
 
-fn codex_session_event_from_event_payload(payload: serde_json::Value) -> Option<CodexSessionEvent> {
-    let payload = serde_json::from_value::<CodexEventPayload>(payload).ok()?;
-    match payload.event_type {
-        CodexEventType::TaskComplete | CodexEventType::TurnComplete => {
-            Some(CodexSessionEvent::Idle {
-                turn_id: payload.turn_id,
-                message: payload.last_agent_message,
-            })
-        }
-        CodexEventType::TaskStarted | CodexEventType::TurnStarted => {
-            Some(CodexSessionEvent::Started {
-                turn_id: payload.turn_id,
-            })
-        }
-        CodexEventType::TurnAborted => Some(CodexSessionEvent::Aborted {
-            turn_id: payload.turn_id,
-            reason: payload.reason.or(payload.message),
+fn codex_session_event_from_event(event: EventMsg) -> Option<CodexSessionEvent> {
+    match event {
+        EventMsg::TurnComplete(event) => Some(CodexSessionEvent::Idle {
+            turn_id: Some(event.turn_id),
+            message: event.last_agent_message,
         }),
-        event_type if event_type.is_input_request() => Some(CodexSessionEvent::NeedsInput {
-            turn_id: payload.turn_id,
-            reason: event_type.as_str().to_string(),
-            prompt: payload.prompt.or(payload.message).or(payload.reason),
+        EventMsg::TurnStarted(event) => Some(CodexSessionEvent::Started {
+            turn_id: Some(event.turn_id),
         }),
-        _ => None,
+        EventMsg::TurnAborted(event) => Some(CodexSessionEvent::Aborted {
+            turn_id: event.turn_id,
+            reason: event.reason,
+        }),
+        EventMsg::ExecApprovalRequest(event) => needs_input(event, "exec_approval_request"),
+        EventMsg::ApplyPatchApprovalRequest(event) => {
+            needs_input(event, "apply_patch_approval_request")
+        }
+        EventMsg::RequestUserInput(event) => needs_input(event, "request_user_input"),
+        EventMsg::ElicitationRequest(event) => needs_input(event, "elicitation_request"),
+        EventMsg::RequestPermissions(event) => needs_input(event, "request_permissions"),
+        EventMsg::Other => None,
     }
 }
 
-fn codex_session_event_from_response_item(payload: serde_json::Value) -> Option<CodexSessionEvent> {
-    let payload = serde_json::from_value::<CodexResponseItemPayload>(payload).ok()?;
-    if payload.item_type != CodexResponseItemType::FunctionCall {
-        return None;
-    }
-    if payload.name.as_deref() != Some("request_user_input") {
-        return None;
-    }
-
+/// Build a `NeedsInput` event from an approval / input-request event, using the
+/// first field that carries a human-readable prompt.
+fn needs_input(event: InputRequestEvent, reason: &str) -> Option<CodexSessionEvent> {
     Some(CodexSessionEvent::NeedsInput {
-        turn_id: None,
-        reason: "request_user_input".to_string(),
-        prompt: request_user_input_prompt(payload.arguments.as_ref()),
+        turn_id: event.turn_id,
+        reason: reason.to_string(),
+        prompt: event
+            .prompt
+            .or(event.message)
+            .or(event.reason)
+            .as_deref()
+            .and_then(prompt_preview),
     })
 }
 
-fn request_user_input_prompt(arguments: Option<&serde_json::Value>) -> Option<String> {
-    let arguments = arguments?;
-    if let Some(arguments) = arguments.as_str() {
-        let arguments = arguments.trim();
-        if arguments.is_empty() {
-            return None;
+fn codex_session_event_from_response_item(item: ResponseItem) -> Option<CodexSessionEvent> {
+    match item {
+        ResponseItem::FunctionCall { name, arguments } if name == "request_user_input" => {
+            Some(CodexSessionEvent::NeedsInput {
+                turn_id: None,
+                reason: "request_user_input".to_string(),
+                prompt: request_user_input_prompt(&arguments),
+            })
         }
-        return serde_json::from_str::<serde_json::Value>(arguments)
-            .ok()
-            .and_then(|value| request_user_input_prompt_from_value(&value))
-            .or_else(|| prompt_preview(arguments));
+        _ => None,
     }
+}
 
-    request_user_input_prompt_from_value(arguments)
+fn request_user_input_prompt(arguments: &str) -> Option<String> {
+    let arguments = arguments.trim();
+    if arguments.is_empty() {
+        return None;
+    }
+    serde_json::from_str::<serde_json::Value>(arguments)
+        .ok()
+        .and_then(|value| request_user_input_prompt_from_value(&value))
+        .or_else(|| prompt_preview(arguments))
 }
 
 fn request_user_input_prompt_from_value(value: &serde_json::Value) -> Option<String> {
