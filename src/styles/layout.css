@@ -8,20 +8,24 @@
 }
 
 .nectus-sidebar-header {
-  padding: 22px 22px 14px;
+  padding: 12px 10px 8px;
 }
 
 .nectus-sidebar-content {
-  gap: 14px;
-  padding: 0 14px 8px;
+  gap: 8px;
+  padding: 0 6px 6px;
+}
+
+.nectus-sidebar-content [data-sidebar="group"] {
+  padding-inline: 2px;
 }
 
 .nectus-sidebar-menu-button {
-  height: 38px;
-  gap: 10px;
+  height: 32px;
+  gap: 9px;
   border-radius: var(--radius-md);
   color: var(--sidebar-foreground);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 650;
   opacity: 0.72;
 }
@@ -79,7 +83,9 @@
 
 .task-tree-list {
   margin-right: 0;
-  gap: 2px;
+  margin-left: 8px;
+  gap: 1px;
+  padding-inline: 8px;
   padding-bottom: 2px;
 }
 
@@ -101,13 +107,13 @@
 
 .task-tree-open {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
+  grid-template-columns: 14px minmax(0, 1fr);
   align-items: start;
-  gap: 7px;
+  gap: 6px;
   height: auto;
-  min-height: 48px;
+  min-height: 30px;
   justify-content: start;
-  padding: 6px 28px 6px 6px;
+  padding: 3px 24px 3px 2px;
   color: inherit;
   text-align: left;
   white-space: normal;
@@ -116,9 +122,9 @@
 .task-tree-status-icon {
   display: grid;
   place-items: center;
-  width: 16px;
+  width: 14px;
   height: 16px;
-  margin-top: 1px;
+  margin-top: 0;
   color: var(--primary);
 }
 
@@ -149,7 +155,7 @@
 .task-tree-main {
   display: grid;
   min-width: 0;
-  gap: 3px;
+  gap: 1px;
 }
 
 .task-tree-title {
