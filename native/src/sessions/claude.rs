@@ -1,6 +1,5 @@
-use super::{review_loop::spawn_review_on_session_idle, RunningSession};
+use super::{emit_session_signal, RunningSession, SessionSignal};
 use crate::db::Database;
-use crate::models::{SessionIdleEvent, SessionNeedsInputEvent};
 use parking_lot::Mutex;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -9,7 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 const CLAUDE_POLL_INTERVAL: Duration = Duration::from_millis(500);
 const CLAUDE_PROMPT_PREVIEW_LIMIT: usize = 500;
@@ -168,56 +167,21 @@ pub(super) fn spawn_claude_event_watcher(
                 continue;
             };
             for line in contents.lines().skip(processed_lines) {
-                match claude_session_event_from_line(line) {
-                    Some(ClaudeSessionEvent::Idle { message }) => {
-                        let _ = app
-                            .emit(
-                                "session_idle",
-                                SessionIdleEvent {
-                                    session_id: session_id.clone(),
-                                    task_id,
-                                    turn_id: None,
-                                    message,
-                                },
-                            )
-                            .inspect_err(|error| {
-                                tracing::warn!(
-                                    ?error,
-                                    session_id = %session_id,
-                                    "failed to emit session_idle"
-                                )
-                            });
-                        spawn_review_on_session_idle(
-                            app.clone(),
-                            db.clone(),
-                            sessions.clone(),
-                            task_id,
-                            session_id.clone(),
-                            cwd.clone(),
-                        );
-                    }
+                let signal = match claude_session_event_from_line(line) {
+                    Some(ClaudeSessionEvent::Idle { message }) => SessionSignal::Idle {
+                        turn_id: None,
+                        message,
+                    },
                     Some(ClaudeSessionEvent::NeedsInput { reason, prompt }) => {
-                        let _ = app
-                            .emit(
-                                "session_needs_input",
-                                SessionNeedsInputEvent {
-                                    session_id: session_id.clone(),
-                                    task_id,
-                                    turn_id: None,
-                                    reason,
-                                    prompt,
-                                },
-                            )
-                            .inspect_err(|error| {
-                                tracing::warn!(
-                                    ?error,
-                                    session_id = %session_id,
-                                    "failed to emit session_needs_input"
-                                )
-                            });
+                        SessionSignal::NeedsInput {
+                            turn_id: None,
+                            reason,
+                            prompt,
+                        }
                     }
-                    None => {}
-                }
+                    None => continue,
+                };
+                emit_session_signal(&app, &db, &sessions, task_id, &session_id, &cwd, signal);
             }
             processed_lines = contents.lines().count();
             std::thread::sleep(CLAUDE_POLL_INTERVAL);

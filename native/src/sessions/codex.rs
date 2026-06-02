@@ -1,6 +1,5 @@
-use super::{review_loop::spawn_review_on_session_idle, RunningSession};
+use super::{emit_session_signal, RunningSession, SessionSignal};
 use crate::db::Database;
-use crate::models::{SessionIdleEvent, SessionNeedsInputEvent};
 use parking_lot::Mutex;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -10,7 +9,7 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 use walkdir::WalkDir;
 
 const CODEX_METADATA_FAST_POLL_ATTEMPTS: usize = 120;
@@ -320,62 +319,24 @@ pub(super) fn spawn_codex_event_watcher(
                 continue;
             };
             for line in contents.lines().skip(processed_lines) {
-                if let Some(event) = codex_session_event_from_line(line, started_at) {
-                    match event {
-                        CodexSessionEvent::Idle { turn_id, message } => {
-                            let _ = app
-                                .emit(
-                                    "session_idle",
-                                    SessionIdleEvent {
-                                        session_id: session_id.clone(),
-                                        task_id,
-                                        turn_id,
-                                        message,
-                                    },
-                                )
-                                .inspect_err(|error| {
-                                    tracing::warn!(
-                                        ?error,
-                                        session_id = %session_id,
-                                        "failed to emit session_idle"
-                                    )
-                                });
-                            spawn_review_on_session_idle(
-                                app.clone(),
-                                db.clone(),
-                                sessions.clone(),
-                                task_id,
-                                session_id.clone(),
-                                cwd.clone(),
-                            );
-                        }
-                        CodexSessionEvent::NeedsInput {
-                            turn_id,
-                            reason,
-                            prompt,
-                        } => {
-                            let _ = app
-                                .emit(
-                                    "session_needs_input",
-                                    SessionNeedsInputEvent {
-                                        session_id: session_id.clone(),
-                                        task_id,
-                                        turn_id,
-                                        reason,
-                                        prompt,
-                                    },
-                                )
-                                .inspect_err(|error| {
-                                    tracing::warn!(
-                                        ?error,
-                                        session_id = %session_id,
-                                        "failed to emit session_needs_input"
-                                    )
-                                });
-                        }
-                        CodexSessionEvent::Started { .. } | CodexSessionEvent::Aborted { .. } => {}
+                let signal = match codex_session_event_from_line(line, started_at) {
+                    Some(CodexSessionEvent::Idle { turn_id, message }) => {
+                        SessionSignal::Idle { turn_id, message }
                     }
-                }
+                    Some(CodexSessionEvent::NeedsInput {
+                        turn_id,
+                        reason,
+                        prompt,
+                    }) => SessionSignal::NeedsInput {
+                        turn_id,
+                        reason,
+                        prompt,
+                    },
+                    Some(CodexSessionEvent::Started { .. })
+                    | Some(CodexSessionEvent::Aborted { .. })
+                    | None => continue,
+                };
+                emit_session_signal(&app, &db, &sessions, task_id, &session_id, &cwd, signal);
             }
             processed_lines = contents.lines().count();
             std::thread::sleep(Duration::from_millis(500));

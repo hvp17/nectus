@@ -1,14 +1,14 @@
 use crate::db::Database;
 use crate::models::{
-    AgentKind, AgentProfile, Repo, Session, SessionExitedEvent, SessionOutputEvent,
-    SessionOutputSnapshot, SessionState, TaskSummary,
+    AgentKind, AgentProfile, Repo, Session, SessionExitedEvent, SessionIdleEvent,
+    SessionNeedsInputEvent, SessionOutputEvent, SessionOutputSnapshot, SessionState, TaskSummary,
 };
 use chrono::Utc;
 use parking_lot::Mutex;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
@@ -28,6 +28,79 @@ use command::resolve_agent_command;
 use review_loop::{spawn_review_on_session_idle, write_agent_submission};
 
 const OUTPUT_BUFFER_LIMIT: usize = 2 * 1024 * 1024;
+
+/// A turn-completion or input-request signal parsed from an agent's session log.
+/// Both the Claude and Codex watchers translate their agent-specific events into
+/// this shape so emission and review kick-off stay in one place.
+pub(super) enum SessionSignal {
+    Idle {
+        turn_id: Option<String>,
+        message: Option<String>,
+    },
+    NeedsInput {
+        turn_id: Option<String>,
+        reason: String,
+        prompt: Option<String>,
+    },
+}
+
+/// Emit the frontend event for a session signal and, on idle, spawn any pending
+/// review. Shared by the Claude and Codex watchers.
+pub(super) fn emit_session_signal(
+    app: &AppHandle,
+    db: &Arc<Mutex<Database>>,
+    sessions: &Arc<Mutex<HashMap<String, RunningSession>>>,
+    task_id: i64,
+    session_id: &str,
+    cwd: &Path,
+    signal: SessionSignal,
+) {
+    match signal {
+        SessionSignal::Idle { turn_id, message } => {
+            let _ = app
+                .emit(
+                    "session_idle",
+                    SessionIdleEvent {
+                        session_id: session_id.to_string(),
+                        task_id,
+                        turn_id,
+                        message,
+                    },
+                )
+                .inspect_err(|error| {
+                    tracing::warn!(?error, session_id = %session_id, "failed to emit session_idle")
+                });
+            spawn_review_on_session_idle(
+                app.clone(),
+                db.clone(),
+                sessions.clone(),
+                task_id,
+                session_id.to_string(),
+                cwd.to_path_buf(),
+            );
+        }
+        SessionSignal::NeedsInput {
+            turn_id,
+            reason,
+            prompt,
+        } => {
+            let _ = app
+                .emit(
+                    "session_needs_input",
+                    SessionNeedsInputEvent {
+                        session_id: session_id.to_string(),
+                        task_id,
+                        turn_id,
+                        reason,
+                        prompt,
+                    },
+                )
+                .inspect_err(|error| {
+                    tracing::warn!(?error, session_id = %session_id, "failed to emit session_needs_input")
+                });
+        }
+    }
+}
 
 pub struct SessionManager {
     sessions: Arc<Mutex<HashMap<String, RunningSession>>>,
