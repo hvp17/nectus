@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "desktop:dev": "tauri dev --config native/tauri.conf.json",
+    "desktop:dev:no-watch": "tauri dev --no-watch --config native/tauri.conf.json",
+    "desktop:dev:green": "bash scripts/desktop-dev-green.sh",
     "desktop:build": "tauri build --config native/tauri.conf.json",
     "tauri": "tauri"
   },
