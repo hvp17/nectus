@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, ExternalLink, LoaderCircle, RefreshCw, Trash2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
-import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { Skeleton } from "./ui/skeleton";
+import { PrReviewBadge } from "./PrReviewBadge";
 import type { PrReview, PrReviewStatus } from "../types";
 
 interface PrReviewDetailProps {
@@ -12,13 +12,6 @@ interface PrReviewDetailProps {
   onRerun: (reviewId: number) => void;
   onDelete: (reviewId: number) => void;
 }
-
-const statusLabels: Record<PrReviewStatus, string> = {
-  queued: "Queued",
-  reviewing: "Reviewing",
-  ready: "Ready",
-  error: "Error",
-};
 
 const inFlight = (status: PrReviewStatus) => status === "queued" || status === "reviewing";
 
@@ -44,9 +37,7 @@ export function PrReviewDetail({ review, onRerun, onDelete }: PrReviewDetailProp
     <section className="flex min-h-0 flex-1 flex-col rounded-lg border bg-card" aria-label="PR review">
       <header className="flex flex-col gap-2 border-b p-4">
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="rounded-md font-normal" data-pr-review-status={review.status}>
-            {statusLabels[review.status]}
-          </Badge>
+          <PrReviewBadge review={review} />
           <span className="text-sm font-semibold text-muted-foreground">#{review.prNumber}</span>
           <span className="truncate text-sm font-semibold">{review.prTitle ?? review.prUrl}</span>
         </div>

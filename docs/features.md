@@ -217,7 +217,10 @@ Current behavior:
 - Manual review runs require a running worker session so blockers or
   feedback can be written back into that session.
 - Claude and Gemini reviewers are run in headless prompt mode with `-p` and the
-  generated review prompt. Custom reviewers receive the prompt on stdin.
+  generated review prompt. Codex reviewers run non-interactively with `codex exec`
+  and the prompt as a trailing positional argument; bare `codex` is the
+  interactive TUI and aborts with `stdin is not a terminal` when spawned without a
+  real terminal. Custom reviewers receive the prompt on stdin.
 - Reviewer output is parsed as:
   - `pass` when a line is exactly `NECTUS_NO_BLOCKERS`, `PASS`, or starts with
     `PASS:`.
@@ -269,14 +272,24 @@ Current behavior:
   worktree down.
 - Status flows `queued → reviewing → ready`, or `error` on failure. A macOS
   notification and in-app toast fire when a review becomes `ready` or `error`.
-- The detail view shows the PR metadata, the review text in a scrollable pane, a
-  Copy button, a Re-run action (re-fetches the PR head to pick up new commits), and
-  Delete.
+- The sidebar list groups reviews into three lifecycle sections — **To review**
+  (`queued`), **Reviewing** (`reviewing`), and **Done** (`ready` and `error`) —
+  each with a count.
+- A finished review also carries a `verdict` that the Done badge surfaces:
+  **Passed** (no blockers), **Blocking issues**, or **Inconclusive** (the reviewer
+  finished without a recognizable verdict). An `error` review shows **Error**
+  instead and has no verdict. The verdict comes from a machine-readable
+  `NECTUS_PR_VERDICT: BLOCKERS|CLEAN` line the reviewer appends; the backend parses
+  it and strips that line before storing the review, so the copied Markdown stays
+  clean. The verdict is the only structured signal — the review body itself is
+  free-form GitHub-flavored Markdown, not the `pass`/`needs_changes` markers the
+  task [AI Review](#ai-review) loop parses.
+- The detail view shows the PR metadata and verdict badge, the review text in a
+  scrollable pane, a Copy button, a Re-run action (re-fetches the PR head to pick up
+  new commits and clears the prior verdict), and Delete.
 - Reviewer profiles are the same agent profiles used elsewhere; the default reviewer
   is the configured default agent profile. Claude and Gemini reviewers run with `-p`;
-  Codex and custom reviewers receive the prompt on stdin.
-- Review output is written for a human (GitHub-flavored Markdown), not parsed into
-  the `pass`/`needs_changes` markers the task [AI Review](#ai-review) loop uses.
+  Codex reviewers run with `codex exec`; custom reviewers receive the prompt on stdin.
 
 Key files:
 

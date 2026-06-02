@@ -1,7 +1,7 @@
 use super::rows::{pr_review_from_row, rows};
 use super::{now, Database};
 use crate::git_ops;
-use crate::models::{PrReview, PrReviewStatus, Repo};
+use crate::models::{PrReview, PrReviewStatus, PrReviewVerdict, Repo};
 use rusqlite::{params, OptionalExtension};
 use std::path::Path;
 
@@ -13,7 +13,7 @@ const PR_REVIEW_SELECT: &str = "
       pr.id, pr.repo_id, r.name, pr.reviewer_profile_id, a.name,
       pr.pr_url, pr.pr_number, pr.pr_title, pr.pr_author, pr.base_branch,
       pr.status, pr.review_output, pr.last_error, pr.worktree_path,
-      pr.created_at, pr.updated_at
+      pr.created_at, pr.updated_at, pr.verdict
     FROM pr_reviews pr
     JOIN repos r ON r.id = pr.repo_id
     LEFT JOIN agent_profiles a ON a.id = pr.reviewer_profile_id
@@ -133,18 +133,24 @@ impl Database {
         )
     }
 
-    pub fn set_pr_review_result(&self, id: i64, output: &str) -> Result<(), String> {
+    pub fn set_pr_review_result(
+        &self,
+        id: i64,
+        output: &str,
+        verdict: PrReviewVerdict,
+    ) -> Result<(), String> {
         self.execute_pr_review_update(
-            "UPDATE pr_reviews SET review_output = ?1, status = ?2, last_error = NULL, updated_at = ?3 WHERE id = ?4",
-            params![output, PrReviewStatus::Ready.as_str(), now(), id],
+            "UPDATE pr_reviews SET review_output = ?1, verdict = ?2, status = ?3, last_error = NULL, updated_at = ?4 WHERE id = ?5",
+            params![output, verdict.as_str(), PrReviewStatus::Ready.as_str(), now(), id],
         )
     }
 
-    /// Reset a finished review back to `queued` and clear its prior output/error
-    /// so the runtime can re-fetch the PR head and review again.
+    /// Reset a finished review back to `queued` and clear its prior
+    /// output/verdict/error so the runtime can re-fetch the PR head and review
+    /// again.
     pub fn reset_pr_review_for_rerun(&self, id: i64) -> Result<PrReview, String> {
         self.execute_pr_review_update(
-            "UPDATE pr_reviews SET status = ?1, review_output = NULL, last_error = NULL, updated_at = ?2 WHERE id = ?3",
+            "UPDATE pr_reviews SET status = ?1, review_output = NULL, verdict = NULL, last_error = NULL, updated_at = ?2 WHERE id = ?3",
             params![PrReviewStatus::Queued.as_str(), now(), id],
         )?;
         self.pr_review_by_id(id)?

@@ -1,12 +1,12 @@
 import { type FormEvent, useState } from "react";
 import { ArrowLeft, GitPullRequest, LoaderCircle } from "lucide-react";
-import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { PrReviewDetail } from "./PrReviewDetail";
-import type { AgentProfile, PrReview, PrReviewStatus } from "../types";
+import { PrReviewBadge } from "./PrReviewBadge";
+import type { AgentProfile, PrReview } from "../types";
 
 interface ReviewsPageProps {
   prReviews: PrReview[];
@@ -22,12 +22,25 @@ interface ReviewsPageProps {
   onBack: () => void;
 }
 
-const statusLabels: Record<PrReviewStatus, string> = {
-  queued: "Queued",
-  reviewing: "Reviewing",
-  ready: "Ready",
-  error: "Error",
-};
+interface ReviewSection {
+  key: string;
+  label: string;
+  reviews: PrReview[];
+}
+
+/// Group reviews into the three lifecycle buckets. `done` collects both finished
+/// reviews (whose verdict the badge surfaces) and reviews that errored out.
+function groupReviews(reviews: PrReview[]): ReviewSection[] {
+  return [
+    { key: "to-review", label: "To review", reviews: reviews.filter((r) => r.status === "queued") },
+    { key: "reviewing", label: "Reviewing", reviews: reviews.filter((r) => r.status === "reviewing") },
+    {
+      key: "done",
+      label: "Done",
+      reviews: reviews.filter((r) => r.status === "ready" || r.status === "error"),
+    },
+  ];
+}
 
 export function ReviewsPage({
   prReviews,
@@ -107,7 +120,7 @@ export function ReviewsPage({
       </form>
 
       <div className="flex min-h-0 flex-1 gap-4">
-        <div className="flex w-72 shrink-0 flex-col gap-2 overflow-y-auto" aria-label="PR review list">
+        <div className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto" aria-label="PR review list">
           {prReviews.length === 0 ? (
             <Empty className="border border-dashed">
               <EmptyHeader>
@@ -116,32 +129,38 @@ export function ReviewsPage({
               </EmptyHeader>
             </Empty>
           ) : (
-            prReviews.map((review) => (
-              <button
-                key={review.id}
-                type="button"
-                aria-pressed={review.id === selectedPrReviewId}
-                onClick={() => onSelectReview(review.id)}
-                className={`flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors hover:bg-accent ${
-                  review.id === selectedPrReviewId ? "border-primary bg-accent" : "bg-card"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant="outline"
-                    className="rounded-md font-normal"
-                    data-pr-review-status={review.status}
-                  >
-                    {statusLabels[review.status]}
-                  </Badge>
-                  <span className="text-xs font-semibold text-muted-foreground">#{review.prNumber}</span>
-                </div>
-                <span className="truncate text-sm font-medium">{review.prTitle ?? review.prUrl}</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {review.repoName}
-                  {review.prAuthor ? ` · ${review.prAuthor}` : ""}
-                </span>
-              </button>
+            groupReviews(prReviews).map((section) => (
+              <section key={section.key} className="flex flex-col gap-2" aria-label={section.label}>
+                <h2 className="flex items-center gap-1.5 px-1 text-[0.7rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {section.label}
+                  <span className="text-muted-foreground/70">{section.reviews.length}</span>
+                </h2>
+                {section.reviews.length === 0 ? (
+                  <p className="px-1 text-xs text-muted-foreground/60">Nothing here yet.</p>
+                ) : (
+                  section.reviews.map((review) => (
+                    <button
+                      key={review.id}
+                      type="button"
+                      aria-pressed={review.id === selectedPrReviewId}
+                      onClick={() => onSelectReview(review.id)}
+                      className={`flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors hover:bg-accent ${
+                        review.id === selectedPrReviewId ? "border-primary bg-accent" : "bg-card"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <PrReviewBadge review={review} />
+                        <span className="text-xs font-semibold text-muted-foreground">#{review.prNumber}</span>
+                      </div>
+                      <span className="truncate text-sm font-medium">{review.prTitle ?? review.prUrl}</span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        {review.repoName}
+                        {review.prAuthor ? ` · ${review.prAuthor}` : ""}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </section>
             ))
           )}
         </div>

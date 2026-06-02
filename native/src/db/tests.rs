@@ -765,13 +765,16 @@ fn creates_lists_and_transitions_a_pr_review() {
     assert_eq!(review.repo_name, repo.name);
     assert_eq!(review.reviewer_name.as_deref(), Some(reviewer.name.as_str()));
 
+    assert_eq!(review.verdict, None);
+
     db.set_pr_review_meta(review.id, Some("Add feature"), Some("octocat"), Some("main"))
         .unwrap();
-    db.set_pr_review_result(review.id, "## Review\nLooks good.")
+    db.set_pr_review_result(review.id, "## Review\nLooks good.", PrReviewVerdict::Blockers)
         .unwrap();
 
     let loaded = db.pr_review_by_id(review.id).unwrap().unwrap();
     assert_eq!(loaded.status, PrReviewStatus::Ready);
+    assert_eq!(loaded.verdict, Some(PrReviewVerdict::Blockers));
     assert_eq!(loaded.pr_title.as_deref(), Some("Add feature"));
     assert_eq!(loaded.pr_author.as_deref(), Some("octocat"));
     assert_eq!(loaded.base_branch.as_deref(), Some("main"));
@@ -779,10 +782,11 @@ fn creates_lists_and_transitions_a_pr_review() {
 
     assert_eq!(db.list_pr_reviews().unwrap().len(), 1);
 
-    // Rerun clears the prior output and returns to queued.
+    // Rerun clears the prior output, verdict, and returns to queued.
     let rerun = db.reset_pr_review_for_rerun(review.id).unwrap();
     assert_eq!(rerun.status, PrReviewStatus::Queued);
     assert_eq!(rerun.review_output, None);
+    assert_eq!(rerun.verdict, None);
 
     db.delete_pr_review(review.id).unwrap();
     assert!(db.pr_review_by_id(review.id).unwrap().is_none());

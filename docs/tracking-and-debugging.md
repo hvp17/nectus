@@ -21,7 +21,7 @@ Core tables:
 | `tasks` | Primary work item, status, prompt, optional worktree, active session, saved session. |
 | `review_loops` | Current review configuration and status per task. |
 | `review_runs` | Reviewer prompts, outputs, verdicts, and errors by review attempt. |
-| `pr_reviews` | External pull-request reviews: PR metadata, status, Markdown output, and ephemeral worktree path. |
+| `pr_reviews` | External pull-request reviews: PR metadata, status, `verdict` (`passed`/`blockers`/`inconclusive`, set when a review reaches `ready`), Markdown output, and ephemeral worktree path. |
 
 Schema owner: `native/src/db/schema.rs`
 
@@ -158,7 +158,7 @@ Backend-to-frontend events:
 | `session_idle` | Task id, session id, Codex turn id, optional message. | `native/src/sessions/codex.rs` |
 | `session_needs_input` | Task id, session id, reason, optional prompt. | `native/src/sessions/codex.rs` |
 | `review_loop_updated` | Review-loop state and optional review run. | `native/src/sessions/review_loop.rs` |
-| `pr_review_updated` | Updated external PR review (status, metadata, Markdown output). | `native/src/sessions/pr_review.rs` |
+| `pr_review_updated` | Updated external PR review (status, verdict, metadata, Markdown output). | `native/src/sessions/pr_review.rs` |
 
 Frontend event listeners:
 
@@ -393,13 +393,22 @@ Check:
   127 with `env: node: No such file or directory` is the minimal-PATH problem —
   see *Agent Command Fails To Start* above; the reviewer launch sets
   `process_util::augmented_path()` to fix it.
-- Claude and Gemini reviewer profiles can run headless with `-p`; custom
-  reviewers must read the generated prompt from stdin.
+- Claude and Gemini reviewer profiles run headless with `-p`; Codex reviewers run
+  non-interactively with `codex exec`; custom reviewers read the generated prompt
+  from stdin. An exit status 1 with `Error: stdin is not a terminal` means a Codex
+  reviewer was launched as the interactive TUI instead of through `codex exec` —
+  `build_reviewer_args` in `native/src/sessions/review_loop.rs` adds the `exec`
+  subcommand for `AgentKind::Codex`.
 - Reviewer output contains an exact first-line verdict token:
   `NECTUS_NO_BLOCKERS`, `NECTUS_BLOCKERS`, or `NECTUS_FEEDBACK`. Legacy `PASS`
   and blocking-review phrase parsing are still accepted.
 - Worker feedback is written to the active worker PTY and submitted with carriage
   return (`\r`), matching the terminal Enter key.
+- External PR reviews are separate: a finished one shows **Inconclusive** when the
+  reviewer omitted the `NECTUS_PR_VERDICT: BLOCKERS|CLEAN` line that
+  `parse_pr_review_output` in `native/src/sessions/pr_review.rs` looks for. The
+  review text is still stored; only the verdict could not be derived. Inspect it
+  with `select status, verdict from pr_reviews order by id desc limit 10;`.
 
 Relevant code:
 

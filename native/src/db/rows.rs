@@ -1,6 +1,7 @@
 use crate::models::{
-    AgentKind, AgentProfile, AppSettings, DensityMode, PrReview, PrReviewStatus, Repo, ReviewLoop,
-    ReviewLoopStatus, ReviewRun, ReviewVerdict, TaskStatus, TaskSummary, ThemeMode,
+    AgentKind, AgentProfile, AppSettings, DensityMode, PrReview, PrReviewStatus, PrReviewVerdict,
+    Repo, ReviewLoop, ReviewLoopStatus, ReviewRun, ReviewVerdict, TaskStatus, TaskSummary,
+    ThemeMode,
 };
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ValueRef};
 use rusqlite::Row;
@@ -27,6 +28,7 @@ impl_enum_from_sql! {
     ReviewLoopStatus => "review loop status",
     ReviewVerdict => "review verdict",
     PrReviewStatus => "pr review status",
+    PrReviewVerdict => "pr review verdict",
     AgentKind => "agent kind",
     ThemeMode => "theme mode",
     DensityMode => "density mode",
@@ -168,5 +170,6 @@ pub(super) fn pr_review_from_row(row: &Row<'_>) -> rusqlite::Result<PrReview> {
         worktree_path: row.get(13)?,
         created_at: row.get(14)?,
         updated_at: row.get(15)?,
+        verdict: row.get(16)?,
     })
 }

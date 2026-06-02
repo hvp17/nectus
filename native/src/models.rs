@@ -183,6 +183,27 @@ impl PrReviewStatus {
     }
 }
 
+/// The conclusion of a completed PR review, parsed from the reviewer's
+/// machine-readable verdict marker. Only set once a review reaches `Ready`;
+/// `Inconclusive` covers reviews that finished without emitting a recognizable
+/// marker.
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Display, EnumString, IntoStaticStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum PrReviewVerdict {
+    Passed,
+    Blockers,
+    Inconclusive,
+}
+
+impl PrReviewVerdict {
+    pub fn as_str(&self) -> &'static str {
+        self.into()
+    }
+}
+
 /// A review of an external GitHub pull request, resolved against a known local
 /// project and reviewed in an ephemeral worktree.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -199,6 +220,7 @@ pub struct PrReview {
     pub pr_author: Option<String>,
     pub base_branch: Option<String>,
     pub status: PrReviewStatus,
+    pub verdict: Option<PrReviewVerdict>,
     pub review_output: Option<String>,
     pub last_error: Option<String>,
     pub worktree_path: Option<String>,
