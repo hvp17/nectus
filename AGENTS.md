@@ -8,9 +8,10 @@ Nectus Desktop is a Mac-first Tauri 2 desktop app for managing parallel Codex/Cl
 - Desktop backend: Rust + Tauri in `native/`
 - Local storage: SQLite through Rust-side `rusqlite`
 - Embedded terminal: Rust `portable-pty` backend + `xterm.js` frontend
+- GitHub: optional integration through the local `gh` CLI (no OAuth, no stored tokens)
 - Package manager: `pnpm`
 
-The app is local-first. Do not add GitHub OAuth/API sync unless explicitly requested.
+The app is local-first. GitHub work shells out to the `gh` CLI the same way it shells out to `git`; do not add app-managed GitHub OAuth or token storage unless explicitly requested.
 
 ## Every Coding Session
 
@@ -22,6 +23,7 @@ The app is local-first. Do not add GitHub OAuth/API sync unless explicitly reque
 - Update `docs/features.md` when user-visible workflows, feature behavior, settings, session behavior, or ownership boundaries change.
 - Update `docs/tracking-and-debugging.md` when persistence, events, diagnostics, failure modes, or debugging commands change.
 - Update `docs/codex-session-jsonl.md` when Codex JSONL assumptions, supported events, or session-log parsing changes.
+- Update `docs/github-integration.md` when `gh` CLI usage, connection checks, or pull request create/detect/status behavior changes.
 - Update `AGENTS.md` itself when development workflow, verification gates, important paths, or coding-session rules change.
 - Keep documentation concrete and repo-grounded. Prefer exact commands, file paths, table names, event names, and known caveats over general prose.
 - Do not add placeholder docs such as `TODO`, `TBD`, or speculative behavior unless it is clearly marked as a future idea outside current behavior.
@@ -158,6 +160,7 @@ pnpm desktop:build
 - `docs/features.md`: feature map and ownership references.
 - `docs/tracking-and-debugging.md`: SQLite state, Tauri commands/events, task/session tracking, logs, and troubleshooting.
 - `docs/codex-session-jsonl.md`: Codex rollout JSONL reference and caveats.
+- `docs/github-integration.md`: `gh` CLI connection model and pull request create/detect/status flows.
 
 ## Backend Boundaries
 
@@ -165,9 +168,12 @@ Keep OS, git, SQLite, and PTY behavior in Rust.
 
 Important backend files:
 
-- `native/src/lib.rs`: Tauri command registration and app setup
-- `native/src/db/`: SQLite schema, row mapping, and persistence tests
+- `native/src/main.rs`: binary entry point that calls `nectus_desktop_lib::run`
+- `native/src/lib.rs`: Tauri command registration, command bodies, and app setup
+- `native/src/db/`: SQLite schema, row mapping, agent profiles, review loops, and persistence tests
 - `native/src/git_ops.rs`: git repo/worktree validation and operations
+- `native/src/github.rs`: `gh` CLI integration — connection status plus pull request create/detect/status parsing (no OAuth, no stored tokens)
+- `native/src/process_util.rs`: shared command helpers (PATH resolution, `command_error` stderr formatting)
 - `native/src/sessions/`: PTY lifecycle, terminal event emission, Codex JSONL watching, agent command setup, and review-loop runtime
 - `native/src/sessions/agents/`: provider-specific Codex, Claude, and Gemini command arguments and fallback locations
 - `native/src/models.rs`: shared serializable data types
@@ -182,6 +188,10 @@ Tauri commands exposed to the frontend include:
 - `list_tasks`
 - `update_task_metadata`
 - `delete_task`
+- `github_status`
+- `create_github_pull_request`
+- `github_pull_request_status`
+- `detect_github_pull_request`
 - `list_agent_profiles`
 - `upsert_agent_profile`
 - `start_pair_loop`
@@ -194,11 +204,13 @@ Tauri commands exposed to the frontend include:
 - `stop_session`
 - `resize_session`
 - `send_session_input`
+- `submit_session_input`
 - `session_output_snapshot`
 
 Events emitted by Rust:
 
 - `session_output`
+- `session_meta`
 - `session_exited`
 - `session_idle`
 - `session_needs_input`
@@ -212,6 +224,9 @@ Important frontend files:
 
 - `src/App.tsx`: app shell and top-level composition
 - `src/hooks/useApp.ts`: app state, project/task/settings orchestration
+- `src/hooks/useSessionEvents.ts`: subscribes to Rust session events (`session_output`, `session_meta`, `session_exited`, `session_idle`, `session_needs_input`)
+- `src/hooks/useSessionCommands.ts`: start/resume/stop/resize/input session command bindings
+- `src/hooks/useGithub.ts`: `gh` connection status and pull request create/detect/status orchestration
 - `src/hooks/useTaskReviewLoop.ts`: selected-task review-loop loading and event handling
 - `src/hooks/useTaskCardPointerDrag.ts`: task-card pointer drag and ghost lifecycle
 - `src/hooks/useTaskDeletion.ts`: task deletion workflow and deletion toasts
@@ -219,7 +234,8 @@ Important frontend files:
 - `src/TerminalPane.tsx`: xterm.js setup, terminal event listeners, input forwarding
 - `src/api.ts`: typed Tauri command wrapper
 - `src/types.ts`: frontend data contracts matching Rust serde output
-- `src/components/`: board, task workspace, settings, and modal UI
+- `src/components/`: board, task workspace, settings, GitHub panel, and modal UI
+- `src/components/GitHubPanel.tsx`: task-inspector GitHub panel for connection state and pull request actions
 - `src/components/settings/`: settings subcomponents and profile-draft helpers
 - `src/test/testUtils.tsx`: shared frontend test helpers for providers, pointer events, DOM rects, and async deferrals
 - `src/test/app*Tests.tsx`: focused App test groups registered by `src/App.test.tsx`
@@ -239,6 +255,7 @@ Preserve these V1 decisions unless the user asks to change them:
 - Worktrees default to a sibling folder: `../<repo-name>-worktrees/<branch-name>`.
 - Tasks can be direct-edit or worktree-backed; worktree is optional.
 - Tasks and PR URLs are stored locally.
+- GitHub integration runs through the local `gh` CLI; the app stores no GitHub tokens and runs no OAuth flow.
 - Codex, Claude, Gemini, and custom agents are launched as configurable CLI commands.
 - Embedded sessions are app-owned child processes.
 - Closing the app stops owned sessions.
@@ -246,7 +263,7 @@ Preserve these V1 decisions unless the user asks to change them:
 ## Notes For Future Changes
 
 - Avoid destructive filesystem deletion for worktrees unless there is an explicit confirmation path.
-- Keep GitHub integration optional and additive.
+- Keep GitHub integration optional, additive, and `gh`-CLI-based; do not introduce app-managed OAuth or token storage.
 - If adding persistent background sessions, introduce a deliberate session manager such as tmux/zellij instead of silently detaching child processes.
 - If adding more terminal features, prefer extending `native/src/sessions/` and `src/TerminalPane.tsx` rather than mixing PTY concerns into dashboard components.
 - The current icon is a simple generated placeholder and can be replaced later with proper app assets.
