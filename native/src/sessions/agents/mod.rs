@@ -48,22 +48,10 @@ fn add_agent_args(command: &mut CommandBuilder, agent: &AgentProfile) {
 }
 
 fn user_bin_candidates(command: &str, home: Option<&Path>) -> Vec<PathBuf> {
-    let mut candidates = Vec::new();
-    if let Some(home) = home {
-        candidates.push(home.join(".local").join("bin").join(command));
-        candidates.push(home.join(".cargo").join("bin").join(command));
-        candidates.push(home.join(".npm-global").join("bin").join(command));
-    }
-    for dir in [
-        "/opt/homebrew/bin",
-        "/usr/local/bin",
-        "/opt/local/bin",
-        "/usr/local/sbin",
-        "/opt/homebrew/sbin",
-    ] {
-        candidates.push(PathBuf::from(dir).join(command));
-    }
-    candidates
+    crate::process_util::third_party_bin_dirs(home)
+        .into_iter()
+        .map(|dir| dir.join(command))
+        .collect()
 }
 
 #[cfg(test)]
