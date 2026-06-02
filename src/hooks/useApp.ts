@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { api } from "../api";
+import { replaceById, upsertById } from "../lib/listState";
 import {
   clearTaskAttention,
   getAttentionCounts,
@@ -185,7 +186,7 @@ export function useApp() {
     });
 
   const applyTask = useCallback((updated: TaskSummary) => {
-    setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    setTasks((current) => replaceById(current, updated));
   }, []);
 
   const {
@@ -293,7 +294,7 @@ export function useApp() {
 
     try {
       const updated = await api.updateTaskMetadata({ taskId: task.id, status });
-      setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setTasks((current) => replaceById(current, updated));
       if (status === "done") {
         setTaskAttention((current) => clearTaskAttention(current, task.id));
       }
@@ -384,10 +385,7 @@ export function useApp() {
 
     try {
       const saved = await api.upsertAgentProfile(profile);
-      setAgentProfiles((current) => {
-        const exists = current.some((item) => item.id === saved.id);
-        return exists ? current.map((item) => (item.id === saved.id ? saved : item)) : [...current, saved];
-      });
+      setAgentProfiles((current) => upsertById(current, saved));
       setMessage(`Saved ${saved.name}`);
       return saved;
     } catch (error) {
