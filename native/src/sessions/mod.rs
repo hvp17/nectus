@@ -196,6 +196,10 @@ impl SessionManager {
         // env still wins since it is applied afterwards.
         command.env("TERM", "xterm-256color");
         command.env("COLORTERM", "truecolor");
+        // The minimal Finder PATH also lacks Homebrew/user bin dirs, so node-based
+        // agent CLIs (e.g. Codex) fail to exec `node`. Hand the session a PATH that
+        // includes the common install dirs; a profile's own PATH still wins below.
+        command.env("PATH", crate::process_util::augmented_path());
         for (key, value) in &agent.env {
             command.env(key, value);
         }

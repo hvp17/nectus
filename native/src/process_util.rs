@@ -63,6 +63,28 @@ fn resolve_executable_in(command: &str, path: OsString, home: Option<&Path>) -> 
         .unwrap_or_else(|_| command.into())
 }
 
+/// Build a `PATH` that appends the common install dirs (see
+/// [`third_party_bin_dirs`]) to the current `PATH`. Resolving an agent binary
+/// to an absolute path is not enough on a GUI-launched app: node-based CLIs
+/// (e.g. Codex) then exec `node` themselves, which must be on the child's `PATH`.
+/// Set this as the spawned command's `PATH` so those nested tools resolve too.
+pub(crate) fn augmented_path() -> OsString {
+    augmented_path_in(
+        env::var_os("PATH").unwrap_or_default(),
+        env::var_os("HOME").map(PathBuf::from).as_deref(),
+    )
+}
+
+fn augmented_path_in(path: OsString, home: Option<&Path>) -> OsString {
+    let mut dirs: Vec<PathBuf> = env::split_paths(&path).collect();
+    for dir in third_party_bin_dirs(home) {
+        if !dirs.contains(&dir) {
+            dirs.push(dir);
+        }
+    }
+    env::join_paths(dirs).unwrap_or(path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,6 +109,38 @@ mod tests {
         );
 
         assert_eq!(resolved, executable.into_os_string());
+    }
+
+    #[test]
+    fn augments_minimal_path_with_install_dirs() {
+        let home = tempdir().unwrap();
+
+        let augmented = augmented_path_in(
+            OsString::from("/usr/bin:/bin"),
+            Some(home.path()),
+        );
+        let dirs: Vec<PathBuf> = env::split_paths(&augmented).collect();
+
+        // Original entries are preserved, ahead of the appended install dirs.
+        assert!(dirs.contains(&PathBuf::from("/usr/bin")));
+        assert!(dirs.contains(&PathBuf::from("/opt/homebrew/bin")));
+        assert!(dirs.contains(&home.path().join(".local").join("bin")));
+        let usr_bin = dirs.iter().position(|d| d == Path::new("/usr/bin")).unwrap();
+        let brew = dirs
+            .iter()
+            .position(|d| d == Path::new("/opt/homebrew/bin"))
+            .unwrap();
+        assert!(usr_bin < brew, "existing PATH entries should come first");
+    }
+
+    #[test]
+    fn does_not_duplicate_install_dirs_already_on_path() {
+        let augmented = augmented_path_in(OsString::from("/opt/homebrew/bin:/usr/bin"), None);
+        let count = env::split_paths(&augmented)
+            .filter(|dir| dir == Path::new("/opt/homebrew/bin"))
+            .count();
+
+        assert_eq!(count, 1);
     }
 
     #[test]
