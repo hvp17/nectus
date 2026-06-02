@@ -13,6 +13,7 @@ import {
   Square,
   TerminalSquare,
 } from "lucide-react";
+import { openExternal } from "../lib/openExternal";
 import { AgentLogo } from "./AgentBrand";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
@@ -296,7 +297,16 @@ export function TaskWorkspace({
             <div className="task-meta-row">
               <span className="task-meta-label">PR:</span>
               {task.prUrl ? (
-                <a className="task-meta-link" href={task.prUrl} target="_blank" rel="noreferrer">
+                <a
+                  className="task-meta-link"
+                  href={task.prUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    openExternal(task.prUrl!);
+                  }}
+                >
                   Open <ExternalLink size={12} />
                 </a>
               ) : (

@@ -1,8 +1,17 @@
 import { screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { openExternal } from "../lib/openExternal";
 import { renderWithTooltipProvider } from "../test/testUtils";
 import type { GithubStatus, PullRequestInfo, TaskSummary } from "../types";
 import { GitHubPanel } from "./GitHubPanel";
+
+vi.mock("../lib/openExternal", () => ({ openExternal: vi.fn() }));
+
+const mockedOpenExternal = vi.mocked(openExternal);
+
+beforeEach(() => {
+  mockedOpenExternal.mockClear();
+});
 
 const baseTask: TaskSummary = {
   id: 42,
@@ -119,5 +128,16 @@ describe("GitHubPanel", () => {
 
     screen.getByRole("button", { name: /refresh pull request/i }).click();
     expect(onRefreshPullRequest).toHaveBeenCalledWith(linkedTask);
+  });
+
+  it("opens the pull request in the default browser when Open is clicked", () => {
+    const prUrl = "https://github.com/hvp17/nectus/pull/9";
+    const linkedTask: TaskSummary = { ...baseTask, prUrl };
+
+    render({ task: linkedTask });
+
+    screen.getByRole("link", { name: /open pull request/i }).click();
+
+    expect(mockedOpenExternal).toHaveBeenCalledWith(prUrl);
   });
 });
