@@ -2,7 +2,7 @@ use crate::models::{
     GithubCheckState, GithubCheckSummary, GithubStatus, PullRequestInfo, PullRequestReviewDecision,
     PullRequestState,
 };
-use crate::process_util::command_error;
+use crate::process_util::{command_error, resolve_executable};
 use serde::Deserialize;
 use std::path::Path;
 use std::process::{Command, Output};
@@ -155,7 +155,9 @@ fn is_pull_request_url(line: &str) -> bool {
 }
 
 fn run_gh(current_dir: Option<&Path>, args: &[&str]) -> Result<Output, String> {
-    let mut command = Command::new("gh");
+    // Resolve `gh` against PATH and the common install locations: a built app
+    // launched from Finder inherits only a minimal PATH that excludes Homebrew.
+    let mut command = Command::new(resolve_executable("gh"));
     if let Some(dir) = current_dir {
         command.current_dir(dir);
     }
