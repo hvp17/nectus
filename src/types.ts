@@ -144,6 +144,9 @@ export interface SessionOutputSnapshot {
   truncated: boolean;
   startOffset: number;
   endOffset: number;
+  /** Terminal size the buffered output was generated at, so replay can match it. */
+  cols: number;
+  rows: number;
 }
 
 export interface SessionExitedEvent {

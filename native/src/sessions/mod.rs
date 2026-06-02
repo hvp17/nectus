@@ -28,6 +28,11 @@ use command::resolve_agent_command;
 use review_loop::{spawn_review_on_session_idle, write_agent_submission};
 
 const OUTPUT_BUFFER_LIMIT: usize = 2 * 1024 * 1024;
+// Default PTY size for a freshly spawned agent, before the frontend fits the
+// terminal to its pane and resizes. The renderer replays buffered output at the
+// session's recorded size, so this is also the width early output is generated at.
+const DEFAULT_PTY_ROWS: u16 = 28;
+const DEFAULT_PTY_COLS: u16 = 100;
 
 /// A turn-completion or input-request signal parsed from an agent's session log.
 /// Both the Claude and Codex watchers translate their agent-specific events into
@@ -117,6 +122,8 @@ struct RunningSession {
     output_truncated: bool,
     output_start_offset: u64,
     output_end_offset: u64,
+    rows: u16,
+    cols: u16,
 }
 
 struct ReviewSessionTarget {
@@ -168,8 +175,8 @@ impl SessionManager {
         let pty_system = native_pty_system();
         let pair = pty_system
             .openpty(PtySize {
-                rows: 28,
-                cols: 100,
+                rows: DEFAULT_PTY_ROWS,
+                cols: DEFAULT_PTY_COLS,
                 pixel_width: 0,
                 pixel_height: 0,
             })
@@ -266,6 +273,8 @@ impl SessionManager {
                 output_truncated: false,
                 output_start_offset: 0,
                 output_end_offset: 0,
+                rows: DEFAULT_PTY_ROWS,
+                cols: DEFAULT_PTY_COLS,
             },
         );
 
@@ -390,6 +399,8 @@ impl SessionManager {
             truncated: running.output_truncated,
             start_offset: running.output_start_offset,
             end_offset: running.output_end_offset,
+            rows: running.rows,
+            cols: running.cols,
         })
     }
 
@@ -478,9 +489,9 @@ impl SessionManager {
     }
 
     pub fn resize(&self, session_id: &str, rows: u16, cols: u16) -> Result<(), String> {
-        let sessions = self.sessions.lock();
+        let mut sessions = self.sessions.lock();
         let running = sessions
-            .get(session_id)
+            .get_mut(session_id)
             .ok_or_else(|| "Session is not running".to_string())?;
         running
             .master
@@ -490,7 +501,12 @@ impl SessionManager {
                 pixel_width: 0,
                 pixel_height: 0,
             })
-            .map_err(|error| format!("Failed to resize PTY: {error}"))
+            .map_err(|error| format!("Failed to resize PTY: {error}"))?;
+        // Record the live size so output_snapshot replays buffered output at the
+        // width it was generated at.
+        running.rows = rows;
+        running.cols = cols;
+        Ok(())
     }
 
     pub fn stop_all(&self, app: &AppHandle, db: Arc<Mutex<Database>>) {
