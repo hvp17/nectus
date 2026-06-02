@@ -1,0 +1,12 @@
+# Tauri's dev watcher is "kill-then-build": it kills the running app on every
+# save, then compiles. A broken mid-edit takes the app (and any running
+# Claude/Codex sessions) down with it.
+#
+# So we hide the Rust source from Tauri's watcher. A gated watcher
+# (scripts/desktop-dev-green.sh) runs `cargo check` and only touches build.rs
+# once the crate compiles cleanly — that touch is what triggers Tauri to
+# rebuild + relaunch. Net effect: the app only restarts on a green compile.
+#
+# Only takes effect when launched via `pnpm desktop:dev:green`. Plain
+# `pnpm desktop:dev` ignores this file's intent because nothing touches build.rs.
+src/
