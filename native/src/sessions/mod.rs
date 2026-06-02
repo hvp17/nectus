@@ -14,6 +14,7 @@ use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
 mod agents;
+mod claude;
 mod codex;
 #[cfg(test)]
 mod codex_tests;
@@ -21,6 +22,7 @@ mod command;
 mod review_loop;
 
 use agents::configure_agent_command;
+use claude::{cleanup_event_sink, spawn_claude_event_watcher};
 use codex::{latest_codex_session_metadata, spawn_codex_event_watcher};
 use command::resolve_agent_command;
 use review_loop::{spawn_review_on_session_idle, write_agent_submission};
@@ -198,6 +200,15 @@ impl SessionManager {
                 cwd_path.clone(),
                 started_at.clone(),
             );
+        } else if agent.agent_kind == AgentKind::Claude {
+            spawn_claude_event_watcher(
+                app.clone(),
+                db.clone(),
+                self.sessions.clone(),
+                task.id,
+                session_id.clone(),
+                cwd_path.clone(),
+            );
         }
 
         std::thread::spawn({
@@ -262,6 +273,8 @@ impl SessionManager {
                                     )
                                 });
                         }
+                    } else if agent_command == AgentKind::Claude.as_str() {
+                        cleanup_event_sink(&session_id);
                     }
                     let _ = db
                         .lock()
@@ -327,6 +340,8 @@ impl SessionManager {
                 running.session.resumable_session_id = Some(metadata.id);
                 running.session.resumable_session_label = metadata.label;
             }
+        } else if running.agent_command == AgentKind::Claude.as_str() {
+            cleanup_event_sink(&session_id);
         }
         db.lock()
             .set_active_session(running.session.task_id, None)?;

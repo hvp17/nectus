@@ -110,7 +110,7 @@ mod tests {
     }
 
     #[test]
-    fn configures_claude_new_session_id_after_custom_args() {
+    fn configures_claude_new_session_id_then_hook_settings() {
         let mut command = CommandBuilder::new(OsString::from("claude"));
         configure_agent_command(
             &mut command,
@@ -123,8 +123,9 @@ mod tests {
             false,
         );
 
+        let argv = argv(&command);
         assert_eq!(
-            argv(&command),
+            argv[..6],
             [
                 "claude",
                 "--model",
@@ -134,6 +135,13 @@ mod tests {
                 "session-2"
             ]
         );
+        // The session id is followed by the inline hook settings overlay.
+        assert_eq!(argv[6], "--settings");
+        let settings: serde_json::Value =
+            serde_json::from_str(&argv[7]).expect("hook settings must be valid JSON");
+        assert!(settings["hooks"]["Stop"].is_array());
+        assert!(settings["hooks"]["Notification"].is_array());
+        assert_eq!(argv.len(), 8);
     }
 
     #[test]
