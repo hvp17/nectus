@@ -2,9 +2,34 @@ use crate::models::{
     AgentKind, AgentProfile, AppSettings, DensityMode, Repo, ReviewLoop, ReviewLoopStatus,
     ReviewRun, ReviewVerdict, TaskStatus, TaskSummary, ThemeMode,
 };
+use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ValueRef};
 use rusqlite::Row;
 use std::collections::BTreeMap;
 use std::io;
+
+/// Teach rusqlite to read our string-backed enums directly via their
+/// strum-derived `FromStr`, so `row.get()` handles the conversion and the row
+/// mappers no longer thread an inner `Result<_, String>` for every enum column.
+macro_rules! impl_enum_from_sql {
+    ($($t:ty => $label:literal),+ $(,)?) => {$(
+        impl FromSql for $t {
+            fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                let text = value.as_str()?;
+                text.parse()
+                    .map_err(|_| FromSqlError::Other(format!("Unknown {}: {text}", $label).into()))
+            }
+        }
+    )+};
+}
+
+impl_enum_from_sql! {
+    TaskStatus => "task status",
+    ReviewLoopStatus => "review loop status",
+    ReviewVerdict => "review verdict",
+    AgentKind => "agent kind",
+    ThemeMode => "theme mode",
+    DensityMode => "density mode",
+}
 
 pub(super) fn rows<T, I>(mapped: I) -> Result<Vec<T>, String>
 where
@@ -25,36 +50,17 @@ pub(super) fn repo_from_row(row: &Row<'_>) -> rusqlite::Result<Repo> {
     })
 }
 
-pub(super) fn task_from_row(row: &Row<'_>) -> rusqlite::Result<Result<TaskSummary, String>> {
-    let status: String = row.get(4)?;
-    let status = match TaskStatus::from_str(&status) {
-        Ok(status) => status,
-        Err(error) => return Ok(Err(error)),
-    };
-    let agent_kind: Option<String> = row.get(8)?;
-    let agent_kind = match agent_kind.as_deref().map(AgentKind::from_str).transpose() {
-        Ok(value) => value,
-        Err(error) => return Ok(Err(error)),
-    };
-    let review_loop_status: Option<String> = row.get(19)?;
-    let review_loop_status = match review_loop_status
-        .as_deref()
-        .map(ReviewLoopStatus::from_str)
-        .transpose()
-    {
-        Ok(value) => value,
-        Err(error) => return Ok(Err(error)),
-    };
-    Ok(Ok(TaskSummary {
+pub(super) fn task_from_row(row: &Row<'_>) -> rusqlite::Result<TaskSummary> {
+    Ok(TaskSummary {
         id: row.get(0)?,
         repo_id: row.get(1)?,
         title: row.get(2)?,
         prompt: row.get(3)?,
-        status,
+        status: row.get(4)?,
         pr_url: row.get(5)?,
         agent_profile_id: row.get(6)?,
         agent_name: row.get(7)?,
-        agent_kind,
+        agent_kind: row.get(8)?,
         has_worktree: row.get(9)?,
         branch_name: row.get(10)?,
         worktree_path: row.get(11)?,
@@ -64,18 +70,13 @@ pub(super) fn task_from_row(row: &Row<'_>) -> rusqlite::Result<Result<TaskSummar
         last_session_agent: row.get(14)?,
         last_session_cwd: row.get(15)?,
         last_session_label: row.get(16)?,
-        review_loop_status,
+        review_loop_status: row.get(19)?,
         created_at: row.get(17)?,
         updated_at: row.get(18)?,
-    }))
+    })
 }
 
 pub(super) fn agent_from_row(row: &Row<'_>) -> rusqlite::Result<AgentProfile> {
-    let agent_kind: String = row.get(2)?;
-    let agent_kind = match AgentKind::from_str(&agent_kind) {
-        Ok(kind) => kind,
-        Err(error) => return Err(invalid_text_column(2, error)),
-    };
     let args_json: String = row.get(5)?;
     let env_json: String = row.get(6)?;
     let args = serde_json::from_str(&args_json).map_err(|error| {
@@ -93,7 +94,7 @@ pub(super) fn agent_from_row(row: &Row<'_>) -> rusqlite::Result<AgentProfile> {
     Ok(AgentProfile {
         id: row.get(0)?,
         name: row.get(1)?,
-        agent_kind,
+        agent_kind: row.get(2)?,
         command: row.get(3)?,
         model: row.get(4)?,
         args,
@@ -111,62 +112,37 @@ fn invalid_text_column(column: usize, error: String) -> rusqlite::Error {
     )
 }
 
-pub(super) fn app_settings_from_row(
-    row: &Row<'_>,
-) -> rusqlite::Result<Result<AppSettings, String>> {
-    let theme: String = row.get(3)?;
-    let density: String = row.get(4)?;
-    let theme = match ThemeMode::from_str(&theme) {
-        Ok(value) => value,
-        Err(error) => return Ok(Err(error)),
-    };
-    let density = match DensityMode::from_str(&density) {
-        Ok(value) => value,
-        Err(error) => return Ok(Err(error)),
-    };
-
-    Ok(Ok(AppSettings {
+pub(super) fn app_settings_from_row(row: &Row<'_>) -> rusqlite::Result<AppSettings> {
+    Ok(AppSettings {
         default_agent_profile_id: row.get(0)?,
         default_worktree_root_pattern: row.get(1)?,
         default_branch_prefix: row.get(2)?,
-        theme,
-        density,
+        theme: row.get(3)?,
+        density: row.get(4)?,
         updated_at: row.get(5)?,
-    }))
+    })
 }
 
-pub(super) fn review_loop_from_row(row: &Row<'_>) -> rusqlite::Result<Result<ReviewLoop, String>> {
-    let status: String = row.get(2)?;
-    let status = match ReviewLoopStatus::from_str(&status) {
-        Ok(value) => value,
-        Err(error) => return Ok(Err(error)),
-    };
-
-    Ok(Ok(ReviewLoop {
+pub(super) fn review_loop_from_row(row: &Row<'_>) -> rusqlite::Result<ReviewLoop> {
+    Ok(ReviewLoop {
         task_id: row.get(0)?,
         reviewer_profile_id: row.get(1)?,
-        status,
+        status: row.get(2)?,
         last_error: row.get(3)?,
         created_at: row.get(4)?,
         updated_at: row.get(5)?,
-    }))
+    })
 }
 
-pub(super) fn review_run_from_row(row: &Row<'_>) -> rusqlite::Result<Result<ReviewRun, String>> {
-    let verdict: String = row.get(3)?;
-    let verdict = match ReviewVerdict::from_str(&verdict) {
-        Ok(value) => value,
-        Err(error) => return Ok(Err(error)),
-    };
-
-    Ok(Ok(ReviewRun {
+pub(super) fn review_run_from_row(row: &Row<'_>) -> rusqlite::Result<ReviewRun> {
+    Ok(ReviewRun {
         id: row.get(0)?,
         task_id: row.get(1)?,
         reviewer_profile_id: row.get(2)?,
-        verdict,
+        verdict: row.get(3)?,
         prompt: row.get(4)?,
         output: row.get(5)?,
         error: row.get(6)?,
         created_at: row.get(7)?,
-    }))
+    })
 }
