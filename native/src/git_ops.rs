@@ -1,14 +1,6 @@
+use crate::process_util::command_error;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-
-fn command_error(output: &Output, fallback: &str) -> String {
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    if stderr.is_empty() {
-        fallback.into()
-    } else {
-        stderr
-    }
-}
 
 fn git_output(repo_path: &Path, args: &[&str], failure_message: &str) -> Result<Output, String> {
     let output = Command::new("git")

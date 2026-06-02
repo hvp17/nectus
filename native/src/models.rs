@@ -55,12 +55,6 @@ impl TaskStatus {
     pub fn as_str(&self) -> &'static str {
         self.into()
     }
-
-    pub fn from_str(value: &str) -> Result<Self, String> {
-        value
-            .parse()
-            .map_err(|_| format!("Unknown task status: {value}"))
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -107,12 +101,6 @@ impl ReviewLoopStatus {
     pub fn as_str(&self) -> &'static str {
         self.into()
     }
-
-    pub fn from_str(value: &str) -> Result<Self, String> {
-        value
-            .parse()
-            .map_err(|_| format!("Unknown review loop status: {value}"))
-    }
 }
 
 #[derive(
@@ -130,12 +118,6 @@ pub enum ReviewVerdict {
 impl ReviewVerdict {
     pub fn as_str(&self) -> &'static str {
         self.into()
-    }
-
-    pub fn from_str(value: &str) -> Result<Self, String> {
-        value
-            .parse()
-            .map_err(|_| format!("Unknown review verdict: {value}"))
     }
 }
 
@@ -197,12 +179,6 @@ pub enum AgentKind {
 impl AgentKind {
     pub fn as_str(&self) -> &'static str {
         self.into()
-    }
-
-    pub fn from_str(value: &str) -> Result<Self, String> {
-        value
-            .parse()
-            .map_err(|_| format!("Unknown agent kind: {value}"))
     }
 }
 
@@ -314,12 +290,6 @@ impl ThemeMode {
     pub fn as_str(&self) -> &'static str {
         self.into()
     }
-
-    pub fn from_str(value: &str) -> Result<Self, String> {
-        value
-            .parse()
-            .map_err(|_| format!("Unknown theme mode: {value}"))
-    }
 }
 
 #[derive(
@@ -335,12 +305,6 @@ pub enum DensityMode {
 impl DensityMode {
     pub fn as_str(&self) -> &'static str {
         self.into()
-    }
-
-    pub fn from_str(value: &str) -> Result<Self, String> {
-        value
-            .parse()
-            .map_err(|_| format!("Unknown density mode: {value}"))
     }
 }
 

@@ -2,6 +2,7 @@ mod db;
 mod git_ops;
 mod github;
 mod models;
+mod process_util;
 mod sessions;
 
 use crate::db::Database;

@@ -1,4 +1,4 @@
-use super::rows::{review_loop_from_row, review_run_from_row};
+use super::rows::{review_loop_from_row, review_run_from_row, rows};
 use super::{now, Database};
 use crate::models::{
     ReviewLoop, ReviewLoopStatus, ReviewRun, ReviewRunInput, ReviewVerdict, TaskStatus,
@@ -60,8 +60,7 @@ impl Database {
                 review_loop_from_row,
             )
             .optional()
-            .map_err(|error| error.to_string())?
-            .transpose()
+            .map_err(|error| error.to_string())
     }
 
     pub fn list_review_runs(&self, task_id: i64) -> Result<Vec<ReviewRun>, String> {
@@ -77,12 +76,11 @@ impl Database {
             )
             .map_err(|error| error.to_string())?;
 
-        let runs = stmt
-            .query_map(params![task_id], review_run_from_row)
-            .map_err(|error| error.to_string())?
-            .map(|row| row.map_err(|error| error.to_string())?)
-            .collect();
-        runs
+        let result = rows(
+            stmt.query_map(params![task_id], review_run_from_row)
+                .map_err(|error| error.to_string())?,
+        );
+        result
     }
 
     pub fn record_review_run(&self, input: ReviewRunInput) -> Result<ReviewRun, String> {
@@ -159,8 +157,7 @@ impl Database {
                 review_run_from_row,
             )
             .optional()
-            .map_err(|error| error.to_string())?
-            .transpose()
+            .map_err(|error| error.to_string())
     }
 }
 

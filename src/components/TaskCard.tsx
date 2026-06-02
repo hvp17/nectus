@@ -5,25 +5,8 @@ import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { truncateFinishedAttentionPreview } from "./attentionPreview";
 import { useTaskCardPointerDrag } from "../hooks/useTaskCardPointerDrag";
 import { formatAttentionReason, type TaskAttention } from "../sessionAttention";
-import type { ReviewLoopStatus, TaskSummary } from "../types";
-
-const reviewLoopStatusLabels: Record<ReviewLoopStatus, string> = {
-  running: "Review ready",
-  reviewing: "Reviewing",
-  passed: "Review passed",
-  feedback_sent: "Review feedback",
-  error: "Review error",
-  stopped: "Review stopped",
-};
-
-const reviewLoopBadgeVariants: Record<ReviewLoopStatus, "default" | "secondary" | "destructive" | "outline"> = {
-  running: "secondary",
-  reviewing: "default",
-  passed: "secondary",
-  feedback_sent: "destructive",
-  error: "destructive",
-  stopped: "outline",
-};
+import { REVIEW_LOOP_BADGE_VARIANTS, REVIEW_LOOP_STATUS_LABELS } from "../statusLabels";
+import type { TaskSummary } from "../types";
 
 interface TaskCardProps {
   task: TaskSummary;
@@ -70,7 +53,7 @@ export function TaskCard({
     attentionDetail && displayedAttentionDetail && displayedAttentionDetail !== attentionDetail,
   );
   const reviewStatus = task.reviewLoopStatus ?? undefined;
-  const reviewStatusLabel = reviewStatus ? reviewLoopStatusLabels[reviewStatus] : undefined;
+  const reviewStatusLabel = reviewStatus ? REVIEW_LOOP_STATUS_LABELS[reviewStatus] : undefined;
 
   return (
     <Card
@@ -147,7 +130,7 @@ export function TaskCard({
         {reviewStatus && reviewStatusLabel && (
           <div className="task-review-line">
             <Badge
-              variant={reviewLoopBadgeVariants[reviewStatus]}
+              variant={REVIEW_LOOP_BADGE_VARIANTS[reviewStatus]}
               className="task-review-badge h-5 px-1.5 text-[10px]"
               data-status={reviewStatus}
             >

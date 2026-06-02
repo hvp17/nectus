@@ -112,7 +112,6 @@ impl Database {
             )
             .optional()
             .map_err(|error| error.to_string())?
-            .transpose()?
             .ok_or_else(|| "App settings were not initialized".to_string())
     }
 
@@ -307,7 +306,6 @@ impl Database {
             )
             .optional()
             .map_err(|error| error.to_string())?;
-        let row = row.transpose()?;
         Ok(row.map(|mut task| {
             task.is_dirty = task
                 .worktree_path
@@ -319,11 +317,11 @@ impl Database {
 
     fn task_rows<I>(&self, mapped: I) -> Result<Vec<TaskSummary>, String>
     where
-        I: Iterator<Item = rusqlite::Result<Result<TaskSummary, String>>>,
+        I: Iterator<Item = rusqlite::Result<TaskSummary>>,
     {
         mapped
             .map(|row| {
-                let mut task = row.map_err(|error| error.to_string())??;
+                let mut task = row.map_err(|error| error.to_string())?;
                 task.is_dirty = task
                     .worktree_path
                     .as_ref()

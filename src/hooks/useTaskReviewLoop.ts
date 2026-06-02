@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { api } from "../api";
+import { useAsyncEffect } from "./useAsyncEffect";
 import { isTauriRuntime } from "../sessionNotifications";
 import type { ReviewLoop, ReviewLoopUpdatedEvent, ReviewRun } from "../types";
 
@@ -28,28 +29,28 @@ export function useTaskReviewLoop({ selectedTaskId, onMessage, onReviewLoopUpdat
     [onMessage],
   );
 
-  useEffect(() => {
-    if (!selectedTaskId) {
-      setSelectedReviewLoop(null);
-      setSelectedReviewRuns([]);
-      return;
-    }
-
-    let disposed = false;
-    Promise.all([api.getTaskReviewLoop(selectedTaskId), api.listTaskReviewRuns(selectedTaskId)])
-      .then(([reviewLoop, reviewRuns]) => {
-        if (disposed) return;
-        setSelectedReviewLoop(reviewLoop);
-        setSelectedReviewRuns(reviewRuns);
-      })
-      .catch((error) => {
-        if (!disposed) publishMessage(String(error));
-      });
-
-    return () => {
-      disposed = true;
-    };
-  }, [publishMessage, selectedTaskId]);
+  useAsyncEffect(
+    async (alive) => {
+      if (!selectedTaskId) {
+        setSelectedReviewLoop(null);
+        setSelectedReviewRuns([]);
+        return;
+      }
+      try {
+        const [reviewLoop, reviewRuns] = await Promise.all([
+          api.getTaskReviewLoop(selectedTaskId),
+          api.listTaskReviewRuns(selectedTaskId),
+        ]);
+        if (alive()) {
+          setSelectedReviewLoop(reviewLoop);
+          setSelectedReviewRuns(reviewRuns);
+        }
+      } catch (error) {
+        if (alive()) publishMessage(String(error));
+      }
+    },
+    [publishMessage, selectedTaskId],
+  );
 
   useEffect(() => {
     if (!isTauriRuntime()) return;

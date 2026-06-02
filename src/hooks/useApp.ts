@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { api } from "../api";
+import { replaceById, upsertById } from "../lib/listState";
+import { useGuardedAction } from "./useGuardedAction";
 import {
   clearTaskAttention,
   getAttentionCounts,
@@ -59,6 +61,8 @@ export function useApp() {
     getSuggestedBranchName,
     resolveWorktreeBranchName,
   } = taskForm;
+
+  const run = useGuardedAction(setMessage, setBusy);
 
   const selectedRepoIdRef = useRef<number | undefined>(undefined);
   const selectedAgentProfileIdRef = useRef<number | undefined>(undefined);
@@ -185,7 +189,7 @@ export function useApp() {
     });
 
   const applyTask = useCallback((updated: TaskSummary) => {
-    setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    setTasks((current) => replaceById(current, updated));
   }, []);
 
   const {
@@ -251,75 +255,60 @@ export function useApp() {
       setMessage("Select an agent before creating a task.");
       return;
     }
-    setBusy(true);
-    setMessage(null);
-
-    try {
-      const branchName = newTaskHasWorktree
-        ? resolveWorktreeBranchName(newTaskBranchName, settings?.defaultBranchPrefix)
-        : null;
-      const task = await api.createTask({
-        repoId: selectedRepoId,
-        title: getGeneratedTaskTitle(),
-        prompt: newTaskPrompt.trim() || null,
-        agentProfileId: newTaskAgentProfileId,
-        hasWorktree: newTaskHasWorktree,
-        branchName,
-      });
-      resetCreateTaskForm();
-      setCreateTaskOpen(false);
-      setSelectedTaskId(task.id);
-      let startError: string | null = null;
-      try {
-        await api.startSession(task.id, newTaskAgentProfileId);
-      } catch (error) {
-        startError = String(error);
-      }
-      await refresh(selectedRepoId);
-      if (startError) {
-        setMessage(`Created ${task.title}, but failed to start session: ${startError}`);
-      } else {
-        setMessage(newTaskHasWorktree ? `Created ${task.branchName}` : `Created ${task.title}`);
-      }
-    } catch (error) {
-      setMessage(String(error));
-    } finally {
-      setBusy(false);
-    }
+    const agentProfileId = newTaskAgentProfileId;
+    await run(
+      async () => {
+        const branchName = newTaskHasWorktree
+          ? resolveWorktreeBranchName(newTaskBranchName, settings?.defaultBranchPrefix)
+          : null;
+        const task = await api.createTask({
+          repoId: selectedRepoId,
+          title: getGeneratedTaskTitle(),
+          prompt: newTaskPrompt.trim() || null,
+          agentProfileId,
+          hasWorktree: newTaskHasWorktree,
+          branchName,
+        });
+        resetCreateTaskForm();
+        setCreateTaskOpen(false);
+        setSelectedTaskId(task.id);
+        let startError: string | null = null;
+        try {
+          await api.startSession(task.id, agentProfileId);
+        } catch (error) {
+          startError = String(error);
+        }
+        await refresh(selectedRepoId);
+        if (startError) {
+          setMessage(`Created ${task.title}, but failed to start session: ${startError}`);
+        } else {
+          setMessage(newTaskHasWorktree ? `Created ${task.branchName}` : `Created ${task.title}`);
+        }
+      },
+      { busy: true },
+    );
   };
 
-  const updateStatus = async (task: TaskSummary, status: TaskStatus) => {
-    setMessage(null);
-
-    try {
+  const updateStatus = (task: TaskSummary, status: TaskStatus) =>
+    run(async () => {
       const updated = await api.updateTaskMetadata({ taskId: task.id, status });
-      setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setTasks((current) => replaceById(current, updated));
       if (status === "done") {
         setTaskAttention((current) => clearTaskAttention(current, task.id));
       }
-    } catch (error) {
-      setMessage(String(error));
-    }
-  };
+    });
 
-  const startPairLoop = async (task: TaskSummary, reviewerProfileId: number) => {
-    setMessage(null);
-
-    try {
+  const startPairLoop = (task: TaskSummary, reviewerProfileId: number) =>
+    run(async () => {
       const reviewLoop = await api.startPairLoop(task.id, reviewerProfileId);
       const reviewRuns = await api.listTaskReviewRuns(task.id);
       setSelectedReviewLoop(reviewLoop);
       setSelectedReviewRuns(reviewRuns);
       setMessage("Review: Started");
-    } catch (error) {
-      setMessage(String(error));
-    }
-  };
+    });
 
-  const startReview = async (task: TaskSummary, reviewerProfileId: number) => {
-    setMessage(null);
-
-    try {
+  const startReview = (task: TaskSummary, reviewerProfileId: number) =>
+    run(async () => {
       let reviewLoop = selectedReviewLoop;
       if (!reviewLoop || ["passed", "feedback_sent", "error", "stopped"].includes(reviewLoop.status)) {
         reviewLoop = await api.startPairLoop(task.id, reviewerProfileId);
@@ -332,22 +321,14 @@ export function useApp() {
       );
       setSelectedReviewRuns(reviewRuns);
       setMessage("Review: Started");
-    } catch (error) {
-      setMessage(String(error));
-    }
-  };
+    });
 
-  const stopPairLoop = async (task: TaskSummary) => {
-    setMessage(null);
-
-    try {
+  const stopPairLoop = (task: TaskSummary) =>
+    run(async () => {
       const reviewLoop = await api.stopPairLoop(task.id);
       setSelectedReviewLoop(reviewLoop);
       setMessage("Review: Stopped");
-    } catch (error) {
-      setMessage(String(error));
-    }
-  };
+    });
 
   const requestDeleteTask = useTaskDeletion({
     deletingTaskIdsRef,
@@ -358,45 +339,32 @@ export function useApp() {
     setMessage,
   });
 
-  const saveAppSettings = async (input: AppSettingsInput) => {
-    setBusy(true);
-    setMessage(null);
+  const saveAppSettings = (input: AppSettingsInput) =>
+    run(
+      async () => {
+        const updated = await api.updateAppSettings(input);
+        setSettings(updated);
+        setSelectedAgentProfileId(updated.defaultAgentProfileId ?? undefined);
+        selectedAgentProfileIdRef.current = updated.defaultAgentProfileId ?? undefined;
+        setMessage("Settings saved");
+        await refresh(selectedRepoIdRef.current);
+        return updated;
+      },
+      { busy: true, rethrow: true },
+    );
 
-    try {
-      const updated = await api.updateAppSettings(input);
-      setSettings(updated);
-      setSelectedAgentProfileId(updated.defaultAgentProfileId ?? undefined);
-      selectedAgentProfileIdRef.current = updated.defaultAgentProfileId ?? undefined;
-      setMessage("Settings saved");
-      await refresh(selectedRepoIdRef.current);
-      return updated;
-    } catch (error) {
-      setMessage(String(error));
-      throw error;
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const saveAgentProfile = async (profile: Partial<AgentProfile> & Pick<AgentProfile, "name" | "agentKind" | "command">) => {
-    setBusy(true);
-    setMessage(null);
-
-    try {
-      const saved = await api.upsertAgentProfile(profile);
-      setAgentProfiles((current) => {
-        const exists = current.some((item) => item.id === saved.id);
-        return exists ? current.map((item) => (item.id === saved.id ? saved : item)) : [...current, saved];
-      });
-      setMessage(`Saved ${saved.name}`);
-      return saved;
-    } catch (error) {
-      setMessage(String(error));
-      throw error;
-    } finally {
-      setBusy(false);
-    }
-  };
+  const saveAgentProfile = (
+    profile: Partial<AgentProfile> & Pick<AgentProfile, "name" | "agentKind" | "command">,
+  ) =>
+    run(
+      async () => {
+        const saved = await api.upsertAgentProfile(profile);
+        setAgentProfiles((current) => upsertById(current, saved));
+        setMessage(`Saved ${saved.name}`);
+        return saved;
+      },
+      { busy: true, rethrow: true },
+    );
 
   return {
     repos,
