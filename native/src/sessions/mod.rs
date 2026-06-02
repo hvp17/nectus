@@ -32,7 +32,7 @@ const OUTPUT_BUFFER_LIMIT: usize = 2 * 1024 * 1024;
 /// A turn-completion or input-request signal parsed from an agent's session log.
 /// Both the Claude and Codex watchers translate their agent-specific events into
 /// this shape so emission and review kick-off stay in one place.
-pub(super) enum SessionSignal {
+enum SessionSignal {
     Idle {
         turn_id: Option<String>,
         message: Option<String>,
@@ -46,7 +46,7 @@ pub(super) enum SessionSignal {
 
 /// Emit the frontend event for a session signal and, on idle, spawn any pending
 /// review. Shared by the Claude and Codex watchers.
-pub(super) fn emit_session_signal(
+fn emit_session_signal(
     app: &AppHandle,
     db: &Arc<Mutex<Database>>,
     sessions: &Arc<Mutex<HashMap<String, RunningSession>>>,
