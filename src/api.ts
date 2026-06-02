@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { formatNotificationBody } from "./notificationText";
 import type {
   AgentProfile,
@@ -185,6 +186,13 @@ export const api = {
   },
   async sessionOutputSnapshot(sessionId: string): Promise<SessionOutputSnapshot> {
     return invoke("session_output_snapshot", { sessionId });
+  },
+  async openExternalUrl(url: string): Promise<void> {
+    if (!isTauri) {
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    await openUrl(url);
   },
   async sendSystemNotification(title: string, body: string): Promise<boolean> {
     if (!isTauri) return false;

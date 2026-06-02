@@ -9,6 +9,7 @@ import {
   RefreshCw,
   XCircle,
 } from "lucide-react";
+import { openExternal } from "../lib/openExternal";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Toggle } from "./ui/toggle";
@@ -190,6 +191,10 @@ export function GitHubPanel({
             target="_blank"
             rel="noreferrer"
             aria-label="Open pull request"
+            onClick={(event) => {
+              event.preventDefault();
+              openExternal(prUrl);
+            }}
           >
             Open <ExternalLink size={12} />
           </a>

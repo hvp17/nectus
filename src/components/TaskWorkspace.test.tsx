@@ -1,9 +1,18 @@
 import { fireEvent, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { openExternal } from "../lib/openExternal";
 import type { TaskAttention } from "../sessionAttention";
 import { renderWithTooltipProvider } from "../test/testUtils";
 import type { AgentProfile, GithubStatus, PullRequestInfo, ReviewLoop, ReviewRun, TaskSummary } from "../types";
 import { TaskWorkspace } from "./TaskWorkspace";
+
+vi.mock("../lib/openExternal", () => ({ openExternal: vi.fn() }));
+
+const mockedOpenExternal = vi.mocked(openExternal);
+
+beforeEach(() => {
+  mockedOpenExternal.mockClear();
+});
 
 const task: TaskSummary = {
   id: 42,
@@ -266,6 +275,17 @@ describe("TaskWorkspace", () => {
     screen.getByRole("button", { name: /create pull request/i }).click();
 
     expect(onCreatePullRequest).toHaveBeenCalledWith(worktreeTask, { draft: false });
+  });
+
+  it("opens the linked pull request in the default browser from the metadata strip", () => {
+    const prUrl = "https://github.com/hvp17/nectus/pull/123";
+    const linkedTask: TaskSummary = { ...task, prUrl };
+
+    renderTaskWorkspace({ task: linkedTask });
+
+    screen.getByRole("link", { name: "Open" }).click();
+
+    expect(mockedOpenExternal).toHaveBeenCalledWith(prUrl);
   });
 
   it("keeps the create pr step completed when a pull request is linked", () => {
