@@ -103,8 +103,8 @@ fn map_review_decision(decision: Option<&str>) -> Option<PullRequestReviewDecisi
 
 /// Parse the JSON from `gh pr view --json …` into a [`PullRequestInfo`].
 pub fn parse_pull_request(json: &str) -> Result<PullRequestInfo, String> {
-    let raw: RawPullRequest =
-        serde_json::from_str(json).map_err(|error| format!("Failed to parse PR details: {error}"))?;
+    let raw: RawPullRequest = serde_json::from_str(json)
+        .map_err(|error| format!("Failed to parse PR details: {error}"))?;
     let (checks, checks_state) = summarize_checks(&raw.status_check_rollup);
     Ok(PullRequestInfo {
         number: raw.number,
@@ -212,7 +212,10 @@ pub fn create_pull_request(
         .output()
         .map_err(|error| format!("Failed to push branch: {error}"))?;
     if !push.status.success() {
-        return Err(command_error(&push, "Failed to push branch before creating PR"));
+        return Err(command_error(
+            &push,
+            "Failed to push branch before creating PR",
+        ));
     }
 
     let mut args = vec!["pr", "create", "--title", title, "--body", body];
@@ -251,7 +254,10 @@ mod tests {
 
     #[test]
     fn parses_login_from_user_json() {
-        assert_eq!(parse_login(r#"{"login":"hvp17"}"#), Some("hvp17".to_string()));
+        assert_eq!(
+            parse_login(r#"{"login":"hvp17"}"#),
+            Some("hvp17".to_string())
+        );
     }
 
     #[test]
@@ -357,7 +363,10 @@ mod tests {
         let pr = parse_pull_request(json).unwrap();
 
         assert_eq!(pr.state, PullRequestState::Merged);
-        assert_eq!(pr.review_decision, Some(PullRequestReviewDecision::Approved));
+        assert_eq!(
+            pr.review_decision,
+            Some(PullRequestReviewDecision::Approved)
+        );
         assert_eq!(pr.checks, GithubCheckSummary::default());
         assert_eq!(pr.checks_state, GithubCheckState::None);
     }

@@ -151,11 +151,13 @@ async fn create_github_pull_request(
             let task = db
                 .task_by_id(task_id)?
                 .ok_or_else(|| "Task not found".to_string())?;
-            task.worktree_path
-                .ok_or_else(|| "Task has no worktree branch to open a pull request from".to_string())?
+            task.worktree_path.ok_or_else(|| {
+                "Task has no worktree branch to open a pull request from".to_string()
+            })?
         };
         let url = github::create_pull_request(Path::new(&worktree), &title, &body, draft)?;
-        db.lock().update_task_metadata(task_id, None, None, Some(url))
+        db.lock()
+            .update_task_metadata(task_id, None, None, Some(url))
     })
     .await
     .map_err(|error| AppError::from(format!("Failed to create pull request: {error}")))?
