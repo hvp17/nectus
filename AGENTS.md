@@ -173,7 +173,7 @@ Important backend files:
 - `native/src/db/`: SQLite schema, row mapping, agent profiles, review loops, and persistence tests
 - `native/src/git_ops.rs`: git repo/worktree validation and operations
 - `native/src/github.rs`: `gh` CLI integration — connection status plus pull request create/detect/status parsing (no OAuth, no stored tokens)
-- `native/src/process_util.rs`: shared command helpers (PATH resolution, `command_error` stderr formatting)
+- `native/src/process_util.rs`: shared command helpers — binary resolution (`resolve_executable`), child `PATH` augmentation (`augmented_path`), the install-dir source of truth (`third_party_bin_dirs`), and `command_error` stderr formatting. See [Spawning External CLIs](#spawning-external-clis-macos-gui-path).
 - `native/src/sessions/`: PTY lifecycle, terminal event emission, Codex JSONL watching, agent command setup, and review-loop runtime
 - `native/src/sessions/agents/`: provider-specific Codex, Claude, and Gemini command arguments and fallback locations
 - `native/src/models.rs`: shared serializable data types
@@ -221,6 +221,36 @@ Events emitted by Rust:
 - `session_needs_input`
 - `review_loop_updated`
 - `pr_review_updated`
+
+## Spawning External CLIs (macOS GUI PATH)
+
+A macOS app launched from Finder/Dock (or the packaged `.app`) inherits only a
+minimal PATH — `/usr/bin:/bin:/usr/sbin:/sbin` — with no Homebrew or user bin
+directories. This breaks externally-spawned CLIs in two distinct ways. Both are
+handled in `native/src/process_util.rs`, whose `third_party_bin_dirs` is the
+single source of truth for the extra locations
+(`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, `~/.cargo/bin`, …):
+
+1. **Finding the CLI itself.** Resolve the binary with `resolve_executable` (for
+   `gh` and general tools) or `resolve_agent_command` (for agent profiles); both
+   search PATH first, then the common install dirs.
+2. **Tools the CLI then spawns.** A resolved absolute path is not enough —
+   node-based CLIs such as Codex `exec` `node` themselves, which must be on the
+   child process's PATH. Set `command.env("PATH", process_util::augmented_path())`
+   on the spawned command so nested executables resolve too. Missing this surfaces
+   as `env: node: No such file or directory` with **exit status 127**.
+
+**Rule:** whenever you spawn an external process — `std::process::Command` or
+portable-pty `CommandBuilder` — resolve the binary with the helpers above *and*
+set its `PATH` to `augmented_path()`. Apply any profile-provided env afterwards so
+a profile's own PATH still wins. Current call sites:
+
+- agent PTY sessions — `native/src/sessions/mod.rs`
+- the reviewer launch shared by the task AI review loop and external PR reviews —
+  `native/src/sessions/review_loop.rs`
+- `gh` invocations resolve `gh` via `resolve_executable`; `gh` is a single static
+  binary that spawns no node, so it needs resolution but not `augmented_path`
+  (`native/src/github.rs`).
 
 ## Frontend Boundaries
 
@@ -272,4 +302,5 @@ Preserve these V1 decisions unless the user asks to change them:
 - Keep GitHub integration optional, additive, and `gh`-CLI-based; do not introduce app-managed OAuth or token storage.
 - If adding persistent background sessions, introduce a deliberate session manager such as tmux/zellij instead of silently detaching child processes.
 - If adding more terminal features, prefer extending `native/src/sessions/` and `src/TerminalPane.tsx` rather than mixing PTY concerns into dashboard components.
+- When spawning any external CLI, follow [Spawning External CLIs](#spawning-external-clis-macos-gui-path): resolve the binary and set `PATH` to `process_util::augmented_path()`. A GUI-launched app's minimal PATH otherwise breaks node-based agents with `env: node: No such file or directory` (exit 127).
 - The current icon is a simple generated placeholder and can be replaced later with proper app assets.

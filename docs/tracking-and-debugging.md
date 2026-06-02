@@ -277,9 +277,20 @@ Check:
   or `/usr/local/bin`.
 - Extra args and environment lines in Settings are valid for that CLI.
 
+Symptom — `env: node: No such file or directory` with **exit status 127**: the
+agent binary was found, but a Finder/Dock-launched app has a minimal PATH so the
+node-based CLI (e.g. Codex) cannot exec `node`. Both the PTY session
+(`native/src/sessions/mod.rs`) and the reviewer launch
+(`native/src/sessions/review_loop.rs`) set the spawned command's `PATH` to
+`process_util::augmented_path()` — the current PATH plus
+`process_util::third_party_bin_dirs` — so nested tools resolve. If `node` lives
+somewhere unusual (e.g. nvm), add that dir to `third_party_bin_dirs` or set `PATH`
+on the agent profile's env. See AGENTS.md → *Spawning External CLIs*.
+
 Relevant code:
 
-- `native/src/sessions/command.rs`
+- `native/src/sessions/command.rs` (binary resolution)
+- `native/src/process_util.rs` (`augmented_path`, `third_party_bin_dirs`)
 - `src/components/SettingsPage.tsx`
 
 ### Terminal Is Blank Or Input Does Not Work
@@ -378,7 +389,10 @@ Check:
   after idle still requires a Codex session that emits `session_idle`.
 - Manual review runs should emit `review_loop_updated` with status
   `reviewing` before the reviewer command finishes.
-- The reviewer profile command resolves and exits successfully.
+- The reviewer profile command resolves and exits successfully. An exit status
+  127 with `env: node: No such file or directory` is the minimal-PATH problem —
+  see *Agent Command Fails To Start* above; the reviewer launch sets
+  `process_util::augmented_path()` to fix it.
 - Claude and Gemini reviewer profiles can run headless with `-p`; custom
   reviewers must read the generated prompt from stdin.
 - Reviewer output contains an exact first-line verdict token:
