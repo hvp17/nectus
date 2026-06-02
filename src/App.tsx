@@ -8,6 +8,7 @@ import { Workspace } from "./components/Workspace";
 import { TaskWorkspace } from "./components/TaskWorkspace";
 import { CreateTaskModal } from "./components/CreateTaskModal";
 import { SettingsPage } from "./components/SettingsPage";
+import { ReviewsPage } from "./components/ReviewsPage";
 import { useApp } from "./hooks/useApp";
 import { useAppTheme } from "./hooks/useAppTheme";
 import { formatNotificationBody } from "./notificationText";
@@ -87,6 +88,14 @@ function App() {
     setCurrentView,
     saveAppSettings,
     saveAgentProfile,
+    prReviews,
+    selectedPrReviewId,
+    setSelectedPrReviewId,
+    selectedPrReview,
+    creatingReview,
+    createPrReview,
+    rerunPrReview,
+    deletePrReview,
   } = useApp();
 
   useAppTheme(settings);
@@ -148,8 +157,13 @@ function App() {
             setCurrentView("settings");
             setSelectedTaskId(undefined);
           }}
+          onOpenReviews={() => {
+            setCurrentView("reviews");
+            setSelectedTaskId(undefined);
+          }}
           onStopSession={stopSession}
           settingsActive={currentView === "settings"}
+          reviewsActive={currentView === "reviews"}
           busy={busy}
           loading={loading}
         />
@@ -164,6 +178,20 @@ function App() {
               onBack={() => setCurrentView("dashboard")}
               onSaveSettings={saveAppSettings}
               onSaveAgentProfile={saveAgentProfile}
+            />
+          ) : currentView === "reviews" ? (
+            <ReviewsPage
+              prReviews={prReviews}
+              selectedPrReview={selectedPrReview}
+              selectedPrReviewId={selectedPrReviewId}
+              agentProfiles={agentProfiles}
+              defaultReviewerProfileId={settings?.defaultAgentProfileId ?? agentProfiles[0]?.id}
+              creatingReview={creatingReview}
+              onSelectReview={setSelectedPrReviewId}
+              onCreateReview={createPrReview}
+              onRerunReview={rerunPrReview}
+              onDeleteReview={deletePrReview}
+              onBack={() => setCurrentView("dashboard")}
             />
           ) : (
             <div

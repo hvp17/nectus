@@ -5,6 +5,7 @@ export type ThemeMode = "system" | "light" | "dark";
 export type DensityMode = "comfortable" | "compact";
 export type ReviewLoopStatus = "running" | "reviewing" | "passed" | "feedback_sent" | "error" | "stopped";
 export type ReviewVerdict = "pass" | "needs_changes" | "feedback" | "unknown";
+export type PrReviewStatus = "queued" | "reviewing" | "ready" | "error";
 export type GithubCheckState = "passing" | "failing" | "pending" | "none";
 export type PullRequestState = "open" | "merged" | "closed" | "unknown";
 export type PullRequestReviewDecision = "approved" | "changes_requested" | "review_required";
@@ -101,6 +102,29 @@ export interface ReviewLoopUpdatedEvent {
   taskId: number;
   reviewLoop: ReviewLoop;
   reviewRun?: ReviewRun | null;
+}
+
+export interface PrReview {
+  id: number;
+  repoId: number;
+  repoName: string;
+  reviewerProfileId: number;
+  reviewerName?: string | null;
+  prUrl: string;
+  prNumber: number;
+  prTitle?: string | null;
+  prAuthor?: string | null;
+  baseBranch?: string | null;
+  status: PrReviewStatus;
+  reviewOutput?: string | null;
+  lastError?: string | null;
+  worktreePath?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PrReviewUpdatedEvent {
+  prReview: PrReview;
 }
 
 export interface AppSettings {

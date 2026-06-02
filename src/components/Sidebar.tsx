@@ -4,6 +4,7 @@ import {
   ArrowRight01Icon,
   FolderAddIcon,
   FolderGitIcon,
+  GitPullRequestIcon,
   PlusSignIcon,
   Settings02Icon,
 } from "@hugeicons/core-free-icons";
@@ -40,8 +41,10 @@ interface SidebarProps {
   onCreateTaskInRepo: (repoId: number) => void;
   onAddProject: () => void;
   onOpenSettings: () => void;
+  onOpenReviews: () => void;
   onStopSession: (sessionId: string) => void;
   settingsActive: boolean;
+  reviewsActive: boolean;
   busy: boolean;
   loading: boolean;
 }
@@ -64,8 +67,10 @@ export function Sidebar({
   onCreateTaskInRepo,
   onAddProject,
   onOpenSettings,
+  onOpenReviews,
   onStopSession,
   settingsActive,
+  reviewsActive,
   busy,
   loading,
 }: SidebarProps) {
@@ -209,6 +214,18 @@ export function Sidebar({
 
       <SidebarFooter>
         <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              type="button"
+              size="lg"
+              isActive={reviewsActive}
+              className="nectus-sidebar-menu-button"
+              onClick={onOpenReviews}
+            >
+              <HugeiconsIcon icon={GitPullRequestIcon} strokeWidth={2} aria-hidden="true" />
+              <span>PR Reviews</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               type="button"

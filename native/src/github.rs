@@ -154,6 +154,101 @@ fn is_pull_request_url(line: &str) -> bool {
             .is_some_and(|c| c.is_ascii_digit())
 }
 
+/// Owner, repository, and number parsed from a GitHub pull request URL.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedPrUrl {
+    pub owner: String,
+    pub repo: String,
+    pub number: i64,
+}
+
+/// Parse a GitHub pull request URL into owner, repo, and number. Accepts
+/// `https://github.com/owner/repo/pull/123` and tolerates an `http`/scheme-less
+/// prefix, a trailing slash, a `.git` repo suffix, a query string, and extra
+/// path segments such as `/files` or `/commits`.
+pub fn parse_pull_request_url(url: &str) -> Result<ParsedPrUrl, String> {
+    let invalid = || "Not a valid GitHub pull request URL".to_string();
+    let trimmed = url.trim();
+    let rest = trimmed
+        .strip_prefix("https://github.com/")
+        .or_else(|| trimmed.strip_prefix("http://github.com/"))
+        .or_else(|| trimmed.strip_prefix("github.com/"))
+        .ok_or_else(invalid)?;
+
+    let mut parts = rest.split('/');
+    let owner = parts.next().filter(|part| !part.is_empty());
+    let repo = parts.next().filter(|part| !part.is_empty());
+    let pull = parts.next();
+    let number_part = parts.next();
+
+    let (Some(owner), Some(repo), Some("pull"), Some(number_part)) =
+        (owner, repo, pull, number_part)
+    else {
+        return Err(invalid());
+    };
+
+    let digits: String = number_part
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    let number: i64 = digits.parse().map_err(|_| invalid())?;
+
+    Ok(ParsedPrUrl {
+        owner: owner.to_string(),
+        repo: repo.trim_end_matches(".git").to_string(),
+        number,
+    })
+}
+
+/// Metadata fetched from `gh pr view` for an external pull request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrMeta {
+    pub title: String,
+    pub author: Option<String>,
+    pub base_branch: Option<String>,
+}
+
+const PR_META_FIELDS: &str = "title,author,baseRefName";
+
+/// Fetch title/author/base-branch for a pull request via `gh pr view <number>`,
+/// run in the resolved local repository so `gh` targets the right repo.
+pub fn fetch_pull_request_meta(repo_path: &Path, number: i64) -> Result<PrMeta, String> {
+    let number = number.to_string();
+    let output = run_gh(
+        Some(repo_path),
+        &["pr", "view", &number, "--json", PR_META_FIELDS],
+    )?;
+    if !output.status.success() {
+        return Err(command_error(&output, "gh pr view failed"));
+    }
+    parse_pull_request_meta(&String::from_utf8_lossy(&output.stdout))
+}
+
+fn parse_pull_request_meta(json: &str) -> Result<PrMeta, String> {
+    #[derive(Deserialize)]
+    struct RawAuthor {
+        login: Option<String>,
+    }
+    #[derive(Deserialize)]
+    struct RawMeta {
+        title: String,
+        #[serde(default)]
+        author: Option<RawAuthor>,
+        #[serde(rename = "baseRefName", default)]
+        base_ref_name: Option<String>,
+    }
+    let raw: RawMeta = serde_json::from_str(json)
+        .map_err(|error| format!("Failed to parse PR metadata: {error}"))?;
+    Ok(PrMeta {
+        title: raw.title,
+        author: raw
+            .author
+            .and_then(|author| author.login)
+            .filter(|login| !login.is_empty()),
+        base_branch: raw.base_ref_name.filter(|branch| !branch.is_empty()),
+    })
+}
+
 fn run_gh(current_dir: Option<&Path>, args: &[&str]) -> Result<Output, String> {
     // Resolve `gh` against PATH and the common install locations: a built app
     // launched from Finder inherits only a minimal PATH that excludes Homebrew.
@@ -286,6 +381,80 @@ fn is_no_pull_request_error(stderr: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_pull_request_url_variants() {
+        let parsed = parse_pull_request_url("https://github.com/hvp17/nectus/pull/42").unwrap();
+        assert_eq!(parsed.owner, "hvp17");
+        assert_eq!(parsed.repo, "nectus");
+        assert_eq!(parsed.number, 42);
+
+        // Trailing slash, extra path segment, `.git` suffix, query string, scheme-less.
+        assert_eq!(
+            parse_pull_request_url("https://github.com/a/b/pull/7/")
+                .unwrap()
+                .number,
+            7
+        );
+        assert_eq!(
+            parse_pull_request_url("https://github.com/a/b/pull/7/files")
+                .unwrap()
+                .number,
+            7
+        );
+        assert_eq!(
+            parse_pull_request_url("https://github.com/a/b.git/pull/7")
+                .unwrap()
+                .repo,
+            "b"
+        );
+        assert_eq!(
+            parse_pull_request_url("https://github.com/a/b/pull/7?diff=split")
+                .unwrap()
+                .number,
+            7
+        );
+        assert_eq!(
+            parse_pull_request_url("github.com/a/b/pull/9").unwrap().number,
+            9
+        );
+    }
+
+    #[test]
+    fn rejects_non_pull_request_urls() {
+        for value in [
+            "",
+            "https://github.com/a/b",
+            "https://github.com/a/b/issues/3",
+            "https://gitlab.com/a/b/pull/3",
+            "https://github.com/a/b/pull/notanumber",
+            "not a url",
+        ] {
+            assert!(
+                parse_pull_request_url(value).is_err(),
+                "{value} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn parses_pull_request_meta_with_author_and_base() {
+        let meta = parse_pull_request_meta(
+            r#"{"title":"Add feature","author":{"login":"octocat"},"baseRefName":"main"}"#,
+        )
+        .unwrap();
+        assert_eq!(meta.title, "Add feature");
+        assert_eq!(meta.author.as_deref(), Some("octocat"));
+        assert_eq!(meta.base_branch.as_deref(), Some("main"));
+    }
+
+    #[test]
+    fn parses_pull_request_meta_with_missing_author() {
+        let meta = parse_pull_request_meta(r#"{"title":"Tidy","author":null}"#).unwrap();
+        assert_eq!(meta.title, "Tidy");
+        assert_eq!(meta.author, None);
+        assert_eq!(meta.base_branch, None);
+    }
 
     #[test]
     fn parses_login_from_user_json() {

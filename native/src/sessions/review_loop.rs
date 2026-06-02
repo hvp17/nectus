@@ -130,7 +130,7 @@ fn emit_review_loop_update(
     );
 }
 
-fn run_reviewer_command(
+pub(super) fn run_reviewer_command(
     reviewer: &AgentProfile,
     cwd: &Path,
     prompt: &str,

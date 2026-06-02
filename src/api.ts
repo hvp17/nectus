@@ -8,6 +8,7 @@ import type {
   AppSettings,
   AppSettingsInput,
   GithubStatus,
+  PrReview,
   PullRequestInfo,
   Repo,
   ReviewLoop,
@@ -123,6 +124,29 @@ export const api = {
   async detectGithubPullRequest(taskId: number): Promise<TaskSummary | null> {
     if (!isTauri) return null;
     return invoke("detect_github_pull_request", { taskId });
+  },
+  async createPrReview(input: {
+    prUrl: string;
+    reviewerProfileId?: number | null;
+  }): Promise<PrReview> {
+    return invoke("create_pr_review", {
+      prUrl: input.prUrl,
+      reviewerProfileId: input.reviewerProfileId ?? null,
+    });
+  },
+  async listPrReviews(): Promise<PrReview[]> {
+    if (!isTauri) return [];
+    return invoke("list_pr_reviews");
+  },
+  async getPrReview(reviewId: number): Promise<PrReview | null> {
+    if (!isTauri) return null;
+    return invoke("get_pr_review", { reviewId });
+  },
+  async rerunPrReview(reviewId: number): Promise<PrReview> {
+    return invoke("rerun_pr_review", { reviewId });
+  },
+  async deletePrReview(reviewId: number): Promise<void> {
+    return invoke("delete_pr_review", { reviewId });
   },
   async listAgentProfiles(): Promise<AgentProfile[]> {
     if (!isTauri) return browserFallbackProfiles;

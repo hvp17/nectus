@@ -164,6 +164,54 @@ pub struct ReviewLoopUpdatedEvent {
     pub review_run: Option<ReviewRun>,
 }
 
+/// Lifecycle of a single external pull-request review.
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Display, EnumString, IntoStaticStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum PrReviewStatus {
+    Queued,
+    Reviewing,
+    Ready,
+    Error,
+}
+
+impl PrReviewStatus {
+    pub fn as_str(&self) -> &'static str {
+        self.into()
+    }
+}
+
+/// A review of an external GitHub pull request, resolved against a known local
+/// project and reviewed in an ephemeral worktree.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PrReview {
+    pub id: i64,
+    pub repo_id: i64,
+    pub repo_name: String,
+    pub reviewer_profile_id: i64,
+    pub reviewer_name: Option<String>,
+    pub pr_url: String,
+    pub pr_number: i64,
+    pub pr_title: Option<String>,
+    pub pr_author: Option<String>,
+    pub base_branch: Option<String>,
+    pub status: PrReviewStatus,
+    pub review_output: Option<String>,
+    pub last_error: Option<String>,
+    pub worktree_path: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrReviewUpdatedEvent {
+    pub pr_review: PrReview,
+}
+
 #[derive(
     Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Display, EnumString, IntoStaticStr,
 )]

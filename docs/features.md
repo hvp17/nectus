@@ -247,6 +247,55 @@ Key files:
 - Persistence: `review_loops` and `review_runs` tables
 - Persistence API: `native/src/db/review_loops.rs`
 
+## PR Review
+
+PR Review reviews an external GitHub pull request against a known local project and
+produces a Markdown review to copy back to the author. It is separate from the task
+board: reviews have their own sidebar section and lifecycle, and share the worktree,
+reviewer-launch, and notification machinery under the hood.
+
+Current behavior:
+
+- Open the PR Reviews section from the sidebar footer.
+- Paste a pull request URL (`https://github.com/owner/repo/pull/123`) and pick a
+  reviewer profile, then start the review.
+- Nectus resolves the PR's `owner/repo` to a project already added to Nectus by
+  matching its git remote (`origin`). If no project matches, the action reports that
+  the repository must be added as a project first. No filesystem scanning is done.
+- The review runs on a background thread: it fetches PR metadata (`gh pr view`),
+  checks out the PR head into an ephemeral worktree
+  (`git fetch origin pull/<n>/head` + `git worktree add`), runs the reviewer
+  headless in that worktree, stores the Markdown review, and always tears the
+  worktree down.
+- Status flows `queued → reviewing → ready`, or `error` on failure. A macOS
+  notification and in-app toast fire when a review becomes `ready` or `error`.
+- The detail view shows the PR metadata, the review text in a scrollable pane, a
+  Copy button, a Re-run action (re-fetches the PR head to pick up new commits), and
+  Delete.
+- Reviewer profiles are the same agent profiles used elsewhere; the default reviewer
+  is the configured default agent profile. Claude and Gemini reviewers run with `-p`;
+  Codex and custom reviewers receive the prompt on stdin.
+- Review output is written for a human (GitHub-flavored Markdown), not parsed into
+  the `pass`/`needs_changes` markers the task [AI Review](#ai-review) loop uses.
+
+Key files:
+
+- Sidebar nav entry: `src/components/Sidebar.tsx`
+- Reviews list and create form: `src/components/ReviewsPage.tsx`
+- Review detail and copy: `src/components/PrReviewDetail.tsx`
+- Frontend state, events, and notifications: `src/hooks/usePrReviews.ts`
+- Frontend API: `src/api.ts`
+- PR URL parsing and `gh pr view` metadata: `native/src/github.rs`
+- Remote `owner/repo` parsing, PR-ref fetch, worktree-at-ref: `native/src/git_ops.rs`
+- Runtime worker: `native/src/sessions/pr_review.rs`
+- Backend commands: `create_pr_review`, `list_pr_reviews`, `get_pr_review`,
+  `rerun_pr_review`, `delete_pr_review`
+- Persistence: `pr_reviews` table; API in `native/src/db/pr_reviews.rs`
+
+Emitted event:
+
+- `pr_review_updated`
+
 ## GitHub
 
 GitHub integration runs through the `gh` CLI, so Nectus stores no tokens. The app

@@ -19,12 +19,14 @@ mod codex;
 #[cfg(test)]
 mod codex_tests;
 mod command;
+mod pr_review;
 mod review_loop;
 
 use agents::configure_agent_command;
 use claude::{cleanup_event_sink, spawn_claude_event_watcher};
 use codex::{latest_codex_session_metadata, spawn_codex_event_watcher};
 use command::resolve_agent_command;
+use pr_review::spawn_pr_review;
 use review_loop::{spawn_review_on_session_idle, write_agent_submission};
 
 const OUTPUT_BUFFER_LIMIT: usize = 2 * 1024 * 1024;
@@ -486,6 +488,13 @@ impl SessionManager {
             target.cwd,
         );
         Ok(())
+    }
+
+    /// Kick off an external pull-request review on a background thread. Unlike
+    /// `run_pair_review`, this owns its own ephemeral worktree and needs no
+    /// running worker session.
+    pub fn run_pr_review(&self, app: AppHandle, db: Arc<Mutex<Database>>, review_id: i64) {
+        spawn_pr_review(app, db, review_id);
     }
 
     pub fn resize(&self, session_id: &str, rows: u16, cols: u16) -> Result<(), String> {

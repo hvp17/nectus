@@ -1,8 +1,8 @@
 use crate::git_ops;
 #[cfg(test)]
 use crate::models::{
-    AgentKind, AgentProfileInput, DensityMode, ReviewLoopStatus, ReviewRunInput, ReviewVerdict,
-    ThemeMode,
+    AgentKind, AgentProfileInput, DensityMode, PrReviewStatus, ReviewLoopStatus, ReviewRunInput,
+    ReviewVerdict, ThemeMode,
 };
 use crate::models::{AppSettings, AppSettingsInput, Repo, TaskStatus, TaskSummary};
 use chrono::Utc;
@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 mod agent_profiles;
+mod pr_reviews;
 mod review_loops;
 mod rows;
 mod schema;

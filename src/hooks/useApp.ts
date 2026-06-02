@@ -15,6 +15,7 @@ import { useSessionAttentionControls } from "./useSessionAttentionControls";
 import { useGithub } from "./useGithub";
 import { useTaskDeletion } from "./useTaskDeletion";
 import { useTaskReviewLoop } from "./useTaskReviewLoop";
+import { usePrReviews } from "./usePrReviews";
 import type {
   AgentProfile,
   AppSettings,
@@ -32,7 +33,7 @@ export function useApp() {
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [settings, setSettings] = useState<AppSettings | undefined>();
-  const [currentView, setCurrentView] = useState<"dashboard" | "settings">("dashboard");
+  const [currentView, setCurrentView] = useState<"dashboard" | "settings" | "reviews">("dashboard");
   const [selectedRepoId, setSelectedRepoId] = useState<number | undefined>();
   const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>();
   const [selectedAgentProfileId, setSelectedAgentProfileId] = useState<number | undefined>();
@@ -339,6 +340,17 @@ export function useApp() {
     setMessage,
   });
 
+  const {
+    prReviews,
+    selectedPrReviewId,
+    setSelectedPrReviewId,
+    selectedPrReview,
+    creatingReview,
+    createPrReview,
+    rerunPrReview,
+    deletePrReview,
+  } = usePrReviews({ onMessage: setMessage });
+
   const saveAppSettings = (input: AppSettingsInput) =>
     run(
       async () => {
@@ -427,5 +439,13 @@ export function useApp() {
     setSelectedAgentProfileId,
     saveAppSettings,
     saveAgentProfile,
+    prReviews,
+    selectedPrReviewId,
+    setSelectedPrReviewId,
+    selectedPrReview,
+    creatingReview,
+    createPrReview,
+    rerunPrReview,
+    deletePrReview,
   };
 }
