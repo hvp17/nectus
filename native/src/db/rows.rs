@@ -1,6 +1,6 @@
 use crate::models::{
-    AgentKind, AgentProfile, AppSettings, DensityMode, Repo, ReviewLoop, ReviewLoopStatus,
-    ReviewRun, ReviewVerdict, TaskStatus, TaskSummary, ThemeMode,
+    AgentKind, AgentProfile, AppSettings, DensityMode, PrReview, PrReviewStatus, Repo, ReviewLoop,
+    ReviewLoopStatus, ReviewRun, ReviewVerdict, TaskStatus, TaskSummary, ThemeMode,
 };
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ValueRef};
 use rusqlite::Row;
@@ -26,6 +26,7 @@ impl_enum_from_sql! {
     TaskStatus => "task status",
     ReviewLoopStatus => "review loop status",
     ReviewVerdict => "review verdict",
+    PrReviewStatus => "pr review status",
     AgentKind => "agent kind",
     ThemeMode => "theme mode",
     DensityMode => "density mode",
@@ -144,5 +145,28 @@ pub(super) fn review_run_from_row(row: &Row<'_>) -> rusqlite::Result<ReviewRun> 
         output: row.get(5)?,
         error: row.get(6)?,
         created_at: row.get(7)?,
+    })
+}
+
+/// Maps the joined `pr_reviews` SELECT (see `db/pr_reviews.rs`): repo name comes
+/// from `repos`, reviewer name from a LEFT JOIN on `agent_profiles`.
+pub(super) fn pr_review_from_row(row: &Row<'_>) -> rusqlite::Result<PrReview> {
+    Ok(PrReview {
+        id: row.get(0)?,
+        repo_id: row.get(1)?,
+        repo_name: row.get(2)?,
+        reviewer_profile_id: row.get(3)?,
+        reviewer_name: row.get(4)?,
+        pr_url: row.get(5)?,
+        pr_number: row.get(6)?,
+        pr_title: row.get(7)?,
+        pr_author: row.get(8)?,
+        base_branch: row.get(9)?,
+        status: row.get(10)?,
+        review_output: row.get(11)?,
+        last_error: row.get(12)?,
+        worktree_path: row.get(13)?,
+        created_at: row.get(14)?,
+        updated_at: row.get(15)?,
     })
 }

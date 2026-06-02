@@ -8,8 +8,8 @@ mod sessions;
 use crate::db::Database;
 use crate::models::{
     AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings, AppSettingsInput,
-    GithubStatus, PullRequestInfo, Repo, ReviewLoop, ReviewRun, Session, SessionExitedEvent,
-    SessionOutputSnapshot, TaskStatus, TaskSummary,
+    GithubStatus, PrReview, PullRequestInfo, Repo, ReviewLoop, ReviewRun, Session,
+    SessionExitedEvent, SessionOutputSnapshot, TaskStatus, TaskSummary,
 };
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
@@ -220,6 +220,77 @@ async fn detect_github_pull_request(
     .await
     .map_err(|error| AppError::from(format!("Failed to detect pull request: {error}")))?
     .map_err(Into::into)
+}
+
+/// Start a review of an external pull request: resolve its `owner/repo` to a
+/// known project, queue the review, and kick off the background reviewer.
+#[tauri::command]
+fn create_pr_review(
+    pr_url: String,
+    reviewer_profile_id: Option<i64>,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<PrReview> {
+    let review = {
+        let db = state.db.lock();
+        let parsed = github::parse_pull_request_url(&pr_url)?;
+        let repo = db
+            .resolve_repo_for_owner_repo(&parsed.owner, &parsed.repo)?
+            .ok_or_else(|| {
+                AppError::from(format!(
+                    "Add {}/{} as a project to review its pull requests",
+                    parsed.owner, parsed.repo
+                ))
+            })?;
+        let reviewer_profile_id = match reviewer_profile_id {
+            Some(id) => id,
+            None => db
+                .get_app_settings()?
+                .default_agent_profile_id
+                .ok_or_else(|| AppError::from("Choose a reviewer profile for the review"))?,
+        };
+        db.create_pr_review(repo.id, reviewer_profile_id, pr_url.trim(), parsed.number)?
+    };
+
+    state.sessions.run_pr_review(app, state.db.clone(), review.id);
+    Ok(review)
+}
+
+#[tauri::command]
+fn list_pr_reviews(state: State<'_, AppState>) -> AppResult<Vec<PrReview>> {
+    app_result(state.db.lock().list_pr_reviews())
+}
+
+#[tauri::command]
+fn get_pr_review(review_id: i64, state: State<'_, AppState>) -> AppResult<Option<PrReview>> {
+    app_result(state.db.lock().pr_review_by_id(review_id))
+}
+
+/// Re-run a finished review: re-fetch the PR head (picking up new commits) and
+/// review again.
+#[tauri::command]
+fn rerun_pr_review(
+    review_id: i64,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<PrReview> {
+    let review = app_result(state.db.lock().reset_pr_review_for_rerun(review_id))?;
+    state.sessions.run_pr_review(app, state.db.clone(), review.id);
+    Ok(review)
+}
+
+#[tauri::command]
+fn delete_pr_review(review_id: i64, state: State<'_, AppState>) -> AppResult<()> {
+    let db = state.db.lock();
+    if let Some(review) = db.pr_review_by_id(review_id)? {
+        if let (Some(worktree), Some(repo)) = (
+            review.worktree_path.as_deref(),
+            db.repo_by_id(review.repo_id)?,
+        ) {
+            let _ = git_ops::remove_worktree(Path::new(&repo.path), Path::new(worktree));
+        }
+    }
+    app_result(db.delete_pr_review(review_id))
 }
 
 #[tauri::command]
@@ -445,6 +516,11 @@ pub fn run() {
             create_github_pull_request,
             github_pull_request_status,
             detect_github_pull_request,
+            create_pr_review,
+            list_pr_reviews,
+            get_pr_review,
+            rerun_pr_review,
+            delete_pr_review,
             list_agent_profiles,
             upsert_agent_profile,
             start_pair_loop,

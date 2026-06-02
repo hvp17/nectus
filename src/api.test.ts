@@ -113,6 +113,35 @@ describe("api", () => {
     });
   });
 
+  it("queues a PR review with a default-null reviewer", async () => {
+    mockedInvoke.mockResolvedValueOnce({ id: 1, prNumber: 3 });
+
+    await api.createPrReview({ prUrl: "https://github.com/owner/repo/pull/3" });
+
+    expect(mockedInvoke).toHaveBeenCalledWith("create_pr_review", {
+      prUrl: "https://github.com/owner/repo/pull/3",
+      reviewerProfileId: null,
+    });
+  });
+
+  it("passes a chosen reviewer when queuing a PR review", async () => {
+    mockedInvoke.mockResolvedValueOnce({ id: 1, prNumber: 3 });
+
+    await api.createPrReview({ prUrl: "https://github.com/owner/repo/pull/3", reviewerProfileId: 4 });
+
+    expect(mockedInvoke).toHaveBeenCalledWith("create_pr_review", {
+      prUrl: "https://github.com/owner/repo/pull/3",
+      reviewerProfileId: 4,
+    });
+  });
+
+  it("returns no PR reviews outside Tauri", async () => {
+    const reviews = await api.listPrReviews();
+
+    expect(reviews).toEqual([]);
+    expect(mockedInvoke).not.toHaveBeenCalled();
+  });
+
   it("returns a disconnected GitHub status outside Tauri", async () => {
     const status = await api.githubStatus();
 

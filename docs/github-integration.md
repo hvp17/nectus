@@ -51,11 +51,30 @@ authentication, Nectus stores no tokens and runs no OAuth flow — it shells out
   best-effort: if the branch has no PR or `gh` errors, the stored PR link still
   shows.
 
+## Review an external pull request
+
+The PR Reviews section reviews a pull request opened by someone else (see
+[PR Review](features.md#pr-review) for the full feature behavior).
+
+- A pasted PR URL (`https://github.com/owner/repo/pull/<n>`) is parsed into
+  `owner`, `repo`, and number by `github::parse_pull_request_url`, then matched to a
+  known project by comparing each project's `origin` remote
+  (`git_ops::remote_owner_repo`) — so the repository must already be added to Nectus.
+- PR metadata (title, author, base branch) is read with
+  `gh pr view <n> --json title,author,baseRefName`, run inside the resolved local
+  repository.
+- The PR head is checked out into an ephemeral worktree with
+  `git fetch --force origin pull/<n>/head:<branch>` followed by `git worktree add`;
+  this works for fork PRs because GitHub exposes `refs/pull/<n>/head` on the base
+  repository's remote. The worktree is always removed after the review.
+
 ## Requirements
 
 - The GitHub CLI (`gh`) must be installed and authenticated (`gh auth login`).
 - Creating a PR needs a worktree-backed task with at least one commit ahead of the
   repository's default branch and a GitHub remote (`origin`).
+- Reviewing an external PR needs the repository added to Nectus as a project and a
+  GitHub remote that resolves to the PR's `owner/repo`.
 
 ## Key files
 

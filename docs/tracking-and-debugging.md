@@ -21,6 +21,7 @@ Core tables:
 | `tasks` | Primary work item, status, prompt, optional worktree, active session, saved session. |
 | `review_loops` | Current review configuration and status per task. |
 | `review_runs` | Reviewer prompts, outputs, verdicts, and errors by review attempt. |
+| `pr_reviews` | External pull-request reviews: PR metadata, status, Markdown output, and ephemeral worktree path. |
 
 Schema owner: `native/src/db/schema.rs`
 
@@ -32,6 +33,8 @@ Persistence APIs:
   session-state records.
 - `native/src/db/agent_profiles.rs`: agent profile queries and upserts.
 - `native/src/db/review_loops.rs`: review-loop and review-run records.
+- `native/src/db/pr_reviews.rs`: PR-review records and `owner/repo` → project
+  resolution.
 
 ### Frontend State
 
@@ -131,6 +134,11 @@ Current commands:
 | `stop_pair_loop` | Stop reviewer automation for a task. |
 | `get_task_review_loop` | Load a task's current review loop. |
 | `list_task_review_runs` | Load stored reviewer runs for a task. |
+| `create_pr_review` | Resolve a PR URL to a known project, queue a review, and start the background reviewer. |
+| `list_pr_reviews` | Load all PR reviews, newest first. |
+| `get_pr_review` | Load a single PR review by id. |
+| `rerun_pr_review` | Reset a PR review to queued and re-run it against the latest PR head. |
+| `delete_pr_review` | Remove a PR review and any lingering ephemeral worktree. |
 | `start_session` | Start an agent in the task cwd. |
 | `resume_session` | Resume a Codex or Claude saved session. |
 | `stop_session` | Stop a running PTY child process. |
@@ -150,6 +158,7 @@ Backend-to-frontend events:
 | `session_idle` | Task id, session id, Codex turn id, optional message. | `native/src/sessions/codex.rs` |
 | `session_needs_input` | Task id, session id, reason, optional prompt. | `native/src/sessions/codex.rs` |
 | `review_loop_updated` | Review-loop state and optional review run. | `native/src/sessions/review_loop.rs` |
+| `pr_review_updated` | Updated external PR review (status, metadata, Markdown output). | `native/src/sessions/pr_review.rs` |
 
 Frontend event listeners:
 
@@ -161,6 +170,8 @@ Frontend event listeners:
 - `src/hooks/useSessionEvents.ts` listens for attention events and sends
   notifications.
 - `src/hooks/useTaskReviewLoop.ts` listens for `review_loop_updated`.
+- `src/hooks/usePrReviews.ts` listens for `pr_review_updated` and notifies when a
+  review becomes ready or errors.
 
 ## Task Tracking Fields
 

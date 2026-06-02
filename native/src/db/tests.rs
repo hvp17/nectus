@@ -706,3 +706,100 @@ fn delete_task_rejects_active_session() {
     assert!(error.contains("Stop the running session"), "{error}");
     assert!(db.task_by_id(task.id).unwrap().is_some());
 }
+
+/// Add a project whose `origin` remote is a GitHub URL (not fetched — only its
+/// URL is read), so `resolve_repo_for_owner_repo` can match it.
+fn add_repo_with_github_remote(db: &Database, owner: &str, name: &str) -> (tempfile::TempDir, Repo) {
+    let dir = tempdir().unwrap();
+    std::process::Command::new("git")
+        .args(["init", "--initial-branch=main"])
+        .arg(dir.path())
+        .output()
+        .unwrap();
+    run_git(
+        dir.path(),
+        &[
+            "remote",
+            "add",
+            "origin",
+            &format!("https://github.com/{owner}/{name}.git"),
+        ],
+    );
+    let repo = db.add_repo(dir.path().to_string_lossy().to_string()).unwrap();
+    (dir, repo)
+}
+
+#[test]
+fn resolves_known_repo_for_pull_request_owner_and_name() {
+    let db = Database::open_in_memory().unwrap();
+    let (_dir, repo) = add_repo_with_github_remote(&db, "hvp17", "nectus");
+
+    // Matching is case-insensitive on both owner and repo.
+    let resolved = db
+        .resolve_repo_for_owner_repo("HVP17", "Nectus")
+        .unwrap()
+        .unwrap();
+    assert_eq!(resolved.id, repo.id);
+    assert!(db
+        .resolve_repo_for_owner_repo("someone", "else")
+        .unwrap()
+        .is_none());
+}
+
+#[test]
+fn creates_lists_and_transitions_a_pr_review() {
+    let db = Database::open_in_memory().unwrap();
+    let (_dir, repo) = add_repo_with_github_remote(&db, "hvp17", "nectus");
+    let reviewer = db.list_agent_profiles().unwrap()[0].clone();
+
+    let review = db
+        .create_pr_review(
+            repo.id,
+            reviewer.id,
+            "https://github.com/hvp17/nectus/pull/7",
+            7,
+        )
+        .unwrap();
+    assert_eq!(review.status, PrReviewStatus::Queued);
+    assert_eq!(review.pr_number, 7);
+    assert_eq!(review.repo_name, repo.name);
+    assert_eq!(review.reviewer_name.as_deref(), Some(reviewer.name.as_str()));
+
+    db.set_pr_review_meta(review.id, Some("Add feature"), Some("octocat"), Some("main"))
+        .unwrap();
+    db.set_pr_review_result(review.id, "## Review\nLooks good.")
+        .unwrap();
+
+    let loaded = db.pr_review_by_id(review.id).unwrap().unwrap();
+    assert_eq!(loaded.status, PrReviewStatus::Ready);
+    assert_eq!(loaded.pr_title.as_deref(), Some("Add feature"));
+    assert_eq!(loaded.pr_author.as_deref(), Some("octocat"));
+    assert_eq!(loaded.base_branch.as_deref(), Some("main"));
+    assert_eq!(loaded.review_output.as_deref(), Some("## Review\nLooks good."));
+
+    assert_eq!(db.list_pr_reviews().unwrap().len(), 1);
+
+    // Rerun clears the prior output and returns to queued.
+    let rerun = db.reset_pr_review_for_rerun(review.id).unwrap();
+    assert_eq!(rerun.status, PrReviewStatus::Queued);
+    assert_eq!(rerun.review_output, None);
+
+    db.delete_pr_review(review.id).unwrap();
+    assert!(db.pr_review_by_id(review.id).unwrap().is_none());
+}
+
+#[test]
+fn deleting_a_repo_cascades_to_its_pr_reviews() {
+    let db = Database::open_in_memory().unwrap();
+    let (_dir, repo) = add_repo_with_github_remote(&db, "hvp17", "nectus");
+    let reviewer = db.list_agent_profiles().unwrap()[0].clone();
+    let review = db
+        .create_pr_review(repo.id, reviewer.id, "https://github.com/hvp17/nectus/pull/1", 1)
+        .unwrap();
+
+    db.conn
+        .execute("DELETE FROM repos WHERE id = ?1", [repo.id])
+        .unwrap();
+
+    assert!(db.pr_review_by_id(review.id).unwrap().is_none());
+}

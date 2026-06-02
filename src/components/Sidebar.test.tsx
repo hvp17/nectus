@@ -48,7 +48,9 @@ function renderSidebar(input?: {
         taskAttention={input?.taskAttention ?? []}
         onAddProject={vi.fn()}
         onOpenSettings={vi.fn()}
+        onOpenReviews={vi.fn()}
         settingsActive={false}
+        reviewsActive={false}
         busy={false}
         loading={false}
         {...props}

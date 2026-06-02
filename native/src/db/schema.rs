@@ -96,6 +96,26 @@ impl Database {
 
                 CREATE INDEX IF NOT EXISTS review_runs_task_idx
                 ON review_runs(task_id, id);
+
+                CREATE TABLE IF NOT EXISTS pr_reviews (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  repo_id INTEGER NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+                  reviewer_profile_id INTEGER NOT NULL REFERENCES agent_profiles(id),
+                  pr_url TEXT NOT NULL,
+                  pr_number INTEGER NOT NULL,
+                  pr_title TEXT,
+                  pr_author TEXT,
+                  base_branch TEXT,
+                  status TEXT NOT NULL,
+                  review_output TEXT,
+                  last_error TEXT,
+                  worktree_path TEXT,
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS pr_reviews_repo_idx
+                ON pr_reviews(repo_id, id);
                 ",
             )
             .map_err(|error| format!("Failed to create database schema: {error}"))

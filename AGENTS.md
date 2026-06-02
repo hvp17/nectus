@@ -189,6 +189,11 @@ Tauri commands exposed to the frontend include:
 - `stop_pair_loop`
 - `get_task_review_loop`
 - `list_task_review_runs`
+- `create_pr_review`
+- `list_pr_reviews`
+- `get_pr_review`
+- `rerun_pr_review`
+- `delete_pr_review`
 - `start_session`
 - `resume_session`
 - `stop_session`
@@ -203,6 +208,7 @@ Events emitted by Rust:
 - `session_idle`
 - `session_needs_input`
 - `review_loop_updated`
+- `pr_review_updated`
 
 ## Frontend Boundaries
 

@@ -186,6 +186,99 @@ pub fn create_worktree(
     }
 }
 
+/// Extract `(owner, repo)` from a git remote URL, handling the common GitHub
+/// SSH (`git@github.com:owner/repo.git`) and HTTPS
+/// (`https://github.com/owner/repo[.git]`) forms. Returns `None` for URLs we
+/// can't confidently parse.
+pub fn parse_remote_owner_repo(url: &str) -> Option<(String, String)> {
+    let url = url.trim();
+    let without_scheme = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+        .or_else(|| url.strip_prefix("ssh://"))
+        .or_else(|| url.strip_prefix("git://"))
+        .unwrap_or(url);
+    // Drop an optional `user@`, then split the host from the path on the first
+    // `:` (SSH shorthand) or `/` (URL path).
+    let after_user = without_scheme
+        .split_once('@')
+        .map(|(_, rest)| rest)
+        .unwrap_or(without_scheme);
+    let (_, path) = after_user.split_once([':', '/'])?;
+    let path = path.trim_matches('/');
+    let path = path.strip_suffix(".git").unwrap_or(path);
+
+    let mut segments = path.split('/').filter(|segment| !segment.is_empty());
+    let owner = segments.next()?.to_string();
+    let repo = segments.next()?.to_string();
+    Some((owner, repo))
+}
+
+/// Read the `(owner, repo)` of a repository's default remote.
+pub fn remote_owner_repo(repo_path: &Path) -> Option<(String, String)> {
+    let remote = default_remote(repo_path).ok()?;
+    let output = git_output(
+        repo_path,
+        &["remote", "get-url", &remote],
+        "Failed to read remote url",
+    )
+    .ok()?;
+    parse_remote_owner_repo(String::from_utf8_lossy(&output.stdout).trim())
+}
+
+/// Fetch a pull request head into a local branch:
+/// `git fetch --force origin pull/<n>/head:<branch>`. Works for fork PRs because
+/// GitHub exposes `refs/pull/<n>/head` on the base repository's remote.
+pub fn fetch_pull_request_ref(
+    repo_path: &Path,
+    number: i64,
+    branch_name: &str,
+) -> Result<(), String> {
+    validate_branch_name(branch_name)?;
+    let remote = default_remote(repo_path)?;
+    let refspec = format!("pull/{number}/head:{branch_name}");
+    git_output(
+        repo_path,
+        &["fetch", "--force", &remote, &refspec],
+        "Failed to fetch pull request ref",
+    )?;
+    Ok(())
+}
+
+/// Add a worktree that checks out an existing local branch (e.g. a fetched PR
+/// head). Unlike [`create_worktree`], this does not create a new branch from the
+/// remote default — the branch must already exist.
+pub fn create_worktree_at_ref(
+    repo_path: &Path,
+    worktree_path: &Path,
+    branch_name: &str,
+) -> Result<(), String> {
+    validate_branch_name(branch_name)?;
+    if worktree_path.exists() {
+        return Err("Worktree path already exists".into());
+    }
+    if let Some(parent) = worktree_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create worktree parent folder: {error}"))?;
+    }
+
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo_path)
+        .arg("worktree")
+        .arg("add")
+        .arg(worktree_path)
+        .arg(branch_name)
+        .output()
+        .map_err(|error| format!("Failed to run git worktree add: {error}"))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(command_error(&output, "git worktree add failed"))
+    }
+}
+
 pub fn remove_worktree(repo_path: &Path, worktree_path: &Path) -> Result<(), String> {
     if !worktree_path.exists() {
         return Ok(());
@@ -347,5 +440,80 @@ mod tests {
         let dir = tempdir().unwrap();
 
         assert!(validate_repo_path(dir.path()).is_err());
+    }
+
+    #[test]
+    fn parses_owner_and_repo_from_remote_urls() {
+        for url in [
+            "git@github.com:hvp17/nectus.git",
+            "https://github.com/hvp17/nectus.git",
+            "https://github.com/hvp17/nectus",
+            "ssh://git@github.com/hvp17/nectus.git",
+            "https://github.com/hvp17/nectus/",
+        ] {
+            assert_eq!(
+                parse_remote_owner_repo(url),
+                Some(("hvp17".to_string(), "nectus".to_string())),
+                "failed to parse {url}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_unparseable_remote_urls() {
+        assert_eq!(parse_remote_owner_repo(""), None);
+        assert_eq!(parse_remote_owner_repo("not-a-url"), None);
+        assert_eq!(parse_remote_owner_repo("https://github.com/owner-only"), None);
+    }
+
+    #[test]
+    fn fetches_pull_request_head_into_a_worktree() {
+        let dir = tempdir().unwrap();
+        let remote_dir = dir.path().join("remote.git");
+        let seed_dir = dir.path().join("seed");
+        let local_dir = dir.path().join("local");
+        let worktree_path = dir.path().join("pr-review-1");
+
+        Command::new("git")
+            .args(["init", "--bare", "--initial-branch=main"])
+            .arg(&remote_dir)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["init", "--initial-branch=main"])
+            .arg(&seed_dir)
+            .output()
+            .unwrap();
+        run_git(&seed_dir, &["config", "user.email", "test@example.com"]);
+        run_git(&seed_dir, &["config", "user.name", "Test User"]);
+        run_git(
+            &seed_dir,
+            &["remote", "add", "origin", &remote_dir.to_string_lossy()],
+        );
+        fs::write(seed_dir.join("base.txt"), "base\n").unwrap();
+        run_git(&seed_dir, &["add", "base.txt"]);
+        run_git(&seed_dir, &["commit", "-m", "Base"]);
+        run_git(&seed_dir, &["push", "-u", "origin", "main"]);
+
+        // Simulate a PR head ref like GitHub exposes at refs/pull/<n>/head.
+        run_git(&seed_dir, &["checkout", "-b", "feature"]);
+        fs::write(seed_dir.join("base.txt"), "from-pull-request\n").unwrap();
+        run_git(&seed_dir, &["commit", "-am", "PR change"]);
+        run_git(&seed_dir, &["push", "origin", "HEAD:refs/pull/1/head"]);
+
+        Command::new("git")
+            .arg("clone")
+            .arg(&remote_dir)
+            .arg(&local_dir)
+            .output()
+            .unwrap();
+
+        fetch_pull_request_ref(&local_dir, 1, "pr-review-1").unwrap();
+        create_worktree_at_ref(&local_dir, &worktree_path, "pr-review-1").unwrap();
+
+        assert_eq!(
+            fs::read_to_string(worktree_path.join("base.txt")).unwrap(),
+            "from-pull-request\n"
+        );
     }
 }
