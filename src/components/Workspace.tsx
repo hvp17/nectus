@@ -6,14 +6,8 @@ import { Card, CardHeader, CardTitle, CardContent, CardAction } from "./ui/card"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
 import { TaskCard } from "./TaskCard";
 import { getTaskAttention, type TaskAttention } from "../sessionAttention";
+import { TASK_STATUS_LABELS } from "../statusLabels";
 import { TaskStatus, TaskSummary, Repo } from "../types";
-
-const statusLabels: Record<TaskStatus, string> = {
-  planned: "Planned",
-  in_progress: "In progress",
-  review: "Review",
-  done: "Done",
-};
 
 const statusOrder: TaskStatus[] = ["planned", "in_progress", "review", "done"];
 
@@ -208,7 +202,7 @@ export function Workspace({
                 isDropTarget={acceptsDraggedTask && dropTargetStatus === status}
               >
                 <div className="column-heading px-1 mb-1">
-                  <span className="text-xs font-bold uppercase tracking-wider">{statusLabels[status]}</span>
+                  <span className="text-xs font-bold uppercase tracking-wider">{TASK_STATUS_LABELS[status]}</span>
                   <Badge variant="secondary" className="text-[10px] h-5 min-w-5 justify-center font-bold">
                     {tasksInColumn.length}
                   </Badge>
@@ -235,7 +229,7 @@ export function Workspace({
                     <Empty className="min-h-32 border-0 bg-background/40 p-4">
                       <EmptyHeader>
                         <EmptyTitle>No tasks</EmptyTitle>
-                        <EmptyDescription>No {statusLabels[status].toLowerCase()} tasks.</EmptyDescription>
+                        <EmptyDescription>No {TASK_STATUS_LABELS[status].toLowerCase()} tasks.</EmptyDescription>
                       </EmptyHeader>
                     </Empty>
                   )}
@@ -266,7 +260,7 @@ function StatusColumn({
         isDropTarget ? "drop-target" : isDropAvailable ? "drop-available" : ""
       }`}
       role="region"
-      aria-label={`${statusLabels[status]} tasks`}
+      aria-label={`${TASK_STATUS_LABELS[status]} tasks`}
       data-task-status={status}
       data-drop-available={isDropAvailable ? "true" : undefined}
       data-drop-target={isDropTarget ? "true" : undefined}

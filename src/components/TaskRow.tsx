@@ -11,14 +11,8 @@ import { AgentLogo } from "./AgentBrand";
 import { SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from "./ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { formatAttentionReason, type TaskAttention } from "../sessionAttention";
-import type { AgentKind, TaskStatus, TaskSummary } from "../types";
-
-const taskStatusLabels: Record<TaskStatus, string> = {
-  planned: "Planned",
-  in_progress: "In progress",
-  review: "Review",
-  done: "Done",
-};
+import { TASK_STATUS_LABELS } from "../statusLabels";
+import type { AgentKind, TaskSummary } from "../types";
 
 export type TaskRowTone = "needs_input" | "idle" | "running" | "review" | "in_progress" | "planned" | "done";
 
@@ -33,7 +27,7 @@ interface TaskRowProps {
 export function TaskRow({ task, attention, isActive, onOpenTask, onStopSession }: TaskRowProps) {
   const rowStatus = getTaskRowStatus(task, attention);
   const agentKind: AgentKind = task.agentKind ?? "custom";
-  const statusLabel = taskStatusLabels[task.status];
+  const statusLabel = TASK_STATUS_LABELS[task.status];
 
   return (
     <SidebarMenuItem className="task-tree-task" data-tone={rowStatus.tone}>

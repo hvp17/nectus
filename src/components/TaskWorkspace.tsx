@@ -42,6 +42,11 @@ import { TerminalPane } from "../TerminalPane";
 import { cn } from "../lib/utils";
 import { formatAttentionReason, type TaskAttention } from "../sessionAttention";
 import {
+  REVIEW_LOOP_STATUS_SHORT_LABELS,
+  REVIEW_VERDICT_LABELS,
+  TASK_STATUS_LABELS,
+} from "../statusLabels";
+import {
   AgentProfile,
   GithubStatus,
   PullRequestInfo,
@@ -77,26 +82,6 @@ export interface TaskWorkspaceProps {
 }
 
 const statusOrder: TaskStatus[] = ["planned", "in_progress", "review", "done"];
-const statusLabels: Record<TaskStatus, string> = {
-  planned: "Planned",
-  in_progress: "In progress",
-  review: "Review",
-  done: "Done",
-};
-const reviewLoopStatusLabels: Record<ReviewLoop["status"], string> = {
-  running: "Ready",
-  reviewing: "Reviewing",
-  passed: "Passed",
-  feedback_sent: "Feedback sent",
-  error: "Error",
-  stopped: "Stopped",
-};
-const reviewVerdictLabels: Record<ReviewRun["verdict"], string> = {
-  pass: "Pass",
-  needs_changes: "Needs changes",
-  feedback: "Feedback",
-  unknown: "Unknown",
-};
 
 export function TaskWorkspace({
   task,
@@ -276,7 +261,7 @@ export function TaskWorkspace({
                   <SelectGroup>
                     {statusOrder.map((status) => (
                       <SelectItem key={status} value={status} className="text-xs">
-                        {statusLabels[status]}
+                        {TASK_STATUS_LABELS[status]}
                       </SelectItem>
                     ))}
                   </SelectGroup>
@@ -505,7 +490,7 @@ export function TaskWorkspace({
                 </div>
                 {reviewLoop && (
                   <Badge variant="outline" className="rounded-md">
-                    {reviewLoopStatusLabels[reviewLoop.status]}
+                    {REVIEW_LOOP_STATUS_SHORT_LABELS[reviewLoop.status]}
                   </Badge>
                 )}
               </div>
@@ -515,7 +500,7 @@ export function TaskWorkspace({
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold">Review feedback</span>
                     <Badge variant="outline" className="rounded-md">
-                      {reviewVerdictLabels[latestReviewRun.verdict]}
+                      {REVIEW_VERDICT_LABELS[latestReviewRun.verdict]}
                     </Badge>
                   </div>
                   <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-xs text-muted-foreground">
@@ -535,7 +520,7 @@ function TaskStatusBadges({ task }: { task: TaskSummary }) {
   return (
     <div className="detail-status-row">
       <Badge variant="outline" data-status={task.status}>
-        {statusLabels[task.status]}
+        {TASK_STATUS_LABELS[task.status]}
       </Badge>
       {task.activeSessionId && (
         <Badge variant="outline" className="border-primary/40 text-primary">
