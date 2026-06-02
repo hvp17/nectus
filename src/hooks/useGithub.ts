@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
+import { useAsyncEffect } from "./useAsyncEffect";
 import type { GithubStatus, PullRequestInfo, TaskSummary } from "../types";
 
 interface UseGithubInput {
@@ -19,19 +20,13 @@ export function useGithub({ selectedTask, setMessage, applyTask }: UseGithubInpu
   const [pullRequestLoading, setPullRequestLoading] = useState(false);
   const [creatingPullRequest, setCreatingPullRequest] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    api
-      .githubStatus()
-      .then((status) => {
-        if (!cancelled) setGithubStatus(status);
-      })
-      .catch(() => {
-        if (!cancelled) setGithubStatus({ installed: false, authenticated: false, account: null });
-      });
-    return () => {
-      cancelled = true;
-    };
+  useAsyncEffect(async (alive) => {
+    try {
+      const status = await api.githubStatus();
+      if (alive()) setGithubStatus(status);
+    } catch {
+      if (alive()) setGithubStatus({ installed: false, authenticated: false, account: null });
+    }
   }, []);
 
   const ghReady = Boolean(githubStatus?.installed && githubStatus?.authenticated);
@@ -66,24 +61,21 @@ export function useGithub({ selectedTask, setMessage, applyTask }: UseGithubInpu
     void loadPullRequest(selectedTaskId);
   }, [ghReady, selectedTaskId, selectedPrUrl, loadPullRequest]);
 
-  useEffect(() => {
-    // When a worktree task has no linked PR yet, ask gh whether one already
-    // exists for its branch (e.g. opened from the terminal) and backfill it.
-    // Backfilling `prUrl` re-triggers the status effect above, which loads checks.
-    if (!ghReady || !selectedTaskId || !selectedHasWorktree || selectedPrUrl) return;
-    let cancelled = false;
-    api
-      .detectGithubPullRequest(selectedTaskId)
-      .then((task) => {
-        if (!cancelled && task) applyTask(task);
-      })
-      .catch(() => {
+  useAsyncEffect(
+    async (alive) => {
+      // When a worktree task has no linked PR yet, ask gh whether one already
+      // exists for its branch (e.g. opened from the terminal) and backfill it.
+      // Backfilling `prUrl` re-triggers the status effect above, which loads checks.
+      if (!ghReady || !selectedTaskId || !selectedHasWorktree || selectedPrUrl) return;
+      try {
+        const task = await api.detectGithubPullRequest(selectedTaskId);
+        if (alive() && task) applyTask(task);
+      } catch {
         // Soft-fail: detection is best-effort; the Create button stays available.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [ghReady, selectedTaskId, selectedHasWorktree, selectedPrUrl, applyTask]);
+      }
+    },
+    [ghReady, selectedTaskId, selectedHasWorktree, selectedPrUrl, applyTask],
+  );
 
   const refreshPullRequest = useCallback(
     (task: TaskSummary) => {
