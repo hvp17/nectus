@@ -366,6 +366,8 @@ pub struct SessionOutputSnapshot {
     pub truncated: bool,
     pub start_offset: u64,
     pub end_offset: u64,
+    pub rows: u16,
+    pub cols: u16,
 }
 
 #[derive(Debug, Clone, Serialize)]

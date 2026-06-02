@@ -187,7 +187,9 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
 
     const cached = getOrCreateTerminal(sessionId);
     cached.container.hidden = false;
-    fitActiveTerminal();
+    // Sizing is owned by loadSnapshotDelta: it must replay buffered output at the
+    // width it was generated at before fitting the PTY to the pane, otherwise the
+    // agent's cursor-addressed redraws land on the wrong rows (ghosting/overlap).
     loadSnapshotDelta(sessionId, cached);
 
     return () => {
@@ -260,10 +262,19 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
       .sessionOutputSnapshot(sessionId)
       .then((snapshot) => {
         if (snapshot.sessionId !== sessionId || terminalsRef.current.get(sessionId) !== cached) return;
+        // For a fresh terminal, match the width the buffer was generated at before
+        // replaying so cursor-addressed redraws reproduce faithfully. Existing
+        // terminals already hold rendered content, so leave their size to the fit.
+        if (cached.renderedOffset === 0 && snapshot.cols > 0 && snapshot.rows > 0) {
+          cached.terminal.resize(snapshot.cols, snapshot.rows);
+        }
         writeOutput(cached, snapshot.data, snapshot.startOffset);
         cached.pendingOutput.splice(0).forEach((output) => {
           writeOutput(cached, output.data, output.startOffset);
         });
+        // History is now rendered; switch the live terminal to the pane size so
+        // the agent redraws (via SIGWINCH) at the size the user actually sees.
+        syncTerminalToPane(sessionId, cached);
       })
       .catch((error) => {
         if (terminalsRef.current.get(sessionId) === cached) {
@@ -277,15 +288,23 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
       });
   };
 
+  const syncTerminalToPane = (sessionId: string, cached: CachedTerminal) => {
+    if (cached.container.hidden) return;
+    cached.fit.fit();
+    api.resizeSession(sessionId, cached.terminal.rows, cached.terminal.cols).catch(() => undefined);
+  };
+
   const fitActiveTerminal = () => {
     const activeSessionId = sessionIdRef.current;
     if (!activeSessionId) return;
 
     const cached = terminalsRef.current.get(activeSessionId);
     if (!cached || cached.container.hidden) return;
+    // Don't resize the PTY mid-replay: it would change the recorded generation
+    // size out from under the snapshot we're still rendering.
+    if (cached.loadingSnapshot) return;
 
-    cached.fit.fit();
-    api.resizeSession(activeSessionId, cached.terminal.rows, cached.terminal.cols).catch(() => undefined);
+    syncTerminalToPane(activeSessionId, cached);
   };
 
   const sendSessionData = (targetSessionId: string, data: string, terminal: Terminal) => {

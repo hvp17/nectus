@@ -11,6 +11,8 @@ const terminalTestState = vi.hoisted(() => {
   class MockTerminal {
     rows = 24;
     cols = 80;
+    resize = vi.fn();
+    write = vi.fn();
     private dataHandler?: (data: string) => void;
 
     constructor() {
@@ -19,7 +21,6 @@ const terminalTestState = vi.hoisted(() => {
 
     loadAddon() {}
     open() {}
-    write() {}
     writeln() {}
     dispose() {}
 
@@ -87,6 +88,8 @@ vi.mock("./api", () => ({
       truncated: false,
       startOffset: 0,
       endOffset: 0,
+      cols: 80,
+      rows: 24,
     }),
   },
 }));
@@ -126,6 +129,43 @@ describe("TerminalPane", () => {
 
     expect(onSessionInput).toHaveBeenCalledWith("session-21");
     expect(mockedApi.sendSessionInput).toHaveBeenCalledWith("session-21", "Continue\n");
+  });
+
+  it("replays history at the snapshot's generation size, then syncs the PTY to the pane", async () => {
+    mockedApi.sessionOutputSnapshot.mockResolvedValueOnce({
+      sessionId: "session-21",
+      data: "buffered output",
+      truncated: false,
+      startOffset: 0,
+      endOffset: 15,
+      cols: 100,
+      rows: 28,
+    });
+
+    render(
+      <TerminalPane sessionId="session-21" onSessionExit={vi.fn()} onSessionInput={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      expect(terminalTestState.instances).toHaveLength(1);
+    });
+
+    const terminal = terminalTestState.instances[0];
+
+    // History must be replayed at the width it was generated at, otherwise the
+    // agent's cursor-addressed redraws land on the wrong rows (ghosting/overlap).
+    await waitFor(() => {
+      expect(terminal.resize).toHaveBeenCalledWith(100, 28);
+      expect(terminal.write).toHaveBeenCalledWith("buffered output");
+    });
+
+    // The resize to generation size must happen before any output is written.
+    const resizeOrder = terminal.resize.mock.invocationCallOrder[0];
+    const writeOrder = terminal.write.mock.invocationCallOrder[0];
+    expect(resizeOrder).toBeLessThan(writeOrder);
+
+    // After replay, the PTY is synced to the pane (mock terminal stays 24x80).
+    expect(mockedApi.resizeSession).toHaveBeenCalledWith("session-21", 24, 80);
   });
 
   it("sends dropped file paths to the active session when files are dropped on the terminal", async () => {
