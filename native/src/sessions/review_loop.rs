@@ -156,6 +156,10 @@ pub(super) fn run_reviewer_command(
         }
         None => true,
     };
+    // A GUI-launched app has a minimal PATH, so a node-based reviewer CLI (e.g.
+    // Codex) fails to exec `node`. Hand the child a PATH that includes the common
+    // install dirs; a profile's own PATH still wins since its env is applied next.
+    command.env("PATH", crate::process_util::augmented_path());
     for (key, value) in &reviewer.env {
         command.env(key, value);
     }
