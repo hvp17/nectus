@@ -30,6 +30,9 @@ vi.mock("../api", () => ({
     submitSessionInput: vi.fn(),
     sendSessionInput: vi.fn(),
     sendSystemNotification: vi.fn().mockResolvedValue(true),
+    githubStatus: vi.fn().mockResolvedValue({ installed: false, authenticated: false, account: null }),
+    createGithubPullRequest: vi.fn(),
+    githubPullRequestStatus: vi.fn(),
   },
 }));
 

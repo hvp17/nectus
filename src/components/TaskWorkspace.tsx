@@ -7,7 +7,6 @@ import {
   CircleCheckBig,
   ExternalLink,
   GitBranch,
-  GitPullRequest,
   LoaderCircle,
   Play,
   RotateCcw,
@@ -25,6 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import { GitHubPanel } from "./GitHubPanel";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import {
   Stepper,
@@ -41,7 +41,15 @@ import { truncateFinishedAttentionPreview } from "./attentionPreview";
 import { TerminalPane } from "../TerminalPane";
 import { cn } from "../lib/utils";
 import { formatAttentionReason, type TaskAttention } from "../sessionAttention";
-import { AgentProfile, ReviewLoop, ReviewRun, TaskSummary, TaskStatus } from "../types";
+import {
+  AgentProfile,
+  GithubStatus,
+  PullRequestInfo,
+  ReviewLoop,
+  ReviewRun,
+  TaskSummary,
+  TaskStatus,
+} from "../types";
 
 export interface TaskWorkspaceProps {
   task: TaskSummary | undefined;
@@ -49,12 +57,17 @@ export interface TaskWorkspaceProps {
   agentProfiles: AgentProfile[];
   reviewLoop?: ReviewLoop | null;
   reviewRuns: ReviewRun[];
+  githubStatus?: GithubStatus;
+  pullRequest?: PullRequestInfo | null;
+  pullRequestLoading?: boolean;
+  creatingPullRequest?: boolean;
   onClose: () => void;
   onStopSession: (sessionId: string) => void;
   onResumeSession: (task: TaskSummary) => void;
   onStartSession: (task: TaskSummary) => void;
   onStartReview: (task: TaskSummary, reviewerProfileId: number) => void;
-  onCreatePullRequest: (task: TaskSummary) => void;
+  onCreatePullRequest: (task: TaskSummary, options?: { draft?: boolean }) => void;
+  onRefreshPullRequest: (task: TaskSummary) => void;
   onUpdateStatus: (task: TaskSummary, status: TaskStatus) => void;
   onDeleteTask: (task: TaskSummary) => void;
   onSessionExit: (sessionId: string) => void;
@@ -91,12 +104,17 @@ export function TaskWorkspace({
   agentProfiles,
   reviewLoop,
   reviewRuns,
+  githubStatus,
+  pullRequest,
+  pullRequestLoading = false,
+  creatingPullRequest = false,
   onClose,
   onStopSession,
   onResumeSession,
   onStartSession,
   onStartReview,
   onCreatePullRequest,
+  onRefreshPullRequest,
   onUpdateStatus,
   onDeleteTask,
   onSessionExit,
@@ -131,12 +149,18 @@ export function TaskWorkspace({
   );
   const startReviewDisabled = !selectedReviewerProfile || reviewerProfiles.length === 0 || reviewInProgress;
   const reviewReadyForNextStep = reviewLoop?.status === "passed";
-  const canCreatePullRequest = Boolean(task.activeSessionId && !task.prUrl);
+  const githubReady = Boolean(githubStatus?.installed && githubStatus?.authenticated);
+  const canCreateViaGithub = Boolean(githubReady && task.hasWorktree && !task.prUrl);
+  const canCreatePullRequest = Boolean(!task.prUrl && (canCreateViaGithub || task.activeSessionId));
   const createPullRequestDescription = task.prUrl
     ? "Pull request linked"
-    : task.activeSessionId
-      ? "Ask the running agent to open a pull request"
-      : "Start or resume the agent first";
+    : canCreateViaGithub
+      ? "Open a pull request with the GitHub CLI"
+      : task.activeSessionId
+        ? "Ask the running agent to open a pull request"
+        : githubReady
+          ? "Add a worktree branch to open a pull request"
+          : "Start the agent or connect the GitHub CLI";
   const workflowStep = task.status === "done" || task.prUrl ? 3 : reviewInProgress ? 1 : reviewReadyForNextStep ? 2 : 1;
   const reviewActionLabel = selectedReviewerProfile
     ? `${reviewInProgress ? "Reviewing with" : "Review with"} ${selectedReviewerProfile.name}`
@@ -315,6 +339,16 @@ export function TaskWorkspace({
             </div>
           </section>
 
+          <GitHubPanel
+            task={task}
+            githubStatus={githubStatus}
+            pullRequest={pullRequest}
+            pullRequestLoading={pullRequestLoading}
+            creatingPullRequest={creatingPullRequest}
+            onCreatePullRequest={onCreatePullRequest}
+            onRefreshPullRequest={onRefreshPullRequest}
+          />
+
           {attention && (
             <Alert
               className={cn(
@@ -452,20 +486,6 @@ export function TaskWorkspace({
                         </div>
                       )}
 
-                      {index === 1 && !task.prUrl && (
-                        <div className="task-review-action">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            aria-label="Ask agent to create pull request"
-                            disabled={!task.activeSessionId}
-                            onClick={() => onCreatePullRequest(task)}
-                          >
-                            <GitPullRequest data-icon="inline-start" />
-                            Create PR
-                          </Button>
-                        </div>
-                      )}
                     </div>
                     {index < workflowSteps.length - 1 && (
                       <StepperSeparator className="absolute inset-y-0 left-3 top-7 -order-1 m-0 -translate-x-1/2 group-data-[orientation=vertical]/stepper-nav:h-[calc(100%-2rem)] group-data-[state=completed]/step:bg-primary" />

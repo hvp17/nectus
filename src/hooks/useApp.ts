@@ -10,6 +10,7 @@ import { useCreateTaskForm } from "./useCreateTaskForm";
 import { useSessionCommands } from "./useSessionCommands";
 import { useSessionEvents } from "./useSessionEvents";
 import { useSessionAttentionControls } from "./useSessionAttentionControls";
+import { useGithub } from "./useGithub";
 import { useTaskDeletion } from "./useTaskDeletion";
 import { useTaskReviewLoop } from "./useTaskReviewLoop";
 import type {
@@ -183,10 +184,33 @@ export function useApp() {
       sessionCommands,
     });
 
+  const applyTask = useCallback((updated: TaskSummary) => {
+    setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+  }, []);
+
+  const {
+    githubStatus,
+    ghReady: githubReady,
+    pullRequest: selectedPullRequest,
+    pullRequestLoading,
+    creatingPullRequest,
+    refreshPullRequest,
+    createPullRequest: createGithubPullRequest,
+  } = useGithub({ selectedTask, setMessage, applyTask });
+
   const createPullRequest = useCallback(
-    async (task: TaskSummary) => {
+    async (task: TaskSummary, options?: { draft?: boolean }) => {
+      // Prefer a deterministic gh-driven PR for worktree tasks — no agent needed.
+      if (task.hasWorktree && githubReady) {
+        await createGithubPullRequest(task, { draft: options?.draft ?? false });
+        return;
+      }
+
+      // Fallback: ask the running agent to open the PR from the terminal.
       if (!task.activeSessionId) {
-        setMessage("Start or resume the agent before creating a PR.");
+        setMessage(
+          "Start or resume the agent to open a PR, or connect the GitHub CLI for a worktree task.",
+        );
         return;
       }
 
@@ -199,7 +223,7 @@ export function useApp() {
         setMessage(String(error));
       }
     },
-    [setMessage, setTaskAttention],
+    [githubReady, createGithubPullRequest, setMessage, setTaskAttention],
   );
 
   const addProject = async () => {
@@ -421,6 +445,11 @@ export function useApp() {
     stopSession,
     resumeSession,
     createPullRequest,
+    githubStatus,
+    selectedPullRequest,
+    pullRequestLoading,
+    creatingPullRequest,
+    refreshPullRequest,
     startPairLoop,
     startReview,
     stopPairLoop,

@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { GitBranch, Palette, Plus, Save, Terminal } from "lucide-react";
+import { CheckCircle2, GitBranch, Github, Palette, Plus, Save, Terminal, XCircle } from "lucide-react";
 import { AgentLogo } from "./AgentBrand";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -8,7 +8,7 @@ import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet 
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
-import type { AgentProfile, AppSettings, AppSettingsInput } from "../types";
+import type { AgentProfile, AppSettings, AppSettingsInput, GithubStatus } from "../types";
 import { ProfileEditor } from "./settings/ProfileEditor";
 import {
   createProfileDraft,
@@ -24,6 +24,7 @@ import {
 interface SettingsPageProps {
   settings?: AppSettings;
   agentProfiles: AgentProfile[];
+  githubStatus?: GithubStatus;
   busy: boolean;
   onBack: () => void;
   onSaveSettings: (settings: AppSettingsInput) => Promise<unknown>;
@@ -35,6 +36,7 @@ interface SettingsPageProps {
 export function SettingsPage({
   settings,
   agentProfiles,
+  githubStatus,
   busy,
   onBack,
   onSaveSettings,
@@ -230,6 +232,18 @@ export function SettingsPage({
         <section className="settings-section">
           <div className="settings-section-header">
             <div className="settings-section-title">
+              <p className="eyebrow">Integrations</p>
+              <h3>GitHub</h3>
+            </div>
+          </div>
+          <div className="settings-section-content">
+            <GithubConnectionCard status={githubStatus} />
+          </div>
+        </section>
+
+        <section className="settings-section">
+          <div className="settings-section-header">
+            <div className="settings-section-title">
               <p className="eyebrow">Interface</p>
               <h3>Appearance</h3>
             </div>
@@ -272,6 +286,40 @@ export function SettingsPage({
         </Button>
       </div>
     </section>
+  );
+}
+
+function GithubConnectionCard({ status }: { status?: GithubStatus }) {
+  const connected = Boolean(status?.installed && status?.authenticated);
+  const detail = !status
+    ? "Checking gh availability…"
+    : !status.installed
+      ? "Install the gh CLI to open pull requests from Nectus."
+      : !status.authenticated
+        ? "Run gh auth login in your terminal to connect."
+        : `Connected as ${status.account ?? "your account"}.`;
+  const badgeLabel = connected ? "Connected" : status?.installed ? "Not signed in" : "Not installed";
+
+  return (
+    <div className="default-agent-strip">
+      <div className="default-agent-copy">
+        <span className="settings-overview-icon">
+          <Github size={15} />
+        </span>
+        <span>
+          <strong>GitHub CLI</strong>
+          <small>{detail}</small>
+        </span>
+      </div>
+      <Badge variant="outline" className="gap-1.5" aria-label={`GitHub ${badgeLabel}`}>
+        {connected ? (
+          <CheckCircle2 size={13} className="text-emerald-500" />
+        ) : (
+          <XCircle size={13} className="text-muted-foreground" />
+        )}
+        {badgeLabel}
+      </Badge>
+    </div>
   );
 }
 

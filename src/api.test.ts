@@ -113,6 +113,56 @@ describe("api", () => {
     });
   });
 
+  it("returns a disconnected GitHub status outside Tauri", async () => {
+    const status = await api.githubStatus();
+
+    expect(status).toEqual({ installed: false, authenticated: false, account: null });
+    expect(mockedInvoke).not.toHaveBeenCalled();
+  });
+
+  it("creates a GitHub pull request through the native command", async () => {
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+    mockedInvoke.mockResolvedValueOnce({
+      id: 5,
+      repoId: 1,
+      title: "Add GitHub panel",
+      status: "review",
+      prUrl: "https://github.com/hvp17/nectus/pull/9",
+      hasWorktree: true,
+      isDirty: false,
+      createdAt: "2026-06-02T12:00:00.000Z",
+      updatedAt: "2026-06-02T12:01:00.000Z",
+    });
+
+    await api.createGithubPullRequest({ taskId: 5, title: "Add GitHub panel", body: "Body", draft: true });
+
+    expect(mockedInvoke).toHaveBeenCalledWith("create_github_pull_request", {
+      taskId: 5,
+      title: "Add GitHub panel",
+      body: "Body",
+      draft: true,
+    });
+  });
+
+  it("requests live pull request status for a task", async () => {
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+    mockedInvoke.mockResolvedValueOnce({
+      number: 9,
+      url: "https://github.com/hvp17/nectus/pull/9",
+      title: "Add GitHub panel",
+      state: "open",
+      isDraft: false,
+      reviewDecision: "review_required",
+      checks: { total: 2, passed: 1, failed: 0, pending: 1 },
+      checksState: "pending",
+    });
+
+    const info = await api.githubPullRequestStatus(9);
+
+    expect(info.number).toBe(9);
+    expect(mockedInvoke).toHaveBeenCalledWith("github_pull_request_status", { taskId: 9 });
+  });
+
   it("truncates long system notification bodies sent to Tauri", async () => {
     vi.resetModules();
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
