@@ -1,16 +1,18 @@
 mod db;
 mod git_ops;
+mod github;
 mod models;
 mod sessions;
 
 use crate::db::Database;
 use crate::models::{
     AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings, AppSettingsInput,
-    Repo, ReviewLoop, ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskStatus,
-    TaskSummary,
+    GithubStatus, PullRequestInfo, Repo, ReviewLoop, ReviewRun, Session, SessionExitedEvent,
+    SessionOutputSnapshot, TaskStatus, TaskSummary,
 };
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
+use std::path::Path;
 use std::sync::Arc;
 use tauri::{Emitter, Manager, State};
 use tracing_subscriber::EnvFilter;
@@ -123,6 +125,64 @@ async fn delete_task(task_id: i64, state: State<'_, AppState>) -> AppResult<()> 
         .await
         .map_err(|error| AppError::from(format!("Failed to finish task deletion: {error}")))?
         .map_err(Into::into)
+}
+
+/// Report whether `gh` is installed, authenticated, and which account is active.
+#[tauri::command]
+async fn github_status() -> AppResult<GithubStatus> {
+    tauri::async_runtime::spawn_blocking(github::status)
+        .await
+        .map_err(|error| AppError::from(format!("Failed to query GitHub status: {error}")))
+}
+
+/// Open a pull request for the task's worktree branch and persist the PR URL.
+#[tauri::command]
+async fn create_github_pull_request(
+    task_id: i64,
+    title: String,
+    body: String,
+    draft: bool,
+    state: State<'_, AppState>,
+) -> AppResult<TaskSummary> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<TaskSummary, String> {
+        let worktree = {
+            let db = db.lock();
+            let task = db
+                .task_by_id(task_id)?
+                .ok_or_else(|| "Task not found".to_string())?;
+            task.worktree_path
+                .ok_or_else(|| "Task has no worktree branch to open a pull request from".to_string())?
+        };
+        let url = github::create_pull_request(Path::new(&worktree), &title, &body, draft)?;
+        db.lock().update_task_metadata(task_id, None, None, Some(url))
+    })
+    .await
+    .map_err(|error| AppError::from(format!("Failed to create pull request: {error}")))?
+    .map_err(Into::into)
+}
+
+/// Fetch the live status of the pull request for the task's worktree branch.
+#[tauri::command]
+async fn github_pull_request_status(
+    task_id: i64,
+    state: State<'_, AppState>,
+) -> AppResult<PullRequestInfo> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<PullRequestInfo, String> {
+        let worktree = {
+            let db = db.lock();
+            let task = db
+                .task_by_id(task_id)?
+                .ok_or_else(|| "Task not found".to_string())?;
+            task.worktree_path
+                .ok_or_else(|| "Task has no worktree branch to inspect".to_string())?
+        };
+        github::pull_request_status(Path::new(&worktree))
+    })
+    .await
+    .map_err(|error| AppError::from(format!("Failed to load pull request status: {error}")))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -344,6 +404,9 @@ pub fn run() {
             list_tasks,
             update_task_metadata,
             delete_task,
+            github_status,
+            create_github_pull_request,
+            github_pull_request_status,
             list_agent_profiles,
             upsert_agent_profile,
             start_pair_loop,
