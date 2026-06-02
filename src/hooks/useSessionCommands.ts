@@ -1,5 +1,6 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 import { api } from "../api";
+import { useGuardedAction } from "./useGuardedAction";
 import type { AgentProfile, Session, TaskSummary } from "../types";
 
 interface UseSessionCommandsParams {
@@ -17,6 +18,8 @@ export function useSessionCommands({
   setSelectedTaskId,
   setTasks,
 }: UseSessionCommandsParams) {
+  const run = useGuardedAction(setMessage);
+
   const applySession = useCallback(
     (session: Session) => {
       setTasks((current) =>
@@ -37,36 +40,25 @@ export function useSessionCommands({
   const startSession = async (task: TaskSummary) => {
     const agentProfileId = task.agentProfileId ?? selectedAgentProfileId ?? agentProfiles[0]?.id;
     if (!agentProfileId) return;
-    setMessage(null);
-    try {
+    await run(async () => {
       const session = await api.startSession(task.id, agentProfileId);
       applySession(session);
       setSelectedTaskId(task.id);
-    } catch (error) {
-      setMessage(String(error));
-    }
+    });
   };
 
-  const stopSession = async (sessionId: string) => {
-    setMessage(null);
-    try {
+  const stopSession = (sessionId: string) =>
+    run(async () => {
       const session = await api.stopSession(sessionId);
       applySession(session);
-    } catch (error) {
-      setMessage(String(error));
-    }
-  };
+    });
 
-  const resumeSession = async (task: TaskSummary) => {
-    setMessage(null);
-    try {
+  const resumeSession = (task: TaskSummary) =>
+    run(async () => {
       const session = await api.resumeSession(task.id);
       applySession(session);
       setSelectedTaskId(task.id);
-    } catch (error) {
-      setMessage(String(error));
-    }
-  };
+    });
 
   const onSessionExit = useCallback(
     (sessionId: string) => {
