@@ -181,6 +181,12 @@ impl SessionManager {
         let executable = resolve_agent_command(&agent.command)?;
         let mut command = CommandBuilder::new(executable);
         configure_agent_command(&mut command, &agent, &session_id, resume);
+        // Bundled apps launched from Finder inherit a minimal environment with no
+        // TERM, so agents (Claude Code via Ink/supports-color) render monochrome.
+        // Advertise the color-capable terminal xterm.js provides; a profile's own
+        // env still wins since it is applied afterwards.
+        command.env("TERM", "xterm-256color");
+        command.env("COLORTERM", "truecolor");
         for (key, value) in &agent.env {
             command.env(key, value);
         }
