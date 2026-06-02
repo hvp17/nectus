@@ -244,21 +244,49 @@ pub fn create_pull_request(
     parse_pr_url(&stdout).ok_or_else(|| "gh pr create did not return a PR URL".to_string())
 }
 
+/// JSON fields requested from `gh pr view`; shared by status and detection so the
+/// two stay in sync.
+const PR_VIEW_FIELDS: &str = "number,state,url,title,isDraft,reviewDecision,statusCheckRollup";
+
+/// Run `gh pr view` for the worktree's branch. `gh` resolves the PR from the
+/// current branch on its own, so no explicit PR reference is needed.
+fn run_pr_view(worktree: &Path) -> Result<Output, String> {
+    run_gh(Some(worktree), &["pr", "view", "--json", PR_VIEW_FIELDS])
+}
+
 /// Fetch the live status of the pull request for the worktree's branch.
 pub fn pull_request_status(worktree: &Path) -> Result<PullRequestInfo, String> {
-    let output = run_gh(
-        Some(worktree),
-        &[
-            "pr",
-            "view",
-            "--json",
-            "number,state,url,title,isDraft,reviewDecision,statusCheckRollup",
-        ],
-    )?;
+    let output = run_pr_view(worktree)?;
     if !output.status.success() {
         return Err(command_error(&output, "gh pr view failed"));
     }
     parse_pull_request(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// Detect the pull request GitHub associates with the worktree's current branch
+/// (for example one opened from the terminal). Returns `Ok(None)` when the branch
+/// simply has no PR yet — the normal "not opened" state — so callers can tell that
+/// apart from a real `gh` failure.
+pub fn find_pull_request(worktree: &Path) -> Result<Option<PullRequestInfo>, String> {
+    let output = run_pr_view(worktree)?;
+    if output.status.success() {
+        return parse_pull_request(&String::from_utf8_lossy(&output.stdout)).map(Some);
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if is_no_pull_request_error(&stderr) {
+        return Ok(None);
+    }
+    Err(command_error(&output, "gh pr view failed"))
+}
+
+/// `gh pr view` exits non-zero with a `no [open] pull requests found for branch …`
+/// message when the branch has no associated PR; that is "not opened yet", not an
+/// error we should surface. Match the distinctive phrase so both the plain and
+/// `open` variants (which differ across gh versions) are recognized.
+fn is_no_pull_request_error(stderr: &str) -> bool {
+    stderr
+        .to_lowercase()
+        .contains("pull requests found for branch")
 }
 
 #[cfg(test)]
@@ -278,6 +306,23 @@ mod tests {
         assert_eq!(parse_login(r#"{"login":""}"#), None);
         assert_eq!(parse_login("not json"), None);
         assert_eq!(parse_login("{}"), None);
+    }
+
+    #[test]
+    fn recognizes_the_no_pull_request_branch_message() {
+        // `gh pr view` prints this to stderr (exit 1) when the branch has no PR.
+        assert!(is_no_pull_request_error(
+            "no pull requests found for branch \"main\""
+        ));
+        // Tolerate casing and the "open" variant some gh versions emit.
+        assert!(is_no_pull_request_error(
+            "No open pull requests found for branch \"feat/x\""
+        ));
+        // A genuine failure (auth, missing remote, …) must not be mistaken for it.
+        assert!(!is_no_pull_request_error(
+            "could not determine current branch"
+        ));
+        assert!(!is_no_pull_request_error("gh: not authenticated"));
     }
 
     #[test]

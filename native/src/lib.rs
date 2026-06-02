@@ -187,6 +187,40 @@ async fn github_pull_request_status(
     .map_err(Into::into)
 }
 
+/// Detect a pull request already open for the task's worktree branch (e.g. one
+/// opened from the terminal) and backfill its URL. Returns the updated task when a
+/// PR was found and linked, or `None` when the branch has no PR yet.
+#[tauri::command]
+async fn detect_github_pull_request(
+    task_id: i64,
+    state: State<'_, AppState>,
+) -> AppResult<Option<TaskSummary>> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<Option<TaskSummary>, String> {
+        let worktree = {
+            let db = db.lock();
+            let task = db
+                .task_by_id(task_id)?
+                .ok_or_else(|| "Task not found".to_string())?;
+            // Nothing to detect once a PR is linked, or without a worktree branch.
+            match task.worktree_path {
+                Some(path) if task.pr_url.is_none() => path,
+                _ => return Ok(None),
+            }
+        };
+        match github::find_pull_request(Path::new(&worktree))? {
+            Some(info) => db
+                .lock()
+                .update_task_metadata(task_id, None, None, Some(info.url))
+                .map(Some),
+            None => Ok(None),
+        }
+    })
+    .await
+    .map_err(|error| AppError::from(format!("Failed to detect pull request: {error}")))?
+    .map_err(Into::into)
+}
+
 #[tauri::command]
 fn list_agent_profiles(state: State<'_, AppState>) -> AppResult<Vec<AgentProfile>> {
     app_result(state.db.lock().list_agent_profiles())
@@ -409,6 +443,7 @@ pub fn run() {
             github_status,
             create_github_pull_request,
             github_pull_request_status,
+            detect_github_pull_request,
             list_agent_profiles,
             upsert_agent_profile,
             start_pair_loop,
