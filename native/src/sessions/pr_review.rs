@@ -2,7 +2,7 @@ use super::review_loop::run_reviewer_command;
 use crate::db::Database;
 use crate::github::{self, PrMeta};
 use crate::git_ops;
-use crate::models::{PrReviewStatus, PrReviewUpdatedEvent};
+use crate::models::{PrReviewStatus, PrReviewUpdatedEvent, PrReviewVerdict};
 use parking_lot::Mutex;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -72,8 +72,10 @@ fn run_pr_review(app: &AppHandle, db: &Arc<Mutex<Database>>, review_id: i64) -> 
     let _ = git_ops::remove_worktree(&repo_path, &worktree_path);
     let _ = db.lock().set_pr_review_worktree(review_id, None);
 
-    let output = output?;
-    db.lock().set_pr_review_result(review_id, &output)?;
+    let raw_output = output?;
+    let (verdict, review_output) = parse_pr_review_output(&raw_output);
+    db.lock()
+        .set_pr_review_result(review_id, &review_output, verdict)?;
     emit_pr_review_update(app, db, review_id);
     Ok(())
 }
@@ -126,12 +128,42 @@ Write a clear, specific code review in GitHub-flavored Markdown that the reviewe
 - Non-blocking suggestions and nits, clearly marked as optional.
 - Anything done well that is worth keeping.
 
-Reference real files and lines. Do not invent issues; if the PR looks solid, say so plainly. Output only the Markdown review, with no preamble before it or sign-off after it.",
+Reference real files and lines. Do not invent issues; if the PR looks solid, say so plainly. Output only the Markdown review, with no preamble before it.
+
+After the review, on the final line by itself, output a machine-readable verdict: exactly `{marker} BLOCKERS` if you listed any blocking issues, or `{marker} CLEAN` if there were none. This line is stripped from the review before it is shown.",
         pr_number = pr_number,
         title = meta.title,
         author = author,
         base = base,
+        marker = PR_VERDICT_MARKER,
     )
+}
+
+/// Marker the reviewer appends so the review's outcome can be tracked without
+/// parsing prose. Kept out of the human-facing review by [`parse_pr_review_output`].
+const PR_VERDICT_MARKER: &str = "NECTUS_PR_VERDICT:";
+
+/// Split a raw reviewer response into its verdict and the human-facing Markdown.
+/// The reviewer appends a `NECTUS_PR_VERDICT:` line; it is parsed into a verdict
+/// and removed from the returned review. A missing or unrecognized marker yields
+/// `Inconclusive` and leaves the text otherwise untouched.
+fn parse_pr_review_output(raw: &str) -> (PrReviewVerdict, String) {
+    let mut verdict = PrReviewVerdict::Inconclusive;
+    let mut kept = Vec::new();
+    for line in raw.lines() {
+        if let Some(value) = line.trim().to_ascii_uppercase().strip_prefix(PR_VERDICT_MARKER) {
+            match value.trim() {
+                "BLOCKERS" => verdict = PrReviewVerdict::Blockers,
+                "CLEAN" => verdict = PrReviewVerdict::Passed,
+                _ => {}
+            }
+            // Drop the marker line from the human-facing review regardless of
+            // whether its value parsed, so it never leaks into the output.
+            continue;
+        }
+        kept.push(line);
+    }
+    (verdict, kept.join("\n").trim().to_string())
 }
 
 #[cfg(test)]
@@ -139,7 +171,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pr_review_prompt_includes_details_and_no_verdict_tokens() {
+    fn pr_review_prompt_includes_details_and_requests_verdict_marker() {
         let meta = PrMeta {
             title: "Add request caching".to_string(),
             author: Some("octocat".to_string()),
@@ -153,8 +185,41 @@ mod tests {
         assert!(prompt.contains("octocat"));
         assert!(prompt.contains("origin/main...HEAD"));
         assert!(prompt.to_lowercase().contains("markdown"));
-        // PR review output is for a human, not the marker-parsing review loop.
-        assert!(!prompt.contains("NECTUS_"));
+        // The reviewer is asked to append a machine-readable verdict marker so
+        // the Done state can distinguish passed from blocking.
+        assert!(prompt.contains("NECTUS_PR_VERDICT: BLOCKERS"));
+        assert!(prompt.contains("NECTUS_PR_VERDICT: CLEAN"));
+    }
+
+    #[test]
+    fn parses_blockers_verdict_and_strips_marker() {
+        let raw = "## Review\nBlocking: missing test.\n\nNECTUS_PR_VERDICT: BLOCKERS";
+
+        let (verdict, review) = parse_pr_review_output(raw);
+
+        assert_eq!(verdict, PrReviewVerdict::Blockers);
+        assert_eq!(review, "## Review\nBlocking: missing test.");
+        assert!(!review.contains("NECTUS_PR_VERDICT"));
+    }
+
+    #[test]
+    fn parses_clean_verdict_as_passed() {
+        let raw = "Looks solid.\nnectus_pr_verdict: clean\n";
+
+        let (verdict, review) = parse_pr_review_output(raw);
+
+        assert_eq!(verdict, PrReviewVerdict::Passed);
+        assert_eq!(review, "Looks solid.");
+    }
+
+    #[test]
+    fn missing_marker_is_inconclusive_and_keeps_output() {
+        let raw = "## Review\nNo verdict line here.";
+
+        let (verdict, review) = parse_pr_review_output(raw);
+
+        assert_eq!(verdict, PrReviewVerdict::Inconclusive);
+        assert_eq!(review, "## Review\nNo verdict line here.");
     }
 
     #[test]

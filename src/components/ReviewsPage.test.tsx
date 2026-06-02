@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { ReviewsPage } from "./ReviewsPage";
 import type { AgentProfile, PrReview } from "../types";
@@ -40,6 +40,7 @@ const readyReview: PrReview = {
   prAuthor: "octocat",
   baseBranch: "main",
   status: "ready",
+  verdict: "passed",
   reviewOutput: "## Review\nLooks good.",
   lastError: null,
   worktreePath: null,
@@ -96,4 +97,29 @@ it("offers an empty state when there are no reviews", () => {
   renderPage({ prReviews: [], selectedPrReview: undefined, selectedPrReviewId: undefined });
 
   expect(screen.getByText("No reviews yet")).toBeInTheDocument();
+});
+
+it("groups reviews into lifecycle sections with verdict badges", () => {
+  const queued: PrReview = {
+    ...readyReview,
+    id: 2,
+    prNumber: 8,
+    status: "queued",
+    verdict: null,
+    reviewOutput: null,
+  };
+  const blockers: PrReview = { ...readyReview, id: 3, prNumber: 9, status: "ready", verdict: "blockers" };
+
+  renderPage({ prReviews: [blockers, queued, readyReview] });
+
+  // The queued review sits under "To review".
+  const toReview = within(screen.getByRole("region", { name: "To review" }));
+  expect(toReview.getByText("Queued")).toBeInTheDocument();
+  expect(toReview.getByText("#8")).toBeInTheDocument();
+
+  // Finished reviews land in "Done" and surface their verdict, not a bare "Ready".
+  const done = within(screen.getByRole("region", { name: "Done" }));
+  expect(done.getByText("Blocking issues")).toBeInTheDocument();
+  expect(done.getAllByText("Passed").length).toBeGreaterThan(0);
+  expect(screen.queryByText("Ready")).not.toBeInTheDocument();
 });

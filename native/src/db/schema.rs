@@ -107,6 +107,7 @@ impl Database {
                   pr_author TEXT,
                   base_branch TEXT,
                   status TEXT NOT NULL,
+                  verdict TEXT,
                   review_output TEXT,
                   last_error TEXT,
                   worktree_path TEXT,
@@ -118,7 +119,38 @@ impl Database {
                 ON pr_reviews(repo_id, id);
                 ",
             )
-            .map_err(|error| format!("Failed to create database schema: {error}"))
+            .map_err(|error| format!("Failed to create database schema: {error}"))?;
+
+        // `pr_reviews.verdict` was added after the table shipped; backfill it on
+        // databases created before then. `CREATE TABLE IF NOT EXISTS` never adds
+        // columns to an existing table, so this ALTER is the only path for them.
+        self.ensure_column("pr_reviews", "verdict", "TEXT")?;
+        Ok(())
+    }
+
+    /// Add `column` to `table` if it is missing, so older databases pick up
+    /// columns introduced after their schema was first created. Idempotent:
+    /// a fresh database created with the column already present skips the ALTER.
+    fn ensure_column(&self, table: &str, column: &str, definition: &str) -> Result<(), String> {
+        let mut stmt = self
+            .conn
+            .prepare(&format!("PRAGMA table_info({table})"))
+            .map_err(|error| format!("Failed to inspect {table} columns: {error}"))?;
+        let existing = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .map_err(|error| format!("Failed to read {table} columns: {error}"))?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(|error| format!("Failed to read {table} columns: {error}"))?;
+        if existing.iter().any(|name| name == column) {
+            return Ok(());
+        }
+        self.conn
+            .execute(
+                &format!("ALTER TABLE {table} ADD COLUMN {column} {definition}"),
+                [],
+            )
+            .map_err(|error| format!("Failed to add {table}.{column}: {error}"))?;
+        Ok(())
     }
 
     pub(super) fn seed_agent_profiles(&self) -> Result<(), String> {

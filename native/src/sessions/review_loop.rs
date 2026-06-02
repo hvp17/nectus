@@ -136,26 +136,9 @@ pub(super) fn run_reviewer_command(
     prompt: &str,
 ) -> Result<String, String> {
     let executable = resolve_agent_command(&reviewer.command)?;
+    let plan = build_reviewer_args(reviewer, prompt);
     let mut command = Command::new(executable);
-    if let Some(model) = reviewer
-        .model
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        command.arg("--model");
-        command.arg(model);
-    }
-    for arg in &reviewer.args {
-        command.arg(arg);
-    }
-    let stdin_prompt = match reviewer_prompt_args(reviewer, prompt) {
-        Some(args) => {
-            command.args(args);
-            false
-        }
-        None => true,
-    };
+    command.args(&plan.args);
     // A GUI-launched app has a minimal PATH, so a node-based reviewer CLI (e.g.
     // Codex) fails to exec `node`. Hand the child a PATH that includes the common
     // install dirs; a profile's own PATH still wins since its env is applied next.
@@ -172,14 +155,17 @@ pub(super) fn run_reviewer_command(
     let mut child = command
         .spawn()
         .map_err(|error| format!("Failed to start reviewer {}: {error}", reviewer.name))?;
-    if stdin_prompt {
-        if let Some(stdin) = child.stdin.as_mut() {
-            stdin
-                .write_all(prompt.as_bytes())
-                .map_err(|error| format!("Failed to send review prompt: {error}"))?;
+    {
+        // Take and drop stdin so the child sees EOF: write the prompt first for
+        // reviewers that read it from stdin, otherwise just close the pipe.
+        let mut stdin = child.stdin.take();
+        if plan.pipe_prompt_to_stdin {
+            if let Some(stdin) = stdin.as_mut() {
+                stdin
+                    .write_all(prompt.as_bytes())
+                    .map_err(|error| format!("Failed to send review prompt: {error}"))?;
+            }
         }
-    } else {
-        drop(child.stdin.take());
     }
     let output = child
         .wait_with_output()
@@ -205,10 +191,53 @@ pub(super) fn write_agent_submission(writer: &mut dyn Write, input: &str) -> std
     writer.flush()
 }
 
-fn reviewer_prompt_args(reviewer: &AgentProfile, prompt: &str) -> Option<Vec<String>> {
-    match reviewer.agent_kind {
-        AgentKind::Claude | AgentKind::Gemini => Some(vec!["-p".to_string(), prompt.to_string()]),
-        AgentKind::Codex | AgentKind::Custom => None,
+/// Argv and stdin handling for launching a reviewer CLI headlessly.
+struct ReviewerCommandPlan {
+    /// Full argument list passed to the reviewer executable, in order.
+    args: Vec<String>,
+    /// When true the prompt is written to the child's stdin; otherwise the
+    /// prompt is already included in `args`.
+    pipe_prompt_to_stdin: bool,
+}
+
+/// Build the headless invocation for a reviewer. Each agent kind has a distinct
+/// non-interactive entry point:
+/// - Claude/Gemini: `-p <prompt>` print mode.
+/// - Codex: the `exec` subcommand with the prompt as a trailing positional arg.
+///   `exec` must precede the model/profile flags. Bare `codex` launches the
+///   interactive TUI, which aborts with "stdin is not a terminal" when spawned
+///   without a real terminal.
+/// - Custom: the prompt is piped to stdin, since the command is arbitrary.
+fn build_reviewer_args(reviewer: &AgentProfile, prompt: &str) -> ReviewerCommandPlan {
+    let mut args = Vec::new();
+    if reviewer.agent_kind == AgentKind::Codex {
+        args.push("exec".to_string());
+    }
+    if let Some(model) = reviewer
+        .model
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        args.push("--model".to_string());
+        args.push(model.to_string());
+    }
+    args.extend(reviewer.args.iter().cloned());
+    let pipe_prompt_to_stdin = match reviewer.agent_kind {
+        AgentKind::Claude | AgentKind::Gemini => {
+            args.push("-p".to_string());
+            args.push(prompt.to_string());
+            false
+        }
+        AgentKind::Codex => {
+            args.push(prompt.to_string());
+            false
+        }
+        AgentKind::Custom => true,
+    };
+    ReviewerCommandPlan {
+        args,
+        pipe_prompt_to_stdin,
     }
 }
 
@@ -412,22 +441,66 @@ mod tests {
     }
 
     #[test]
-    fn sends_claude_and_gemini_review_prompts_through_headless_prompt_args() {
+    fn codex_reviewer_runs_headless_exec_with_prompt_as_positional_arg() {
+        // Bare `codex` launches the interactive TUI and aborts with "stdin is
+        // not a terminal" when spawned without a real terminal; the reviewer
+        // must use the non-interactive `exec` subcommand instead.
+        let plan = build_reviewer_args(&agent("Codex", AgentKind::Codex, "codex"), "Review this");
+
         assert_eq!(
-            reviewer_prompt_args(&agent("Claude", AgentKind::Claude, "claude"), "Review this"),
-            Some(vec!["-p".to_string(), "Review this".to_string()])
+            plan.args,
+            vec!["exec".to_string(), "Review this".to_string()]
         );
+        assert!(!plan.pipe_prompt_to_stdin);
+    }
+
+    #[test]
+    fn codex_reviewer_exec_precedes_model_and_profile_args() {
+        let mut profile = agent("Codex", AgentKind::Codex, "codex");
+        profile.model = Some("gpt-5.3-codex".to_string());
+        profile.args = vec!["--full-auto".to_string()];
+
+        let plan = build_reviewer_args(&profile, "Review this");
+
         assert_eq!(
-            reviewer_prompt_args(&agent("Gemini", AgentKind::Gemini, "gemini"), "Review this"),
-            Some(vec!["-p".to_string(), "Review this".to_string()])
+            plan.args,
+            vec![
+                "exec".to_string(),
+                "--model".to_string(),
+                "gpt-5.3-codex".to_string(),
+                "--full-auto".to_string(),
+                "Review this".to_string(),
+            ]
         );
+        assert!(!plan.pipe_prompt_to_stdin);
+    }
+
+    #[test]
+    fn sends_claude_and_gemini_review_prompts_through_headless_print_mode() {
+        let claude =
+            build_reviewer_args(&agent("Claude", AgentKind::Claude, "claude"), "Review this");
         assert_eq!(
-            reviewer_prompt_args(
-                &agent("Custom", AgentKind::Custom, "reviewer"),
-                "Review this"
-            ),
-            None
+            claude.args,
+            vec!["-p".to_string(), "Review this".to_string()]
         );
+        assert!(!claude.pipe_prompt_to_stdin);
+
+        let gemini =
+            build_reviewer_args(&agent("Gemini", AgentKind::Gemini, "gemini"), "Review this");
+        assert_eq!(
+            gemini.args,
+            vec!["-p".to_string(), "Review this".to_string()]
+        );
+        assert!(!gemini.pipe_prompt_to_stdin);
+    }
+
+    #[test]
+    fn custom_reviewer_pipes_prompt_to_stdin() {
+        let plan =
+            build_reviewer_args(&agent("Custom", AgentKind::Custom, "reviewer"), "Review this");
+
+        assert!(plan.args.is_empty());
+        assert!(plan.pipe_prompt_to_stdin);
     }
 
     #[test]

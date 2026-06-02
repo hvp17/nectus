@@ -6,6 +6,7 @@ export type DensityMode = "comfortable" | "compact";
 export type ReviewLoopStatus = "running" | "reviewing" | "passed" | "feedback_sent" | "error" | "stopped";
 export type ReviewVerdict = "pass" | "needs_changes" | "feedback" | "unknown";
 export type PrReviewStatus = "queued" | "reviewing" | "ready" | "error";
+export type PrReviewVerdict = "passed" | "blockers" | "inconclusive";
 export type GithubCheckState = "passing" | "failing" | "pending" | "none";
 export type PullRequestState = "open" | "merged" | "closed" | "unknown";
 export type PullRequestReviewDecision = "approved" | "changes_requested" | "review_required";
@@ -116,6 +117,7 @@ export interface PrReview {
   prAuthor?: string | null;
   baseBranch?: string | null;
   status: PrReviewStatus;
+  verdict?: PrReviewVerdict | null;
   reviewOutput?: string | null;
   lastError?: string | null;
   worktreePath?: string | null;
