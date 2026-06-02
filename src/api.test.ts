@@ -163,6 +163,36 @@ describe("api", () => {
     expect(mockedInvoke).toHaveBeenCalledWith("github_pull_request_status", { taskId: 9 });
   });
 
+  it("detects an existing pull request for a task branch", async () => {
+    // `isTauri` is captured at module load, so re-import with the flag present.
+    vi.resetModules();
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+    mockedInvoke.mockResolvedValueOnce({
+      id: 5,
+      repoId: 1,
+      title: "Add GitHub panel",
+      status: "review",
+      prUrl: "https://github.com/hvp17/nectus/pull/9",
+      hasWorktree: true,
+      isDirty: false,
+      createdAt: "2026-06-02T12:00:00.000Z",
+      updatedAt: "2026-06-02T12:01:00.000Z",
+    });
+
+    const { api: tauriApi } = await import("./api");
+    const task = await tauriApi.detectGithubPullRequest(5);
+
+    expect(task?.prUrl).toBe("https://github.com/hvp17/nectus/pull/9");
+    expect(mockedInvoke).toHaveBeenCalledWith("detect_github_pull_request", { taskId: 5 });
+  });
+
+  it("returns no detected pull request outside Tauri", async () => {
+    const task = await api.detectGithubPullRequest(5);
+
+    expect(task).toBeNull();
+    expect(mockedInvoke).not.toHaveBeenCalled();
+  });
+
   it("truncates long system notification bodies sent to Tauri", async () => {
     vi.resetModules();
     Object.defineProperty(window, "__TAURI_INTERNALS__", {

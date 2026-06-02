@@ -56,6 +56,7 @@ export function useGithub({ selectedTask, setMessage, applyTask }: UseGithubInpu
 
   const selectedTaskId = selectedTask?.id;
   const selectedPrUrl = selectedTask?.prUrl ?? null;
+  const selectedHasWorktree = selectedTask?.hasWorktree ?? false;
 
   useEffect(() => {
     // Invalidate any in-flight fetch whenever the selected task changes.
@@ -64,6 +65,25 @@ export function useGithub({ selectedTask, setMessage, applyTask }: UseGithubInpu
     if (!ghReady || !selectedTaskId || !selectedPrUrl) return;
     void loadPullRequest(selectedTaskId);
   }, [ghReady, selectedTaskId, selectedPrUrl, loadPullRequest]);
+
+  useEffect(() => {
+    // When a worktree task has no linked PR yet, ask gh whether one already
+    // exists for its branch (e.g. opened from the terminal) and backfill it.
+    // Backfilling `prUrl` re-triggers the status effect above, which loads checks.
+    if (!ghReady || !selectedTaskId || !selectedHasWorktree || selectedPrUrl) return;
+    let cancelled = false;
+    api
+      .detectGithubPullRequest(selectedTaskId)
+      .then((task) => {
+        if (!cancelled && task) applyTask(task);
+      })
+      .catch(() => {
+        // Soft-fail: detection is best-effort; the Create button stays available.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ghReady, selectedTaskId, selectedHasWorktree, selectedPrUrl, applyTask]);
 
   const refreshPullRequest = useCallback(
     (task: TaskSummary) => {

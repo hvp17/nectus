@@ -119,6 +119,10 @@ export const api = {
   async githubPullRequestStatus(taskId: number): Promise<PullRequestInfo> {
     return invoke("github_pull_request_status", { taskId });
   },
+  async detectGithubPullRequest(taskId: number): Promise<TaskSummary | null> {
+    if (!isTauri) return null;
+    return invoke("detect_github_pull_request", { taskId });
+  },
   async listAgentProfiles(): Promise<AgentProfile[]> {
     if (!isTauri) return browserFallbackProfiles;
     return invoke("list_agent_profiles");

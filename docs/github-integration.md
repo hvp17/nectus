@@ -27,6 +27,18 @@ authentication, Nectus stores no tokens and runs no OAuth flow — it shells out
   submitting a structured prompt into the active agent session asking it to open
   the PR from the terminal.
 
+## Detecting an existing pull request
+
+- When a worktree-backed task has no linked PR yet and GitHub is connected, Nectus
+  asks `gh pr view` whether the branch already has a PR — so one opened outside
+  Nectus (e.g. `gh pr create` or the GitHub web UI) is picked up automatically.
+- Detection runs when such a task is selected. A found PR's URL is backfilled to the
+  task (the same `pr_url` column the create flow writes), which then loads live
+  status; a branch with no PR is left untouched and the `Create pull request` action
+  stays available.
+- `gh pr view` exits non-zero with `no pull requests found for branch …` when the
+  branch has no PR; Nectus treats that as "not opened yet", not an error.
+
 ## Pull request status
 
 - When a task has a linked PR and GitHub is connected, the panel shows live status
@@ -54,6 +66,7 @@ authentication, Nectus stores no tokens and runs no OAuth flow — it shells out
 - Frontend API: `src/api.ts`
 - gh shell-out and output parsing: `native/src/github.rs`
 - Backend commands: `github_status`, `create_github_pull_request`,
-  `github_pull_request_status` (registered in `native/src/lib.rs`)
+  `github_pull_request_status`, `detect_github_pull_request` (registered in
+  `native/src/lib.rs`)
 - PR URL persistence: `pr_url` column on the `tasks` table, via
   `update_task_metadata`
