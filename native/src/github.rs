@@ -46,6 +46,9 @@ fn classify_check(check: &RawCheck) -> CheckOutcome {
         }
         return match check.conclusion.as_deref() {
             Some("SUCCESS") | Some("NEUTRAL") | Some("SKIPPED") => CheckOutcome::Pass,
+            // Awaiting a manual gate (e.g. deploy approval) or needing a re-run —
+            // not a real failure, so surface as pending rather than failing.
+            Some("ACTION_REQUIRED") | Some("STALE") => CheckOutcome::Pending,
             Some(_) => CheckOutcome::Fail,
             None => CheckOutcome::Pending,
         };
@@ -136,8 +139,18 @@ pub fn parse_pr_url(stdout: &str) -> Option<String> {
         .lines()
         .map(str::trim)
         .rev()
-        .find(|line| line.starts_with("https://") && line.contains("/pull/"))
+        .find(|line| is_pull_request_url(line))
         .map(str::to_string)
+}
+
+/// A line is a PR URL when it is an https link whose `/pull/` segment is
+/// immediately followed by a PR number (guards against e.g. `/pull/requests`).
+fn is_pull_request_url(line: &str) -> bool {
+    line.starts_with("https://")
+        && line
+            .split_once("/pull/")
+            .and_then(|(_, rest)| rest.chars().next())
+            .is_some_and(|c| c.is_ascii_digit())
 }
 
 fn command_error(output: &Output, fallback: &str) -> String {
@@ -284,6 +297,42 @@ mod tests {
             Some("https://github.com/hvp17/nectus/pull/7".to_string())
         );
         assert_eq!(parse_pr_url("no url here"), None);
+    }
+
+    #[test]
+    fn parses_pr_url_only_when_pull_is_followed_by_a_number() {
+        // A trailing https link that contains "/pull/" but is not a numbered PR
+        // (e.g. a "/pull/requests" path) must not be mistaken for the created PR.
+        let stdout =
+            "https://github.com/hvp17/nectus/pull/55\nhttps://github.com/hvp17/nectus/pull/requests";
+        assert_eq!(
+            parse_pr_url(stdout),
+            Some("https://github.com/hvp17/nectus/pull/55".to_string())
+        );
+    }
+
+    #[test]
+    fn treats_action_required_and_stale_checks_as_pending_not_failing() {
+        let json = r#"{
+            "number": 14,
+            "url": "https://github.com/hvp17/nectus/pull/14",
+            "title": "Awaiting deploy approval",
+            "state": "OPEN",
+            "isDraft": false,
+            "reviewDecision": "",
+            "statusCheckRollup": [
+                {"__typename":"CheckRun","status":"COMPLETED","conclusion":"SUCCESS"},
+                {"__typename":"CheckRun","status":"COMPLETED","conclusion":"ACTION_REQUIRED"},
+                {"__typename":"CheckRun","status":"COMPLETED","conclusion":"STALE"}
+            ]
+        }"#;
+
+        let pr = parse_pull_request(json).unwrap();
+
+        assert_eq!(pr.checks.failed, 0);
+        assert_eq!(pr.checks.pending, 2);
+        assert_eq!(pr.checks.passed, 1);
+        assert_eq!(pr.checks_state, GithubCheckState::Pending);
     }
 
     #[test]

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { GithubStatus, PullRequestInfo, TaskSummary } from "../types";
 
@@ -36,15 +36,21 @@ export function useGithub({ selectedTask, setMessage, applyTask }: UseGithubInpu
 
   const ghReady = Boolean(githubStatus?.installed && githubStatus?.authenticated);
 
+  // Monotonic request token so out-of-order responses (from rapid task switches
+  // or overlapping refreshes) can never apply stale PR data to the current task.
+  const requestRef = useRef(0);
+
   const loadPullRequest = useCallback(async (taskId: number) => {
+    const requestId = (requestRef.current += 1);
     setPullRequestLoading(true);
     try {
-      setPullRequest(await api.githubPullRequestStatus(taskId));
+      const info = await api.githubPullRequestStatus(taskId);
+      if (requestRef.current === requestId) setPullRequest(info);
     } catch {
       // Soft-fail: the panel still shows the stored PR link; status is best-effort.
-      setPullRequest(null);
+      if (requestRef.current === requestId) setPullRequest(null);
     } finally {
-      setPullRequestLoading(false);
+      if (requestRef.current === requestId) setPullRequestLoading(false);
     }
   }, []);
 
@@ -52,6 +58,8 @@ export function useGithub({ selectedTask, setMessage, applyTask }: UseGithubInpu
   const selectedPrUrl = selectedTask?.prUrl ?? null;
 
   useEffect(() => {
+    // Invalidate any in-flight fetch whenever the selected task changes.
+    requestRef.current += 1;
     setPullRequest(null);
     if (!ghReady || !selectedTaskId || !selectedPrUrl) return;
     void loadPullRequest(selectedTaskId);
