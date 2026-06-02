@@ -2,6 +2,7 @@ use crate::models::{
     GithubCheckState, GithubCheckSummary, GithubStatus, PullRequestInfo, PullRequestReviewDecision,
     PullRequestState,
 };
+use crate::process_util::command_error;
 use serde::Deserialize;
 use std::path::Path;
 use std::process::{Command, Output};
@@ -151,15 +152,6 @@ fn is_pull_request_url(line: &str) -> bool {
             .split_once("/pull/")
             .and_then(|(_, rest)| rest.chars().next())
             .is_some_and(|c| c.is_ascii_digit())
-}
-
-fn command_error(output: &Output, fallback: &str) -> String {
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    if stderr.is_empty() {
-        fallback.into()
-    } else {
-        stderr
-    }
 }
 
 fn run_gh(current_dir: Option<&Path>, args: &[&str]) -> Result<Output, String> {
