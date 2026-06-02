@@ -2,7 +2,7 @@ import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { TaskAttention } from "../sessionAttention";
 import { renderWithTooltipProvider } from "../test/testUtils";
-import type { AgentProfile, ReviewLoop, ReviewRun, TaskSummary } from "../types";
+import type { AgentProfile, GithubStatus, PullRequestInfo, ReviewLoop, ReviewRun, TaskSummary } from "../types";
 import { TaskWorkspace } from "./TaskWorkspace";
 
 const task: TaskSummary = {
@@ -69,11 +69,14 @@ function renderTaskWorkspace(input?: {
   attention?: TaskAttention;
   reviewLoop?: ReviewLoop | null;
   reviewRuns?: ReviewRun[];
+  githubStatus?: GithubStatus;
+  pullRequest?: PullRequestInfo | null;
   onStopSession?: (sessionId: string) => void;
   onResumeSession?: (task: TaskSummary) => void;
   onStartSession?: (task: TaskSummary) => void;
   onStartReview?: (task: TaskSummary, reviewerProfileId: number) => void;
-  onCreatePullRequest?: (task: TaskSummary) => void;
+  onCreatePullRequest?: (task: TaskSummary, options?: { draft?: boolean }) => void;
+  onRefreshPullRequest?: (task: TaskSummary) => void;
   onUpdateStatus?: (task: TaskSummary, status: TaskSummary["status"]) => void;
   onDeleteTask?: (task: TaskSummary) => void;
 }) {
@@ -84,12 +87,15 @@ function renderTaskWorkspace(input?: {
       agentProfiles={agentProfiles}
       reviewLoop={input?.reviewLoop ?? null}
       reviewRuns={input?.reviewRuns ?? []}
+      githubStatus={input?.githubStatus}
+      pullRequest={input?.pullRequest}
       onClose={vi.fn()}
       onStopSession={input?.onStopSession ?? vi.fn()}
       onResumeSession={input?.onResumeSession ?? vi.fn()}
       onStartSession={input?.onStartSession ?? vi.fn()}
       onStartReview={input?.onStartReview ?? vi.fn()}
       onCreatePullRequest={input?.onCreatePullRequest ?? vi.fn()}
+      onRefreshPullRequest={input?.onRefreshPullRequest ?? vi.fn()}
       onUpdateStatus={input?.onUpdateStatus ?? vi.fn()}
       onDeleteTask={input?.onDeleteTask ?? vi.fn()}
       onSessionExit={vi.fn()}
@@ -223,7 +229,7 @@ describe("TaskWorkspace", () => {
     expect(onUpdateStatus).toHaveBeenCalledWith(inReviewTask, "done");
   });
 
-  it("asks the active agent to create a pull request from the workflow", () => {
+  it("triggers PR creation from the workflow step when an agent session is active", () => {
     const onCreatePullRequest = vi.fn();
     const runningTask: TaskSummary = {
       ...task,
@@ -237,9 +243,29 @@ describe("TaskWorkspace", () => {
     expect(createPrStep).not.toBeDisabled();
     expect(screen.getByText(/ask the running agent to open a pull request/i)).toBeInTheDocument();
 
-    screen.getByRole("button", { name: /ask agent to create pull request/i }).click();
+    createPrStep.click();
 
     expect(onCreatePullRequest).toHaveBeenCalledWith(runningTask);
+  });
+
+  it("creates a pull request from the GitHub panel when connected", () => {
+    const onCreatePullRequest = vi.fn();
+    const worktreeTask: TaskSummary = {
+      ...task,
+      status: "review",
+      activeSessionId: null,
+      prUrl: null,
+    };
+
+    renderTaskWorkspace({
+      task: worktreeTask,
+      githubStatus: { installed: true, authenticated: true, account: "hvp17" },
+      onCreatePullRequest,
+    });
+
+    screen.getByRole("button", { name: /create pull request/i }).click();
+
+    expect(onCreatePullRequest).toHaveBeenCalledWith(worktreeTask, { draft: false });
   });
 
   it("keeps the create pr step completed when a pull request is linked", () => {

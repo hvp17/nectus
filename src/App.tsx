@@ -73,6 +73,11 @@ function App() {
     stopSession,
     resumeSession,
     createPullRequest,
+    githubStatus,
+    selectedPullRequest,
+    pullRequestLoading,
+    creatingPullRequest,
+    refreshPullRequest,
     startReview,
     onSessionExit,
     onSessionInput,
@@ -154,6 +159,7 @@ function App() {
             <SettingsPage
               settings={settings}
               agentProfiles={agentProfiles}
+              githubStatus={githubStatus}
               busy={busy}
               onBack={() => setCurrentView("dashboard")}
               onSaveSettings={saveAppSettings}
@@ -172,6 +178,10 @@ function App() {
                   agentProfiles={agentProfiles}
                   reviewLoop={selectedReviewLoop}
                   reviewRuns={selectedReviewRuns}
+                  githubStatus={githubStatus}
+                  pullRequest={selectedPullRequest}
+                  pullRequestLoading={pullRequestLoading}
+                  creatingPullRequest={creatingPullRequest}
                   onClose={() => {
                     setSelectedTaskId(undefined);
                   }}
@@ -180,6 +190,7 @@ function App() {
                   onStartSession={startSession}
                   onStartReview={startReview}
                   onCreatePullRequest={createPullRequest}
+                  onRefreshPullRequest={refreshPullRequest}
                   onUpdateStatus={updateStatus}
                   onDeleteTask={requestDeleteTask}
                   onSessionExit={onSessionExit}

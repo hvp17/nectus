@@ -203,14 +203,17 @@ Current behavior:
   adjacent dropdown to switch reviewer profiles before starting the pass.
 - The review action switches the selected task UI to `reviewing` while the reviewer
   command runs, and the task workflow stepper shows the in-progress state.
-- The task workflow stepper enables `Create PR` when the worker session is
-  running. That action submits a structured prompt into the active PTY, including
-  the terminal Enter sequence, asking the agent to verify, commit, push, create
-  the PR, and report the URL.
+- The task workflow stepper enables `Create PR` for worktree tasks once the
+  GitHub CLI is connected, or whenever a worker session is running. For worktree
+  tasks with `gh` connected it opens the pull request directly and stores the URL
+  on the task automatically; otherwise it submits a structured prompt into the
+  active PTY, including the terminal Enter sequence, asking the agent to verify,
+  commit, push, create the PR, and report the URL. See
+  [GitHub Integration](github-integration.md).
 - The task workflow stepper also shows a `Move to done` step that marks the
   task complete.
-- PR URLs are still stored through task metadata when linked, but the first
-  `Create PR` flow does not call GitHub APIs or discover the URL automatically.
+- PR URLs are stored on the task: captured automatically by the `gh`-driven flow,
+  or written through task metadata when linked manually or by the agent.
 - Manual review runs require a running worker session so blockers or
   feedback can be written back into that session.
 - Claude and Gemini reviewers are run in headless prompt mode with `-p` and the
@@ -243,6 +246,22 @@ Key files:
 - Runtime worker: `native/src/sessions/review_loop.rs`
 - Persistence: `review_loops` and `review_runs` tables
 - Persistence API: `native/src/db/review_loops.rs`
+
+## GitHub
+
+GitHub integration runs through the `gh` CLI, so Nectus stores no tokens. The app
+reports connection status, opens pull requests directly for worktree tasks
+(capturing the URL onto the task), and shows live PR state and CI checks. Full
+behavior lives in [GitHub Integration](github-integration.md).
+
+Key files:
+
+- Task inspector panel: `src/components/GitHubPanel.tsx`
+- Settings connection card: `src/components/SettingsPage.tsx`
+- Connection and PR-status state: `src/hooks/useGithub.ts`
+- gh shell-out and parsing: `native/src/github.rs`
+- Backend commands: `github_status`, `create_github_pull_request`,
+  `github_pull_request_status`
 
 ## Settings
 

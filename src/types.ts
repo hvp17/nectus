@@ -5,6 +5,9 @@ export type ThemeMode = "system" | "light" | "dark";
 export type DensityMode = "comfortable" | "compact";
 export type ReviewLoopStatus = "running" | "reviewing" | "passed" | "feedback_sent" | "error" | "stopped";
 export type ReviewVerdict = "pass" | "needs_changes" | "feedback" | "unknown";
+export type GithubCheckState = "passing" | "failing" | "pending" | "none";
+export type PullRequestState = "open" | "merged" | "closed" | "unknown";
+export type PullRequestReviewDecision = "approved" | "changes_requested" | "review_required";
 
 export interface Repo {
   id: number;
@@ -36,6 +39,30 @@ export interface TaskSummary {
   reviewLoopStatus?: ReviewLoopStatus | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface GithubStatus {
+  installed: boolean;
+  authenticated: boolean;
+  account?: string | null;
+}
+
+export interface GithubCheckSummary {
+  total: number;
+  passed: number;
+  failed: number;
+  pending: number;
+}
+
+export interface PullRequestInfo {
+  number: number;
+  url: string;
+  title: string;
+  state: PullRequestState;
+  isDraft: boolean;
+  reviewDecision?: PullRequestReviewDecision | null;
+  checks: GithubCheckSummary;
+  checksState: GithubCheckState;
 }
 
 export interface AgentProfile {

@@ -1,0 +1,123 @@
+import { screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { renderWithTooltipProvider } from "../test/testUtils";
+import type { GithubStatus, PullRequestInfo, TaskSummary } from "../types";
+import { GitHubPanel } from "./GitHubPanel";
+
+const baseTask: TaskSummary = {
+  id: 42,
+  repoId: 7,
+  title: "Add GitHub integration",
+  prompt: "Wire up gh.",
+  status: "review",
+  prUrl: null,
+  agentProfileId: 1,
+  agentName: "Codex",
+  agentKind: "codex",
+  hasWorktree: true,
+  branchName: "feat/github",
+  worktreePath: "/tmp/wt/feat-github",
+  isDirty: false,
+  activeSessionId: null,
+  lastSessionId: null,
+  lastSessionAgent: null,
+  lastSessionCwd: null,
+  lastSessionLabel: null,
+  createdAt: "2026-06-02T00:00:00.000Z",
+  updatedAt: "2026-06-02T00:00:00.000Z",
+};
+
+const connected: GithubStatus = { installed: true, authenticated: true, account: "hvp17" };
+
+function render(input?: {
+  task?: TaskSummary;
+  githubStatus?: GithubStatus;
+  pullRequest?: PullRequestInfo | null;
+  pullRequestLoading?: boolean;
+  creatingPullRequest?: boolean;
+  onCreatePullRequest?: (task: TaskSummary, options: { draft: boolean }) => void;
+  onRefreshPullRequest?: (task: TaskSummary) => void;
+}) {
+  return renderWithTooltipProvider(
+    <GitHubPanel
+      task={input?.task ?? baseTask}
+      githubStatus={input?.githubStatus ?? connected}
+      pullRequest={input?.pullRequest ?? null}
+      pullRequestLoading={input?.pullRequestLoading}
+      creatingPullRequest={input?.creatingPullRequest}
+      onCreatePullRequest={input?.onCreatePullRequest ?? vi.fn()}
+      onRefreshPullRequest={input?.onRefreshPullRequest ?? vi.fn()}
+    />,
+  );
+}
+
+describe("GitHubPanel", () => {
+  it("prompts to install gh when the CLI is missing", () => {
+    render({ githubStatus: { installed: false, authenticated: false, account: null } });
+
+    expect(screen.getByText(/github cli/i)).toBeInTheDocument();
+    expect(screen.getByText(/install/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /create pull request/i })).not.toBeInTheDocument();
+  });
+
+  it("prompts to sign in when gh is installed but not authenticated", () => {
+    render({ githubStatus: { installed: true, authenticated: false, account: null } });
+
+    expect(screen.getByText(/gh auth login/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /create pull request/i })).not.toBeInTheDocument();
+  });
+
+  it("creates a pull request for a connected task with a worktree", () => {
+    const onCreatePullRequest = vi.fn();
+
+    render({ onCreatePullRequest });
+
+    expect(screen.getByText(/hvp17/i)).toBeInTheDocument();
+    screen.getByRole("button", { name: /create pull request/i }).click();
+
+    expect(onCreatePullRequest).toHaveBeenCalledWith(baseTask, { draft: false });
+  });
+
+  it("explains that a worktree is required when the task has none", () => {
+    const taskWithoutWorktree: TaskSummary = {
+      ...baseTask,
+      hasWorktree: false,
+      branchName: null,
+      worktreePath: null,
+    };
+
+    render({ task: taskWithoutWorktree });
+
+    expect(screen.getByText(/worktree branch/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /create pull request/i })).not.toBeInTheDocument();
+  });
+
+  it("shows live pull request status when a PR is linked", () => {
+    const onRefreshPullRequest = vi.fn();
+    const linkedTask: TaskSummary = { ...baseTask, prUrl: "https://github.com/hvp17/nectus/pull/9" };
+    const pullRequest: PullRequestInfo = {
+      number: 9,
+      url: "https://github.com/hvp17/nectus/pull/9",
+      title: "Add GitHub integration",
+      state: "open",
+      isDraft: false,
+      reviewDecision: "review_required",
+      checks: { total: 3, passed: 1, failed: 1, pending: 1 },
+      checksState: "failing",
+    };
+
+    render({ task: linkedTask, pullRequest, onRefreshPullRequest });
+
+    expect(screen.getByText(/#9/)).toBeInTheDocument();
+    expect(screen.getByText("Open", { selector: "[data-pr-state]" })).toBeInTheDocument();
+    expect(screen.getByText(/review required/i)).toBeInTheDocument();
+    expect(screen.getByText("1", { selector: ".github-check-failed" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /open pull request/i })).toHaveAttribute(
+      "href",
+      "https://github.com/hvp17/nectus/pull/9",
+    );
+
+    screen.getByRole("button", { name: /refresh pull request/i }).click();
+    expect(onRefreshPullRequest).toHaveBeenCalledWith(linkedTask);
+  });
+});

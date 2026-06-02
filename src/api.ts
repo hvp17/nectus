@@ -6,6 +6,8 @@ import type {
   AgentProfile,
   AppSettings,
   AppSettingsInput,
+  GithubStatus,
+  PullRequestInfo,
   Repo,
   ReviewLoop,
   ReviewRun,
@@ -96,6 +98,26 @@ export const api = {
   },
   async deleteTask(taskId: number): Promise<void> {
     return invoke("delete_task", { taskId });
+  },
+  async githubStatus(): Promise<GithubStatus> {
+    if (!isTauri) return { installed: false, authenticated: false, account: null };
+    return invoke("github_status");
+  },
+  async createGithubPullRequest(input: {
+    taskId: number;
+    title: string;
+    body: string;
+    draft: boolean;
+  }): Promise<TaskSummary> {
+    return invoke("create_github_pull_request", {
+      taskId: input.taskId,
+      title: input.title,
+      body: input.body,
+      draft: input.draft,
+    });
+  },
+  async githubPullRequestStatus(taskId: number): Promise<PullRequestInfo> {
+    return invoke("github_pull_request_status", { taskId });
   },
   async listAgentProfiles(): Promise<AgentProfile[]> {
     if (!isTauri) return browserFallbackProfiles;
