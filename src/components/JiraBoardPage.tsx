@@ -100,8 +100,7 @@ export function JiraBoardPage({
     <div className="jira-board" data-testid="jira-board">
       <header className="jira-board-header flex flex-wrap items-center gap-3 border-b p-4">
         <div className="mr-auto">
-          <p className="eyebrow">JIRA</p>
-          <h1 className="text-xl font-bold tracking-tight">Board</h1>
+          <h1 className="text-xl font-bold tracking-tight">JIRA Board</h1>
         </div>
         <JiraConnection status={status} />
         <Button

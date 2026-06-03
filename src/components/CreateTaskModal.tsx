@@ -84,7 +84,6 @@ export function CreateTaskModal({
         <form onSubmit={onSubmit}>
           <DialogHeader className="border-b p-6 pr-12">
             <div>
-              <p className="eyebrow">Agent Setup</p>
               <DialogTitle className="text-xl font-bold tracking-tight">Create New Task</DialogTitle>
               <DialogDescription className="sr-only">
                 Configure the project, agent profile, prompt, and git worktree for a new task.

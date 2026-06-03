@@ -150,7 +150,6 @@ export function Workspace({
     <section className="workspace p-10 overflow-auto max-w-[1400px] mx-auto w-full" aria-label="Dashboard workspace">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Operations</p>
           <h2 className="text-3xl font-bold tracking-tight">
             {selectedRepo ? selectedRepo.name : loading ? "Loading projects..." : "Connect a Project"}
           </h2>

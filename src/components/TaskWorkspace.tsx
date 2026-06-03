@@ -210,7 +210,6 @@ export function TaskWorkspace({
               Task Board
             </Button>
             <div className="min-w-0">
-              <p className="eyebrow">Agent Terminal</p>
               <h2 className="truncate text-2xl font-bold tracking-tight">{task.title}</h2>
             </div>
           </div>
@@ -233,7 +232,6 @@ export function TaskWorkspace({
 
       <aside className="task-inspector-sidebar" aria-label="Task inspector">
         <div className="task-inspector-header">
-          <p className="eyebrow">Task Detail</p>
           <h3 className="truncate text-xl font-bold leading-tight">{task.title}</h3>
           <TaskStatusBadges task={task} />
         </div>

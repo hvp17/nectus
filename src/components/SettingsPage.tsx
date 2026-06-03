@@ -90,7 +90,6 @@ export function SettingsPage({
     <section className="settings-page workspace p-10 overflow-auto mx-auto w-full">
       <header className="settings-hero">
         <div>
-          <p className="eyebrow">Preferences</p>
           <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
         </div>
         <div className="settings-hero-actions">
@@ -120,7 +119,6 @@ export function SettingsPage({
         <section className="settings-section">
           <div className="settings-section-header">
             <div className="settings-section-title">
-              <p className="eyebrow">Agents</p>
               <h3>Agent Profiles</h3>
             </div>
             <div className="settings-section-actions">
@@ -190,7 +188,6 @@ export function SettingsPage({
         <section className="settings-section">
           <div className="settings-section-header">
             <div className="settings-section-title">
-              <p className="eyebrow">Repositories</p>
               <h3>Projects & Worktrees</h3>
             </div>
           </div>
@@ -232,7 +229,6 @@ export function SettingsPage({
         <section className="settings-section">
           <div className="settings-section-header">
             <div className="settings-section-title">
-              <p className="eyebrow">Integrations</p>
               <h3>GitHub</h3>
             </div>
           </div>
@@ -244,7 +240,6 @@ export function SettingsPage({
         <section className="settings-section">
           <div className="settings-section-header">
             <div className="settings-section-title">
-              <p className="eyebrow">Interface</p>
               <h3>Appearance</h3>
             </div>
           </div>
