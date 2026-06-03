@@ -125,7 +125,7 @@ impl Database {
         // databases created before then. `CREATE TABLE IF NOT EXISTS` never adds
         // columns to an existing table, so this ALTER is the only path for them.
         self.ensure_column("pr_reviews", "verdict", "TEXT")?;
-        Ok(())
+        self.run_migrations()
     }
 
     /// Add `column` to `table` if it is missing, so older databases pick up
@@ -150,6 +150,38 @@ impl Database {
                 [],
             )
             .map_err(|error| format!("Failed to add {table}.{column}: {error}"))?;
+        Ok(())
+    }
+
+    /// Additive, idempotent column migrations for existing databases. The base
+    /// schema uses `CREATE TABLE IF NOT EXISTS`, so new columns on existing
+    /// tables must be added here. Safe to run on every open.
+    pub(super) fn run_migrations(&self) -> Result<(), String> {
+        self.add_column_if_missing("tasks", "jira_issue_key", "TEXT")?;
+        self.add_column_if_missing("tasks", "jira_issue_summary", "TEXT")?;
+        self.add_column_if_missing("tasks", "jira_issue_url", "TEXT")?;
+        self.add_column_if_missing("app_settings", "jira_board_jql", "TEXT")?;
+        self.add_column_if_missing("app_settings", "jira_site_url", "TEXT")?;
+        Ok(())
+    }
+
+    fn add_column_if_missing(&self, table: &str, column: &str, decl: &str) -> Result<(), String> {
+        let exists = self
+            .conn
+            .prepare(&format!("PRAGMA table_info({table})"))
+            .and_then(|mut stmt| {
+                stmt.query_map([], |row| row.get::<_, String>(1))
+                    .map(|rows| rows.filter_map(Result::ok).any(|name| name == column))
+            })
+            .map_err(|error| format!("Failed to inspect {table}: {error}"))?;
+        if !exists {
+            self.conn
+                .execute(
+                    &format!("ALTER TABLE {table} ADD COLUMN {column} {decl}"),
+                    [],
+                )
+                .map_err(|error| format!("Failed to add {table}.{column}: {error}"))?;
+        }
         Ok(())
     }
 

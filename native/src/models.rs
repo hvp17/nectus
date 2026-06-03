@@ -79,6 +79,9 @@ pub struct TaskSummary {
     pub last_session_cwd: Option<String>,
     pub last_session_label: Option<String>,
     pub review_loop_status: Option<ReviewLoopStatus>,
+    pub jira_issue_key: Option<String>,
+    pub jira_issue_summary: Option<String>,
+    pub jira_issue_url: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -319,6 +322,40 @@ pub struct PullRequestInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct JiraStatus {
+    pub installed: bool,
+    pub authenticated: bool,
+    pub account: Option<String>,
+    pub site: Option<String>,
+}
+
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Display, EnumString, IntoStaticStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum JiraStatusCategory {
+    ToDo,
+    InProgress,
+    Done,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct JiraWorkItem {
+    pub key: String,
+    pub summary: String,
+    pub status_name: String,
+    pub status_category: JiraStatusCategory,
+    pub issue_type: Option<String>,
+    pub assignee: Option<String>,
+    pub url: Option<String>,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentProfile {
     pub id: i64,
     pub name: String,
@@ -384,6 +421,8 @@ pub struct AppSettings {
     pub default_agent_profile_id: Option<i64>,
     pub default_worktree_root_pattern: String,
     pub default_branch_prefix: Option<String>,
+    pub jira_board_jql: Option<String>,
+    pub jira_site_url: Option<String>,
     pub theme: ThemeMode,
     pub density: DensityMode,
     pub updated_at: String,
@@ -395,6 +434,10 @@ pub struct AppSettingsInput {
     pub default_agent_profile_id: Option<i64>,
     pub default_worktree_root_pattern: String,
     pub default_branch_prefix: Option<String>,
+    #[serde(default)]
+    pub jira_board_jql: Option<String>,
+    #[serde(default)]
+    pub jira_site_url: Option<String>,
     pub theme: ThemeMode,
     pub density: DensityMode,
 }

@@ -74,6 +74,9 @@ pub(super) fn task_from_row(row: &Row<'_>) -> rusqlite::Result<TaskSummary> {
         last_session_cwd: row.get(15)?,
         last_session_label: row.get(16)?,
         review_loop_status: row.get(19)?,
+        jira_issue_key: row.get(20)?,
+        jira_issue_summary: row.get(21)?,
+        jira_issue_url: row.get(22)?,
         created_at: row.get(17)?,
         updated_at: row.get(18)?,
     })
@@ -123,6 +126,8 @@ pub(super) fn app_settings_from_row(row: &Row<'_>) -> rusqlite::Result<AppSettin
         theme: row.get(3)?,
         density: row.get(4)?,
         updated_at: row.get(5)?,
+        jira_board_jql: row.get(6)?,
+        jira_site_url: row.get(7)?,
     })
 }
 

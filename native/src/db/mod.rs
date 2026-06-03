@@ -104,7 +104,7 @@ impl Database {
         self.conn
             .query_row(
                 "
-                SELECT default_agent_profile_id, default_worktree_root_pattern, default_branch_prefix, theme, density, updated_at
+                SELECT default_agent_profile_id, default_worktree_root_pattern, default_branch_prefix, theme, density, updated_at, jira_board_jql, jira_site_url
                 FROM app_settings
                 WHERE id = 1
                 ",
@@ -135,6 +135,14 @@ impl Database {
             .default_branch_prefix
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty());
+        let jira_board_jql = settings
+            .jira_board_jql
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let jira_site_url = settings
+            .jira_site_url
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
         let pattern = settings.default_worktree_root_pattern.trim().to_string();
         let updated_at = now();
         self.conn
@@ -146,7 +154,9 @@ impl Database {
                     default_branch_prefix = ?3,
                     theme = ?4,
                     density = ?5,
-                    updated_at = ?6
+                    updated_at = ?6,
+                    jira_board_jql = ?7,
+                    jira_site_url = ?8
                 WHERE id = 1
                 ",
                 params![
@@ -155,7 +165,9 @@ impl Database {
                     default_branch_prefix,
                     settings.theme.as_str(),
                     settings.density.as_str(),
-                    updated_at
+                    updated_at,
+                    jira_board_jql,
+                    jira_site_url
                 ],
             )
             .map_err(|error| format!("Failed to update app settings: {error}"))?;
@@ -256,7 +268,8 @@ impl Database {
                    t.has_worktree, t.branch_name, t.worktree_path, t.active_session_id,
                    t.last_session_id, t.last_session_agent, t.last_session_cwd, t.last_session_label,
                    t.created_at, t.updated_at,
-                   rl.status
+                   rl.status,
+                   t.jira_issue_key, t.jira_issue_summary, t.jira_issue_url
             FROM tasks t
             LEFT JOIN agent_profiles a ON a.id = t.agent_profile_id
             LEFT JOIN review_loops rl ON rl.task_id = t.id
@@ -296,7 +309,8 @@ impl Database {
                        t.has_worktree, t.branch_name, t.worktree_path, t.active_session_id,
                        t.last_session_id, t.last_session_agent, t.last_session_cwd, t.last_session_label,
                        t.created_at, t.updated_at,
-                       rl.status
+                       rl.status,
+                       t.jira_issue_key, t.jira_issue_summary, t.jira_issue_url
                 FROM tasks t
                 LEFT JOIN agent_profiles a ON a.id = t.agent_profile_id
                 LEFT JOIN review_loops rl ON rl.task_id = t.id
@@ -358,6 +372,31 @@ impl Database {
             )
             .map_err(|error| format!("Failed to update task: {error}"))?;
 
+        self.task_by_id(task_id)?
+            .ok_or_else(|| "Task not found after update".into())
+    }
+
+    /// Set (or clear, when all fields are `None`) the local JIRA story link on a
+    /// task. Attaching never writes back to JIRA — this only updates local state.
+    pub fn set_task_jira_link(
+        &self,
+        task_id: i64,
+        key: Option<String>,
+        summary: Option<String>,
+        url: Option<String>,
+    ) -> Result<TaskSummary, String> {
+        self.task_by_id(task_id)?
+            .ok_or_else(|| "Task not found".to_string())?;
+        self.conn
+            .execute(
+                "
+                UPDATE tasks
+                SET jira_issue_key = ?1, jira_issue_summary = ?2, jira_issue_url = ?3, updated_at = ?4
+                WHERE id = ?5
+                ",
+                params![key, summary, url, now(), task_id],
+            )
+            .map_err(|error| format!("Failed to update JIRA link: {error}"))?;
         self.task_by_id(task_id)?
             .ok_or_else(|| "Task not found after update".into())
     }

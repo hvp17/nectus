@@ -1,6 +1,7 @@
 mod db;
 mod git_ops;
 mod github;
+mod jira;
 mod models;
 mod process_util;
 mod sessions;
@@ -8,8 +9,8 @@ mod sessions;
 use crate::db::Database;
 use crate::models::{
     AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings, AppSettingsInput,
-    GithubStatus, PrReview, PullRequestInfo, Repo, ReviewLoop, ReviewRun, Session,
-    SessionExitedEvent, SessionOutputSnapshot, TaskStatus, TaskSummary,
+    GithubStatus, JiraStatus, JiraWorkItem, PrReview, PullRequestInfo, Repo, ReviewLoop, ReviewRun,
+    Session, SessionExitedEvent, SessionOutputSnapshot, TaskStatus, TaskSummary,
 };
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
@@ -86,16 +87,30 @@ fn create_task(
     agent_profile_id: Option<i64>,
     has_worktree: Option<bool>,
     branch_name: Option<String>,
+    jira_issue_key: Option<String>,
+    jira_issue_summary: Option<String>,
+    jira_issue_url: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<TaskSummary> {
-    app_result(state.db.lock().create_task_record(
+    let db = state.db.lock();
+    let task = db.create_task_record(
         repo_id,
         title,
         prompt,
         agent_profile_id,
         has_worktree.unwrap_or(false),
         branch_name,
-    ))
+    )?;
+    // Attaching to a story only links locally — it never writes back to JIRA.
+    if jira_issue_key.is_some() {
+        return app_result(db.set_task_jira_link(
+            task.id,
+            jira_issue_key,
+            jira_issue_summary,
+            jira_issue_url,
+        ));
+    }
+    Ok(task)
 }
 
 #[tauri::command]
@@ -222,6 +237,82 @@ async fn detect_github_pull_request(
     .map_err(Into::into)
 }
 
+/// Report whether `acli` is installed, authenticated, and the active site.
+#[tauri::command]
+async fn jira_status() -> AppResult<JiraStatus> {
+    tauri::async_runtime::spawn_blocking(jira::status)
+        .await
+        .map_err(|error| AppError::from(format!("Failed to query JIRA status: {error}")))
+}
+
+/// Load the JIRA board by running the configured board JQL search.
+#[tauri::command]
+async fn jira_search_board(state: State<'_, AppState>) -> AppResult<Vec<JiraWorkItem>> {
+    let jql = {
+        let db = state.db.lock();
+        db.get_app_settings()?
+            .jira_board_jql
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| AppError::from("Set a board JQL in Settings to load the JIRA board"))?
+    };
+    tauri::async_runtime::spawn_blocking(move || jira::search(&jql, 200))
+        .await
+        .map_err(|error| AppError::from(format!("Failed to load JIRA board: {error}")))?
+        .map_err(Into::into)
+}
+
+/// Fetch a single work item (e.g. to backfill a story description on attach).
+#[tauri::command]
+async fn jira_get_work_item(key: String) -> AppResult<JiraWorkItem> {
+    tauri::async_runtime::spawn_blocking(move || jira::view(&key))
+        .await
+        .map_err(|error| AppError::from(format!("Failed to load work item: {error}")))?
+        .map_err(Into::into)
+}
+
+/// Transition a work item. Fails when JIRA's workflow forbids the move; the UI
+/// reverts the optimistic card and surfaces the error.
+#[tauri::command]
+async fn jira_transition_work_item(key: String, status: String) -> AppResult<()> {
+    tauri::async_runtime::spawn_blocking(move || jira::transition(&key, &status))
+        .await
+        .map_err(|error| AppError::from(format!("Failed to transition work item: {error}")))?
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn jira_assign_work_item(key: String, assignee: String) -> AppResult<()> {
+    tauri::async_runtime::spawn_blocking(move || jira::assign(&key, &assignee))
+        .await
+        .map_err(|error| AppError::from(format!("Failed to assign work item: {error}")))?
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn jira_comment_work_item(key: String, body: String) -> AppResult<()> {
+    tauri::async_runtime::spawn_blocking(move || jira::comment(&key, &body))
+        .await
+        .map_err(|error| AppError::from(format!("Failed to comment on work item: {error}")))?
+        .map_err(Into::into)
+}
+
+/// Set or clear the local JIRA story link on a task. Never writes to JIRA.
+#[tauri::command]
+fn set_task_jira_link(
+    task_id: i64,
+    key: Option<String>,
+    summary: Option<String>,
+    url: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<TaskSummary> {
+    app_result(
+        state
+            .db
+            .lock()
+            .set_task_jira_link(task_id, key, summary, url),
+    )
+}
+
 /// Start a review of an external pull request: resolve its `owner/repo` to a
 /// known project, queue the review, and kick off the background reviewer.
 #[tauri::command]
@@ -252,7 +343,9 @@ fn create_pr_review(
         db.create_pr_review(repo.id, reviewer_profile_id, pr_url.trim(), parsed.number)?
     };
 
-    state.sessions.run_pr_review(app, state.db.clone(), review.id);
+    state
+        .sessions
+        .run_pr_review(app, state.db.clone(), review.id);
     Ok(review)
 }
 
@@ -275,7 +368,9 @@ fn rerun_pr_review(
     state: State<'_, AppState>,
 ) -> AppResult<PrReview> {
     let review = app_result(state.db.lock().reset_pr_review_for_rerun(review_id))?;
-    state.sessions.run_pr_review(app, state.db.clone(), review.id);
+    state
+        .sessions
+        .run_pr_review(app, state.db.clone(), review.id);
     Ok(review)
 }
 
@@ -517,6 +612,13 @@ pub fn run() {
             create_github_pull_request,
             github_pull_request_status,
             detect_github_pull_request,
+            jira_status,
+            jira_search_board,
+            jira_get_work_item,
+            jira_transition_work_item,
+            jira_assign_work_item,
+            jira_comment_work_item,
+            set_task_jira_link,
             create_pr_review,
             list_pr_reviews,
             get_pr_review,

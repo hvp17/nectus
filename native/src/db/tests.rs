@@ -122,6 +122,8 @@ fn seeds_and_updates_global_app_settings() {
             default_agent_profile_id: Some(profiles[1].id),
             default_worktree_root_pattern: "../worktrees/{repoName}".to_string(),
             default_branch_prefix: Some("feat/".to_string()),
+            jira_board_jql: None,
+            jira_site_url: None,
             theme: ThemeMode::Dark,
             density: DensityMode::Compact,
         })
@@ -135,6 +137,68 @@ fn seeds_and_updates_global_app_settings() {
     assert_eq!(updated.default_branch_prefix.as_deref(), Some("feat/"));
     assert_eq!(updated.theme, ThemeMode::Dark);
     assert_eq!(updated.density, DensityMode::Compact);
+}
+
+#[test]
+fn persists_jira_link_and_board_settings() {
+    let db = Database::open_in_memory().unwrap();
+    let repo_dir = tempdir().unwrap();
+    std::process::Command::new("git")
+        .arg("init")
+        .arg(repo_dir.path())
+        .output()
+        .unwrap();
+    let repo = db
+        .add_repo(repo_dir.path().to_string_lossy().to_string())
+        .unwrap();
+
+    let task = db
+        .create_task_record(repo.id, "Linked".to_string(), None, None, false, None)
+        .unwrap();
+    assert_eq!(task.jira_issue_key, None);
+
+    let linked = db
+        .set_task_jira_link(
+            task.id,
+            Some("PROJ-7".to_string()),
+            Some("Fix login".to_string()),
+            Some("https://x.atlassian.net/browse/PROJ-7".to_string()),
+        )
+        .unwrap();
+    assert_eq!(linked.jira_issue_key.as_deref(), Some("PROJ-7"));
+    assert_eq!(linked.jira_issue_summary.as_deref(), Some("Fix login"));
+    // Survives a reload from the row mapper.
+    assert_eq!(
+        db.task_by_id(task.id)
+            .unwrap()
+            .unwrap()
+            .jira_issue_url
+            .as_deref(),
+        Some("https://x.atlassian.net/browse/PROJ-7")
+    );
+
+    // Clearing all fields detaches the link.
+    let cleared = db.set_task_jira_link(task.id, None, None, None).unwrap();
+    assert_eq!(cleared.jira_issue_key, None);
+
+    // Board JQL round-trips through app settings.
+    let base = db.get_app_settings().unwrap();
+    let saved = db
+        .update_app_settings(AppSettingsInput {
+            default_agent_profile_id: base.default_agent_profile_id,
+            default_worktree_root_pattern: base.default_worktree_root_pattern,
+            default_branch_prefix: base.default_branch_prefix,
+            jira_board_jql: Some("project = PROJ".to_string()),
+            jira_site_url: Some("https://x.atlassian.net".to_string()),
+            theme: base.theme,
+            density: base.density,
+        })
+        .unwrap();
+    assert_eq!(saved.jira_board_jql.as_deref(), Some("project = PROJ"));
+    assert_eq!(
+        saved.jira_site_url.as_deref(),
+        Some("https://x.atlassian.net")
+    );
 }
 
 #[test]
@@ -158,6 +222,8 @@ fn updated_worktree_root_pattern_applies_to_existing_and_new_repos() {
         default_agent_profile_id: None,
         default_worktree_root_pattern: "../global-worktrees/{repoName}".to_string(),
         default_branch_prefix: None,
+        jira_board_jql: None,
+        jira_site_url: None,
         theme: ThemeMode::System,
         density: DensityMode::Comfortable,
     })
@@ -709,7 +775,11 @@ fn delete_task_rejects_active_session() {
 
 /// Add a project whose `origin` remote is a GitHub URL (not fetched — only its
 /// URL is read), so `resolve_repo_for_owner_repo` can match it.
-fn add_repo_with_github_remote(db: &Database, owner: &str, name: &str) -> (tempfile::TempDir, Repo) {
+fn add_repo_with_github_remote(
+    db: &Database,
+    owner: &str,
+    name: &str,
+) -> (tempfile::TempDir, Repo) {
     let dir = tempdir().unwrap();
     std::process::Command::new("git")
         .args(["init", "--initial-branch=main"])
@@ -725,7 +795,9 @@ fn add_repo_with_github_remote(db: &Database, owner: &str, name: &str) -> (tempf
             &format!("https://github.com/{owner}/{name}.git"),
         ],
     );
-    let repo = db.add_repo(dir.path().to_string_lossy().to_string()).unwrap();
+    let repo = db
+        .add_repo(dir.path().to_string_lossy().to_string())
+        .unwrap();
     (dir, repo)
 }
 
@@ -763,7 +835,10 @@ fn creates_lists_and_transitions_a_pr_review() {
     assert_eq!(review.status, PrReviewStatus::Queued);
     assert_eq!(review.pr_number, 7);
     assert_eq!(review.repo_name, repo.name);
-    assert_eq!(review.reviewer_name.as_deref(), Some(reviewer.name.as_str()));
+    assert_eq!(
+        review.reviewer_name.as_deref(),
+        Some(reviewer.name.as_str())
+    );
 
     assert_eq!(review.verdict, None);
 
@@ -778,7 +853,10 @@ fn creates_lists_and_transitions_a_pr_review() {
     assert_eq!(loaded.pr_title.as_deref(), Some("Add feature"));
     assert_eq!(loaded.pr_author.as_deref(), Some("octocat"));
     assert_eq!(loaded.base_branch.as_deref(), Some("main"));
-    assert_eq!(loaded.review_output.as_deref(), Some("## Review\nLooks good."));
+    assert_eq!(
+        loaded.review_output.as_deref(),
+        Some("## Review\nLooks good.")
+    );
 
     assert_eq!(db.list_pr_reviews().unwrap().len(), 1);
 
@@ -798,7 +876,12 @@ fn deleting_a_repo_cascades_to_its_pr_reviews() {
     let (_dir, repo) = add_repo_with_github_remote(&db, "hvp17", "nectus");
     let reviewer = db.list_agent_profiles().unwrap()[0].clone();
     let review = db
-        .create_pr_review(repo.id, reviewer.id, "https://github.com/hvp17/nectus/pull/1", 1)
+        .create_pr_review(
+            repo.id,
+            reviewer.id,
+            "https://github.com/hvp17/nectus/pull/1",
+            1,
+        )
         .unwrap();
 
     db.conn
