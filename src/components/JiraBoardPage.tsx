@@ -227,7 +227,7 @@ function BoardBody({
   if (!project) {
     return (
       <BoardEmpty title="Choose a project">
-        Pick a JIRA project above to load its board. No query to write — just choose a
+        Pick a JIRA project above to load its board. No query to write, just choose a
         project and optional filters.
       </BoardEmpty>
     );

@@ -109,7 +109,7 @@ export function PrReviewDetail({ review, onRerun, onDelete }: PrReviewDetailProp
         <div className="flex flex-col gap-3" aria-label="Review in progress">
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
             <LoaderCircle size={14} className="animate-spin" />
-            {review.status === "queued" ? "Queued — preparing worktree…" : "Reviewing the pull request…"}
+            {review.status === "queued" ? "Queued, preparing worktree…" : "Reviewing the pull request…"}
           </p>
           <Skeleton className="h-4 w-3/4" />
           <Skeleton className="h-4 w-full" />
