@@ -44,12 +44,12 @@
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border) 86%, var(--foreground));
   border-radius: 8px;
-  background: #0a0a0a;
-  box-shadow: 0 18px 60px color-mix(in srgb, black 24%, transparent);
+  background: var(--background);
+  box-shadow: var(--shadow-lg);
 }
 
 .task-terminal-panel .terminal-host {
-  background: #0a0a0a;
+  background: var(--background);
   padding: 12px;
 }
 
@@ -62,7 +62,7 @@
   min-width: 0;
   min-height: 0;
   padding: 28px;
-  color: #d7dde5;
+  color: var(--foreground);
   font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
 }
 
@@ -78,7 +78,7 @@
 }
 
 .terminal-launcher-kicker {
-  color: #8f99a8;
+  color: var(--muted-foreground);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -87,7 +87,7 @@
 
 .terminal-launcher-title {
   margin: 8px 0 0;
-  color: #f4f7fb;
+  color: var(--foreground);
   font-size: 22px;
   font-weight: 800;
 }
@@ -96,7 +96,7 @@
   max-width: 48ch;
   margin: 8px 0 0;
   overflow: hidden;
-  color: #8f99a8;
+  color: var(--muted-foreground);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
