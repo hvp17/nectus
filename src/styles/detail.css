@@ -43,7 +43,7 @@
   min-height: 0;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border) 86%, var(--foreground));
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--background);
   box-shadow: var(--shadow-lg);
 }
@@ -308,7 +308,7 @@
   margin-top: 12px;
   padding: 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--muted);
 }
 
