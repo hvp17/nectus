@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { api } from "../api";
 import { toSettingsInput } from "../components/settings/profileDrafts";
 import { replaceById, upsertById } from "../lib/listState";
+import { jiraBrowseUrl } from "../lib/jira";
 import { useGuardedAction } from "./useGuardedAction";
 import {
   clearTaskAttention,
@@ -251,7 +252,11 @@ export function useApp() {
         }
       }
       setNewTaskPrompt(description);
-      setPendingJiraLink({ key: item.key, summary: item.summary, url: item.url ?? null });
+      setPendingJiraLink({
+        key: item.key,
+        summary: item.summary,
+        url: jiraBrowseUrl(jira.jiraStatus?.site, item.key),
+      });
       setNewTaskRepoId(selectedRepoId ?? repos[0]?.id);
       setSelectedJiraItem(null);
       setCurrentView("dashboard");
@@ -261,6 +266,7 @@ export function useApp() {
     [
       repos,
       selectedRepoId,
+      jira.jiraStatus?.site,
       setNewTaskTitle,
       setNewTaskPrompt,
       setPendingJiraLink,

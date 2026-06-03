@@ -231,6 +231,7 @@ function App() {
               <JiraWorkItemDialog
                 item={selectedJiraItem}
                 statusOptions={jiraColumns.map((column) => column.statusName)}
+                site={jiraStatus?.site}
                 onClose={() => setSelectedJiraItem(null)}
                 onTransition={(item, statusName) => {
                   transitionJira(item, statusName);
@@ -285,6 +286,7 @@ function App() {
                   onUpdateStatus={updateStatus}
                   onDeleteTask={requestDeleteTask}
                   onSetJiraLink={setTaskJiraLink}
+                  jiraSite={jiraStatus?.site}
                   onSessionExit={onSessionExit}
                   onSessionInput={onSessionInput}
                   busy={busy}

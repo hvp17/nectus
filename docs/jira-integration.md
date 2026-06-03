@@ -48,6 +48,12 @@ All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
 - **Comment:** `acli jira workitem comment --key <key> --body "<text>"`.
 - **View:** `acli jira workitem view <key> --json` backfills a story description when
   creating a task from it.
+- **Open in JIRA:** the work-item dialog and the linked-story panel open the canonical
+  browse URL `https://<site>/browse/<KEY>`, built from the connected site host plus the
+  issue key (`jiraBrowseUrl` in `src/lib/jira.ts`). `acli` only returns the issue's REST
+  `self` link (`…/rest/api/3/issue/<id>`), which is an API endpoint, not a page — it is
+  intentionally ignored, and the linked-story panel rebuilds the URL so stories attached
+  before this was fixed still open correctly.
 
 ## Attaching a task to a story
 

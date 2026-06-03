@@ -21,11 +21,14 @@ import {
 } from "./ui/select";
 import { Textarea } from "./ui/textarea";
 import { JiraAvatar, JiraIssueTypeIcon } from "./jiraVisuals";
+import { jiraBrowseUrl } from "../lib/jira";
 import type { JiraWorkItem } from "../types";
 
 interface JiraWorkItemDialogProps {
   item: JiraWorkItem | null;
   statusOptions: string[];
+  /** Connected JIRA site host, used to build the issue's browse URL. */
+  site?: string | null;
   onClose: () => void;
   onTransition: (item: JiraWorkItem, statusName: string) => void;
   onAssign: (key: string, assignee: string) => void;
@@ -37,6 +40,7 @@ interface JiraWorkItemDialogProps {
 export function JiraWorkItemDialog({
   item,
   statusOptions,
+  site,
   onClose,
   onTransition,
   onAssign,
@@ -52,6 +56,7 @@ export function JiraWorkItemDialog({
             key={item.key}
             item={item}
             statusOptions={statusOptions}
+            site={site}
             onTransition={onTransition}
             onAssign={onAssign}
             onComment={onComment}
@@ -71,6 +76,7 @@ type JiraWorkItemDialogBodyProps = Omit<JiraWorkItemDialogProps, "onClose" | "it
 function JiraWorkItemDialogBody({
   item,
   statusOptions,
+  site,
   onTransition,
   onAssign,
   onComment,
@@ -79,6 +85,7 @@ function JiraWorkItemDialogBody({
 }: JiraWorkItemDialogBodyProps) {
   const [assignee, setAssignee] = useState("");
   const [comment, setComment] = useState("");
+  const browseUrl = jiraBrowseUrl(site, item.key);
 
   // Ensure the current status is selectable even if it is not one of the
   // derived board columns (e.g. a status with no other items).
@@ -97,13 +104,13 @@ function JiraWorkItemDialogBody({
           {item.issueType && (
             <span className="text-xs font-medium text-muted-foreground">{item.issueType}</span>
           )}
-          {item.url && (
+          {browseUrl && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="ml-auto h-7 gap-1 text-xs"
-              onClick={() => onOpenUrl(item.url as string)}
+              onClick={() => onOpenUrl(browseUrl)}
             >
               Open in JIRA
               <ExternalLink className="size-3.5" />

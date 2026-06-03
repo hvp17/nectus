@@ -81,6 +81,8 @@ export interface TaskWorkspaceProps {
     taskId: number,
     link: { key: string; summary: string; url: string | null } | null,
   ) => void;
+  /** Connected JIRA site host, used to build the linked story's browse URL. */
+  jiraSite?: string | null;
   onSessionExit: (sessionId: string) => void;
   onSessionInput: (sessionId: string) => void;
   busy?: boolean;
@@ -109,6 +111,7 @@ export function TaskWorkspace({
   onUpdateStatus,
   onDeleteTask,
   onSetJiraLink,
+  jiraSite,
   onSessionExit,
   onSessionInput,
   busy = false,
@@ -350,7 +353,7 @@ export function TaskWorkspace({
             onRefreshPullRequest={onRefreshPullRequest}
           />
 
-          <JiraPanel task={task} onSetJiraLink={onSetJiraLink} />
+          <JiraPanel task={task} site={jiraSite} onSetJiraLink={onSetJiraLink} />
 
           {attention && (
             <Alert

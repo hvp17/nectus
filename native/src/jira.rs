@@ -37,9 +37,10 @@ struct RawWorkItem {
     // Some acli outputs flatten summary/status at the top level; accept both.
     summary: Option<String>,
     status: Option<RawStatus>,
+    // acli's `url`, when present, is a real link; its `self` is the REST API
+    // endpoint (…/rest/api/3/issue/<id>), which is not user-facing, so `self` is
+    // intentionally ignored. The UI builds the browse URL from site + key.
     url: Option<String>,
-    #[serde(rename = "self")]
-    self_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -139,7 +140,7 @@ fn work_item_from_raw(raw: RawWorkItem) -> Option<JiraWorkItem> {
         issue_type,
         priority,
         assignee,
-        url: raw.url.or(raw.self_url),
+        url: raw.url,
         description,
     })
 }
