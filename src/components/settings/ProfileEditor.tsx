@@ -108,6 +108,7 @@ export function ProfileEditor({ profile, isDefault, busy, onChange, onSave }: Pr
               id={`profile-command-${profile.id ?? "new"}`}
               value={profile.command}
               onChange={(event) => onChange({ command: event.target.value })}
+              placeholder="e.g. codex"
               className="font-mono"
             />
           </Field>
