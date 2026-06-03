@@ -292,3 +292,18 @@ body {
     transform: translateY(0);
   }
 }
+
+/* Honor reduced-motion for the inline utility animations used across the app
+   (loading spinners, pulsing status dots, dialog slide-ins). The content fade
+   above is gated to no-preference; this covers everything else so a
+   reduced-motion preference silences all looping/entrance motion. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin,
+  .animate-pulse,
+  .animate-ping,
+  .animate-bounce,
+  [class*="animate-in"],
+  [class*="animate-out"] {
+    animation: none !important;
+  }
+}
