@@ -17,8 +17,8 @@ Core tables:
 | --- | --- |
 | `repos` | Saved project repositories and each project's default worktree root. |
 | `agent_profiles` | CLI agent configuration, including command, model, args, and env. |
-| `app_settings` | Default agent, worktree pattern, branch prefix, theme, and density. |
-| `tasks` | Primary work item, status, prompt, optional worktree, active session, saved session. |
+| `app_settings` | Default agent, worktree pattern, branch prefix, theme, density, and JIRA board JQL / site URL. |
+| `tasks` | Primary work item, status, prompt, optional worktree, active session, saved session, and optional JIRA story link. |
 | `review_loops` | Current review configuration and status per task. |
 | `review_runs` | Reviewer prompts, outputs, verdicts, and errors by review attempt. |
 | `pr_reviews` | External pull-request reviews: PR metadata, status, `verdict` (`passed`/`blockers`/`inconclusive`, set when a review reaches `ready`), Markdown output, and ephemeral worktree path. |
@@ -127,6 +127,13 @@ Current commands:
 | `list_tasks` | Load task summaries and dirty-state checks. |
 | `update_task_metadata` | Update title, status, or PR URL. |
 | `delete_task` | Delete a task and remove its worktree when applicable. |
+| `jira_status` | Report whether `acli` is installed, authenticated, and the active site. |
+| `jira_search_board` | Load board work items via the configured board JQL (`acli jira workitem search --json`). |
+| `jira_get_work_item` | Fetch a single work item (e.g. to backfill a story description). |
+| `jira_transition_work_item` | Transition a work item to a target status (optimistic; fails on illegal workflow moves). |
+| `jira_assign_work_item` | Assign a work item to a user. |
+| `jira_comment_work_item` | Add a comment to a work item. |
+| `set_task_jira_link` | Set or clear the local JIRA story link on a task (never writes to JIRA). |
 | `list_agent_profiles` | Load agent profiles. |
 | `upsert_agent_profile` | Create or update an agent profile. |
 | `start_pair_loop` | Enable reviewer automation for a task. |
@@ -191,9 +198,17 @@ Important `tasks` columns:
 - `last_session_cwd`: project path or worktree path used for the last session.
 - `last_session_label`: Codex label from the latest matching JSONL metadata when
   available.
+- `jira_issue_key` / `jira_issue_summary` / `jira_issue_url`: optional local-only
+  link to a JIRA story, captured at attach time; null when the task is unlinked.
+  Set/cleared via `set_task_jira_link`; never written back to JIRA.
 
 The schema enforces that direct-edit tasks have no branch/worktree path and
 worktree tasks have both.
+
+Additive columns (such as the `jira_*` fields above and `app_settings.jira_board_jql`
+/ `jira_site_url`) are introduced by `run_migrations` in `native/src/db/schema.rs`,
+which `ALTER TABLE`s any missing column on every open so existing databases upgrade
+in place.
 
 ## Debug Logging
 

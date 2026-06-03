@@ -24,6 +24,7 @@ The app is local-first. GitHub work shells out to the `gh` CLI the same way it s
 - Update `docs/tracking-and-debugging.md` when persistence, events, diagnostics, failure modes, or debugging commands change.
 - Update `docs/codex-session-jsonl.md` when Codex JSONL assumptions, supported events, or session-log parsing changes.
 - Update `docs/github-integration.md` when `gh` CLI usage, connection checks, or pull request create/detect/status behavior changes.
+- Update `docs/jira-integration.md` when `acli` usage, the board JQL/columns, work-item management, or task↔story link behavior changes.
 - Update `AGENTS.md` itself when development workflow, verification gates, important paths, or coding-session rules change.
 - Keep documentation concrete and repo-grounded. Prefer exact commands, file paths, table names, event names, and known caveats over general prose.
 - Do not add placeholder docs such as `TODO`, `TBD`, or speculative behavior unless it is clearly marked as a future idea outside current behavior.
@@ -161,6 +162,7 @@ pnpm desktop:build
 - `docs/tracking-and-debugging.md`: SQLite state, Tauri commands/events, task/session tracking, logs, and troubleshooting.
 - `docs/codex-session-jsonl.md`: Codex rollout JSONL reference and caveats.
 - `docs/github-integration.md`: `gh` CLI connection model and pull request create/detect/status flows.
+- `docs/jira-integration.md`: `acli` (Atlassian CLI) connection model, JQL board, auto-derived columns, work-item management, and local task↔story links.
 
 ## Backend Boundaries
 
@@ -173,6 +175,7 @@ Important backend files:
 - `native/src/db/`: SQLite schema, row mapping, agent profiles, review loops, and persistence tests
 - `native/src/git_ops.rs`: git repo/worktree validation and operations
 - `native/src/github.rs`: `gh` CLI integration — connection status plus pull request create/detect/status parsing (no OAuth, no stored tokens)
+- `native/src/jira.rs`: `acli` (Atlassian CLI) integration — connection status plus work-item search/view/transition/assign/comment with tolerant JSON parsing (no OAuth, no stored tokens)
 - `native/src/process_util.rs`: shared command helpers — binary resolution (`resolve_executable`), child `PATH` augmentation (`augmented_path`), the install-dir source of truth (`third_party_bin_dirs`), and `command_error` stderr formatting. See [Spawning External CLIs](#spawning-external-clis-macos-gui-path).
 - `native/src/sessions/`: PTY lifecycle, terminal event emission, Codex JSONL watching, agent command setup, and review-loop runtime
 - `native/src/sessions/agents/`: provider-specific Codex, Claude, and Gemini command arguments and fallback locations
@@ -192,6 +195,13 @@ Tauri commands exposed to the frontend include:
 - `create_github_pull_request`
 - `github_pull_request_status`
 - `detect_github_pull_request`
+- `jira_status`
+- `jira_search_board`
+- `jira_get_work_item`
+- `jira_transition_work_item`
+- `jira_assign_work_item`
+- `jira_comment_work_item`
+- `set_task_jira_link`
 - `list_agent_profiles`
 - `upsert_agent_profile`
 - `start_pair_loop`
@@ -251,6 +261,9 @@ a profile's own PATH still wins. Current call sites:
 - `gh` invocations resolve `gh` via `resolve_executable`; `gh` is a single static
   binary that spawns no node, so it needs resolution but not `augmented_path`
   (`native/src/github.rs`).
+- `acli` invocations resolve `acli` via `resolve_executable`; like `gh` it is a
+  single binary that spawns no node, so it needs resolution but not `augmented_path`
+  (`native/src/jira.rs`).
 
 ## Frontend Boundaries
 
@@ -263,6 +276,7 @@ Important frontend files:
 - `src/hooks/useSessionEvents.ts`: subscribes to Rust session events (`session_output`, `session_meta`, `session_exited`, `session_idle`, `session_needs_input`)
 - `src/hooks/useSessionCommands.ts`: start/resume/stop/resize/input session command bindings
 - `src/hooks/useGithub.ts`: `gh` connection status and pull request create/detect/status orchestration
+- `src/hooks/useJira.ts`: `acli` connection status, board items, auto-derived columns, and optimistic transition
 - `src/hooks/useTaskReviewLoop.ts`: selected-task review-loop loading and event handling
 - `src/hooks/useTaskCardPointerDrag.ts`: task-card pointer drag and ghost lifecycle
 - `src/hooks/useTaskDeletion.ts`: task deletion workflow and deletion toasts
@@ -272,6 +286,9 @@ Important frontend files:
 - `src/types.ts`: frontend data contracts matching Rust serde output
 - `src/components/`: board, task workspace, settings, GitHub panel, and modal UI
 - `src/components/GitHubPanel.tsx`: task-inspector GitHub panel for connection state and pull request actions
+- `src/components/JiraBoardPage.tsx`: global JIRA board view — JQL config, auto-derived columns, drag-to-transition
+- `src/components/JiraWorkItemDialog.tsx`: work-item management (transition/assign/comment) and create-task-from-story
+- `src/components/JiraPanel.tsx`: task-inspector panel for the linked JIRA story (display + detach)
 - `src/components/settings/`: settings subcomponents and profile-draft helpers
 - `src/test/testUtils.tsx`: shared frontend test helpers for providers, pointer events, DOM rects, and async deferrals
 - `src/test/app*Tests.tsx`: focused App test groups registered by `src/App.test.tsx`

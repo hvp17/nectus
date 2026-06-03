@@ -325,6 +325,34 @@ Key files:
 - Backend commands: `github_status`, `create_github_pull_request`,
   `github_pull_request_status`
 
+## JIRA
+
+The JIRA Board is a first-class view (sidebar footer, alongside PR Reviews) backed
+by the official Atlassian CLI (`acli`), so Nectus stores no tokens and runs no
+OAuth. The board is global and JQL-defined — set a query in the header (stored in
+`app_settings.jira_board_jql`) and work items load into **auto-derived columns**
+grouped by status and ordered by JIRA status category.
+
+It is a full management surface: drag a card between columns to transition it
+(optimistic — reverted if JIRA's workflow rejects the move), and open a card to
+change status, assign, or comment. **Create task from this story** opens the task
+modal pre-seeded from the story (title, description) with a project selector; the
+resulting task↔story link is stored locally on the task (`jira_issue_key/summary/
+url`) and never writes back to JIRA. Linked stories appear as a badge on task
+cards/rows and a detachable panel in the task inspector. Full behavior and caveats
+live in [JIRA Integration](jira-integration.md).
+
+Key files:
+
+- Board view: `src/components/JiraBoardPage.tsx`
+- Work-item dialog: `src/components/JiraWorkItemDialog.tsx`
+- Linked-story inspector panel: `src/components/JiraPanel.tsx`
+- Board/connection state and columns: `src/hooks/useJira.ts`
+- acli shell-out and parsing: `native/src/jira.rs`
+- Backend commands: `jira_status`, `jira_search_board`, `jira_get_work_item`,
+  `jira_transition_work_item`, `jira_assign_work_item`, `jira_comment_work_item`,
+  `set_task_jira_link`
+
 ## Settings
 
 Settings are persisted locally and include:
