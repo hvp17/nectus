@@ -1,4 +1,5 @@
 import { Plus } from "lucide-react";
+import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -20,14 +21,22 @@ import {
 } from "./ui/field";
 import { Input } from "./ui/input";
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 import { Textarea } from "./ui/textarea";
 import { AgentLogo } from "./AgentBrand";
-import { AgentProfile } from "../types";
+import { AgentProfile, Repo } from "../types";
 
 interface CreateTaskModalProps {
   onClose: () => void;
   onSubmit: (e: React.FormEvent) => void;
   agentProfiles: AgentProfile[];
+  repos: Repo[];
   busy: boolean;
 
   newTaskTitle: string;
@@ -41,12 +50,16 @@ interface CreateTaskModalProps {
   suggestedBranchName: string;
   newTaskAgentProfileId: number | undefined;
   setNewTaskAgentProfileId: (val: number) => void;
+  newTaskRepoId: number | undefined;
+  setNewTaskRepoId: (val: number) => void;
+  linkedJiraKey?: string | null;
 }
 
 export function CreateTaskModal({
   onClose,
   onSubmit,
   agentProfiles,
+  repos,
   busy,
   newTaskTitle,
   setNewTaskTitle,
@@ -59,8 +72,11 @@ export function CreateTaskModal({
   suggestedBranchName,
   newTaskAgentProfileId,
   setNewTaskAgentProfileId,
+  newTaskRepoId,
+  setNewTaskRepoId,
+  linkedJiraKey,
 }: CreateTaskModalProps) {
-  const submitDisabled = busy || !newTaskAgentProfileId;
+  const submitDisabled = busy || !newTaskAgentProfileId || !newTaskRepoId;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -71,12 +87,36 @@ export function CreateTaskModal({
               <p className="eyebrow">Agent Setup</p>
               <DialogTitle className="text-xl font-bold tracking-tight">Create New Task</DialogTitle>
               <DialogDescription className="sr-only">
-                Configure the agent profile, prompt, and git worktree for a new task.
+                Configure the project, agent profile, prompt, and git worktree for a new task.
               </DialogDescription>
+              {linkedJiraKey && (
+                <Badge variant="secondary" className="mt-2 font-mono">
+                  Linked to {linkedJiraKey}
+                </Badge>
+              )}
             </div>
           </DialogHeader>
 
           <FieldGroup className="gap-6 p-6">
+            <Field>
+              <FieldLabel htmlFor="new-task-repo">Project</FieldLabel>
+              <Select
+                value={newTaskRepoId?.toString()}
+                onValueChange={(value) => setNewTaskRepoId(Number(value))}
+              >
+                <SelectTrigger id="new-task-repo" className="h-10">
+                  <SelectValue placeholder="Choose a project" />
+                </SelectTrigger>
+                <SelectContent>
+                  {repos.map((repo) => (
+                    <SelectItem key={repo.id} value={repo.id.toString()}>
+                      {repo.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+
             <Field>
               <FieldLabel htmlFor="new-task-title">Title (Optional)</FieldLabel>
               <Input

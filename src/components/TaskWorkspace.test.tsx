@@ -107,6 +107,7 @@ function renderTaskWorkspace(input?: {
       onRefreshPullRequest={input?.onRefreshPullRequest ?? vi.fn()}
       onUpdateStatus={input?.onUpdateStatus ?? vi.fn()}
       onDeleteTask={input?.onDeleteTask ?? vi.fn()}
+      onSetJiraLink={vi.fn()}
       onSessionExit={vi.fn()}
       onSessionInput={vi.fn()}
     />,

@@ -27,6 +27,12 @@ export function resolveWorktreeBranchName(
   return getSuggestedWorktreeBranchName(trimmedDefaultPrefix, branchIdentifier);
 }
 
+export interface PendingJiraLink {
+  key: string;
+  summary: string;
+  url: string | null;
+}
+
 export function useCreateTaskForm(defaultAgentProfileId?: number) {
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -35,6 +41,10 @@ export function useCreateTaskForm(defaultAgentProfileId?: number) {
   const [newTaskBranchIdentifier, setNewTaskBranchIdentifier] = useState(() => createBranchIdentifier());
   const [newTaskHasWorktree, setNewTaskHasWorktree] = useState(false);
   const [newTaskAgentProfileId, setNewTaskAgentProfileId] = useState<number | undefined>(defaultAgentProfileId);
+  const [newTaskRepoId, setNewTaskRepoId] = useState<number | undefined>();
+  // Set when a task is created from a JIRA story; carried into create_task as a
+  // local-only link (never written back to JIRA).
+  const [pendingJiraLink, setPendingJiraLink] = useState<PendingJiraLink | null>(null);
 
   const resetCreateTaskForm = (agentProfileId = defaultAgentProfileId) => {
     setNewTaskTitle("");
@@ -43,6 +53,8 @@ export function useCreateTaskForm(defaultAgentProfileId?: number) {
     setNewTaskBranchIdentifier(createBranchIdentifier());
     setNewTaskHasWorktree(false);
     setNewTaskAgentProfileId(agentProfileId);
+    setNewTaskRepoId(undefined);
+    setPendingJiraLink(null);
   };
 
   const closeCreateTaskModal = () => {
@@ -82,6 +94,10 @@ export function useCreateTaskForm(defaultAgentProfileId?: number) {
     setNewTaskHasWorktree,
     newTaskAgentProfileId,
     setNewTaskAgentProfileId,
+    newTaskRepoId,
+    setNewTaskRepoId,
+    pendingJiraLink,
+    setPendingJiraLink,
     resetCreateTaskForm,
     closeCreateTaskModal,
     getGeneratedTaskTitle,

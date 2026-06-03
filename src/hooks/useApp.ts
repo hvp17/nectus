@@ -13,6 +13,7 @@ import { useSessionCommands } from "./useSessionCommands";
 import { useSessionEvents } from "./useSessionEvents";
 import { useSessionAttentionControls } from "./useSessionAttentionControls";
 import { useGithub } from "./useGithub";
+import { useJira } from "./useJira";
 import { useTaskDeletion } from "./useTaskDeletion";
 import { useTaskReviewLoop } from "./useTaskReviewLoop";
 import { usePrReviews } from "./usePrReviews";
@@ -20,6 +21,7 @@ import type {
   AgentProfile,
   AppSettings,
   AppSettingsInput,
+  JiraWorkItem,
   Repo,
   ReviewLoop,
   TaskStatus,
@@ -33,7 +35,10 @@ export function useApp() {
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [settings, setSettings] = useState<AppSettings | undefined>();
-  const [currentView, setCurrentView] = useState<"dashboard" | "settings" | "reviews">("dashboard");
+  const [currentView, setCurrentView] = useState<"dashboard" | "settings" | "reviews" | "jira">(
+    "dashboard",
+  );
+  const [selectedJiraItem, setSelectedJiraItem] = useState<JiraWorkItem | null>(null);
   const [selectedRepoId, setSelectedRepoId] = useState<number | undefined>();
   const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>();
   const [selectedAgentProfileId, setSelectedAgentProfileId] = useState<number | undefined>();
@@ -56,6 +61,10 @@ export function useApp() {
     setNewTaskHasWorktree,
     newTaskAgentProfileId,
     setNewTaskAgentProfileId,
+    newTaskRepoId,
+    setNewTaskRepoId,
+    pendingJiraLink,
+    setPendingJiraLink,
     resetCreateTaskForm,
     closeCreateTaskModal,
     getGeneratedTaskTitle,
@@ -203,6 +212,52 @@ export function useApp() {
     createPullRequest: createGithubPullRequest,
   } = useGithub({ selectedTask, setMessage, applyTask });
 
+  const jira = useJira({ active: currentView === "jira", setMessage });
+
+  const createTaskFromStory = useCallback(
+    async (item: JiraWorkItem) => {
+      setNewTaskTitle(item.summary);
+      let description = item.description ?? "";
+      if (!description) {
+        try {
+          description = (await api.jiraGetWorkItem(item.key)).description ?? "";
+        } catch {
+          // Best-effort: leave the prompt blank if the description fetch fails.
+        }
+      }
+      setNewTaskPrompt(description);
+      setPendingJiraLink({ key: item.key, summary: item.summary, url: item.url ?? null });
+      setNewTaskRepoId(selectedRepoId ?? repos[0]?.id);
+      setSelectedJiraItem(null);
+      setCurrentView("dashboard");
+      setSelectedTaskId(undefined);
+      setCreateTaskOpen(true);
+    },
+    [
+      repos,
+      selectedRepoId,
+      setNewTaskTitle,
+      setNewTaskPrompt,
+      setPendingJiraLink,
+      setNewTaskRepoId,
+      setCreateTaskOpen,
+    ],
+  );
+
+  const setTaskJiraLink = (
+    taskId: number,
+    link: { key: string; summary: string; url: string | null } | null,
+  ) =>
+    run(async () => {
+      const updated = await api.setTaskJiraLink({
+        taskId,
+        key: link?.key ?? null,
+        summary: link?.summary ?? null,
+        url: link?.url ?? null,
+      });
+      setTasks((current) => replaceById(current, updated));
+    });
+
   const createPullRequest = useCallback(
     async (task: TaskSummary, options?: { draft?: boolean }) => {
       // Prefer a deterministic gh-driven PR for worktree tasks — no agent needed.
@@ -251,27 +306,36 @@ export function useApp() {
   };
 
   const createTask = async () => {
-    if (!selectedRepoId) return;
+    const repoId = newTaskRepoId ?? selectedRepoId;
+    if (!repoId) {
+      setMessage("Choose a project before creating a task.");
+      return;
+    }
     if (!newTaskAgentProfileId) {
       setMessage("Select an agent before creating a task.");
       return;
     }
     const agentProfileId = newTaskAgentProfileId;
+    const jiraLink = pendingJiraLink;
     await run(
       async () => {
         const branchName = newTaskHasWorktree
           ? resolveWorktreeBranchName(newTaskBranchName, settings?.defaultBranchPrefix)
           : null;
         const task = await api.createTask({
-          repoId: selectedRepoId,
+          repoId,
           title: getGeneratedTaskTitle(),
           prompt: newTaskPrompt.trim() || null,
           agentProfileId,
           hasWorktree: newTaskHasWorktree,
           branchName,
+          jiraIssueKey: jiraLink?.key ?? null,
+          jiraIssueSummary: jiraLink?.summary ?? null,
+          jiraIssueUrl: jiraLink?.url ?? null,
         });
         resetCreateTaskForm();
         setCreateTaskOpen(false);
+        setSelectedRepoId(repoId);
         setSelectedTaskId(task.id);
         let startError: string | null = null;
         try {
@@ -279,7 +343,7 @@ export function useApp() {
         } catch (error) {
           startError = String(error);
         }
-        await refresh(selectedRepoId);
+        await refresh(repoId);
         if (startError) {
           setMessage(`Created ${task.title}, but failed to start session: ${startError}`);
         } else {
@@ -416,8 +480,13 @@ export function useApp() {
     setNewTaskHasWorktree,
     newTaskAgentProfileId,
     setNewTaskAgentProfileId,
+    newTaskRepoId,
+    setNewTaskRepoId,
+    pendingJiraLink,
     suggestedBranchName: getSuggestedBranchName(settings?.defaultBranchPrefix),
     createTask,
+    createTaskFromStory,
+    setTaskJiraLink,
     closeCreateTaskModal,
     updateStatus,
     requestDeleteTask,
@@ -430,6 +499,15 @@ export function useApp() {
     pullRequestLoading,
     creatingPullRequest,
     refreshPullRequest,
+    jiraStatus: jira.jiraStatus,
+    jiraColumns: jira.columns,
+    jiraLoading: jira.loading,
+    refreshJira: jira.refresh,
+    transitionJira: jira.transition,
+    assignJira: jira.assign,
+    commentJira: jira.comment,
+    selectedJiraItem,
+    setSelectedJiraItem,
     startPairLoop,
     startReview,
     stopPairLoop,

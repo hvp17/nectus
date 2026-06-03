@@ -9,9 +9,12 @@ import { TaskWorkspace } from "./components/TaskWorkspace";
 import { CreateTaskModal } from "./components/CreateTaskModal";
 import { SettingsPage } from "./components/SettingsPage";
 import { ReviewsPage } from "./components/ReviewsPage";
+import { JiraBoardPage } from "./components/JiraBoardPage";
+import { JiraWorkItemDialog } from "./components/JiraWorkItemDialog";
 import { useApp } from "./hooks/useApp";
 import { useAppTheme } from "./hooks/useAppTheme";
 import { formatNotificationBody } from "./notificationText";
+import { api } from "./api";
 
 function getToastContent(message: string) {
   const separator = message.indexOf(": ");
@@ -79,6 +82,20 @@ function App() {
     pullRequestLoading,
     creatingPullRequest,
     refreshPullRequest,
+    jiraStatus,
+    jiraColumns,
+    jiraLoading,
+    refreshJira,
+    transitionJira,
+    assignJira,
+    commentJira,
+    selectedJiraItem,
+    setSelectedJiraItem,
+    createTaskFromStory,
+    setTaskJiraLink,
+    newTaskRepoId,
+    setNewTaskRepoId,
+    pendingJiraLink,
     startReview,
     onSessionExit,
     onSessionInput,
@@ -118,6 +135,7 @@ function App() {
         setNewTaskAgentProfileId(defaultAgentProfileId);
       }
     }
+    setNewTaskRepoId(selectedRepoId);
     setCreateTaskOpen(true);
   };
 
@@ -161,9 +179,14 @@ function App() {
             setCurrentView("reviews");
             setSelectedTaskId(undefined);
           }}
+          onOpenJira={() => {
+            setCurrentView("jira");
+            setSelectedTaskId(undefined);
+          }}
           onStopSession={stopSession}
           settingsActive={currentView === "settings"}
           reviewsActive={currentView === "reviews"}
+          jiraActive={currentView === "jira"}
           busy={busy}
           loading={loading}
         />
@@ -179,6 +202,44 @@ function App() {
               onSaveSettings={saveAppSettings}
               onSaveAgentProfile={saveAgentProfile}
             />
+          ) : currentView === "jira" ? (
+            <>
+              <JiraBoardPage
+                status={jiraStatus}
+                columns={jiraColumns}
+                loading={jiraLoading}
+                boardJql={settings?.jiraBoardJql ?? ""}
+                onChangeJql={(jql) => {
+                  if (!settings) return;
+                  void saveAppSettings({
+                    defaultAgentProfileId: settings.defaultAgentProfileId,
+                    defaultWorktreeRootPattern: settings.defaultWorktreeRootPattern,
+                    defaultBranchPrefix: settings.defaultBranchPrefix,
+                    jiraBoardJql: jql || null,
+                    jiraSiteUrl: settings.jiraSiteUrl,
+                    theme: settings.theme,
+                    density: settings.density,
+                  }).then(() => refreshJira());
+                }}
+                onRefresh={refreshJira}
+                onTransition={transitionJira}
+                onOpenItem={setSelectedJiraItem}
+                onCreateTask={createTaskFromStory}
+              />
+              <JiraWorkItemDialog
+                item={selectedJiraItem}
+                statusOptions={jiraColumns.map((column) => column.statusName)}
+                onClose={() => setSelectedJiraItem(null)}
+                onTransition={(item, statusName) => {
+                  transitionJira(item, statusName);
+                  setSelectedJiraItem(null);
+                }}
+                onAssign={assignJira}
+                onComment={commentJira}
+                onCreateTask={createTaskFromStory}
+                onOpenUrl={(url) => void api.openExternalUrl(url)}
+              />
+            </>
           ) : currentView === "reviews" ? (
             <ReviewsPage
               prReviews={prReviews}
@@ -221,6 +282,7 @@ function App() {
                   onRefreshPullRequest={refreshPullRequest}
                   onUpdateStatus={updateStatus}
                   onDeleteTask={requestDeleteTask}
+                  onSetJiraLink={setTaskJiraLink}
                   onSessionExit={onSessionExit}
                   onSessionInput={onSessionInput}
                   busy={busy}
@@ -259,6 +321,7 @@ function App() {
               createTask();
             }}
             agentProfiles={agentProfiles}
+            repos={repos}
             busy={busy}
             newTaskTitle={newTaskTitle}
             setNewTaskTitle={setNewTaskTitle}
@@ -271,6 +334,9 @@ function App() {
             suggestedBranchName={suggestedBranchName}
             newTaskAgentProfileId={newTaskAgentProfileId}
             setNewTaskAgentProfileId={setNewTaskAgentProfileId}
+            newTaskRepoId={newTaskRepoId}
+            setNewTaskRepoId={setNewTaskRepoId}
+            linkedJiraKey={pendingJiraLink?.key ?? null}
           />
         )}
       </SidebarProvider>

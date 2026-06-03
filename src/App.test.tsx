@@ -32,6 +32,15 @@ vi.mock("./api", () => ({
     githubStatus: vi.fn().mockResolvedValue({ installed: false, authenticated: false, account: null }),
     createGithubPullRequest: vi.fn(),
     githubPullRequestStatus: vi.fn(),
+    jiraStatus: vi
+      .fn()
+      .mockResolvedValue({ installed: false, authenticated: false, account: null, site: null }),
+    jiraSearchBoard: vi.fn().mockResolvedValue([]),
+    jiraGetWorkItem: vi.fn(),
+    jiraTransitionWorkItem: vi.fn(),
+    jiraAssignWorkItem: vi.fn(),
+    jiraCommentWorkItem: vi.fn(),
+    setTaskJiraLink: vi.fn(),
   },
 }));
 

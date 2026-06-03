@@ -75,6 +75,9 @@ export function defineAppTaskCreationTests() {
         agentProfileId: 2,
         hasWorktree: false,
         branchName: null,
+        jiraIssueKey: null,
+        jiraIssueSummary: null,
+        jiraIssueUrl: null,
       });
     });
   });
@@ -127,6 +130,9 @@ export function defineAppTaskCreationTests() {
         agentProfileId: 1,
         hasWorktree: false,
         branchName: null,
+        jiraIssueKey: null,
+        jiraIssueSummary: null,
+        jiraIssueUrl: null,
       });
     });
   });
@@ -153,6 +159,9 @@ export function defineAppTaskCreationTests() {
         agentProfileId: 2,
         hasWorktree: false,
         branchName: null,
+        jiraIssueKey: null,
+        jiraIssueSummary: null,
+        jiraIssueUrl: null,
       });
     });
     await waitFor(() => {

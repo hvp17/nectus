@@ -26,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { GitHubPanel } from "./GitHubPanel";
+import { JiraPanel } from "./JiraPanel";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import {
   Stepper,
@@ -76,6 +77,10 @@ export interface TaskWorkspaceProps {
   onRefreshPullRequest: (task: TaskSummary) => void;
   onUpdateStatus: (task: TaskSummary, status: TaskStatus) => void;
   onDeleteTask: (task: TaskSummary) => void;
+  onSetJiraLink: (
+    taskId: number,
+    link: { key: string; summary: string; url: string | null } | null,
+  ) => void;
   onSessionExit: (sessionId: string) => void;
   onSessionInput: (sessionId: string) => void;
   busy?: boolean;
@@ -103,6 +108,7 @@ export function TaskWorkspace({
   onRefreshPullRequest,
   onUpdateStatus,
   onDeleteTask,
+  onSetJiraLink,
   onSessionExit,
   onSessionInput,
   busy = false,
@@ -343,6 +349,8 @@ export function TaskWorkspace({
             onCreatePullRequest={onCreatePullRequest}
             onRefreshPullRequest={onRefreshPullRequest}
           />
+
+          <JiraPanel task={task} onSetJiraLink={onSetJiraLink} />
 
           {attention && (
             <Alert

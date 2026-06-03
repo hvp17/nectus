@@ -49,8 +49,10 @@ function renderSidebar(input?: {
         onAddProject={vi.fn()}
         onOpenSettings={vi.fn()}
         onOpenReviews={vi.fn()}
+        onOpenJira={vi.fn()}
         settingsActive={false}
         reviewsActive={false}
+        jiraActive={false}
         busy={false}
         loading={false}
         {...props}
