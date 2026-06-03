@@ -87,19 +87,19 @@ export function TaskCard({
           {attention?.kind === "needs_input" && (
             <Badge variant="secondary" className="attention-badge h-5 px-1.5 text-[10px]">
               <AlertTriangle size={11} />
-              INPUT
+              Needs input
             </Badge>
           )}
           {attention?.kind === "idle" && (
             <Badge variant="secondary" className="attention-badge h-5 px-1.5 text-[10px]">
               <CircleCheckBig size={11} />
-              DONE
+              Done
             </Badge>
           )}
           {task.activeSessionId && (
             <Badge variant="default" className="h-5 px-1.5 text-[10px]">
               <Radio size={10} />
-              LIVE
+              Live
             </Badge>
           )}
 
@@ -161,9 +161,11 @@ export function TaskCard({
 
         <div className="task-card-meta flex items-center justify-between text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
           <span>{task.agentName ?? "No agent"}</span>
-          <span className={task.isDirty ? "dirty-indicator" : ""}>
-            {task.hasWorktree ? (task.isDirty ? "dirty" : "clean") : "task"}
-          </span>
+          {task.hasWorktree && (
+            <span className={task.isDirty ? "dirty-indicator" : ""}>
+              {task.isDirty ? "dirty" : "clean"}
+            </span>
+          )}
         </div>
       </div>
     </Card>
