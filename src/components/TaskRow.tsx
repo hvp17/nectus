@@ -69,6 +69,22 @@ export function TaskRow({ task, attention, isActive, onOpenTask, onStopSession }
                 </TooltipContent>
               </Tooltip>
             )}
+            {task.jiraIssueKey && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className="task-tree-jira font-mono"
+                    aria-label={`JIRA ${task.jiraIssueKey}`}
+                    tabIndex={0}
+                  >
+                    {task.jiraIssueKey}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  {task.jiraIssueSummary ?? task.jiraIssueKey}
+                </TooltipContent>
+              </Tooltip>
+            )}
           </span>
           {rowStatus.detail && <span className="task-tree-detail">{rowStatus.detail}</span>}
         </span>

@@ -75,6 +75,9 @@ describe("api", () => {
       agentProfileId: 1,
       hasWorktree: false,
       branchName: null,
+      jiraIssueKey: null,
+      jiraIssueSummary: null,
+      jiraIssueUrl: null,
     });
   });
 

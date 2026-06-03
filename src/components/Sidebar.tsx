@@ -5,6 +5,7 @@ import {
   FolderAddIcon,
   FolderGitIcon,
   GitPullRequestIcon,
+  KanbanIcon,
   PlusSignIcon,
   Settings02Icon,
 } from "@hugeicons/core-free-icons";
@@ -42,9 +43,11 @@ interface SidebarProps {
   onAddProject: () => void;
   onOpenSettings: () => void;
   onOpenReviews: () => void;
+  onOpenJira: () => void;
   onStopSession: (sessionId: string) => void;
   settingsActive: boolean;
   reviewsActive: boolean;
+  jiraActive: boolean;
   busy: boolean;
   loading: boolean;
 }
@@ -68,9 +71,11 @@ export function Sidebar({
   onAddProject,
   onOpenSettings,
   onOpenReviews,
+  onOpenJira,
   onStopSession,
   settingsActive,
   reviewsActive,
+  jiraActive,
   busy,
   loading,
 }: SidebarProps) {
@@ -214,6 +219,18 @@ export function Sidebar({
 
       <SidebarFooter>
         <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              type="button"
+              size="lg"
+              isActive={jiraActive}
+              className="nectus-sidebar-menu-button"
+              onClick={onOpenJira}
+            >
+              <HugeiconsIcon icon={KanbanIcon} strokeWidth={2} aria-hidden="true" />
+              <span>JIRA Board</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               type="button"

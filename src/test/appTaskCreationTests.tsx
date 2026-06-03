@@ -75,6 +75,9 @@ export function defineAppTaskCreationTests() {
         agentProfileId: 2,
         hasWorktree: false,
         branchName: null,
+        jiraIssueKey: null,
+        jiraIssueSummary: null,
+        jiraIssueUrl: null,
       });
     });
   });
@@ -127,6 +130,9 @@ export function defineAppTaskCreationTests() {
         agentProfileId: 1,
         hasWorktree: false,
         branchName: null,
+        jiraIssueKey: null,
+        jiraIssueSummary: null,
+        jiraIssueUrl: null,
       });
     });
   });
@@ -153,6 +159,9 @@ export function defineAppTaskCreationTests() {
         agentProfileId: 2,
         hasWorktree: false,
         branchName: null,
+        jiraIssueKey: null,
+        jiraIssueSummary: null,
+        jiraIssueUrl: null,
       });
     });
     await waitFor(() => {
@@ -196,6 +205,12 @@ export function defineAppTaskCreationTests() {
       defaultAgentProfileId: 1,
       defaultWorktreeRootPattern: "../{repoName}-worktrees",
       defaultBranchPrefix: "feat/",
+      jiraBoardJql: null,
+      jiraSiteUrl: null,
+      jiraBoardProject: null,
+      jiraFilterMyIssues: false,
+      jiraFilterUnresolved: true,
+      jiraFilterCurrentSprint: false,
       theme: "system",
       density: "comfortable",
       updatedAt: "2026-05-14T00:00:00.000Z",
@@ -235,6 +250,12 @@ export function defineAppTaskCreationTests() {
       defaultAgentProfileId: 1,
       defaultWorktreeRootPattern: "../{repoName}-worktrees",
       defaultBranchPrefix: "feat/",
+      jiraBoardJql: null,
+      jiraSiteUrl: null,
+      jiraBoardProject: null,
+      jiraFilterMyIssues: false,
+      jiraFilterUnresolved: true,
+      jiraFilterCurrentSprint: false,
       theme: "system",
       density: "comfortable",
       updatedAt: "2026-05-14T00:00:00.000Z",

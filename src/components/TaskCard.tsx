@@ -140,6 +140,18 @@ export function TaskCard({
           </div>
         )}
 
+        {task.jiraIssueKey && (
+          <div className="flex items-center gap-1.5">
+            <Badge
+              variant="outline"
+              className="h-5 px-1.5 font-mono text-[10px]"
+              title={task.jiraIssueSummary ?? undefined}
+            >
+              {task.jiraIssueKey}
+            </Badge>
+          </div>
+        )}
+
         <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground font-mono">
           {task.hasWorktree ? <GitBranch size={12} className="opacity-70" /> : <Bot size={12} className="opacity-70" />}
           <span className="truncate">{task.hasWorktree ? task.branchName : "No worktree"}</span>

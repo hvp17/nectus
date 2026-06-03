@@ -234,11 +234,16 @@
   place-items: center;
   width: 42px;
   height: 42px;
-  border: 1px solid var(--sidebar-border);
   border-radius: var(--radius-md);
-  background: var(--sidebar-primary);
+  background:
+    linear-gradient(155deg, color-mix(in oklch, var(--sidebar-primary) 88%, white), var(--sidebar-primary) 55%, color-mix(in oklch, var(--sidebar-primary) 78%, black));
   color: var(--sidebar-primary-foreground);
+  font-size: 19px;
   font-weight: 800;
+  letter-spacing: -0.02em;
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklch, white 45%, transparent),
+    0 6px 16px -6px color-mix(in oklch, var(--sidebar-primary) 70%, transparent);
 }
 
 .brand h1,
@@ -320,16 +325,22 @@
 
 .metric strong {
   display: block;
-  font-size: 24px;
+  font-size: 26px;
+  font-weight: 700;
   line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 .metric[data-tone="warning"] {
-  background: color-mix(in srgb, oklch(0.78 0.15 72) 12%, var(--muted));
+  background:
+    linear-gradient(180deg, color-mix(in oklch, oklch(0.82 0.15 75) 9%, transparent), transparent 60%),
+    var(--card);
+  border-color: color-mix(in oklch, oklch(0.82 0.15 75) 26%, var(--border));
 }
 
 .metric[data-tone="warning"] [data-slot="card-action"] {
-  color: oklch(0.68 0.16 56);
+  color: oklch(0.82 0.15 75);
   opacity: 1;
 }
 

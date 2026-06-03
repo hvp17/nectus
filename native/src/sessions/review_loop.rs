@@ -387,6 +387,9 @@ mod tests {
             last_session_cwd: Some("/tmp/repo-worktrees/feat/settings".to_string()),
             last_session_label: None,
             review_loop_status: None,
+            jira_issue_key: None,
+            jira_issue_summary: None,
+            jira_issue_url: None,
             created_at: "now".to_string(),
             updated_at: "now".to_string(),
         }
