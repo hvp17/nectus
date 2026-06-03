@@ -120,7 +120,7 @@ describe("GitHubPanel", () => {
     expect(screen.getByText(/#9/)).toBeInTheDocument();
     expect(screen.getByText("Open", { selector: "[data-pr-state]" })).toBeInTheDocument();
     expect(screen.getByText(/review required/i)).toBeInTheDocument();
-    expect(screen.getByText("1", { selector: ".github-check-failed" })).toBeInTheDocument();
+    expect(screen.getByText("1", { selector: '[data-check="failed"]' })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /open pull request/i })).toHaveAttribute(
       "href",
       "https://github.com/hvp17/nectus/pull/9",

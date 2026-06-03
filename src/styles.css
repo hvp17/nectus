@@ -267,8 +267,7 @@ body {
 .dark [data-slot="card"],
 .dark .metric,
 .dark .jira-card,
-.dark .review-run-summary,
-.dark .github-pr-card {
+.dark .review-run-summary {
   box-shadow:
     inset 0 1px 0 0 color-mix(in oklch, white 6%, transparent),
     var(--shadow-xs);
