@@ -313,7 +313,7 @@ function GithubConnectionCard({ status }: { status?: GithubStatus }) {
       </div>
       <Badge variant="outline" className="gap-1.5" aria-label={`GitHub ${badgeLabel}`}>
         {connected ? (
-          <CheckCircle2 size={13} className="text-emerald-500" />
+          <CheckCircle2 size={13} className="text-status-success" />
         ) : (
           <XCircle size={13} className="text-muted-foreground" />
         )}

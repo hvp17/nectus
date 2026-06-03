@@ -359,7 +359,7 @@ export function TaskWorkspace({
             <Alert
               className={cn(
                 "mt-4 border-primary/25 bg-primary/5 px-3 py-3",
-                attention.kind === "needs_input" && "border-amber-500/35 bg-amber-500/10",
+                attention.kind === "needs_input" && "border-status-warning/35 bg-status-warning/10",
               )}
             >
               {attention.kind === "needs_input" ? <AlertTriangle size={16} /> : <CircleCheckBig size={16} />}
@@ -549,7 +549,7 @@ function TaskStatusBadges({ task }: { task: TaskSummary }) {
         </Badge>
       )}
       {task.isDirty && (
-        <Badge variant="outline" className="text-indigo-500">
+        <Badge variant="outline" className="text-status-info">
           Dirty worktree
         </Badge>
       )}

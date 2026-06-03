@@ -68,15 +68,15 @@ body.task-drag-selection-lock * {
 }
 
 .task-card-shell[data-state="needs_input"] .task-state-rail {
-  background: oklch(0.72 0.16 63);
+  background: var(--status-warning);
 }
 
 .task-card-shell[data-state="idle"] .task-state-rail {
-  background: oklch(0.6 0.13 150);
+  background: var(--status-success);
 }
 
 .task-card-shell[data-state="dirty"] .task-state-rail {
-  background: oklch(0.58 0.11 265);
+  background: var(--status-info);
 }
 
 .attention-badge {
@@ -99,7 +99,7 @@ body.task-drag-selection-lock * {
 }
 
 .task-card-shell[data-state="needs_input"] .task-attention-line {
-  background: color-mix(in srgb, oklch(0.72 0.16 63) 16%, transparent);
+  background: color-mix(in srgb, var(--status-warning) 16%, transparent);
 }
 
 .task-attention-detail {
@@ -126,12 +126,12 @@ body.task-drag-selection-lock * {
 }
 
 .task-review-badge[data-status="passed"] {
-  background: color-mix(in srgb, oklch(0.6 0.13 150) 16%, transparent);
-  color: oklch(0.67 0.14 150);
+  background: color-mix(in srgb, var(--status-success) 16%, transparent);
+  color: var(--status-success);
 }
 
 .dirty-indicator {
-  color: oklch(0.55 0.12 265);
+  color: var(--status-info);
 }
 
 .task-drag-ghost * {

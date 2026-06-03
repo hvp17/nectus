@@ -25,9 +25,9 @@ import type {
 } from "../types";
 
 const CATEGORY_DOT: Record<JiraStatusCategory, string> = {
-  to_do: "oklch(0.72 0.02 250)",
+  to_do: "var(--muted-foreground)",
   in_progress: "var(--primary)",
-  done: "oklch(0.72 0.15 152)",
+  done: "var(--status-success)",
   unknown: "var(--muted-foreground)",
 };
 
@@ -179,7 +179,7 @@ function JiraConnection({ status }: { status: JiraStatus | undefined }) {
   if (!status.authenticated) return <Badge variant="destructive">Not authenticated</Badge>;
   return (
     <Badge variant="secondary" className="gap-1">
-      <span className="size-2 rounded-full bg-emerald-500" aria-hidden="true" />
+      <span className="size-2 rounded-full bg-status-success" aria-hidden="true" />
       {status.site ?? "Connected"}
     </Badge>
   );

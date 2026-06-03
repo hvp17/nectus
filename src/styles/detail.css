@@ -390,7 +390,7 @@
 }
 
 .github-check-passed {
-  color: var(--color-emerald-500, #10b981);
+  color: var(--status-success);
 }
 
 .github-check-failed {
