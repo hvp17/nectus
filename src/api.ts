@@ -8,6 +8,8 @@ import type {
   AppSettings,
   AppSettingsInput,
   GithubStatus,
+  JiraStatus,
+  JiraWorkItem,
   PrReview,
   PullRequestInfo,
   Repo,
@@ -74,6 +76,9 @@ export const api = {
     agentProfileId?: number | null;
     hasWorktree?: boolean;
     branchName?: string | null;
+    jiraIssueKey?: string | null;
+    jiraIssueSummary?: string | null;
+    jiraIssueUrl?: string | null;
   }): Promise<TaskSummary> {
     return invoke("create_task", {
       repoId: input.repoId,
@@ -82,6 +87,9 @@ export const api = {
       agentProfileId: input.agentProfileId ?? null,
       hasWorktree: input.hasWorktree ?? false,
       branchName: input.branchName ?? null,
+      jiraIssueKey: input.jiraIssueKey ?? null,
+      jiraIssueSummary: input.jiraIssueSummary ?? null,
+      jiraIssueUrl: input.jiraIssueUrl ?? null,
     });
   },
   async updateTaskMetadata(input: {
@@ -124,6 +132,39 @@ export const api = {
   async detectGithubPullRequest(taskId: number): Promise<TaskSummary | null> {
     if (!isTauri) return null;
     return invoke("detect_github_pull_request", { taskId });
+  },
+  async jiraStatus(): Promise<JiraStatus> {
+    if (!isTauri) return { installed: false, authenticated: false, account: null, site: null };
+    return invoke("jira_status");
+  },
+  async jiraSearchBoard(): Promise<JiraWorkItem[]> {
+    if (!isTauri) return [];
+    return invoke("jira_search_board");
+  },
+  async jiraGetWorkItem(key: string): Promise<JiraWorkItem> {
+    return invoke("jira_get_work_item", { key });
+  },
+  async jiraTransitionWorkItem(key: string, status: string): Promise<void> {
+    return invoke("jira_transition_work_item", { key, status });
+  },
+  async jiraAssignWorkItem(key: string, assignee: string): Promise<void> {
+    return invoke("jira_assign_work_item", { key, assignee });
+  },
+  async jiraCommentWorkItem(key: string, body: string): Promise<void> {
+    return invoke("jira_comment_work_item", { key, body });
+  },
+  async setTaskJiraLink(input: {
+    taskId: number;
+    key?: string | null;
+    summary?: string | null;
+    url?: string | null;
+  }): Promise<TaskSummary> {
+    return invoke("set_task_jira_link", {
+      taskId: input.taskId,
+      key: input.key ?? null,
+      summary: input.summary ?? null,
+      url: input.url ?? null,
+    });
   },
   async createPrReview(input: {
     prUrl: string;

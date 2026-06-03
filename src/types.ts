@@ -39,6 +39,9 @@ export interface TaskSummary {
   lastSessionCwd?: string | null;
   lastSessionLabel?: string | null;
   reviewLoopStatus?: ReviewLoopStatus | null;
+  jiraIssueKey?: string | null;
+  jiraIssueSummary?: string | null;
+  jiraIssueUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -65,6 +68,26 @@ export interface PullRequestInfo {
   reviewDecision?: PullRequestReviewDecision | null;
   checks: GithubCheckSummary;
   checksState: GithubCheckState;
+}
+
+export type JiraStatusCategory = "to_do" | "in_progress" | "done" | "unknown";
+
+export interface JiraStatus {
+  installed: boolean;
+  authenticated: boolean;
+  account?: string | null;
+  site?: string | null;
+}
+
+export interface JiraWorkItem {
+  key: string;
+  summary: string;
+  statusName: string;
+  statusCategory: JiraStatusCategory;
+  issueType?: string | null;
+  assignee?: string | null;
+  url?: string | null;
+  description?: string | null;
 }
 
 export interface AgentProfile {
@@ -133,6 +156,8 @@ export interface AppSettings {
   defaultAgentProfileId?: number | null;
   defaultWorktreeRootPattern: string;
   defaultBranchPrefix?: string | null;
+  jiraBoardJql?: string | null;
+  jiraSiteUrl?: string | null;
   theme: ThemeMode;
   density: DensityMode;
   updatedAt: string;
@@ -142,6 +167,8 @@ export interface AppSettingsInput {
   defaultAgentProfileId?: number | null;
   defaultWorktreeRootPattern: string;
   defaultBranchPrefix?: string | null;
+  jiraBoardJql?: string | null;
+  jiraSiteUrl?: string | null;
   theme: ThemeMode;
   density: DensityMode;
 }
