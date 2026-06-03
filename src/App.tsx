@@ -111,6 +111,7 @@ function App() {
     selectedPrReviewId,
     setSelectedPrReviewId,
     selectedPrReview,
+    selectedPrReviewRuns,
     creatingReview,
     createPrReview,
     rerunPrReview,
@@ -248,6 +249,7 @@ function App() {
               prReviews={prReviews}
               selectedPrReview={selectedPrReview}
               selectedPrReviewId={selectedPrReviewId}
+              selectedPrReviewRuns={selectedPrReviewRuns}
               agentProfiles={agentProfiles}
               defaultReviewerProfileId={settings?.defaultAgentProfileId ?? agentProfiles[0]?.id}
               creatingReview={creatingReview}

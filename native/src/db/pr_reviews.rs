@@ -1,7 +1,12 @@
-use super::rows::{pr_review_from_row, rows};
+use super::rows::{
+    pr_review_from_row, pr_review_reviewer_from_row, pr_review_run_from_row, rows,
+};
 use super::{now, Database};
 use crate::git_ops;
-use crate::models::{PrReview, PrReviewStatus, PrReviewVerdict, Repo};
+use crate::models::{
+    PrReview, PrReviewMode, PrReviewReviewer, PrReviewRun, PrReviewRunInput, PrReviewStatus,
+    PrReviewVerdict, Repo,
+};
 use rusqlite::{params, OptionalExtension};
 use std::path::Path;
 
@@ -13,10 +18,21 @@ const PR_REVIEW_SELECT: &str = "
       pr.id, pr.repo_id, r.name, pr.reviewer_profile_id, a.name,
       pr.pr_url, pr.pr_number, pr.pr_title, pr.pr_author, pr.base_branch,
       pr.status, pr.review_output, pr.last_error, pr.worktree_path,
-      pr.created_at, pr.updated_at, pr.verdict
+      pr.created_at, pr.updated_at, pr.verdict,
+      pr.mode, pr.max_rounds, pr.rounds_completed, pr.converged
     FROM pr_reviews pr
     JOIN repos r ON r.id = pr.repo_id
     LEFT JOIN agent_profiles a ON a.id = pr.reviewer_profile_id
+";
+
+/// Shared joined projection for `pr_review_runs`, column order matching
+/// [`super::rows::pr_review_run_from_row`].
+const PR_REVIEW_RUN_SELECT: &str = "
+    SELECT
+      prr.id, prr.pr_review_id, prr.reviewer_profile_id, a.name,
+      prr.round, prr.verdict, prr.output, prr.error, prr.created_at
+    FROM pr_review_runs prr
+    LEFT JOIN agent_profiles a ON a.id = prr.reviewer_profile_id
 ";
 
 impl Database {
@@ -80,21 +96,188 @@ impl Database {
             .conn
             .prepare(&format!("{PR_REVIEW_SELECT} ORDER BY pr.id DESC"))
             .map_err(|error| error.to_string())?;
-        let result = rows(stmt
+        let mut reviews = rows(stmt
             .query_map([], pr_review_from_row)
-            .map_err(|error| error.to_string())?);
-        result
+            .map_err(|error| error.to_string())?)?;
+        for review in &mut reviews {
+            if review.mode == PrReviewMode::Consensus {
+                review.reviewers = self.list_pr_review_reviewers(review.id)?;
+            }
+        }
+        Ok(reviews)
     }
 
     pub fn pr_review_by_id(&self, id: i64) -> Result<Option<PrReview>, String> {
-        self.conn
+        let review = self
+            .conn
             .query_row(
                 &format!("{PR_REVIEW_SELECT} WHERE pr.id = ?1"),
                 params![id],
                 pr_review_from_row,
             )
             .optional()
-            .map_err(|error| error.to_string())
+            .map_err(|error| error.to_string())?;
+        match review {
+            Some(mut review) => {
+                if review.mode == PrReviewMode::Consensus {
+                    review.reviewers = self.list_pr_review_reviewers(review.id)?;
+                }
+                Ok(Some(review))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Create a multi-model consensus review: the parent row records the
+    /// synthesizer (`synthesizer_profile_id`, which also surfaces as the review's
+    /// reviewer name) and the round cap, and each participating reviewer is
+    /// recorded in `pr_review_reviewers`. Requires at least two distinct
+    /// reviewers; duplicates are rejected by the join table's primary key.
+    pub fn create_consensus_pr_review(
+        &self,
+        repo_id: i64,
+        synthesizer_profile_id: i64,
+        reviewer_profile_ids: &[i64],
+        max_rounds: i64,
+        pr_url: &str,
+        pr_number: i64,
+    ) -> Result<PrReview, String> {
+        self.repo_by_id(repo_id)?
+            .ok_or_else(|| "Repository not found".to_string())?;
+        if reviewer_profile_ids.len() < 2 {
+            return Err("A consensus review needs at least two reviewers".to_string());
+        }
+        for reviewer_profile_id in reviewer_profile_ids {
+            self.agent_profile_by_id(*reviewer_profile_id)?
+                .ok_or_else(|| "Reviewer profile not found".to_string())?;
+        }
+
+        let now = now();
+        self.conn
+            .execute(
+                "
+                INSERT INTO pr_reviews
+                  (repo_id, reviewer_profile_id, pr_url, pr_number, status, mode, max_rounds, rounds_completed, created_at, updated_at)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, ?8, ?8)
+                ",
+                params![
+                    repo_id,
+                    synthesizer_profile_id,
+                    pr_url,
+                    pr_number,
+                    PrReviewStatus::Queued.as_str(),
+                    PrReviewMode::Consensus.as_str(),
+                    max_rounds,
+                    now
+                ],
+            )
+            .map_err(|error| format!("Failed to create consensus PR review: {error}"))?;
+
+        let review_id = self.conn.last_insert_rowid();
+        for (position, reviewer_profile_id) in reviewer_profile_ids.iter().enumerate() {
+            self.conn
+                .execute(
+                    "INSERT INTO pr_review_reviewers (pr_review_id, reviewer_profile_id, position) VALUES (?1, ?2, ?3)",
+                    params![review_id, reviewer_profile_id, position as i64],
+                )
+                .map_err(|error| format!("Failed to add consensus reviewer: {error}"))?;
+        }
+
+        self.pr_review_by_id(review_id)?
+            .ok_or_else(|| "PR review was saved but could not be loaded".to_string())
+    }
+
+    /// The reviewers participating in a consensus review, in selection order.
+    pub fn list_pr_review_reviewers(
+        &self,
+        pr_review_id: i64,
+    ) -> Result<Vec<PrReviewReviewer>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "
+                SELECT prr.reviewer_profile_id, a.name
+                FROM pr_review_reviewers prr
+                LEFT JOIN agent_profiles a ON a.id = prr.reviewer_profile_id
+                WHERE prr.pr_review_id = ?1
+                ORDER BY prr.position
+                ",
+            )
+            .map_err(|error| error.to_string())?;
+        let result = rows(stmt
+            .query_map(params![pr_review_id], pr_review_reviewer_from_row)
+            .map_err(|error| error.to_string())?);
+        result
+    }
+
+    /// Record one reviewer's output for one consensus round and return it with
+    /// the reviewer's display name resolved.
+    pub fn record_pr_review_run(&self, input: PrReviewRunInput) -> Result<PrReviewRun, String> {
+        self.conn
+            .execute(
+                "
+                INSERT INTO pr_review_runs
+                  (pr_review_id, reviewer_profile_id, round, verdict, output, error, created_at)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                ",
+                params![
+                    input.pr_review_id,
+                    input.reviewer_profile_id,
+                    input.round,
+                    input.verdict.as_str(),
+                    input.output,
+                    input.error,
+                    now()
+                ],
+            )
+            .map_err(|error| format!("Failed to record review round: {error}"))?;
+        let run_id = self.conn.last_insert_rowid();
+        self.conn
+            .query_row(
+                &format!("{PR_REVIEW_RUN_SELECT} WHERE prr.id = ?1"),
+                params![run_id],
+                pr_review_run_from_row,
+            )
+            .map_err(|error| format!("Failed to load recorded review round: {error}"))
+    }
+
+    /// All round outputs for a consensus review, oldest first.
+    pub fn list_pr_review_runs(&self, pr_review_id: i64) -> Result<Vec<PrReviewRun>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(&format!("{PR_REVIEW_RUN_SELECT} WHERE prr.pr_review_id = ?1 ORDER BY prr.id"))
+            .map_err(|error| error.to_string())?;
+        let result = rows(stmt
+            .query_map(params![pr_review_id], pr_review_run_from_row)
+            .map_err(|error| error.to_string())?);
+        result
+    }
+
+    /// Mark how many parallel rounds have finished, so the UI can show progress
+    /// while a consensus run is mid-flight.
+    pub fn set_pr_review_progress(
+        &self,
+        id: i64,
+        rounds_completed: i64,
+    ) -> Result<(), String> {
+        self.execute_pr_review_update(
+            "UPDATE pr_reviews SET rounds_completed = ?1, updated_at = ?2 WHERE id = ?3",
+            params![rounds_completed, now(), id],
+        )
+    }
+
+    /// Store the synthesized consensus result and whether the reviewers converged.
+    pub fn set_pr_review_consensus(
+        &self,
+        id: i64,
+        output: &str,
+        verdict: PrReviewVerdict,
+        converged: bool,
+    ) -> Result<(), String> {
+        self.execute_pr_review_update(
+            "UPDATE pr_reviews SET review_output = ?1, verdict = ?2, converged = ?3, status = ?4, last_error = NULL, updated_at = ?5 WHERE id = ?6",
+            params![output, verdict.as_str(), converged, PrReviewStatus::Ready.as_str(), now(), id],
+        )
     }
 
     pub fn set_pr_review_status(
@@ -147,10 +330,17 @@ impl Database {
 
     /// Reset a finished review back to `queued` and clear its prior
     /// output/verdict/error so the runtime can re-fetch the PR head and review
-    /// again.
+    /// again. For consensus reviews this also discards the recorded round
+    /// outputs and resets the round/convergence progress.
     pub fn reset_pr_review_for_rerun(&self, id: i64) -> Result<PrReview, String> {
+        self.conn
+            .execute(
+                "DELETE FROM pr_review_runs WHERE pr_review_id = ?1",
+                params![id],
+            )
+            .map_err(|error| format!("Failed to clear review rounds: {error}"))?;
         self.execute_pr_review_update(
-            "UPDATE pr_reviews SET status = ?1, review_output = NULL, verdict = NULL, last_error = NULL, updated_at = ?2 WHERE id = ?3",
+            "UPDATE pr_reviews SET status = ?1, review_output = NULL, verdict = NULL, last_error = NULL, rounds_completed = 0, converged = NULL, updated_at = ?2 WHERE id = ?3",
             params![PrReviewStatus::Queued.as_str(), now(), id],
         )?;
         self.pr_review_by_id(id)?

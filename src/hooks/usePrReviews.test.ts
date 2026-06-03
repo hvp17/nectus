@@ -7,6 +7,7 @@ import type { PrReview } from "../types";
 vi.mock("../api", () => ({
   api: {
     listPrReviews: vi.fn().mockResolvedValue([]),
+    listPrReviewRuns: vi.fn().mockResolvedValue([]),
     createPrReview: vi.fn(),
     rerunPrReview: vi.fn(),
     deletePrReview: vi.fn(),
@@ -28,6 +29,11 @@ const review: PrReview = {
   reviewOutput: null,
   lastError: null,
   worktreePath: null,
+  mode: "single",
+  maxRounds: null,
+  roundsCompleted: 0,
+  converged: null,
+  reviewers: [],
   createdAt: "2026-06-02T00:00:00.000Z",
   updatedAt: "2026-06-02T00:00:00.000Z",
 };
@@ -45,7 +51,7 @@ it("queues a created review at the top of the list and selects it", async () => 
   await waitFor(() => expect(api.listPrReviews).toHaveBeenCalled());
 
   await act(async () => {
-    await result.current.createPrReview("https://github.com/owner/repo/pull/9", 2);
+    await result.current.createPrReview("https://github.com/owner/repo/pull/9", [2]);
   });
 
   expect(result.current.prReviews[0].id).toBe(9);

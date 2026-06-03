@@ -7,6 +7,7 @@ export type ReviewLoopStatus = "running" | "reviewing" | "passed" | "feedback_se
 export type ReviewVerdict = "pass" | "needs_changes" | "feedback" | "unknown";
 export type PrReviewStatus = "queued" | "reviewing" | "ready" | "error";
 export type PrReviewVerdict = "passed" | "blockers" | "inconclusive";
+export type PrReviewMode = "single" | "consensus";
 export type GithubCheckState = "passing" | "failing" | "pending" | "none";
 export type PullRequestState = "open" | "merged" | "closed" | "unknown";
 export type PullRequestReviewDecision = "approved" | "changes_requested" | "review_required";
@@ -134,10 +135,16 @@ export interface ReviewLoopUpdatedEvent {
   reviewRun?: ReviewRun | null;
 }
 
+export interface PrReviewReviewer {
+  reviewerProfileId: number;
+  reviewerName?: string | null;
+}
+
 export interface PrReview {
   id: number;
   repoId: number;
   repoName: string;
+  /** Single mode: the reviewer. Consensus mode: the synthesizer. */
   reviewerProfileId: number;
   reviewerName?: string | null;
   prUrl: string;
@@ -150,12 +157,35 @@ export interface PrReview {
   reviewOutput?: string | null;
   lastError?: string | null;
   worktreePath?: string | null;
+  mode: PrReviewMode;
+  /** Consensus only: the iteration cap. */
+  maxRounds?: number | null;
+  /** Consensus only: how many parallel rounds have finished. */
+  roundsCompleted: number;
+  /** Consensus only: whether reviewers agreed before the cap (null until done). */
+  converged?: boolean | null;
+  /** Consensus only: the participating reviewers. Empty for single reviews. */
+  reviewers: PrReviewReviewer[];
   createdAt: string;
   updatedAt: string;
 }
 
+/** One reviewer's output for one round of a consensus PR review. */
+export interface PrReviewRun {
+  id: number;
+  prReviewId: number;
+  reviewerProfileId: number;
+  reviewerName?: string | null;
+  round: number;
+  verdict: PrReviewVerdict;
+  output: string;
+  error?: string | null;
+  createdAt: string;
+}
+
 export interface PrReviewUpdatedEvent {
   prReview: PrReview;
+  latestRun?: PrReviewRun | null;
 }
 
 export interface AppSettings {

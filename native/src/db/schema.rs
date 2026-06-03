@@ -117,6 +117,27 @@ impl Database {
 
                 CREATE INDEX IF NOT EXISTS pr_reviews_repo_idx
                 ON pr_reviews(repo_id, id);
+
+                CREATE TABLE IF NOT EXISTS pr_review_reviewers (
+                  pr_review_id INTEGER NOT NULL REFERENCES pr_reviews(id) ON DELETE CASCADE,
+                  reviewer_profile_id INTEGER NOT NULL REFERENCES agent_profiles(id),
+                  position INTEGER NOT NULL,
+                  PRIMARY KEY (pr_review_id, reviewer_profile_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS pr_review_runs (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  pr_review_id INTEGER NOT NULL REFERENCES pr_reviews(id) ON DELETE CASCADE,
+                  reviewer_profile_id INTEGER NOT NULL REFERENCES agent_profiles(id),
+                  round INTEGER NOT NULL,
+                  verdict TEXT NOT NULL,
+                  output TEXT NOT NULL,
+                  error TEXT,
+                  created_at TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS pr_review_runs_review_idx
+                ON pr_review_runs(pr_review_id, id);
                 ",
             )
             .map_err(|error| format!("Failed to create database schema: {error}"))?;
@@ -178,6 +199,17 @@ impl Database {
             "jira_filter_current_sprint",
             "INTEGER NOT NULL DEFAULT 0",
         )?;
+        // Consensus PR review: a single-reviewer review is `mode = 'single'`; a
+        // multi-model run is `mode = 'consensus'` with the participants tracked in
+        // `pr_review_reviewers` and their per-round outputs in `pr_review_runs`.
+        self.add_column_if_missing("pr_reviews", "mode", "TEXT NOT NULL DEFAULT 'single'")?;
+        self.add_column_if_missing("pr_reviews", "max_rounds", "INTEGER")?;
+        self.add_column_if_missing(
+            "pr_reviews",
+            "rounds_completed",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
+        self.add_column_if_missing("pr_reviews", "converged", "INTEGER")?;
         Ok(())
     }
 

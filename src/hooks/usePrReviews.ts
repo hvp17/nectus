@@ -3,7 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { api } from "../api";
 import { useAsyncEffect } from "./useAsyncEffect";
 import { isTauriRuntime, notifySessionEvent } from "../sessionNotifications";
-import type { PrReview, PrReviewUpdatedEvent } from "../types";
+import type { PrReview, PrReviewRun, PrReviewUpdatedEvent } from "../types";
 
 interface UsePrReviewsArgs {
   onMessage: (message: string) => void;
@@ -14,6 +14,13 @@ function upsertNewestFirst(list: PrReview[], review: PrReview): PrReview[] {
   return list.some((item) => item.id === review.id)
     ? list.map((item) => (item.id === review.id ? review : item))
     : [review, ...list];
+}
+
+/** Append a round run, replacing it if its id is already present. */
+function appendRun(list: PrReviewRun[], run: PrReviewRun): PrReviewRun[] {
+  return list.some((item) => item.id === run.id)
+    ? list.map((item) => (item.id === run.id ? run : item))
+    : [...list, run];
 }
 
 function reviewLabel(review: PrReview): string {
@@ -30,6 +37,7 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
   const [prReviews, setPrReviews] = useState<PrReview[]>([]);
   const [selectedPrReviewId, setSelectedPrReviewId] = useState<number | undefined>();
   const [creatingReview, setCreatingReview] = useState(false);
+  const [runsByReview, setRunsByReview] = useState<Record<number, PrReviewRun[]>>({});
   const prReviewsRef = useRef<PrReview[]>([]);
 
   const setReviews = useCallback((updater: (current: PrReview[]) => PrReview[]) => {
@@ -52,6 +60,22 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
     [onMessage, setReviews],
   );
 
+  // Load the per-reviewer round outputs whenever a (consensus) review is opened.
+  // Events keep them live afterward; single reviews simply return no runs.
+  useAsyncEffect(
+    async (alive) => {
+      if (selectedPrReviewId === undefined) return;
+      const reviewId = selectedPrReviewId;
+      try {
+        const runs = await api.listPrReviewRuns(reviewId);
+        if (alive()) setRunsByReview((current) => ({ ...current, [reviewId]: runs }));
+      } catch (error) {
+        if (alive()) onMessage(String(error));
+      }
+    },
+    [selectedPrReviewId, onMessage],
+  );
+
   useEffect(() => {
     if (!isTauriRuntime()) return;
 
@@ -62,6 +86,14 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
       const review = event.payload.prReview;
       const previousStatus = prReviewsRef.current.find((item) => item.id === review.id)?.status;
       setReviews((current) => upsertNewestFirst(current, review));
+
+      const latestRun = event.payload.latestRun;
+      if (latestRun) {
+        setRunsByReview((current) => ({
+          ...current,
+          [latestRun.prReviewId]: appendRun(current[latestRun.prReviewId] ?? [], latestRun),
+        }));
+      }
 
       if (review.status === previousStatus) return;
       if (review.status === "ready") {
@@ -88,10 +120,10 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
   }, [onMessage, setReviews]);
 
   const createPrReview = useCallback(
-    async (prUrl: string, reviewerProfileId?: number | null) => {
+    async (prUrl: string, reviewerProfileIds: number[], maxRounds?: number) => {
       setCreatingReview(true);
       try {
-        const review = await api.createPrReview({ prUrl, reviewerProfileId });
+        const review = await api.createPrReview({ prUrl, reviewerProfileIds, maxRounds });
         setReviews((current) => upsertNewestFirst(current, review));
         setSelectedPrReviewId(review.id);
         onMessage(`PR review queued: ${reviewLabel(review)}`);
@@ -111,6 +143,9 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
       try {
         const review = await api.rerunPrReview(reviewId);
         setReviews((current) => upsertNewestFirst(current, review));
+        // The backend cleared the prior rounds; drop the stale ones so the
+        // re-run's rounds stream in fresh.
+        setRunsByReview((current) => ({ ...current, [reviewId]: [] }));
       } catch (error) {
         onMessage(String(error));
       }
@@ -136,11 +171,17 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
     [prReviews, selectedPrReviewId],
   );
 
+  const selectedPrReviewRuns = useMemo(
+    () => (selectedPrReviewId === undefined ? [] : runsByReview[selectedPrReviewId] ?? []),
+    [runsByReview, selectedPrReviewId],
+  );
+
   return {
     prReviews,
     selectedPrReviewId,
     setSelectedPrReviewId,
     selectedPrReview,
+    selectedPrReviewRuns,
     creatingReview,
     createPrReview,
     rerunPrReview,

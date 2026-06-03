@@ -1,7 +1,7 @@
 use crate::models::{
-    AgentKind, AgentProfile, AppSettings, DensityMode, PrReview, PrReviewStatus, PrReviewVerdict,
-    Repo, ReviewLoop, ReviewLoopStatus, ReviewRun, ReviewVerdict, TaskStatus, TaskSummary,
-    ThemeMode,
+    AgentKind, AgentProfile, AppSettings, DensityMode, PrReview, PrReviewMode, PrReviewReviewer,
+    PrReviewRun, PrReviewStatus, PrReviewVerdict, Repo, ReviewLoop, ReviewLoopStatus, ReviewRun,
+    ReviewVerdict, TaskStatus, TaskSummary, ThemeMode,
 };
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ValueRef};
 use rusqlite::Row;
@@ -29,6 +29,7 @@ impl_enum_from_sql! {
     ReviewVerdict => "review verdict",
     PrReviewStatus => "pr review status",
     PrReviewVerdict => "pr review verdict",
+    PrReviewMode => "pr review mode",
     AgentKind => "agent kind",
     ThemeMode => "theme mode",
     DensityMode => "density mode",
@@ -160,7 +161,8 @@ pub(super) fn review_run_from_row(row: &Row<'_>) -> rusqlite::Result<ReviewRun> 
 }
 
 /// Maps the joined `pr_reviews` SELECT (see `db/pr_reviews.rs`): repo name comes
-/// from `repos`, reviewer name from a LEFT JOIN on `agent_profiles`.
+/// from `repos`, reviewer name from a LEFT JOIN on `agent_profiles`. `reviewers`
+/// is left empty here and populated by the caller with a follow-up query.
 pub(super) fn pr_review_from_row(row: &Row<'_>) -> rusqlite::Result<PrReview> {
     Ok(PrReview {
         id: row.get(0)?,
@@ -180,5 +182,34 @@ pub(super) fn pr_review_from_row(row: &Row<'_>) -> rusqlite::Result<PrReview> {
         created_at: row.get(14)?,
         updated_at: row.get(15)?,
         verdict: row.get(16)?,
+        mode: row.get(17)?,
+        max_rounds: row.get(18)?,
+        rounds_completed: row.get(19)?,
+        converged: row.get(20)?,
+        reviewers: Vec::new(),
+    })
+}
+
+/// Maps the joined `pr_review_runs` SELECT (see `db/pr_reviews.rs`): reviewer
+/// name comes from a LEFT JOIN on `agent_profiles`.
+pub(super) fn pr_review_run_from_row(row: &Row<'_>) -> rusqlite::Result<PrReviewRun> {
+    Ok(PrReviewRun {
+        id: row.get(0)?,
+        pr_review_id: row.get(1)?,
+        reviewer_profile_id: row.get(2)?,
+        reviewer_name: row.get(3)?,
+        round: row.get(4)?,
+        verdict: row.get(5)?,
+        output: row.get(6)?,
+        error: row.get(7)?,
+        created_at: row.get(8)?,
+    })
+}
+
+/// Maps a `pr_review_reviewers` row joined to `agent_profiles` for the name.
+pub(super) fn pr_review_reviewer_from_row(row: &Row<'_>) -> rusqlite::Result<PrReviewReviewer> {
+    Ok(PrReviewReviewer {
+        reviewer_profile_id: row.get(0)?,
+        reviewer_name: row.get(1)?,
     })
 }
