@@ -342,8 +342,10 @@ change status, assign, or comment. **Create task from this story** opens the tas
 modal pre-seeded from the story (title, description) with a project selector; the
 resulting task↔story link is stored locally on the task (`jira_issue_key/summary/
 url`) and never writes back to JIRA. Linked stories appear as a badge on task
-cards/rows and a detachable panel in the task inspector. Full behavior and caveats
-live in [JIRA Integration](jira-integration.md).
+cards/rows and a detachable panel in the task inspector, and — the other direction —
+each board card lists the tasks attached to that story (agent logo, title, live/
+status), each click-through to the dashboard. Full behavior and caveats live in
+[JIRA Integration](jira-integration.md).
 
 Key files:
 

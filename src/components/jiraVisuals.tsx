@@ -1,4 +1,17 @@
-import { Bookmark, Bug, Layers, ListTree, SquareCheck, Zap, type LucideIcon } from "lucide-react";
+import {
+  Bookmark,
+  Bug,
+  ChevronDown,
+  ChevronUp,
+  ChevronsDown,
+  ChevronsUp,
+  Equal,
+  Layers,
+  ListTree,
+  SquareCheck,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "../lib/utils";
 
 interface TypeStyle {
@@ -42,6 +55,44 @@ export function JiraIssueTypeIcon({
       aria-label={style.label}
     >
       <Icon className="size-2.5 text-white" strokeWidth={2.5} absoluteStrokeWidth />
+    </span>
+  );
+}
+
+interface PriorityStyle {
+  icon: LucideIcon;
+  color: string;
+  label: string;
+}
+
+// JIRA's five default priorities, with the up/down chevron glyphs and red→blue
+// ramp people recognise from the board. Keyed by the priority name JIRA returns.
+const PRIORITY_STYLES: Record<string, PriorityStyle> = {
+  highest: { icon: ChevronsUp, color: "#CD1F1F", label: "Highest" },
+  high: { icon: ChevronUp, color: "#E2483D", label: "High" },
+  medium: { icon: Equal, color: "#D97008", label: "Medium" },
+  low: { icon: ChevronDown, color: "#1868DB", label: "Low" },
+  lowest: { icon: ChevronsDown, color: "#357DE8", label: "Lowest" },
+};
+
+export function JiraPriorityIcon({
+  priority,
+  className,
+}: {
+  priority: string | null | undefined;
+  className?: string;
+}) {
+  if (!priority) return null;
+  const style = PRIORITY_STYLES[priority.trim().toLowerCase()];
+  if (!style) return null;
+  const Icon = style.icon;
+  return (
+    <span
+      className={cn("inline-flex shrink-0", className)}
+      title={`Priority: ${style.label}`}
+      aria-label={`Priority: ${style.label}`}
+    >
+      <Icon className="size-4" style={{ color: style.color }} strokeWidth={3} aria-hidden="true" />
     </span>
   );
 }

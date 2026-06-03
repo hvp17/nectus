@@ -60,6 +60,11 @@ All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
 - The linked story shows as a badge on task cards and rows, and as a detachable panel
   in the task inspector. Detaching clears the local link (and again writes nothing to
   JIRA).
+- The reverse is also surfaced: each board card lists the local tasks attached to that
+  story under a **Tasks** section — agent logo, title, and status (a live session shows
+  a pulsing **Running** indicator). Clicking a task chip opens it in the dashboard.
+  Matching is by `task.jira_issue_key === item.key`; a story with no attached tasks
+  shows no section.
 
 ## Requirements
 

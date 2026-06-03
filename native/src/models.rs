@@ -356,6 +356,7 @@ pub struct JiraWorkItem {
     pub status_name: String,
     pub status_category: JiraStatusCategory,
     pub issue_type: Option<String>,
+    pub priority: Option<String>,
     pub assignee: Option<String>,
     pub url: Option<String>,
     pub description: Option<String>,

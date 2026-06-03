@@ -90,6 +90,7 @@ export interface JiraWorkItem {
   statusName: string;
   statusCategory: JiraStatusCategory;
   issueType?: string | null;
+  priority?: string | null;
   assignee?: string | null;
   url?: string | null;
   description?: string | null;

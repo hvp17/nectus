@@ -48,6 +48,7 @@ struct RawFields {
     status: Option<RawStatus>,
     description: Option<String>,
     issuetype: Option<RawNamed>,
+    priority: Option<RawNamed>,
     assignee: Option<RawAssignee>,
 }
 
@@ -114,6 +115,12 @@ fn work_item_from_raw(raw: RawWorkItem) -> Option<JiraWorkItem> {
         .as_ref()
         .and_then(|f| f.issuetype.as_ref())
         .and_then(|t| t.name.clone());
+    let priority = fields
+        .as_ref()
+        .and_then(|f| f.priority.as_ref())
+        .and_then(|p| p.name.clone())
+        // JIRA uses "None" for unset priority; treat it as no priority.
+        .filter(|name| !name.eq_ignore_ascii_case("none"));
     let assignee = fields
         .as_ref()
         .and_then(|f| f.assignee.as_ref())
@@ -130,6 +137,7 @@ fn work_item_from_raw(raw: RawWorkItem) -> Option<JiraWorkItem> {
         status_name,
         status_category,
         issue_type,
+        priority,
         assignee,
         url: raw.url.or(raw.self_url),
         description,
@@ -341,8 +349,8 @@ mod tests {
     #[test]
     fn parses_search_array_with_fields() {
         let json = r#"[
-          {"key":"PROJ-1","fields":{"summary":"Login bug","status":{"name":"In Progress","statusCategory":{"key":"indeterminate","name":"In Progress"}},"issuetype":{"name":"Bug"},"assignee":{"displayName":"Ada"}}},
-          {"key":"PROJ-2","fields":{"summary":"Docs","status":{"name":"Done","statusCategory":{"key":"done","name":"Done"}}}}
+          {"key":"PROJ-1","fields":{"summary":"Login bug","status":{"name":"In Progress","statusCategory":{"key":"indeterminate","name":"In Progress"}},"issuetype":{"name":"Bug"},"priority":{"name":"High"},"assignee":{"displayName":"Ada"}}},
+          {"key":"PROJ-2","fields":{"summary":"Docs","status":{"name":"Done","statusCategory":{"key":"done","name":"Done"}},"priority":{"name":"None"}}}
         ]"#;
         let items = parse_work_items(json).unwrap();
         assert_eq!(items.len(), 2);
@@ -351,8 +359,11 @@ mod tests {
         assert_eq!(items[0].status_name, "In Progress");
         assert_eq!(items[0].status_category, JiraStatusCategory::InProgress);
         assert_eq!(items[0].issue_type.as_deref(), Some("Bug"));
+        assert_eq!(items[0].priority.as_deref(), Some("High"));
         assert_eq!(items[0].assignee.as_deref(), Some("Ada"));
         assert_eq!(items[1].status_category, JiraStatusCategory::Done);
+        // A literal "None" priority is treated as unset.
+        assert_eq!(items[1].priority, None);
     }
 
     #[test]

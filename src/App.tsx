@@ -141,6 +141,16 @@ function App() {
     setCreateTaskOpen(true);
   };
 
+  // Focus a task in the dashboard from anywhere (sidebar, JIRA board card).
+  const openTask = (taskId: number) => {
+    const task = tasks.find((item) => item.id === taskId);
+    setCurrentView("dashboard");
+    if (task) {
+      setSelectedRepoId(task.repoId);
+    }
+    setSelectedTaskId(taskId);
+  };
+
   return (
     <TooltipProvider>
       <SidebarProvider
@@ -158,14 +168,7 @@ function App() {
             setSelectedRepoId(id);
             setSelectedTaskId(undefined);
           }}
-          onOpenTask={(taskId) => {
-            const task = tasks.find((item) => item.id === taskId);
-            setCurrentView("dashboard");
-            if (task) {
-              setSelectedRepoId(task.repoId);
-            }
-            setSelectedTaskId(taskId);
-          }}
+          onOpenTask={openTask}
           onCreateTaskInRepo={(repoId) => {
             setCurrentView("dashboard");
             setSelectedRepoId(repoId);
@@ -209,6 +212,8 @@ function App() {
               <JiraBoardPage
                 status={jiraStatus}
                 projects={jiraProjects}
+                tasks={tasks}
+                onOpenTask={openTask}
                 project={settings?.jiraBoardProject ?? null}
                 filters={{
                   myIssues: settings?.jiraFilterMyIssues ?? false,
