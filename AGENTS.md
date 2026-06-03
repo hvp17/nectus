@@ -175,7 +175,7 @@ Important backend files:
 - `native/src/db/`: SQLite schema, row mapping, agent profiles, review loops, and persistence tests
 - `native/src/git_ops.rs`: git repo/worktree validation and operations
 - `native/src/github.rs`: `gh` CLI integration — connection status plus pull request create/detect/status parsing (no OAuth, no stored tokens)
-- `native/src/jira.rs`: `acli` (Atlassian CLI) integration — connection status plus work-item search/view/transition/assign/comment with tolerant JSON parsing (no OAuth, no stored tokens)
+- `native/src/jira.rs`: `acli` (Atlassian CLI) integration — connection status, project list, work-item search/view/transition/assign/comment with tolerant JSON parsing, and the structured-config JQL builder (`build_board_jql`, so the UI never types JQL); no OAuth, no stored tokens
 - `native/src/process_util.rs`: shared command helpers — binary resolution (`resolve_executable`), child `PATH` augmentation (`augmented_path`), the install-dir source of truth (`third_party_bin_dirs`), and `command_error` stderr formatting. See [Spawning External CLIs](#spawning-external-clis-macos-gui-path).
 - `native/src/sessions/`: PTY lifecycle, terminal event emission, Codex JSONL watching, agent command setup, and review-loop runtime
 - `native/src/sessions/agents/`: provider-specific Codex, Claude, and Gemini command arguments and fallback locations
@@ -196,6 +196,7 @@ Tauri commands exposed to the frontend include:
 - `github_pull_request_status`
 - `detect_github_pull_request`
 - `jira_status`
+- `jira_list_projects`
 - `jira_search_board`
 - `jira_get_work_item`
 - `jira_transition_work_item`

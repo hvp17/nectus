@@ -73,6 +73,12 @@ export function defineAppSmokeTests() {
         defaultAgentProfileId: 1,
         defaultWorktreeRootPattern: "../{repoName}-worktrees",
         defaultBranchPrefix: null,
+        jiraBoardJql: null,
+        jiraSiteUrl: null,
+        jiraBoardProject: null,
+        jiraFilterMyIssues: false,
+        jiraFilterUnresolved: true,
+        jiraFilterCurrentSprint: false,
         theme: "dark",
         density: "compact",
       });

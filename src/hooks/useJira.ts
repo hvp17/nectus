@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { api } from "../api";
 import { useAsyncEffect } from "./useAsyncEffect";
-import type { JiraStatus, JiraStatusCategory, JiraWorkItem } from "../types";
+import type { JiraProject, JiraStatus, JiraStatusCategory, JiraWorkItem } from "../types";
 
 export interface JiraColumn {
   statusName: string;
@@ -44,16 +44,20 @@ export function deriveColumns(items: JiraWorkItem[]): JiraColumn[] {
 
 interface UseJiraInput {
   active: boolean;
+  /** Whether a board project has been chosen — the board only loads once it is. */
+  configured: boolean;
   setMessage: (message: string | null) => void;
 }
 
 /**
- * Owns JIRA connection state and the board work items. Connection status loads
- * once; the board (re)loads whenever the JIRA view becomes active and `acli` is
- * connected. Mirrors `useGithub` in shape and soft-failure handling.
+ * Owns JIRA connection state, the project list, and the board work items.
+ * Connection status loads once; the project list loads when the view is active and
+ * `acli` is connected; the board (re)loads once a project is configured. The board
+ * JQL is built backend-side from the structured config, so no JQL is typed here.
  */
-export function useJira({ active, setMessage }: UseJiraInput) {
+export function useJira({ active, configured, setMessage }: UseJiraInput) {
   const [jiraStatus, setJiraStatus] = useState<JiraStatus>();
+  const [projects, setProjects] = useState<JiraProject[]>([]);
   const [items, setItems] = useState<JiraWorkItem[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -70,6 +74,20 @@ export function useJira({ active, setMessage }: UseJiraInput) {
 
   const ready = Boolean(jiraStatus?.installed && jiraStatus?.authenticated);
 
+  // Load the project picker options when the view is active and connected.
+  useAsyncEffect(
+    async (alive) => {
+      if (!active || !ready) return;
+      try {
+        const list = await api.jiraListProjects();
+        if (alive()) setProjects(list);
+      } catch {
+        // Soft-fail: the picker just stays empty; status guidance still shows.
+      }
+    },
+    [active, ready],
+  );
+
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
@@ -82,13 +100,14 @@ export function useJira({ active, setMessage }: UseJiraInput) {
     }
   }, [setMessage]);
 
-  // Load the board whenever the view becomes active and the CLI is connected.
+  // Load the board whenever the view becomes active, the CLI is connected, and a
+  // project has been chosen.
   useAsyncEffect(
     async (alive) => {
-      if (!active || !ready || !alive()) return;
+      if (!active || !ready || !configured || !alive()) return;
       await refresh();
     },
-    [active, ready, refresh],
+    [active, ready, configured, refresh],
   );
 
   const transition = useCallback(
@@ -140,6 +159,7 @@ export function useJira({ active, setMessage }: UseJiraInput) {
   return {
     jiraStatus,
     ready,
+    projects,
     items,
     columns: deriveColumns(items),
     loading,

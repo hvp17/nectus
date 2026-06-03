@@ -124,6 +124,10 @@ fn seeds_and_updates_global_app_settings() {
             default_branch_prefix: Some("feat/".to_string()),
             jira_board_jql: None,
             jira_site_url: None,
+            jira_board_project: None,
+            jira_filter_my_issues: false,
+            jira_filter_unresolved: true,
+            jira_filter_current_sprint: false,
             theme: ThemeMode::Dark,
             density: DensityMode::Compact,
         })
@@ -190,6 +194,10 @@ fn persists_jira_link_and_board_settings() {
             default_branch_prefix: base.default_branch_prefix,
             jira_board_jql: Some("project = PROJ".to_string()),
             jira_site_url: Some("https://x.atlassian.net".to_string()),
+            jira_board_project: Some("PROJ".to_string()),
+            jira_filter_my_issues: true,
+            jira_filter_unresolved: false,
+            jira_filter_current_sprint: true,
             theme: base.theme,
             density: base.density,
         })
@@ -199,6 +207,14 @@ fn persists_jira_link_and_board_settings() {
         saved.jira_site_url.as_deref(),
         Some("https://x.atlassian.net")
     );
+    assert_eq!(saved.jira_board_project.as_deref(), Some("PROJ"));
+    assert!(saved.jira_filter_my_issues);
+    assert!(!saved.jira_filter_unresolved);
+    assert!(saved.jira_filter_current_sprint);
+    // Reloads keep the structured board config.
+    let reloaded = db.get_app_settings().unwrap();
+    assert_eq!(reloaded.jira_board_project.as_deref(), Some("PROJ"));
+    assert!(reloaded.jira_filter_current_sprint);
 }
 
 #[test]
@@ -224,6 +240,10 @@ fn updated_worktree_root_pattern_applies_to_existing_and_new_repos() {
         default_branch_prefix: None,
         jira_board_jql: None,
         jira_site_url: None,
+        jira_board_project: None,
+        jira_filter_my_issues: false,
+        jira_filter_unresolved: true,
+        jira_filter_current_sprint: false,
         theme: ThemeMode::System,
         density: DensityMode::Comfortable,
     })

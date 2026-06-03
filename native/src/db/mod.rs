@@ -104,7 +104,7 @@ impl Database {
         self.conn
             .query_row(
                 "
-                SELECT default_agent_profile_id, default_worktree_root_pattern, default_branch_prefix, theme, density, updated_at, jira_board_jql, jira_site_url
+                SELECT default_agent_profile_id, default_worktree_root_pattern, default_branch_prefix, theme, density, updated_at, jira_board_jql, jira_site_url, jira_board_project, jira_filter_my_issues, jira_filter_unresolved, jira_filter_current_sprint
                 FROM app_settings
                 WHERE id = 1
                 ",
@@ -143,6 +143,10 @@ impl Database {
             .jira_site_url
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty());
+        let jira_board_project = settings
+            .jira_board_project
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
         let pattern = settings.default_worktree_root_pattern.trim().to_string();
         let updated_at = now();
         self.conn
@@ -156,7 +160,11 @@ impl Database {
                     density = ?5,
                     updated_at = ?6,
                     jira_board_jql = ?7,
-                    jira_site_url = ?8
+                    jira_site_url = ?8,
+                    jira_board_project = ?9,
+                    jira_filter_my_issues = ?10,
+                    jira_filter_unresolved = ?11,
+                    jira_filter_current_sprint = ?12
                 WHERE id = 1
                 ",
                 params![
@@ -167,7 +175,11 @@ impl Database {
                     settings.density.as_str(),
                     updated_at,
                     jira_board_jql,
-                    jira_site_url
+                    jira_site_url,
+                    jira_board_project,
+                    settings.jira_filter_my_issues,
+                    settings.jira_filter_unresolved,
+                    settings.jira_filter_current_sprint
                 ],
             )
             .map_err(|error| format!("Failed to update app settings: {error}"))?;

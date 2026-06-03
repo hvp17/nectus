@@ -8,6 +8,7 @@ import type {
   AppSettings,
   AppSettingsInput,
   GithubStatus,
+  JiraProject,
   JiraStatus,
   JiraWorkItem,
   PrReview,
@@ -137,6 +138,10 @@ export const api = {
     if (!isTauri) return { installed: false, authenticated: false, account: null, site: null };
     return invoke("jira_status");
   },
+  async jiraListProjects(): Promise<JiraProject[]> {
+    if (!isTauri) return [];
+    return invoke("jira_list_projects");
+  },
   async jiraSearchBoard(): Promise<JiraWorkItem[]> {
     if (!isTauri) return [];
     return invoke("jira_search_board");
@@ -221,6 +226,12 @@ export const api = {
         defaultAgentProfileId: browserFallbackProfiles[0]?.id ?? null,
         defaultWorktreeRootPattern: "../{repoName}-worktrees",
         defaultBranchPrefix: null,
+        jiraBoardJql: null,
+        jiraSiteUrl: null,
+        jiraBoardProject: null,
+        jiraFilterMyIssues: false,
+        jiraFilterUnresolved: true,
+        jiraFilterCurrentSprint: false,
         theme: "system",
         density: "comfortable",
         updatedAt: new Date().toISOString(),

@@ -9,8 +9,9 @@ mod sessions;
 use crate::db::Database;
 use crate::models::{
     AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings, AppSettingsInput,
-    GithubStatus, JiraStatus, JiraWorkItem, PrReview, PullRequestInfo, Repo, ReviewLoop, ReviewRun,
-    Session, SessionExitedEvent, SessionOutputSnapshot, TaskStatus, TaskSummary,
+    GithubStatus, JiraProject, JiraStatus, JiraWorkItem, PrReview, PullRequestInfo, Repo,
+    ReviewLoop, ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskStatus,
+    TaskSummary,
 };
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
@@ -245,15 +246,32 @@ async fn jira_status() -> AppResult<JiraStatus> {
         .map_err(|error| AppError::from(format!("Failed to query JIRA status: {error}")))
 }
 
-/// Load the JIRA board by running the configured board JQL search.
+/// List the JIRA projects visible to the user, for the board's project picker.
+#[tauri::command]
+async fn jira_list_projects() -> AppResult<Vec<JiraProject>> {
+    tauri::async_runtime::spawn_blocking(jira::list_projects)
+        .await
+        .map_err(|error| AppError::from(format!("Failed to list JIRA projects: {error}")))?
+        .map_err(Into::into)
+}
+
+/// Load the JIRA board. The JQL is built from the structured board config (project
+/// + filter toggles) so the user never types JQL.
 #[tauri::command]
 async fn jira_search_board(state: State<'_, AppState>) -> AppResult<Vec<JiraWorkItem>> {
     let jql = {
         let db = state.db.lock();
-        db.get_app_settings()?
-            .jira_board_jql
+        let settings = db.get_app_settings()?;
+        let project = settings
+            .jira_board_project
             .filter(|value| !value.trim().is_empty())
-            .ok_or_else(|| AppError::from("Set a board JQL in Settings to load the JIRA board"))?
+            .ok_or_else(|| AppError::from("Choose a JIRA project to load the board"))?;
+        jira::build_board_jql(
+            &project,
+            settings.jira_filter_my_issues,
+            settings.jira_filter_unresolved,
+            settings.jira_filter_current_sprint,
+        )
     };
     tauri::async_runtime::spawn_blocking(move || jira::search(&jql, 200))
         .await
@@ -613,6 +631,7 @@ pub fn run() {
             github_pull_request_status,
             detect_github_pull_request,
             jira_status,
+            jira_list_projects,
             jira_search_board,
             jira_get_work_item,
             jira_transition_work_item,

@@ -17,7 +17,7 @@ Core tables:
 | --- | --- |
 | `repos` | Saved project repositories and each project's default worktree root. |
 | `agent_profiles` | CLI agent configuration, including command, model, args, and env. |
-| `app_settings` | Default agent, worktree pattern, branch prefix, theme, density, and JIRA board JQL / site URL. |
+| `app_settings` | Default agent, worktree pattern, branch prefix, theme, density, and the JIRA board config (selected project + filter flags; the JQL is built from these). |
 | `tasks` | Primary work item, status, prompt, optional worktree, active session, saved session, and optional JIRA story link. |
 | `review_loops` | Current review configuration and status per task. |
 | `review_runs` | Reviewer prompts, outputs, verdicts, and errors by review attempt. |
@@ -128,7 +128,8 @@ Current commands:
 | `update_task_metadata` | Update title, status, or PR URL. |
 | `delete_task` | Delete a task and remove its worktree when applicable. |
 | `jira_status` | Report whether `acli` is installed, authenticated, and the active site. |
-| `jira_search_board` | Load board work items via the configured board JQL (`acli jira workitem search --json`). |
+| `jira_list_projects` | List visible JIRA projects for the board's project picker (`acli jira project list --json`). |
+| `jira_search_board` | Load board work items; the JQL is built from the structured board config (project + filter flags), so no JQL is typed. |
 | `jira_get_work_item` | Fetch a single work item (e.g. to backfill a story description). |
 | `jira_transition_work_item` | Transition a work item to a target status (optimistic; fails on illegal workflow moves). |
 | `jira_assign_work_item` | Assign a work item to a user. |
@@ -205,10 +206,11 @@ Important `tasks` columns:
 The schema enforces that direct-edit tasks have no branch/worktree path and
 worktree tasks have both.
 
-Additive columns (such as the `jira_*` fields above and `app_settings.jira_board_jql`
-/ `jira_site_url`) are introduced by `run_migrations` in `native/src/db/schema.rs`,
-which `ALTER TABLE`s any missing column on every open so existing databases upgrade
-in place.
+Additive columns (such as the `jira_*` task fields above and the `app_settings` JIRA
+board config — `jira_board_project`, `jira_filter_my_issues`, `jira_filter_unresolved`,
+`jira_filter_current_sprint`, plus the legacy `jira_board_jql` / `jira_site_url`) are
+introduced by `run_migrations` in `native/src/db/schema.rs`, which `ALTER TABLE`s any
+missing column on every open so existing databases upgrade in place.
 
 ## Debug Logging
 

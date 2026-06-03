@@ -83,12 +83,14 @@ function App() {
     creatingPullRequest,
     refreshPullRequest,
     jiraStatus,
+    jiraProjects,
     jiraColumns,
     jiraLoading,
     refreshJira,
     transitionJira,
     assignJira,
     commentJira,
+    setJiraBoardConfig,
     selectedJiraItem,
     setSelectedJiraItem,
     createTaskFromStory,
@@ -206,21 +208,16 @@ function App() {
             <>
               <JiraBoardPage
                 status={jiraStatus}
+                projects={jiraProjects}
+                project={settings?.jiraBoardProject ?? null}
+                filters={{
+                  myIssues: settings?.jiraFilterMyIssues ?? false,
+                  unresolved: settings?.jiraFilterUnresolved ?? true,
+                  currentSprint: settings?.jiraFilterCurrentSprint ?? false,
+                }}
                 columns={jiraColumns}
                 loading={jiraLoading}
-                boardJql={settings?.jiraBoardJql ?? ""}
-                onChangeJql={(jql) => {
-                  if (!settings) return;
-                  void saveAppSettings({
-                    defaultAgentProfileId: settings.defaultAgentProfileId,
-                    defaultWorktreeRootPattern: settings.defaultWorktreeRootPattern,
-                    defaultBranchPrefix: settings.defaultBranchPrefix,
-                    jiraBoardJql: jql || null,
-                    jiraSiteUrl: settings.jiraSiteUrl,
-                    theme: settings.theme,
-                    density: settings.density,
-                  }).then(() => refreshJira());
-                }}
+                onChangeConfig={setJiraBoardConfig}
                 onRefresh={refreshJira}
                 onTransition={transitionJira}
                 onOpenItem={setSelectedJiraItem}

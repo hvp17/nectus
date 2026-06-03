@@ -343,6 +343,13 @@ pub enum JiraStatusCategory {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct JiraProject {
+    pub key: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct JiraWorkItem {
     pub key: String,
     pub summary: String,
@@ -423,6 +430,10 @@ pub struct AppSettings {
     pub default_branch_prefix: Option<String>,
     pub jira_board_jql: Option<String>,
     pub jira_site_url: Option<String>,
+    pub jira_board_project: Option<String>,
+    pub jira_filter_my_issues: bool,
+    pub jira_filter_unresolved: bool,
+    pub jira_filter_current_sprint: bool,
     pub theme: ThemeMode,
     pub density: DensityMode,
     pub updated_at: String,
@@ -438,6 +449,14 @@ pub struct AppSettingsInput {
     pub jira_board_jql: Option<String>,
     #[serde(default)]
     pub jira_site_url: Option<String>,
+    #[serde(default)]
+    pub jira_board_project: Option<String>,
+    #[serde(default)]
+    pub jira_filter_my_issues: bool,
+    #[serde(default)]
+    pub jira_filter_unresolved: bool,
+    #[serde(default)]
+    pub jira_filter_current_sprint: bool,
     pub theme: ThemeMode,
     pub density: DensityMode,
 }

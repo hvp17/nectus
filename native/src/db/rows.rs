@@ -128,6 +128,10 @@ pub(super) fn app_settings_from_row(row: &Row<'_>) -> rusqlite::Result<AppSettin
         updated_at: row.get(5)?,
         jira_board_jql: row.get(6)?,
         jira_site_url: row.get(7)?,
+        jira_board_project: row.get(8)?,
+        jira_filter_my_issues: row.get(9)?,
+        jira_filter_unresolved: row.get(10)?,
+        jira_filter_current_sprint: row.get(11)?,
     })
 }
 

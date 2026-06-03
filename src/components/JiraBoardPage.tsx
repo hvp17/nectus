@@ -1,41 +1,68 @@
-import { useEffect, useState } from "react";
 import { Plus, RefreshCw } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 import { Skeleton } from "./ui/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty";
 import type { JiraColumn } from "../hooks/useJira";
-import type { JiraStatus, JiraWorkItem } from "../types";
+import type { JiraProject, JiraStatus, JiraWorkItem } from "../types";
+
+export interface JiraBoardFilters {
+  myIssues: boolean;
+  unresolved: boolean;
+  currentSprint: boolean;
+}
+
+export interface JiraBoardConfigChange {
+  project?: string | null;
+  myIssues?: boolean;
+  unresolved?: boolean;
+  currentSprint?: boolean;
+}
 
 interface JiraBoardPageProps {
   status: JiraStatus | undefined;
+  projects: JiraProject[];
+  project: string | null;
+  filters: JiraBoardFilters;
   columns: JiraColumn[];
   loading: boolean;
-  boardJql: string;
-  onChangeJql: (jql: string) => void;
+  onChangeConfig: (partial: JiraBoardConfigChange) => void;
   onRefresh: () => void;
   onTransition: (item: JiraWorkItem, statusName: string) => void;
   onOpenItem: (item: JiraWorkItem) => void;
   onCreateTask: (item: JiraWorkItem) => void;
 }
 
+const FILTER_VALUES = { mine: "mine", hideDone: "hideDone", sprint: "sprint" } as const;
+
 export function JiraBoardPage({
   status,
+  projects,
+  project,
+  filters,
   columns,
   loading,
-  boardJql,
-  onChangeJql,
+  onChangeConfig,
   onRefresh,
   onTransition,
   onOpenItem,
   onCreateTask,
 }: JiraBoardPageProps) {
-  const [jql, setJql] = useState(boardJql);
-  useEffect(() => setJql(boardJql), [boardJql]);
-
   const ready = Boolean(status?.installed && status?.authenticated);
   const itemsByKey = new Map(columns.flatMap((column) => column.items).map((item) => [item.key, item]));
+
+  const activeFilters: string[] = [];
+  if (filters.myIssues) activeFilters.push(FILTER_VALUES.mine);
+  if (filters.unresolved) activeFilters.push(FILTER_VALUES.hideDone);
+  if (filters.currentSprint) activeFilters.push(FILTER_VALUES.sprint);
 
   return (
     <div className="jira-board" data-testid="jira-board">
@@ -45,32 +72,62 @@ export function JiraBoardPage({
           <h1 className="text-xl font-bold tracking-tight">Board</h1>
         </div>
         <JiraConnection status={status} />
-        <Button type="button" variant="outline" size="sm" onClick={onRefresh} disabled={!ready || loading} className="gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onRefresh}
+          disabled={!ready || !project || loading}
+          className="gap-2"
+        >
           <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
           Refresh
         </Button>
       </header>
 
-      <div className="jira-board-toolbar flex items-center gap-2 border-b p-4">
-        <Input
-          value={jql}
-          onChange={(event) => setJql(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") onChangeJql(jql.trim());
-          }}
-          placeholder='project = PROJ AND statusCategory != Done ORDER BY rank'
-          className="font-mono text-xs"
-          spellCheck={false}
-        />
-        <Button type="button" size="sm" onClick={() => onChangeJql(jql.trim())} disabled={jql.trim() === boardJql.trim()}>
-          Save &amp; Load
-        </Button>
-      </div>
+      {ready && (
+        <div className="jira-board-toolbar flex flex-wrap items-center gap-3 border-b p-4">
+          <Select
+            value={project ?? undefined}
+            onValueChange={(value) => onChangeConfig({ project: value })}
+          >
+            <SelectTrigger className="h-9 w-64" aria-label="JIRA project">
+              <SelectValue placeholder="Choose a project" />
+            </SelectTrigger>
+            <SelectContent>
+              {projects.map((option) => (
+                <SelectItem key={option.key} value={option.key}>
+                  {option.name} ({option.key})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <ToggleGroup
+            type="multiple"
+            variant="outline"
+            size="sm"
+            value={activeFilters}
+            onValueChange={(values) =>
+              onChangeConfig({
+                myIssues: values.includes(FILTER_VALUES.mine),
+                unresolved: values.includes(FILTER_VALUES.hideDone),
+                currentSprint: values.includes(FILTER_VALUES.sprint),
+              })
+            }
+            disabled={!project}
+            aria-label="Board filters"
+          >
+            <ToggleGroupItem value={FILTER_VALUES.mine}>My issues</ToggleGroupItem>
+            <ToggleGroupItem value={FILTER_VALUES.hideDone}>Hide done</ToggleGroupItem>
+            <ToggleGroupItem value={FILTER_VALUES.sprint}>Current sprint</ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+      )}
 
       <BoardBody
-        ready={ready}
         status={status}
-        boardJql={boardJql}
+        project={project}
         loading={loading}
         columns={columns}
         itemsByKey={itemsByKey}
@@ -95,9 +152,8 @@ function JiraConnection({ status }: { status: JiraStatus | undefined }) {
 }
 
 interface BoardBodyProps {
-  ready: boolean;
   status: JiraStatus | undefined;
-  boardJql: string;
+  project: string | null;
   loading: boolean;
   columns: JiraColumn[];
   itemsByKey: Map<string, JiraWorkItem>;
@@ -107,9 +163,8 @@ interface BoardBodyProps {
 }
 
 function BoardBody({
-  ready,
   status,
-  boardJql,
+  project,
   loading,
   columns,
   itemsByKey,
@@ -127,15 +182,15 @@ function BoardBody({
   if (!status.authenticated) {
     return (
       <BoardEmpty title="Not signed in to JIRA">
-        Run <code>acli jira auth login</code> in a terminal, then refresh.
+        Run <code>acli jira auth login</code> in a terminal, then reopen this view.
       </BoardEmpty>
     );
   }
-  if (!boardJql.trim()) {
+  if (!project) {
     return (
-      <BoardEmpty title="No board query yet">
-        Enter a JQL query above (for example{" "}
-        <code>project = PROJ ORDER BY rank</code>) and choose Save &amp; Load.
+      <BoardEmpty title="Choose a project">
+        Pick a JIRA project above to load its board. No query to write — just choose a
+        project and optional filters.
       </BoardEmpty>
     );
   }
@@ -151,12 +206,12 @@ function BoardBody({
   if (columns.length === 0) {
     return (
       <BoardEmpty title="No matching stories">
-        The board query returned no work items. Adjust the JQL above.
+        This project and filter combination returned no work items. Adjust the filters
+        above.
       </BoardEmpty>
     );
   }
 
-  void ready;
   return (
     <div className="jira-board-columns flex gap-4 overflow-x-auto p-4">
       {columns.map((column) => (

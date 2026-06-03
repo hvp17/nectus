@@ -35,6 +35,7 @@ vi.mock("./api", () => ({
     jiraStatus: vi
       .fn()
       .mockResolvedValue({ installed: false, authenticated: false, account: null, site: null }),
+    jiraListProjects: vi.fn().mockResolvedValue([]),
     jiraSearchBoard: vi.fn().mockResolvedValue([]),
     jiraGetWorkItem: vi.fn(),
     jiraTransitionWorkItem: vi.fn(),
@@ -82,6 +83,12 @@ describe("App", () => {
       defaultAgentProfileId: 1,
       defaultWorktreeRootPattern: "../{repoName}-worktrees",
       defaultBranchPrefix: null,
+      jiraBoardJql: null,
+      jiraSiteUrl: null,
+      jiraBoardProject: null,
+      jiraFilterMyIssues: false,
+      jiraFilterUnresolved: true,
+      jiraFilterCurrentSprint: false,
       theme: "system",
       density: "comfortable",
       updatedAt: "2026-05-14T00:00:00.000Z",

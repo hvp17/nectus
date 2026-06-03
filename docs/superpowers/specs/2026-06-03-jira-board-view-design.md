@@ -22,7 +22,7 @@ These were settled during brainstorming and constrain the rest of the design:
 4. **Board is its own world.** Global and JQL-defined, *not* tied to repos. Selecting a repo does not filter the JIRA view.
 5. **Repo chosen at attach time.** When a story becomes a task, the user picks the destination repo (and worktree/agent) right then.
 6. **Attach = local link only.** Creating a task from a story writes **nothing** to JIRA. Every JIRA mutation (transition, edit, comment, create, assign) is an **explicit** user action in the board view. The link is stored locally on the task.
-7. **Board defined by a raw JQL string** the user configures. No guided builder, no saved views in V1.
+7. **Board defined by a raw JQL string** the user configures. No guided builder, no saved views in V1. *(Superseded post-implementation: the board is now fully UI-driven — a project picker + filter toggles — and Nectus builds the JQL internally via `jira::build_board_jql`; no JQL is typed. See [JIRA integration](../../jira-integration.md).)*
 8. **Columns auto-derived** from the statuses present in the JQL results, ordered by JIRA `statusCategory` (To Do → In Progress → Done). No manual column list.
 9. **Drag-to-transition, optimistic.** Dragging a card to a column calls `acli jira workitem transition`. On workflow rejection, the card reverts and a toast surfaces the error.
 

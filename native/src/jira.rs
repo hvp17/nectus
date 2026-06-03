@@ -1,7 +1,29 @@
-use crate::models::{JiraStatus, JiraStatusCategory, JiraWorkItem};
+use crate::models::{JiraProject, JiraStatus, JiraStatusCategory, JiraWorkItem};
 use crate::process_util::{command_error, resolve_executable};
 use serde::Deserialize;
 use std::process::{Command, Output};
+
+/// Build the board JQL from the structured UI selections, so the user never types
+/// JQL. `project` is required; the flags add the usual board filters. Ordering by
+/// `updated` (rather than `rank`) avoids errors on projects without a ranked board.
+pub fn build_board_jql(
+    project: &str,
+    my_issues: bool,
+    unresolved: bool,
+    current_sprint: bool,
+) -> String {
+    let mut clauses = vec![format!("project = \"{}\"", project.replace('"', "\\\""))];
+    if my_issues {
+        clauses.push("assignee = currentUser()".to_string());
+    }
+    if unresolved {
+        clauses.push("statusCategory != Done".to_string());
+    }
+    if current_sprint {
+        clauses.push("sprint in openSprints()".to_string());
+    }
+    format!("{} ORDER BY updated DESC", clauses.join(" AND "))
+}
 
 /// Tolerant raw shape of a work item from `acli jira workitem search --json` /
 /// `view --json`. Field names follow the documented `acli` output; every field
@@ -140,6 +162,39 @@ pub fn parse_work_items(json: &str) -> Result<Vec<JiraWorkItem>, String> {
     Ok(raw.into_iter().filter_map(work_item_from_raw).collect())
 }
 
+/// Parse `acli jira project list --json` into key/name pairs. Tolerant of a
+/// top-level array or an object wrapping the list, and of missing names.
+pub fn parse_projects(json: &str) -> Result<Vec<JiraProject>, String> {
+    #[derive(Deserialize)]
+    struct RawProject {
+        key: Option<String>,
+        name: Option<String>,
+    }
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Projects {
+        List(Vec<RawProject>),
+        Wrapped {
+            #[serde(alias = "projects", alias = "values", alias = "results")]
+            items: Vec<RawProject>,
+        },
+    }
+    let parsed: Projects =
+        serde_json::from_str(json).map_err(|error| format!("Failed to parse projects: {error}"))?;
+    let raw = match parsed {
+        Projects::List(items) => items,
+        Projects::Wrapped { items } => items,
+    };
+    Ok(raw
+        .into_iter()
+        .filter_map(|project| {
+            let key = project.key?;
+            let name = project.name.unwrap_or_else(|| key.clone());
+            Some(JiraProject { key, name })
+        })
+        .collect())
+}
+
 /// Parse a single work item from `acli jira workitem view --json`.
 pub fn parse_work_item(json: &str) -> Result<JiraWorkItem, String> {
     let raw: RawWorkItem = serde_json::from_str(json)
@@ -211,6 +266,16 @@ pub fn search(jql: &str, limit: u32) -> Result<Vec<JiraWorkItem>, String> {
         return Err(command_error(&output, "acli jira workitem search failed"));
     }
     parse_work_items(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// List the JIRA projects visible to the user, to populate the board's project
+/// picker (so no JQL has to be typed).
+pub fn list_projects() -> Result<Vec<JiraProject>, String> {
+    let output = run_acli(&["jira", "project", "list", "--json", "--limit", "100"])?;
+    if !output.status.success() {
+        return Err(command_error(&output, "acli jira project list failed"));
+    }
+    parse_projects(&String::from_utf8_lossy(&output.stdout))
 }
 
 /// View a single work item (used to backfill a story description).
@@ -321,6 +386,44 @@ mod tests {
         let item = parse_work_item(json).unwrap();
         assert_eq!(item.key, "V-1");
         assert_eq!(item.description.as_deref(), Some("details"));
+    }
+
+    #[test]
+    fn builds_board_jql_from_project_only() {
+        assert_eq!(
+            build_board_jql("ENG", false, false, false),
+            "project = \"ENG\" ORDER BY updated DESC"
+        );
+    }
+
+    #[test]
+    fn builds_board_jql_with_all_filters() {
+        assert_eq!(
+            build_board_jql("ENG", true, true, true),
+            "project = \"ENG\" AND assignee = currentUser() AND statusCategory != Done AND sprint in openSprints() ORDER BY updated DESC"
+        );
+    }
+
+    #[test]
+    fn builds_board_jql_escapes_quotes_in_project_key() {
+        assert_eq!(
+            build_board_jql("A\"B", false, true, false),
+            "project = \"A\\\"B\" AND statusCategory != Done ORDER BY updated DESC"
+        );
+    }
+
+    #[test]
+    fn parses_project_list_array_and_wrapped() {
+        let array = r#"[{"key":"ENG","name":"Engineering"},{"key":"OPS"}]"#;
+        let projects = parse_projects(array).unwrap();
+        assert_eq!(projects.len(), 2);
+        assert_eq!(projects[0].key, "ENG");
+        assert_eq!(projects[0].name, "Engineering");
+        // Missing name falls back to the key.
+        assert_eq!(projects[1].name, "OPS");
+
+        let wrapped = r#"{"projects":[{"key":"PROJ","name":"Project"}]}"#;
+        assert_eq!(parse_projects(wrapped).unwrap()[0].key, "PROJ");
     }
 
     #[test]

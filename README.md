@@ -32,11 +32,12 @@ git, SQLite, and PTY work lives in the Rust backend.
 - Run a single AI review with another agent profile and feed blockers or
   implementation feedback back to the worker session.
 - Submit a Create PR prompt to a running agent from the task workflow.
-- Manage a global JIRA board (via the Atlassian CLI `acli`): browse stories in
+- Manage a global JIRA board (via the Atlassian CLI `acli`): pick a project from a
+  dropdown and toggle filters — no JQL to write — then browse stories in
   auto-derived status columns, drag to transition, assign and comment, and create a
   task from a story with a local-only task↔story link. Requires `acli` installed and
-  `acli jira auth login`; set a board JQL in the JIRA view header. No tokens are
-  stored. See [docs/jira-integration.md](docs/jira-integration.md).
+  `acli jira auth login`. No tokens are stored. See
+  [docs/jira-integration.md](docs/jira-integration.md).
 - Configure agent commands, model arguments, environment variables, theme,
   density, branch prefixes, and worktree root patterns.
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { api } from "../api";
+import { toSettingsInput } from "../components/settings/profileDrafts";
 import { replaceById, upsertById } from "../lib/listState";
 import { useGuardedAction } from "./useGuardedAction";
 import {
@@ -212,7 +213,31 @@ export function useApp() {
     createPullRequest: createGithubPullRequest,
   } = useGithub({ selectedTask, setMessage, applyTask });
 
-  const jira = useJira({ active: currentView === "jira", setMessage });
+  const jira = useJira({
+    active: currentView === "jira",
+    configured: Boolean(settings?.jiraBoardProject),
+    setMessage,
+  });
+
+  const setJiraBoardConfig = (partial: {
+    project?: string | null;
+    myIssues?: boolean;
+    unresolved?: boolean;
+    currentSprint?: boolean;
+  }) =>
+    run(async () => {
+      if (!settings) return;
+      const updated = await api.updateAppSettings({
+        ...toSettingsInput(settings),
+        jiraBoardProject:
+          partial.project !== undefined ? partial.project : settings.jiraBoardProject ?? null,
+        jiraFilterMyIssues: partial.myIssues ?? settings.jiraFilterMyIssues,
+        jiraFilterUnresolved: partial.unresolved ?? settings.jiraFilterUnresolved,
+        jiraFilterCurrentSprint: partial.currentSprint ?? settings.jiraFilterCurrentSprint,
+      });
+      setSettings(updated);
+      await jira.refresh();
+    });
 
   const createTaskFromStory = useCallback(
     async (item: JiraWorkItem) => {
@@ -500,12 +525,14 @@ export function useApp() {
     creatingPullRequest,
     refreshPullRequest,
     jiraStatus: jira.jiraStatus,
+    jiraProjects: jira.projects,
     jiraColumns: jira.columns,
     jiraLoading: jira.loading,
     refreshJira: jira.refresh,
     transitionJira: jira.transition,
     assignJira: jira.assign,
     commentJira: jira.comment,
+    setJiraBoardConfig,
     selectedJiraItem,
     setSelectedJiraItem,
     startPairLoop,

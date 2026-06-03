@@ -162,6 +162,22 @@ impl Database {
         self.add_column_if_missing("tasks", "jira_issue_url", "TEXT")?;
         self.add_column_if_missing("app_settings", "jira_board_jql", "TEXT")?;
         self.add_column_if_missing("app_settings", "jira_site_url", "TEXT")?;
+        self.add_column_if_missing("app_settings", "jira_board_project", "TEXT")?;
+        self.add_column_if_missing(
+            "app_settings",
+            "jira_filter_my_issues",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
+        self.add_column_if_missing(
+            "app_settings",
+            "jira_filter_unresolved",
+            "INTEGER NOT NULL DEFAULT 1",
+        )?;
+        self.add_column_if_missing(
+            "app_settings",
+            "jira_filter_current_sprint",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
         Ok(())
     }
 

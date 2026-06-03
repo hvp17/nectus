@@ -72,6 +72,11 @@ export interface PullRequestInfo {
 
 export type JiraStatusCategory = "to_do" | "in_progress" | "done" | "unknown";
 
+export interface JiraProject {
+  key: string;
+  name: string;
+}
+
 export interface JiraStatus {
   installed: boolean;
   authenticated: boolean;
@@ -158,6 +163,10 @@ export interface AppSettings {
   defaultBranchPrefix?: string | null;
   jiraBoardJql?: string | null;
   jiraSiteUrl?: string | null;
+  jiraBoardProject?: string | null;
+  jiraFilterMyIssues: boolean;
+  jiraFilterUnresolved: boolean;
+  jiraFilterCurrentSprint: boolean;
   theme: ThemeMode;
   density: DensityMode;
   updatedAt: string;
@@ -169,6 +178,10 @@ export interface AppSettingsInput {
   defaultBranchPrefix?: string | null;
   jiraBoardJql?: string | null;
   jiraSiteUrl?: string | null;
+  jiraBoardProject?: string | null;
+  jiraFilterMyIssues: boolean;
+  jiraFilterUnresolved: boolean;
+  jiraFilterCurrentSprint: boolean;
   theme: ThemeMode;
   density: DensityMode;
 }
