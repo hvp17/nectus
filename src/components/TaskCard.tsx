@@ -157,7 +157,7 @@ export function TaskCard({
           <span className="truncate">{task.hasWorktree ? task.branchName : "No worktree"}</span>
         </div>
 
-        <div className="task-card-meta flex items-center justify-between text-[10px] uppercase tracking-wider font-bold text-muted-foreground/60">
+        <div className="task-card-meta flex items-center justify-between text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
           <span>{task.agentName ?? "No agent"}</span>
           <span className={task.isDirty ? "dirty-indicator" : ""}>
             {task.hasWorktree ? (task.isDirty ? "dirty" : "clean") : "task"}

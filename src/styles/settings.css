@@ -322,7 +322,7 @@
   gap: 5px;
   border-color: color-mix(in srgb, var(--agent-accent) 34%, var(--border));
   background: color-mix(in srgb, var(--agent-accent) 8%, transparent);
-  color: color-mix(in srgb, var(--agent-accent) 70%, var(--foreground));
+  color: color-mix(in srgb, var(--agent-accent) 35%, var(--foreground));
 }
 
 .profile-kind-select {

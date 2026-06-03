@@ -328,7 +328,7 @@ function JiraCard({
         <span
           className={cn(
             "font-mono text-[11px] font-medium uppercase tracking-wide text-muted-foreground",
-            item.statusCategory === "done" && "text-muted-foreground/60 line-through",
+            item.statusCategory === "done" && "line-through",
           )}
         >
           {item.key}
@@ -373,7 +373,7 @@ function LinkedTasks({
     <div className="mt-2.5 border-t pt-2.5">
       <p className="mb-1.5 flex items-center gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
         Tasks
-        <span className="text-muted-foreground/70">{tasks.length}</span>
+        <span className="text-muted-foreground">{tasks.length}</span>
       </p>
       <ul className="flex flex-col gap-1">
         {tasks.map((task) => (

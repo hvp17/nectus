@@ -133,10 +133,10 @@ export function ReviewsPage({
               <section key={section.key} className="flex flex-col gap-2" aria-label={section.label}>
                 <h2 className="flex items-center gap-1.5 px-1 text-[0.7rem] font-semibold uppercase tracking-wide text-muted-foreground">
                   {section.label}
-                  <span className="text-muted-foreground/70">{section.reviews.length}</span>
+                  <span className="text-muted-foreground">{section.reviews.length}</span>
                 </h2>
                 {section.reviews.length === 0 ? (
-                  <p className="px-1 text-xs text-muted-foreground/60">Nothing here yet.</p>
+                  <p className="px-1 text-xs text-muted-foreground">Nothing here yet.</p>
                 ) : (
                   section.reviews.map((review) => (
                     <button
