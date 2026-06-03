@@ -11,7 +11,7 @@ export function defineAppSmokeTests() {
     render(<App />);
 
     expect(await screen.findByText("No projects yet")).toBeInTheDocument();
-    expect(screen.getByText("Operations")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Connect a Project" })).toBeInTheDocument();
   });
 
   it("ignores legacy demo query parameters and loads normal app data", async () => {

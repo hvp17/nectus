@@ -133,14 +133,12 @@ export function JiraAvatar({
     return (
       <span
         className={cn(
-          "inline-grid size-5 shrink-0 place-items-center rounded-full border border-dashed border-muted-foreground/50 text-[9px] font-bold text-muted-foreground/70",
+          "inline-grid size-5 shrink-0 place-items-center rounded-full border border-dashed border-muted-foreground/60",
           className,
         )}
         title="Unassigned"
         aria-label="Unassigned"
-      >
-        –
-      </span>
+      />
     );
   }
   const isYou = name.trim().toLowerCase() === "you";

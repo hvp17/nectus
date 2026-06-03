@@ -4,8 +4,10 @@ import { AgentLogo } from "./AgentBrand";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
-import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "./ui/field";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "./ui/field";
 import { Input } from "./ui/input";
+import { Skeleton } from "./ui/skeleton";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import type { AgentProfile, AppSettings, AppSettingsInput, GithubStatus } from "../types";
@@ -64,6 +66,7 @@ export function SettingsPage({
   const profileCountLabel = `${profileDrafts.length} ${profileDrafts.length === 1 ? "profile" : "profiles"}`;
   const themeLabel = settingsDraft.theme[0].toUpperCase() + settingsDraft.theme.slice(1);
   const densityLabel = settingsDraft.density[0].toUpperCase() + settingsDraft.density.slice(1);
+  const worktreePatternInvalid = !settingsDraft.defaultWorktreeRootPattern.includes("{repoName}");
 
   const updateProfileDraft = (index: number, patch: Partial<ProfileDraft>) => {
     setProfileDrafts((current) =>
@@ -90,7 +93,6 @@ export function SettingsPage({
     <section className="settings-page workspace p-10 overflow-auto mx-auto w-full">
       <header className="settings-hero">
         <div>
-          <p className="eyebrow">Preferences</p>
           <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
         </div>
         <div className="settings-hero-actions">
@@ -120,7 +122,6 @@ export function SettingsPage({
         <section className="settings-section">
           <div className="settings-section-header">
             <div className="settings-section-title">
-              <p className="eyebrow">Agents</p>
               <h3>Agent Profiles</h3>
             </div>
             <div className="settings-section-actions">
@@ -173,16 +174,34 @@ export function SettingsPage({
             </div>
 
             <div className="profile-list">
-              {profileDrafts.map((profile, index) => (
-                <ProfileEditor
-                  key={profile.id ?? `new-${index}`}
-                  profile={profile}
-                  isDefault={Boolean(profile.id && profile.id === settingsDraft.defaultAgentProfileId)}
-                  busy={busy}
-                  onChange={(patch) => updateProfileDraft(index, patch)}
-                  onSave={() => saveProfile(profile)}
-                />
-              ))}
+              {profileDrafts.length === 0 ? (
+                <Empty className="border border-dashed">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <Terminal />
+                    </EmptyMedia>
+                    <EmptyTitle>No agent profiles yet</EmptyTitle>
+                    <EmptyDescription>Add a profile to choose which CLI agent runs your tasks.</EmptyDescription>
+                  </EmptyHeader>
+                  <EmptyContent>
+                    <Button type="button" variant="outline" size="sm" className="gap-2" onClick={addProfileDraft}>
+                      <Plus data-icon="inline-start" />
+                      Add Profile
+                    </Button>
+                  </EmptyContent>
+                </Empty>
+              ) : (
+                profileDrafts.map((profile, index) => (
+                  <ProfileEditor
+                    key={profile.id ?? `new-${index}`}
+                    profile={profile}
+                    isDefault={Boolean(profile.id && profile.id === settingsDraft.defaultAgentProfileId)}
+                    busy={busy}
+                    onChange={(patch) => updateProfileDraft(index, patch)}
+                    onSave={() => saveProfile(profile)}
+                  />
+                ))
+              )}
             </div>
           </div>
         </section>
@@ -190,7 +209,6 @@ export function SettingsPage({
         <section className="settings-section">
           <div className="settings-section-header">
             <div className="settings-section-title">
-              <p className="eyebrow">Repositories</p>
               <h3>Projects & Worktrees</h3>
             </div>
           </div>
@@ -207,9 +225,11 @@ export function SettingsPage({
                   }))
                 }
                 placeholder="../{repoName}-worktrees"
+                aria-invalid={worktreePatternInvalid}
                 className="font-mono"
               />
               <FieldDescription>Use {"{repoName}"} to place each project in its own global worktree folder.</FieldDescription>
+              {worktreePatternInvalid && <FieldError>Pattern must include {"{repoName}"} so each project gets its own folder.</FieldError>}
             </Field>
             <Field>
               <FieldLabel htmlFor="branch-prefix">Default branch prefix</FieldLabel>
@@ -232,7 +252,6 @@ export function SettingsPage({
         <section className="settings-section">
           <div className="settings-section-header">
             <div className="settings-section-title">
-              <p className="eyebrow">Integrations</p>
               <h3>GitHub</h3>
             </div>
           </div>
@@ -244,7 +263,6 @@ export function SettingsPage({
         <section className="settings-section">
           <div className="settings-section-header">
             <div className="settings-section-title">
-              <p className="eyebrow">Interface</p>
               <h3>Appearance</h3>
             </div>
           </div>
@@ -278,7 +296,7 @@ export function SettingsPage({
         <Button
           type="button"
           onClick={() => onSaveSettings(settingsDraft)}
-          disabled={busy || !settingsDraft.defaultWorktreeRootPattern.includes("{repoName}")}
+          disabled={busy || worktreePatternInvalid}
           className="gap-2"
         >
           <Save data-icon="inline-start" />
@@ -290,15 +308,30 @@ export function SettingsPage({
 }
 
 function GithubConnectionCard({ status }: { status?: GithubStatus }) {
-  const connected = Boolean(status?.installed && status?.authenticated);
-  const detail = !status
-    ? "Checking gh availability…"
-    : !status.installed
-      ? "Install the gh CLI to open pull requests from Nectus."
-      : !status.authenticated
-        ? "Run gh auth login in your terminal to connect."
-        : `Connected as ${status.account ?? "your account"}.`;
-  const badgeLabel = connected ? "Connected" : status?.installed ? "Not signed in" : "Not installed";
+  if (!status) {
+    return (
+      <div className="default-agent-strip">
+        <div className="default-agent-copy">
+          <span className="settings-overview-icon">
+            <Github size={15} />
+          </span>
+          <span>
+            <strong>GitHub CLI</strong>
+            <Skeleton className="mt-1 h-3 w-44" />
+          </span>
+        </div>
+        <Skeleton className="h-6 w-24" />
+      </div>
+    );
+  }
+
+  const connected = Boolean(status.installed && status.authenticated);
+  const detail = !status.installed
+    ? "Install the gh CLI to open pull requests from Nectus."
+    : !status.authenticated
+      ? "Run gh auth login in your terminal to connect."
+      : `Connected as ${status.account ?? "your account"}.`;
+  const badgeLabel = connected ? "Connected" : status.installed ? "Not signed in" : "Not installed";
 
   return (
     <div className="default-agent-strip">
@@ -313,7 +346,7 @@ function GithubConnectionCard({ status }: { status?: GithubStatus }) {
       </div>
       <Badge variant="outline" className="gap-1.5" aria-label={`GitHub ${badgeLabel}`}>
         {connected ? (
-          <CheckCircle2 size={13} className="text-emerald-500" />
+          <CheckCircle2 size={13} className="text-status-success" />
         ) : (
           <XCircle size={13} className="text-muted-foreground" />
         )}

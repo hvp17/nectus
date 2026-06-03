@@ -4,6 +4,7 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardAction } from "./ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
+import { Skeleton } from "./ui/skeleton";
 import { TaskCard } from "./TaskCard";
 import { getTaskAttention, type TaskAttention } from "../sessionAttention";
 import { TASK_STATUS_LABELS } from "../statusLabels";
@@ -150,7 +151,6 @@ export function Workspace({
     <section className="workspace p-10 overflow-auto max-w-[1400px] mx-auto w-full" aria-label="Dashboard workspace">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Operations</p>
           <h2 className="text-3xl font-bold tracking-tight">
             {selectedRepo ? selectedRepo.name : loading ? "Loading projects..." : "Connect a Project"}
           </h2>
@@ -170,7 +170,7 @@ export function Workspace({
       </div>
 
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-bold uppercase tracking-widest opacity-50">Task Board</h3>
+        <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Task Board</h3>
         {selectedRepo && (
           <Button type="button" size="sm" onClick={onCreateTask} disabled={busy} className="h-9 gap-2">
             <Plus data-icon="inline-start" />
@@ -179,7 +179,9 @@ export function Workspace({
         )}
       </div>
 
-      {!selectedRepo && !loading ? (
+      {loading ? (
+        <BoardSkeleton />
+      ) : !selectedRepo ? (
         <Empty className="min-h-[360px] border bg-muted/20">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -226,12 +228,9 @@ export function Workspace({
                     />
                   ))}
                   {selectedRepo && tasksInColumn.length === 0 && (
-                    <Empty className="min-h-32 border-0 bg-background/40 p-4">
-                      <EmptyHeader>
-                        <EmptyTitle>No tasks</EmptyTitle>
-                        <EmptyDescription>No {TASK_STATUS_LABELS[status].toLowerCase()} tasks.</EmptyDescription>
-                      </EmptyHeader>
-                    </Empty>
+                    <p className="px-1 py-6 text-center text-xs text-muted-foreground">
+                      No {TASK_STATUS_LABELS[status].toLowerCase()} tasks
+                    </p>
                   )}
                 </div>
               </StatusColumn>
@@ -240,6 +239,23 @@ export function Workspace({
         </div>
       )}
     </section>
+  );
+}
+
+function BoardSkeleton() {
+  return (
+    <div className="columns overflow-x-auto pb-4" aria-busy="true" aria-label="Loading tasks">
+      {statusOrder.map((status) => (
+        <div key={status} className="status-column min-h-[500px] flex flex-col gap-3 rounded-xl bg-muted/30 p-3">
+          <div className="column-heading px-1 mb-1">
+            <span className="text-xs font-bold uppercase tracking-wider">{TASK_STATUS_LABELS[status]}</span>
+            <Skeleton className="h-5 w-5 rounded-md" />
+          </div>
+          <Skeleton className="h-24 w-full rounded-xl" />
+          <Skeleton className="h-24 w-full rounded-xl" />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -284,8 +300,8 @@ function Metric({
   return (
     <Card size="sm" className="metric border-none bg-muted/30 shadow-none" data-tone={tone}>
       <CardHeader className="flex-row items-center justify-between pb-1">
-        <CardTitle className="text-[11px] font-bold uppercase tracking-wider opacity-60">{label}</CardTitle>
-        <CardAction className="opacity-40">{icon}</CardAction>
+        <CardTitle className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{label}</CardTitle>
+        <CardAction className="text-muted-foreground">{icon}</CardAction>
       </CardHeader>
       <CardContent>
         <strong className="text-2xl font-bold tabular-nums">{value}</strong>

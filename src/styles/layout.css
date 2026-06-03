@@ -26,7 +26,7 @@
   border-radius: var(--radius-md);
   color: var(--sidebar-foreground);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   opacity: 0.72;
 }
 
@@ -70,7 +70,7 @@
   height: 7px;
   margin-left: auto;
   border-radius: 999px;
-  background: var(--destructive);
+  background: var(--status-warning);
 }
 
 .task-tree-add {
@@ -93,7 +93,7 @@
   padding: 4px 8px;
   color: var(--muted-foreground);
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .task-tree-task {
@@ -136,7 +136,7 @@
 }
 
 .task-tree-task[data-tone="needs_input"] .task-tree-status-icon {
-  color: var(--destructive);
+  color: var(--status-warning);
 }
 
 .task-tree-task[data-tone="idle"] .task-tree-status-icon,
@@ -145,7 +145,7 @@
 }
 
 .task-tree-task[data-tone="review"] .task-tree-status-dot {
-  background: oklch(0.78 0.15 72);
+  background: var(--status-warning);
 }
 
 .task-tree-task[data-tone="in_progress"] .task-tree-status-dot {
@@ -162,7 +162,7 @@
   overflow: hidden;
   color: var(--sidebar-foreground);
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 700;
   line-height: 1.25;
   text-overflow: ellipsis;
 }
@@ -257,15 +257,6 @@
   color: var(--muted-foreground);
 }
 
-.section-title,
-.eyebrow {
-  color: var(--muted-foreground);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .content-shell {
   min-width: 0;
   min-height: 100vh;
@@ -307,10 +298,6 @@
   font-size: 32px;
 }
 
-.eyebrow {
-  margin: 0 0 5px;
-}
-
 .metrics {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -334,13 +321,13 @@
 
 .metric[data-tone="warning"] {
   background:
-    linear-gradient(180deg, color-mix(in oklch, oklch(0.82 0.15 75) 9%, transparent), transparent 60%),
+    linear-gradient(180deg, color-mix(in oklch, var(--status-warning) 9%, transparent), transparent 60%),
     var(--card);
-  border-color: color-mix(in oklch, oklch(0.82 0.15 75) 26%, var(--border));
+  border-color: color-mix(in oklch, var(--status-warning) 26%, var(--border));
 }
 
 .metric[data-tone="warning"] [data-slot="card-action"] {
-  color: oklch(0.82 0.15 75);
+  color: var(--status-warning);
   opacity: 1;
 }
 
@@ -350,12 +337,12 @@
 }
 
 .metric[data-tone="success"] [data-slot="card-action"] {
-  color: oklch(0.58 0.12 150);
+  color: var(--status-success);
   opacity: 1;
 }
 
 .metric[data-tone="dirty"] [data-slot="card-action"] {
-  color: oklch(0.55 0.11 265);
+  color: var(--status-info);
   opacity: 1;
 }
 

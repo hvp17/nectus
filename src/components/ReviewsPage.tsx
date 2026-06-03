@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { ArrowLeft, GitPullRequest, LoaderCircle } from "lucide-react";
 import { Button } from "./ui/button";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { PrReviewDetail } from "./PrReviewDetail";
@@ -75,7 +75,7 @@ export function ReviewsPage({
           <ArrowLeft />
         </Button>
         <div>
-          <h1 className="text-lg font-bold tracking-tight">PR Reviews</h1>
+          <h1 className="text-2xl font-bold tracking-tight">PR Reviews</h1>
           <p className="text-xs text-muted-foreground">
             Paste a GitHub pull request link to review it against a known project.
           </p>
@@ -133,10 +133,10 @@ export function ReviewsPage({
               <section key={section.key} className="flex flex-col gap-2" aria-label={section.label}>
                 <h2 className="flex items-center gap-1.5 px-1 text-[0.7rem] font-semibold uppercase tracking-wide text-muted-foreground">
                   {section.label}
-                  <span className="text-muted-foreground/70">{section.reviews.length}</span>
+                  <span className="text-muted-foreground">{section.reviews.length}</span>
                 </h2>
                 {section.reviews.length === 0 ? (
-                  <p className="px-1 text-xs text-muted-foreground/60">Nothing here yet.</p>
+                  <p className="px-1 text-xs text-muted-foreground">Nothing here yet.</p>
                 ) : (
                   section.reviews.map((review) => (
                     <button
@@ -168,9 +168,15 @@ export function ReviewsPage({
         {selectedPrReview ? (
           <PrReviewDetail review={selectedPrReview} onRerun={onRerunReview} onDelete={onDeleteReview} />
         ) : (
-          <div className="flex min-h-0 flex-1 items-center justify-center rounded-lg border border-dashed">
-            <p className="text-sm text-muted-foreground">Select a review to see its feedback.</p>
-          </div>
+          <Empty className="min-h-0 flex-1 rounded-lg border border-dashed">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <GitPullRequest />
+              </EmptyMedia>
+              <EmptyTitle>No review selected</EmptyTitle>
+              <EmptyDescription>Select a review from the list to see its feedback.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
       </div>
     </div>

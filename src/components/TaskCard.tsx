@@ -87,19 +87,19 @@ export function TaskCard({
           {attention?.kind === "needs_input" && (
             <Badge variant="secondary" className="attention-badge h-5 px-1.5 text-[10px]">
               <AlertTriangle size={11} />
-              INPUT
+              Needs input
             </Badge>
           )}
           {attention?.kind === "idle" && (
             <Badge variant="secondary" className="attention-badge h-5 px-1.5 text-[10px]">
               <CircleCheckBig size={11} />
-              DONE
+              Done
             </Badge>
           )}
           {task.activeSessionId && (
             <Badge variant="default" className="h-5 px-1.5 text-[10px]">
               <Radio size={10} />
-              LIVE
+              Live
             </Badge>
           )}
 
@@ -152,16 +152,20 @@ export function TaskCard({
           </div>
         )}
 
-        <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground font-mono">
+        <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
           {task.hasWorktree ? <GitBranch size={12} className="opacity-70" /> : <Bot size={12} className="opacity-70" />}
-          <span className="truncate">{task.hasWorktree ? task.branchName : "No worktree"}</span>
+          <span className={task.hasWorktree ? "truncate font-mono" : "truncate"}>
+            {task.hasWorktree ? task.branchName : "No worktree"}
+          </span>
         </div>
 
-        <div className="task-card-meta flex items-center justify-between text-[10px] uppercase tracking-wider font-bold text-muted-foreground/60">
+        <div className="task-card-meta flex items-center justify-between text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
           <span>{task.agentName ?? "No agent"}</span>
-          <span className={task.isDirty ? "dirty-indicator" : ""}>
-            {task.hasWorktree ? (task.isDirty ? "dirty" : "clean") : "task"}
-          </span>
+          {task.hasWorktree && (
+            <span className={task.isDirty ? "dirty-indicator" : ""}>
+              {task.isDirty ? "dirty" : "clean"}
+            </span>
+          )}
         </div>
       </div>
     </Card>

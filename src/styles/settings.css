@@ -227,19 +227,19 @@
 }
 
 .profile-editor[data-agent-kind="codex"] {
-  --agent-accent: oklch(0.56 0.12 225);
+  --agent-accent: var(--chart-2);
 }
 
 .profile-editor[data-agent-kind="claude"] {
-  --agent-accent: oklch(0.63 0.13 55);
+  --agent-accent: var(--chart-4);
 }
 
 .profile-editor[data-agent-kind="gemini"] {
-  --agent-accent: oklch(0.62 0.17 292);
+  --agent-accent: var(--chart-3);
 }
 
 .profile-editor[data-agent-kind="custom"] {
-  --agent-accent: oklch(0.58 0.11 155);
+  --agent-accent: var(--chart-5);
 }
 
 .profile-editor-header {
@@ -322,7 +322,7 @@
   gap: 5px;
   border-color: color-mix(in srgb, var(--agent-accent) 34%, var(--border));
   background: color-mix(in srgb, var(--agent-accent) 8%, transparent);
-  color: color-mix(in srgb, var(--agent-accent) 70%, var(--foreground));
+  color: color-mix(in srgb, var(--agent-accent) 35%, var(--foreground));
 }
 
 .profile-kind-select {

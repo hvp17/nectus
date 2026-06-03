@@ -210,7 +210,6 @@ export function TaskWorkspace({
               Task Board
             </Button>
             <div className="min-w-0">
-              <p className="eyebrow">Agent Terminal</p>
               <h2 className="truncate text-2xl font-bold tracking-tight">{task.title}</h2>
             </div>
           </div>
@@ -233,7 +232,6 @@ export function TaskWorkspace({
 
       <aside className="task-inspector-sidebar" aria-label="Task inspector">
         <div className="task-inspector-header">
-          <p className="eyebrow">Task Detail</p>
           <h3 className="truncate text-xl font-bold leading-tight">{task.title}</h3>
           <TaskStatusBadges task={task} />
         </div>
@@ -359,7 +357,7 @@ export function TaskWorkspace({
             <Alert
               className={cn(
                 "mt-4 border-primary/25 bg-primary/5 px-3 py-3",
-                attention.kind === "needs_input" && "border-amber-500/35 bg-amber-500/10",
+                attention.kind === "needs_input" && "border-status-warning/35 bg-status-warning/10",
               )}
             >
               {attention.kind === "needs_input" ? <AlertTriangle size={16} /> : <CircleCheckBig size={16} />}
@@ -549,7 +547,7 @@ function TaskStatusBadges({ task }: { task: TaskSummary }) {
         </Badge>
       )}
       {task.isDirty && (
-        <Badge variant="outline" className="text-indigo-500">
+        <Badge variant="outline" className="text-status-info">
           Dirty worktree
         </Badge>
       )}

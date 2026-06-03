@@ -25,9 +25,9 @@ import type {
 } from "../types";
 
 const CATEGORY_DOT: Record<JiraStatusCategory, string> = {
-  to_do: "oklch(0.72 0.02 250)",
+  to_do: "var(--muted-foreground)",
   in_progress: "var(--primary)",
-  done: "oklch(0.72 0.15 152)",
+  done: "var(--status-success)",
   unknown: "var(--muted-foreground)",
 };
 
@@ -100,8 +100,7 @@ export function JiraBoardPage({
     <div className="jira-board" data-testid="jira-board">
       <header className="jira-board-header flex flex-wrap items-center gap-3 border-b p-4">
         <div className="mr-auto">
-          <p className="eyebrow">JIRA</p>
-          <h1 className="text-xl font-bold tracking-tight">Board</h1>
+          <h1 className="text-xl font-bold tracking-tight">JIRA Board</h1>
         </div>
         <JiraConnection status={status} />
         <Button
@@ -179,7 +178,7 @@ function JiraConnection({ status }: { status: JiraStatus | undefined }) {
   if (!status.authenticated) return <Badge variant="destructive">Not authenticated</Badge>;
   return (
     <Badge variant="secondary" className="gap-1">
-      <span className="size-2 rounded-full bg-emerald-500" aria-hidden="true" />
+      <span className="size-2 rounded-full bg-status-success" aria-hidden="true" />
       {status.site ?? "Connected"}
     </Badge>
   );
@@ -227,7 +226,7 @@ function BoardBody({
   if (!project) {
     return (
       <BoardEmpty title="Choose a project">
-        Pick a JIRA project above to load its board. No query to write — just choose a
+        Pick a JIRA project above to load its board. No query to write, just choose a
         project and optional filters.
       </BoardEmpty>
     );
@@ -329,7 +328,7 @@ function JiraCard({
         <span
           className={cn(
             "font-mono text-[11px] font-medium uppercase tracking-wide text-muted-foreground",
-            item.statusCategory === "done" && "text-muted-foreground/60 line-through",
+            item.statusCategory === "done" && "line-through",
           )}
         >
           {item.key}
@@ -374,7 +373,7 @@ function LinkedTasks({
     <div className="mt-2.5 border-t pt-2.5">
       <p className="mb-1.5 flex items-center gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
         Tasks
-        <span className="text-muted-foreground/70">{tasks.length}</span>
+        <span className="text-muted-foreground">{tasks.length}</span>
       </p>
       <ul className="flex flex-col gap-1">
         {tasks.map((task) => (

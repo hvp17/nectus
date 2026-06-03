@@ -74,6 +74,9 @@
   --shadow-opacity: var(--shadow-opacity);
   --color-shadow-color: var(--shadow-color);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-status-success: var(--status-success);
+  --color-status-warning: var(--status-warning);
+  --color-status-info: var(--status-info);
 }
 
 :root {
@@ -101,6 +104,12 @@
   --chart-3: oklch(0.5500 0.1300 268);
   --chart-4: oklch(0.7000 0.1400 70);
   --chart-5: oklch(0.6500 0.1500 150);
+  /* Semantic status signals — single source of truth for success / warning / info
+     (worktree dirty), reused everywhere a state needs color so the same concept is
+     always the same hue. Destructive stays reserved for genuine errors. */
+  --status-success: oklch(0.5800 0.1280 152);
+  --status-warning: oklch(0.7000 0.1550 65);
+  --status-info: oklch(0.5500 0.1150 262);
   --radius: 0.625rem;
   --sidebar: oklch(0.9680 0.0040 240);
   --sidebar-foreground: oklch(0.2600 0.0150 252);
@@ -162,6 +171,9 @@
   --chart-3: oklch(0.6800 0.1300 285);
   --chart-4: oklch(0.8000 0.1400 75);
   --chart-5: oklch(0.7400 0.1500 152);
+  --status-success: oklch(0.7200 0.1450 152);
+  --status-warning: oklch(0.8000 0.1500 72);
+  --status-info: oklch(0.7000 0.1250 262);
   --sidebar: oklch(0.1650 0.0120 252);
   --sidebar-foreground: oklch(0.9200 0.0050 250);
   --sidebar-primary: oklch(0.8200 0.1350 195);
@@ -255,8 +267,7 @@ body {
 .dark [data-slot="card"],
 .dark .metric,
 .dark .jira-card,
-.dark .review-run-summary,
-.dark .github-pr-card {
+.dark .review-run-summary {
   box-shadow:
     inset 0 1px 0 0 color-mix(in oklch, white 6%, transparent),
     var(--shadow-xs);
@@ -278,5 +289,20 @@ body {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* Honor reduced-motion for the inline utility animations used across the app
+   (loading spinners, pulsing status dots, dialog slide-ins). The content fade
+   above is gated to no-preference; this covers everything else so a
+   reduced-motion preference silences all looping/entrance motion. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin,
+  .animate-pulse,
+  .animate-ping,
+  .animate-bounce,
+  [class*="animate-in"],
+  [class*="animate-out"] {
+    animation: none !important;
   }
 }

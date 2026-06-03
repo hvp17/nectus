@@ -114,7 +114,6 @@ export function Sidebar({
           <div className="brand-mark">N</div>
           <div>
             <h1 className="text-lg font-bold tracking-tight">Nectus</h1>
-            <span className="text-[10px] uppercase tracking-widest font-extrabold opacity-50">Parallel Agents</span>
           </div>
         </div>
       </SidebarHeader>

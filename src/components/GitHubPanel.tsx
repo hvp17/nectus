@@ -10,8 +10,10 @@ import {
   XCircle,
 } from "lucide-react";
 import { openExternal } from "../lib/openExternal";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
+import { Skeleton } from "./ui/skeleton";
 import { Toggle } from "./ui/toggle";
 import type {
   GithubStatus,
@@ -60,39 +62,49 @@ export function GitHubPanel({
   const [draft, setDraft] = useState(false);
 
   return (
-    <section className="github-panel" aria-label="GitHub">
-      <div className="github-panel-header">
-        <div className="github-panel-title">
+    <section className="mt-4 border-t pt-4" aria-label="GitHub">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-muted-foreground">
           <Github size={14} />
-          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">GitHub</p>
-        </div>
+          GitHub
+        </p>
         {githubStatus?.authenticated && (
-          <Badge variant="outline" className="rounded-md font-normal">
+          <Badge variant="outline" className="font-normal">
             {githubStatus.account ?? "Connected"}
           </Badge>
         )}
       </div>
 
-      {renderBody()}
+      <div className="mt-3">{renderBody()}</div>
     </section>
   );
 
   function renderBody() {
     if (!githubStatus) {
-      return <p className="github-panel-hint">Checking GitHub CLI…</p>;
+      return <Skeleton className="h-9 w-full" />;
     }
     if (!githubStatus.installed) {
       return (
-        <p className="github-panel-hint">
-          GitHub CLI not found. Install <code>gh</code> to open pull requests from Nectus.
-        </p>
+        <Alert>
+          <Github size={16} />
+          <AlertTitle>GitHub CLI not found</AlertTitle>
+          <AlertDescription>
+            Install <code className="rounded bg-muted px-1 py-0.5 font-mono text-[0.85em]">gh</code> to open pull
+            requests from Nectus.
+          </AlertDescription>
+        </Alert>
       );
     }
     if (!githubStatus.authenticated) {
       return (
-        <p className="github-panel-hint">
-          Not signed in. Run <code>gh auth login</code> in your terminal to connect.
-        </p>
+        <Alert>
+          <XCircle size={16} />
+          <AlertTitle>Not signed in</AlertTitle>
+          <AlertDescription>
+            Run <code className="rounded bg-muted px-1 py-0.5 font-mono text-[0.85em]">gh auth login</code> in your
+            terminal to connect.
+          </AlertDescription>
+        </Alert>
       );
     }
 
@@ -102,12 +114,15 @@ export function GitHubPanel({
 
     if (!task.hasWorktree) {
       return (
-        <p className="github-panel-hint">Add a worktree branch to open a pull request from Nectus.</p>
+        <Alert>
+          <GitPullRequest size={16} />
+          <AlertDescription>Add a worktree branch to open a pull request from Nectus.</AlertDescription>
+        </Alert>
       );
     }
 
     return (
-      <div className="github-panel-create">
+      <div className="flex items-center gap-2">
         <Toggle
           size="sm"
           variant="outline"
@@ -137,39 +152,37 @@ export function GitHubPanel({
 
   function renderPullRequest(prUrl: string) {
     return (
-      <div className="github-pr-card">
-        <div className="github-pr-row">
-          <span className="github-pr-number">
-            {pullRequest ? `#${pullRequest.number}` : "Pull request"}
-          </span>
+      <div className="rounded-lg border bg-muted/40 p-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-bold">{pullRequest ? `#${pullRequest.number}` : "Pull request"}</span>
           {pullRequest && (
-            <Badge variant="outline" className="rounded-md" data-pr-state={pullRequest.state}>
+            <Badge variant="outline" data-pr-state={pullRequest.state}>
               {prStateLabel(pullRequest)}
             </Badge>
           )}
           {pullRequest?.reviewDecision && (
-            <Badge variant="outline" className="rounded-md font-normal">
+            <Badge variant="outline" className="font-normal">
               {reviewDecisionLabels[pullRequest.reviewDecision]}
             </Badge>
           )}
         </div>
 
         {pullRequest && pullRequest.checks.total > 0 && (
-          <div className="github-checks" aria-label="Pull request checks">
+          <div className="mt-2 flex items-center gap-3" aria-label="Pull request checks">
             {pullRequest.checks.passed > 0 && (
-              <span className="github-check github-check-passed">
+              <span data-check="passed" className="inline-flex items-center gap-1 text-xs font-bold text-status-success">
                 <CheckCircle2 size={13} />
                 {pullRequest.checks.passed}
               </span>
             )}
             {pullRequest.checks.failed > 0 && (
-              <span className="github-check github-check-failed">
+              <span data-check="failed" className="inline-flex items-center gap-1 text-xs font-bold text-destructive">
                 <XCircle size={13} />
                 {pullRequest.checks.failed}
               </span>
             )}
             {pullRequest.checks.pending > 0 && (
-              <span className="github-check github-check-pending">
+              <span data-check="pending" className="inline-flex items-center gap-1 text-xs font-bold text-muted-foreground">
                 <Clock size={13} />
                 {pullRequest.checks.pending}
               </span>
@@ -178,15 +191,15 @@ export function GitHubPanel({
         )}
 
         {pullRequestLoading && !pullRequest && (
-          <p className="github-panel-hint">
-            <LoaderCircle size={13} className="mr-1 inline animate-spin" />
-            Loading status…
-          </p>
+          <div className="mt-2 flex flex-col gap-1.5" aria-label="Loading pull request status">
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="h-4 w-1/2" />
+          </div>
         )}
 
-        <div className="github-pr-actions">
+        <div className="mt-2.5 flex items-center justify-between gap-2">
           <a
-            className="github-pr-link"
+            className="inline-flex items-center gap-1 text-xs font-semibold hover:underline"
             href={prUrl}
             target="_blank"
             rel="noreferrer"
