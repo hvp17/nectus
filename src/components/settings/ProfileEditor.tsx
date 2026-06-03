@@ -47,7 +47,7 @@ export function ProfileEditor({ profile, isDefault, busy, onChange, onSave }: Pr
             />
             <p className="profile-command-summary">
               <Terminal size={13} />
-              <span className="font-mono">{commandLabel}</span>
+              <span className={profile.command.trim() ? "font-mono" : undefined}>{commandLabel}</span>
               <span aria-hidden="true">·</span>
               <span>{modelLabel}</span>
             </p>

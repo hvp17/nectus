@@ -152,9 +152,11 @@ export function TaskCard({
           </div>
         )}
 
-        <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground font-mono">
+        <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
           {task.hasWorktree ? <GitBranch size={12} className="opacity-70" /> : <Bot size={12} className="opacity-70" />}
-          <span className="truncate">{task.hasWorktree ? task.branchName : "No worktree"}</span>
+          <span className={task.hasWorktree ? "truncate font-mono" : "truncate"}>
+            {task.hasWorktree ? task.branchName : "No worktree"}
+          </span>
         </div>
 
         <div className="task-card-meta flex items-center justify-between text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
