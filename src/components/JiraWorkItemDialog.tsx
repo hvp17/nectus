@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "./ui/select";
 import { Textarea } from "./ui/textarea";
+import { JiraAvatar, JiraIssueTypeIcon } from "./jiraVisuals";
 import type { JiraWorkItem } from "../types";
 
 interface JiraWorkItemDialogProps {
@@ -89,10 +90,13 @@ function JiraWorkItemDialogBody({
     <>
       <DialogHeader>
         <div className="flex items-center gap-2">
+          <JiraIssueTypeIcon type={item.issueType} className="size-5 rounded-md" />
           <Badge variant="secondary" className="font-mono">
             {item.key}
           </Badge>
-          {item.issueType && <Badge variant="outline">{item.issueType}</Badge>}
+          {item.issueType && (
+            <span className="text-xs font-medium text-muted-foreground">{item.issueType}</span>
+          )}
           {item.url && (
             <Button
               type="button"
@@ -142,8 +146,16 @@ function JiraWorkItemDialogBody({
         )}
 
         <Field>
-          <FieldLabel htmlFor="jira-assignee">
-            Assignee{item.assignee ? ` (currently ${item.assignee})` : ""}
+          <FieldLabel htmlFor="jira-assignee" className="flex items-center gap-2">
+            Assignee
+            {item.assignee ? (
+              <span className="inline-flex items-center gap-1.5 font-normal text-muted-foreground">
+                <JiraAvatar name={item.assignee} className="size-4 text-[8px]" />
+                {item.assignee}
+              </span>
+            ) : (
+              <span className="font-normal text-muted-foreground">· Unassigned</span>
+            )}
           </FieldLabel>
           <div className="flex gap-2">
             <Input

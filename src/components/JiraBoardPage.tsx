@@ -11,8 +11,16 @@ import {
 import { Skeleton } from "./ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty";
+import { JiraAvatar, JiraIssueTypeIcon } from "./jiraVisuals";
 import type { JiraColumn } from "../hooks/useJira";
-import type { JiraProject, JiraStatus, JiraWorkItem } from "../types";
+import type { JiraProject, JiraStatus, JiraStatusCategory, JiraWorkItem } from "../types";
+
+const CATEGORY_DOT: Record<JiraStatusCategory, string> = {
+  to_do: "oklch(0.72 0.02 250)",
+  in_progress: "var(--primary)",
+  done: "oklch(0.72 0.15 152)",
+  unknown: "var(--muted-foreground)",
+};
 
 export interface JiraBoardFilters {
   myIssues: boolean;
@@ -229,7 +237,14 @@ function BoardBody({
           }}
         >
           <div className="flex items-center justify-between border-b px-3 py-2">
-            <span className="text-sm font-semibold">{column.statusName}</span>
+            <span className="flex items-center gap-2 text-sm font-semibold">
+              <span
+                className="size-2 rounded-full"
+                style={{ background: CATEGORY_DOT[column.category] }}
+                aria-hidden="true"
+              />
+              {column.statusName}
+            </span>
             <Badge variant="secondary">{column.items.length}</Badge>
           </div>
           <div className="flex flex-col gap-2 p-2">
@@ -272,15 +287,13 @@ function JiraCard({
         }
       }}
     >
-      <p className="mb-2 line-clamp-3 text-sm font-medium">{item.summary}</p>
+      <p className="mb-2.5 line-clamp-3 text-sm font-medium">{item.summary}</p>
       <div className="flex items-center gap-2">
+        <JiraIssueTypeIcon type={item.issueType} />
         <Badge variant="outline" className="font-mono text-[10px]">
           {item.key}
         </Badge>
-        {item.issueType && <span className="text-[11px] text-muted-foreground">{item.issueType}</span>}
-        {item.assignee && (
-          <span className="ml-auto truncate text-[11px] text-muted-foreground">{item.assignee}</span>
-        )}
+        <JiraAvatar name={item.assignee} className="ml-auto" />
       </div>
       <Button
         type="button"
