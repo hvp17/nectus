@@ -154,6 +154,9 @@ function App() {
 
   // Top-level rail navigation. Board needs a selected project to show its kanban.
   const navigate = (view: RailView) => {
+    // The composer (and task workspace) overlay the routed view, so leaving via
+    // the rail must dismiss them.
+    if (createTaskOpen) closeCreateTaskModal();
     setSelectedTaskId(undefined);
     if (view === "board" && selectedRepoId === undefined && repos[0]) {
       setSelectedRepoId(repos[0].id);
