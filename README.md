@@ -15,12 +15,15 @@ git, SQLite, and PTY work lives in the Rust backend.
   blank worktree branch names become generated `task-...` branches.
 - Launch Codex, Claude, Gemini, or custom CLI agent profiles in an embedded
   terminal.
+- Triage every agent across all projects from Mission Control, the default home:
+  rows grouped by who needs you (needs-input, running, review, done) carry the
+  agent's latest line and an inline action; click a row to open the task.
+- Navigate with a slim icon rail (Mission Control, Board, JIRA, PR Reviews,
+  Settings); a needs-input badge on the rail flags work waiting on you.
 - Open a selected task into a focused terminal workspace with task details in a
-  persistent right inspector.
+  persistent right inspector, plus an inline action bar when the agent is waiting.
 - Delete tasks from board cards or the selected-task inspector with background
   progress toasts.
-- Use the sidebar Tasks section to see the total task count, create tasks, and
-  jump to or stop active sessions.
 - Send the task prompt into a new agent session automatically.
 - Resume Codex and Claude sessions when a saved session id is available.
 - Track task status across `Planned`, `In progress`, `Review`, and `Done`.
@@ -31,6 +34,10 @@ git, SQLite, and PTY work lives in the Rust backend.
 - Send macOS notifications for session attention events.
 - Run a single AI review with another agent profile and feed blockers or
   implementation feedback back to the worker session.
+- Review an external GitHub pull request from the PR Reviews view — paste a PR
+  link, pick one reviewer, or two or more for a multi-model **consensus** that
+  runs the reviewers over rounds, shows a convergence matrix, and synthesizes a
+  single verdict. See [docs/features.md](docs/features.md#pr-review).
 - Submit a Create PR prompt to a running agent from the task workflow.
 - Manage a global JIRA board (via the Atlassian CLI `acli`): pick a project from a
   dropdown and toggle filters — no JQL to write — then browse stories in
@@ -156,7 +163,12 @@ docs/                Project documentation and debugging references
 
 Important frontend files:
 
-- `src/App.tsx`: app shell and top-level composition
+- `src/App.tsx`: icon-rail shell, view routing, and top-level composition
+- `src/components/IconRail.tsx`: 58px primary navigation rail with needs-input badge
+- `src/components/ProjectPanel.tsx`: contextual project list shown beside the board
+- `src/components/MissionControl.tsx`: cross-project attention-first triage home
+- `src/lib/agentState.ts`: derives each task's cross-project state, latest line, and
+  elapsed time for Mission Control and the board
 - `src/hooks/useApp.ts`: app state, project/task/settings orchestration
 - `src/hooks/useTaskReviewLoop.ts`: review-loop loading and
   `review_loop_updated` event subscription
@@ -168,7 +180,7 @@ Important frontend files:
 - `src/api.ts`: typed frontend wrapper around Tauri commands
 - `src/TerminalPane.tsx`: xterm.js lifecycle, PTY input/output, and dropped
   file-path insertion
-- `src/components/`: board, task workspace, settings, and modal UI
+- `src/components/`: icon rail, Mission Control, board, task workspace, settings, and modal UI
 - `src/components/TaskDeleteDialog.tsx`: shared task deletion confirmation UI
 - `src/styles.css`: Tailwind imports, theme tokens, and global base rules
 - `src/styles/`: focused CSS files imported by `src/main.tsx`

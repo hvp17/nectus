@@ -367,10 +367,6 @@
 }
 
 @media (max-width: 1220px) {
-  .app-shell {
-    grid-template-columns: 230px minmax(520px, 1fr);
-  }
-
   .columns {
     grid-template-columns: repeat(2, minmax(180px, 1fr));
   }

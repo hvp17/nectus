@@ -120,10 +120,10 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
   }, [onMessage, setReviews]);
 
   const createPrReview = useCallback(
-    async (prUrl: string, reviewerProfileIds: number[], maxRounds?: number) => {
+    async (prUrl: string, reviewerProfileIds?: number[] | null, rounds?: number | null) => {
       setCreatingReview(true);
       try {
-        const review = await api.createPrReview({ prUrl, reviewerProfileIds, maxRounds });
+        const review = await api.createPrReview({ prUrl, reviewerProfileIds, rounds });
         setReviews((current) => upsertNewestFirst(current, review));
         setSelectedPrReviewId(review.id);
         onMessage(`PR review queued: ${reviewLabel(review)}`);

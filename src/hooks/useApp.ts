@@ -37,8 +37,8 @@ export function useApp() {
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [settings, setSettings] = useState<AppSettings | undefined>();
-  const [currentView, setCurrentView] = useState<"dashboard" | "settings" | "reviews" | "jira">(
-    "dashboard",
+  const [currentView, setCurrentView] = useState<"mission" | "board" | "settings" | "reviews" | "jira">(
+    "mission",
   );
   const [selectedJiraItem, setSelectedJiraItem] = useState<JiraWorkItem | null>(null);
   const [selectedRepoId, setSelectedRepoId] = useState<number | undefined>();
@@ -259,7 +259,7 @@ export function useApp() {
       });
       setNewTaskRepoId(selectedRepoId ?? repos[0]?.id);
       setSelectedJiraItem(null);
-      setCurrentView("dashboard");
+      setCurrentView("board");
       setSelectedTaskId(undefined);
       setCreateTaskOpen(true);
     },

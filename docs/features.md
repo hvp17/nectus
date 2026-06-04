@@ -2,12 +2,41 @@
 
 This document maps current Nectus Desktop behavior to the files that own it.
 
+## Navigation And Mission Control
+
+The app shell is a slim icon rail plus a contextual panel, not a full sidebar.
+
+- The icon rail (always visible, 58px) holds Mission Control, Board, JIRA, PR
+  Reviews, and Settings. The Mission Control icon carries a badge with the
+  cross-project needs-input count.
+- Mission Control is the default home: a cross-project, attention-first triage
+  inbox. Every task across every project is grouped by who needs you —
+  **Needs you → Running → Review → Done → Idle** — and each row carries the
+  agent's latest line, elapsed time, and an inline action (Respond / Open /
+  Review / PR). Clicking a row opens that task's terminal workspace.
+- The Board is per-project. Selecting Board (or a project in the panel) reveals
+  the contextual project panel (projects with task counts and a needs-input dot)
+  beside the workflow kanban.
+- Opening a task replaces the current view with the focused terminal workspace;
+  the back affordance returns to Mission Control or the board.
+
+Key files:
+
+- Icon rail: `src/components/IconRail.tsx`
+- Contextual project panel: `src/components/ProjectPanel.tsx`
+- Mission Control triage: `src/components/MissionControl.tsx`
+- Cross-project agent-state model (state, latest line, elapsed):
+  `src/lib/agentState.ts`
+- App shell composition and view routing: `src/App.tsx`
+- Shell, Mission Control, board, and workspace styling: `src/styles/redesign.css`
+- View state and orchestration: `src/hooks/useApp.ts`
+
 ## Projects
 
 Projects are existing local git repositories. The app validates a selected
 folder with git before saving it.
 
-- Frontend entry points: `src/components/Sidebar.tsx`, `src/hooks/useApp.ts`
+- Frontend entry points: `src/components/ProjectPanel.tsx`, `src/components/IconRail.tsx`, `src/hooks/useApp.ts`
 - Dialog wrapper: `src/api.ts`
 - Backend command: `add_repo`
 - Git validation: `native/src/git_ops.rs`
@@ -46,11 +75,14 @@ Task status values are:
 
 Key files:
 
-- Creation modal: `src/components/CreateTaskModal.tsx`
+- New-task composer (`CreateTaskComposer`, a focused inline view reached from the
+  board's New Task action — not a modal): `src/components/CreateTaskModal.tsx`
 - Board and drag/drop status updates: `src/components/Workspace.tsx`
 - Task card: `src/components/TaskCard.tsx`
 - Task-card pointer drag tracking: `src/hooks/useTaskCardPointerDrag.ts`
-- Selected-task workspace and inspector rail: `src/components/TaskWorkspace.tsx`
+- Selected-task workspace — horizontal workflow ribbon above the terminal, an
+  inline action bar under it, and a calm sectioned facts rail (identity ·
+  metadata · PR-status card · linked story · review): `src/components/TaskWorkspace.tsx`
 - Shared task deletion confirmation: `src/components/TaskDeleteDialog.tsx`
 - Dashboard layout and board scrolling: `src/styles.css`
 - Frontend state orchestration: `src/hooks/useApp.ts`
@@ -104,15 +136,13 @@ Current behavior:
 - New task prompts are written to the PTY after launch.
 - Dropping files on the terminal inserts their escaped paths into the active
   session input, matching the local terminal workflow for Codex image/file paths.
-- Selecting a task replaces the board with a focused terminal workspace. Running
-  sessions render the live terminal front and center; tasks without an active
-  session show launcher controls in the terminal stage.
-- The shadcn/sidebar left rail groups Projects and Tasks as sibling sections.
-  The Tasks section appears whenever tasks exist, shows the total local task
-  count with an icon-only add-task action in the header, lists running tasks
-  across projects with icon-only agent context, attention and task-status text,
-  shows a worktree identifier icon only for worktree-backed tasks, and provides
-  open and stop actions for active sessions.
+- Selecting a task replaces the current view with a focused terminal workspace.
+  Running sessions render the live terminal front and center; tasks without an
+  active session show launcher controls in the terminal stage. When the agent is
+  waiting, an inline action bar surfaces the pending decision under the terminal.
+- There is no task tree in the shell. Cross-project tasks are triaged in Mission
+  Control; per-project tasks live on the board. See
+  [Navigation And Mission Control](#navigation-and-mission-control).
 - Task metadata, status, deletion, prompt, workflow, review controls, and review
   feedback live in the persistent right inspector rail.
 - Terminal output is streamed through the `session_output` Tauri event.
@@ -121,9 +151,9 @@ Current behavior:
 
 Key files:
 
-- Sidebar shell and Projects section: `src/components/Sidebar.tsx`
-- Sidebar Tasks section: `src/components/TaskQuickAccessPanel.tsx`
-- shadcn/sidebar primitives: `src/components/ui/sidebar.tsx`
+- Shell (icon rail + project panel): `src/components/IconRail.tsx`, `src/components/ProjectPanel.tsx`
+- Cross-project triage: `src/components/MissionControl.tsx`
+- App shell and view routing: `src/App.tsx`
 - Terminal UI: `src/TerminalPane.tsx`
 - Session controls: `src/hooks/useSessionCommands.ts`
 - Attention-clearing session control wrappers: `src/hooks/useSessionAttentionControls.ts`
@@ -180,7 +210,8 @@ Attention tracking is UI state derived from backend events.
   default.
 - Starting, resuming, stopping, marking done, or sending input clears the marker
   for that task.
-- Counts are shown in the dashboard metrics.
+- Counts are shown as Mission Control summary pills and the icon-rail needs-input
+  badge.
 - macOS notifications are sent for idle and needs-input events when permission is
   granted.
 
@@ -254,15 +285,15 @@ Key files:
 
 PR Review reviews an external GitHub pull request against a known local project and
 produces a Markdown review to copy back to the author. It is separate from the task
-board: reviews have their own sidebar section and lifecycle, and share the worktree,
+board: reviews have their own rail section and lifecycle, and share the worktree,
 reviewer-launch, and notification machinery under the hood.
 
 Current behavior:
 
-- Open the PR Reviews section from the sidebar footer.
-- Paste a pull request URL (`https://github.com/owner/repo/pull/123`) and pick one
-  or more reviewer profiles, then start the review. One reviewer runs a single
-  review; two or more run a multi-model **consensus** review (see below).
+- Open PR Reviews from the icon rail.
+- Paste a pull request URL (`https://github.com/owner/repo/pull/123`) and pick a
+  reviewer profile (shown as selectable chips), then start the review. Selecting
+  **two or more** reviewers runs a multi-model **consensus** review (see below).
 - Nectus resolves the PR's `owner/repo` to a project already added to Nectus by
   matching its git remote (`origin`). If no project matches, the action reports that
   the repository must be added as a project first. No filesystem scanning is done.
@@ -273,7 +304,7 @@ Current behavior:
   worktree down.
 - Status flows `queued → reviewing → ready`, or `error` on failure. A macOS
   notification and in-app toast fire when a review becomes `ready` or `error`.
-- The sidebar list groups reviews into three lifecycle sections — **To review**
+- The list groups reviews into three lifecycle sections — **To review**
   (`queued`), **Reviewing** (`reviewing`), and **Done** (`ready` and `error`) —
   each with a count.
 - A finished review also carries a `verdict` that the Done badge surfaces:
@@ -292,43 +323,40 @@ Current behavior:
   is the configured default agent profile. Claude and Gemini reviewers run with `-p`;
   Codex reviewers run with `codex exec`; custom reviewers receive the prompt on stdin.
 
-Consensus review (two or more reviewers):
+**Consensus mode.** Selecting two or more reviewers (optionally setting a round
+count, 1–5, default 2) runs them as a consensus review:
 
-- Choosing 2+ reviewers turns on consensus mode and reveals a **Rounds** cap
-  (default 3, max 5). The first selected reviewer also acts as the synthesizer.
-- All reviewers review the same PR head in **one shared read-only ephemeral
-  worktree**, in parallel. Round 1 is independent; in each later round every
-  reviewer is shown the others' previous-round reviews and asked to reconsider.
-  Rounds repeat until every reviewer reports the same non-inconclusive verdict
-  (converged) or the cap is reached.
-- A final synthesis pass merges the last round's reviews into one consensus review
-  to paste into the PR, keeping every distinct blocking issue and flagging any
-  unresolved disagreement. The detail view shows the consensus summary
-  ("Converged in N rounds" / "No consensus after N rounds"), the reviewer chips,
-  the synthesized review, and a per-round breakdown with each reviewer's verdict and
-  output. Rounds stream in live while the review runs.
-- The list and detail badges still surface the overall verdict (the converged
-  verdict, or the synthesizer's when the reviewers did not agree). Re-run and Delete
-  behave as for single reviews; re-run discards the prior rounds.
+- The PR head is checked out once and every reviewer reads it in round 1. From
+  round 2 on, each reviewer also sees the other reviewers' prior-round notes and
+  gives a fresh verdict, so they can converge.
+- Reviewing stops early the moment all reviewers agree on a recognizable verdict
+  (`passed`/`blockers`); otherwise it runs the full round budget.
+- The **synthesizer** (the first-selected reviewer) folds every reviewer's latest
+  review into one consolidated Markdown review. The stored `verdict` is the
+  synthesizer's marker, falling back to the majority position (blockers wins ties).
+- The detail view shows a convergence banner ("Converged in N rounds — …"), a
+  **reviewers × rounds** matrix of verdict dots that fills in live as each round
+  is persisted, and the synthesized review. The list card and detail header carry
+  an "N-model" tag.
+- Consensus state is persisted on the review row (`reviewer_profile_ids`, `rounds`,
+  `consensus_json`); a single-reviewer review stores none of these. Re-run resets
+  the matrix but keeps the reviewer roster and round budget.
 
 Key files:
 
-- Sidebar nav entry: `src/components/Sidebar.tsx`
-- Reviews list and create form: `src/components/ReviewsPage.tsx`
-- Review detail and copy: `src/components/PrReviewDetail.tsx`
+- Rail nav entry: `src/components/IconRail.tsx`
+- Reviews list and create form (reviewer chips + consensus rounds): `src/components/ReviewsPage.tsx`
+- Review detail, copy, and consensus banner/convergence matrix: `src/components/PrReviewDetail.tsx`
 - Frontend state, events, and notifications: `src/hooks/usePrReviews.ts`
 - Frontend API: `src/api.ts`
 - PR URL parsing and `gh pr view` metadata: `native/src/github.rs`
 - Remote `owner/repo` parsing, PR-ref fetch, worktree-at-ref: `native/src/git_ops.rs`
-- Runtime workers: `native/src/sessions/pr_review.rs` (single) and
-  `native/src/sessions/pr_consensus.rs` (consensus rounds + synthesis)
-- Backend commands: `create_pr_review` (takes `reviewer_profile_ids` + `max_rounds`;
-  one id → single, 2+ → consensus), `list_pr_reviews`, `get_pr_review`,
-  `list_pr_review_runs` (per-reviewer round outputs), `rerun_pr_review`,
-  `delete_pr_review`
-- Persistence: `pr_reviews` plus `pr_review_reviewers` (participants) and
-  `pr_review_runs` (per-reviewer, per-round outputs); API in
-  `native/src/db/pr_reviews.rs`
+- Runtime worker (single review + consensus rounds, convergence, synthesizer):
+  `native/src/sessions/pr_review.rs`
+- Backend commands: `create_pr_review` (takes `reviewerProfileIds` + `rounds`),
+  `list_pr_reviews`, `get_pr_review`, `rerun_pr_review`, `delete_pr_review`
+- Persistence: `pr_reviews` table (consensus adds `reviewer_profile_ids`, `rounds`,
+  `consensus_json`); API in `native/src/db/pr_reviews.rs`
 
 Emitted event:
 
@@ -352,7 +380,7 @@ Key files:
 
 ## JIRA
 
-The JIRA Board is a first-class view (sidebar footer, alongside PR Reviews) backed
+The JIRA Board is a first-class view (icon rail, alongside PR Reviews) backed
 by the official Atlassian CLI (`acli`), so Nectus stores no tokens and runs no
 OAuth. The board is global and fully UI-driven — **no JQL is typed**: pick a JIRA
 project from a dropdown (populated by `acli jira project list`) and toggle filters
@@ -363,19 +391,22 @@ status category.
 
 It is a full management surface: drag a card between columns to transition it
 (optimistic — reverted if JIRA's workflow rejects the move), and open a card to
-change status, assign, or comment. **Create task from this story** opens the task
-modal pre-seeded from the story (title, description) with a project selector; the
-resulting task↔story link is stored locally on the task (`jira_issue_key/summary/
-url`) and never writes back to JIRA. Linked stories appear as a badge on task
+dock an **inline side panel** beside the board (the board stays in context as a
+2-column split; it is no longer a modal dialog) to change status, assign, or
+comment. The panel's bottom launch row (agent select + **Create task & start**)
+and the card's **Create task** affordance both open the task composer pre-seeded
+from the story (title, description) with a project selector; the resulting
+task↔story link is stored locally on the task (`jira_issue_key/summary/url`) and
+never writes back to JIRA. Linked stories appear as a badge on task
 cards/rows and a detachable panel in the task inspector, and — the other direction —
 each board card lists the tasks attached to that story (agent logo, title, live/
-status), each click-through to the dashboard. Full behavior and caveats live in
+status), each click-through opening that task. Full behavior and caveats live in
 [JIRA Integration](jira-integration.md).
 
 Key files:
 
-- Board view: `src/components/JiraBoardPage.tsx`
-- Work-item dialog: `src/components/JiraWorkItemDialog.tsx`
+- Board view + docked work-item split: `src/components/JiraBoardPage.tsx`
+- Work-item side panel (`JiraWorkItemPanel`, de-modaled): `src/components/JiraWorkItemDialog.tsx`
 - Linked-story inspector panel: `src/components/JiraPanel.tsx`
 - Board/connection state and columns: `src/hooks/useJira.ts`
 - acli shell-out and parsing: `native/src/jira.rs`

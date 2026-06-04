@@ -272,7 +272,11 @@ Keep React UI and command bindings in `src/`.
 
 Important frontend files:
 
-- `src/App.tsx`: app shell and top-level composition
+- `src/App.tsx`: icon-rail shell, view routing (`mission` | `board` | `jira` | `reviews` | `settings`), and top-level composition
+- `src/components/IconRail.tsx`: 58px primary navigation rail; Mission Control icon carries the cross-project needs-input badge
+- `src/components/ProjectPanel.tsx`: contextual project list (counts + needs-input dot) shown beside the board
+- `src/components/MissionControl.tsx`: cross-project, attention-first triage home (the default view), grouped needs_you → running → review → done → idle
+- `src/lib/agentState.ts`: maps a task + attention to its cross-project state, latest line, and elapsed time (shared by Mission Control and the board)
 - `src/hooks/useApp.ts`: app state, project/task/settings orchestration
 - `src/hooks/useSessionEvents.ts`: subscribes to Rust session events (`session_output`, `session_meta`, `session_exited`, `session_idle`, `session_needs_input`)
 - `src/hooks/useSessionCommands.ts`: start/resume/stop/resize/input session command bindings
@@ -285,16 +289,16 @@ Important frontend files:
 - `src/TerminalPane.tsx`: xterm.js setup, terminal event listeners, input forwarding
 - `src/api.ts`: typed Tauri command wrapper
 - `src/types.ts`: frontend data contracts matching Rust serde output
-- `src/components/`: board, task workspace, settings, GitHub panel, and modal UI
+- `src/components/`: icon rail, Mission Control, board, task workspace (workflow ribbon + facts rail), settings, GitHub panel, and the inline composer/side-panel UI (no modals/dialogs for create-task or JIRA work items)
 - `src/components/GitHubPanel.tsx`: task-inspector GitHub panel for connection state and pull request actions
 - `src/components/JiraBoardPage.tsx`: global JIRA board view — JQL config, auto-derived columns, drag-to-transition
-- `src/components/JiraWorkItemDialog.tsx`: work-item management (transition/assign/comment) and create-task-from-story
+- `src/components/JiraWorkItemDialog.tsx`: `JiraWorkItemPanel` — the de-modaled work-item side panel docked beside the board (transition/assign/comment + an agent-select "Create task & start" launch row)
 - `src/components/JiraPanel.tsx`: task-inspector panel for the linked JIRA story (display + detach)
 - `src/components/settings/`: settings subcomponents and profile-draft helpers
 - `src/test/testUtils.tsx`: shared frontend test helpers for providers, pointer events, DOM rects, and async deferrals
 - `src/test/app*Tests.tsx`: focused App test groups registered by `src/App.test.tsx`
 - `src/styles.css`: Tailwind imports, theme tokens, and global base rules
-- `src/styles/`: focused CSS files imported by `src/main.tsx` for layout, settings, task board, detail, and forms
+- `src/styles/`: focused CSS files imported by `src/main.tsx` for layout, settings, task board, detail, forms, and the reimagined shell/Mission Control/board/workspace and secondary views (`redesign.css`, all `nx-` prefixed)
 
 Do not call shell/git directly from the frontend. Add Rust commands instead.
 

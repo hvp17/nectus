@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RefreshCw, Plus, Activity, GitBranch, CheckCircle2, AlertTriangle, CircleCheckBig } from "lucide-react";
-import { Badge } from "./ui/badge";
+import { GitBranch, Plus, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
-import { Card, CardHeader, CardTitle, CardContent, CardAction } from "./ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
 import { Skeleton } from "./ui/skeleton";
 import { TaskCard } from "./TaskCard";
@@ -62,7 +60,6 @@ interface WorkspaceProps {
   onDeleteTask: (task: TaskSummary) => void;
   onUpdateStatus: (task: TaskSummary, status: TaskStatus) => void;
   deletingTaskIds: ReadonlySet<number>;
-  counts: { active: number; dirty: number; review: number; needsInput: number; finished: number };
   busy: boolean;
   loading: boolean;
 }
@@ -78,7 +75,6 @@ export function Workspace({
   onDeleteTask,
   onUpdateStatus,
   deletingTaskIds,
-  counts,
   busy,
   loading,
 }: WorkspaceProps) {
@@ -121,62 +117,53 @@ export function Workspace({
     setDropTargetStatus(status);
   }, []);
 
-  const moveDroppedTask = useCallback((taskId: number, status: TaskStatus) => {
-    const task = getTaskById(taskId);
-    clearTaskDrag();
-    if (!task) {
-      return;
-    }
-    if (task.status === status) {
-      return;
-    }
-    if (busyRef.current) {
-      return;
-    }
-    onUpdateStatus(task, status);
-  }, [clearTaskDrag, getTaskById, onUpdateStatus]);
-
-  const movePointerDroppedTask = useCallback((taskId: number, clientX: number, clientY: number) => {
-    const status =
-      getStatusFromHitboxes(statusHitboxesRef.current, clientX, clientY) ?? getStatusFromPoint(clientX, clientY);
-    lastPointerStatusRef.current = undefined;
-    if (!status) {
+  const moveDroppedTask = useCallback(
+    (taskId: number, status: TaskStatus) => {
+      const task = getTaskById(taskId);
       clearTaskDrag();
-      return;
-    }
-    moveDroppedTask(taskId, status);
-  }, [clearTaskDrag, moveDroppedTask]);
+      if (!task) return;
+      if (task.status === status) return;
+      if (busyRef.current) return;
+      onUpdateStatus(task, status);
+    },
+    [clearTaskDrag, getTaskById, onUpdateStatus],
+  );
+
+  const movePointerDroppedTask = useCallback(
+    (taskId: number, clientX: number, clientY: number) => {
+      const status =
+        getStatusFromHitboxes(statusHitboxesRef.current, clientX, clientY) ?? getStatusFromPoint(clientX, clientY);
+      lastPointerStatusRef.current = undefined;
+      if (!status) {
+        clearTaskDrag();
+        return;
+      }
+      moveDroppedTask(taskId, status);
+    },
+    [clearTaskDrag, moveDroppedTask],
+  );
 
   return (
-    <section className="workspace p-10 overflow-auto max-w-[1400px] mx-auto w-full" aria-label="Dashboard workspace">
-      <header className="topbar">
+    <main className="nx-main" aria-label="Project board">
+      <div className="nx-head-row">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">
-            {selectedRepo ? selectedRepo.name : loading ? "Loading projects..." : "Connect a Project"}
-          </h2>
+          <h1 className="nx-h1">
+            {selectedRepo ? selectedRepo.name : loading ? "Loading projects…" : "Connect a project"}
+          </h1>
+          <p className="nx-sub">Workflow board — Planned through Done, with live state on every card.</p>
         </div>
-        <Button variant="outline" size="sm" onClick={onRefresh} title="Refresh" className="h-9 gap-2">
-          <RefreshCw data-icon="inline-start" className={loading ? "animate-spin" : undefined} />
-          Refresh
-        </Button>
-      </header>
-
-      <div className="metrics operational-metrics mb-8">
-        <Metric icon={<AlertTriangle size={18} />} label="Needs Input" value={counts.needsInput} tone="warning" />
-        <Metric icon={<Activity size={18} />} label="Running" value={counts.active} tone="live" />
-        <Metric icon={<CircleCheckBig size={18} />} label="Finished" value={counts.finished} tone="success" />
-        <Metric icon={<GitBranch size={18} />} label="Dirty" value={counts.dirty} tone="dirty" />
-        <Metric icon={<CheckCircle2 size={18} />} label="Review" value={counts.review} />
-      </div>
-
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Task Board</h3>
-        {selectedRepo && (
-          <Button type="button" size="sm" onClick={onCreateTask} disabled={busy} className="h-9 gap-2">
-            <Plus data-icon="inline-start" />
-            New Task
+        <div className="nx-head-actions">
+          <Button variant="outline" size="sm" onClick={onRefresh} title="Refresh">
+            <RefreshCw data-icon="inline-start" className={loading ? "animate-spin" : undefined} />
+            Refresh
           </Button>
-        )}
+          {selectedRepo && (
+            <Button type="button" size="sm" onClick={onCreateTask} disabled={busy}>
+              <Plus data-icon="inline-start" />
+              New Task
+            </Button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -187,74 +174,76 @@ export function Workspace({
             <EmptyMedia variant="icon">
               <GitBranch size={16} />
             </EmptyMedia>
-            <EmptyTitle>Connect a Project</EmptyTitle>
-            <EmptyDescription>Add an existing local git repo from the Projects sidebar.</EmptyDescription>
+            <EmptyTitle>Connect a project</EmptyTitle>
+            <EmptyDescription>Add an existing local git repo from the Projects panel.</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
-        <div className="columns overflow-x-auto pb-4">
-          {statusOrder.map((status) => {
-            const tasksInColumn = visibleTasks.filter((t) => t.status === status);
-            const acceptsDraggedTask = Boolean(draggingTask && draggingTask.status !== status);
-            return (
-              <StatusColumn
-                key={status}
-                status={status}
-                isDropAvailable={acceptsDraggedTask}
-                isDropTarget={acceptsDraggedTask && dropTargetStatus === status}
-              >
-                <div className="column-heading px-1 mb-1">
-                  <span className="text-xs font-bold uppercase tracking-wider">{TASK_STATUS_LABELS[status]}</span>
-                  <Badge variant="secondary" className="text-[10px] h-5 min-w-5 justify-center font-bold">
-                    {tasksInColumn.length}
-                  </Badge>
-                </div>
-                <div className="flex flex-col gap-3">
-                  {tasksInColumn.map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      attention={getTaskAttention(taskAttention, task.id)}
-                      isSelected={selectedTaskId === task.id}
-                      busy={busy}
-                      isDeleting={deletingTaskIds.has(task.id)}
-                      isDragging={draggingTaskId === task.id}
-                      onSelect={onSelectTask}
-                      onDelete={onDeleteTask}
-                      onDragStart={startTaskDrag}
-                      onPointerDragMove={markPointerDragPosition}
-                      onPointerDragEnd={movePointerDroppedTask}
-                      onDragEnd={clearTaskDrag}
-                    />
-                  ))}
-                  {selectedRepo && tasksInColumn.length === 0 && (
-                    <p className="px-1 py-6 text-center text-xs text-muted-foreground">
-                      No {TASK_STATUS_LABELS[status].toLowerCase()} tasks
-                    </p>
-                  )}
-                </div>
-              </StatusColumn>
-            );
-          })}
+        <div className="nx-board">
+          <div className="nx-cols">
+            {statusOrder.map((status) => {
+              const tasksInColumn = visibleTasks.filter((t) => t.status === status);
+              const acceptsDraggedTask = Boolean(draggingTask && draggingTask.status !== status);
+              return (
+                <StatusColumn
+                  key={status}
+                  status={status}
+                  isDropAvailable={acceptsDraggedTask}
+                  isDropTarget={acceptsDraggedTask && dropTargetStatus === status}
+                >
+                  <div className="nx-col-head">
+                    <span className="nx-cl">{TASK_STATUS_LABELS[status]}</span>
+                    <span className="nx-cc">{tasksInColumn.length}</span>
+                  </div>
+                  <div className="nx-col-body">
+                    {tasksInColumn.map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        attention={getTaskAttention(taskAttention, task.id)}
+                        isSelected={selectedTaskId === task.id}
+                        busy={busy}
+                        isDeleting={deletingTaskIds.has(task.id)}
+                        isDragging={draggingTaskId === task.id}
+                        onSelect={onSelectTask}
+                        onDelete={onDeleteTask}
+                        onDragStart={startTaskDrag}
+                        onPointerDragMove={markPointerDragPosition}
+                        onPointerDragEnd={movePointerDroppedTask}
+                        onDragEnd={clearTaskDrag}
+                      />
+                    ))}
+                    {tasksInColumn.length === 0 && (
+                      <p className="nx-col-empty">No {TASK_STATUS_LABELS[status].toLowerCase()} tasks</p>
+                    )}
+                  </div>
+                </StatusColumn>
+              );
+            })}
+          </div>
         </div>
       )}
-    </section>
+    </main>
   );
 }
 
 function BoardSkeleton() {
   return (
-    <div className="columns overflow-x-auto pb-4" aria-busy="true" aria-label="Loading tasks">
-      {statusOrder.map((status) => (
-        <div key={status} className="status-column min-h-[500px] flex flex-col gap-3 rounded-xl bg-muted/30 p-3">
-          <div className="column-heading px-1 mb-1">
-            <span className="text-xs font-bold uppercase tracking-wider">{TASK_STATUS_LABELS[status]}</span>
-            <Skeleton className="h-5 w-5 rounded-md" />
+    <div className="nx-board" aria-busy="true" aria-label="Loading tasks">
+      <div className="nx-cols">
+        {statusOrder.map((status) => (
+          <div key={status} className="nx-col">
+            <div className="nx-col-head">
+              <span className="nx-cl">{TASK_STATUS_LABELS[status]}</span>
+              <Skeleton className="h-5 w-5 rounded-md" />
+            </div>
+            <div className="nx-col-body">
+              <Skeleton className="h-24 w-full rounded-lg" />
+              <Skeleton className="h-24 w-full rounded-lg" />
+            </div>
           </div>
-          <Skeleton className="h-24 w-full rounded-xl" />
-          <Skeleton className="h-24 w-full rounded-xl" />
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -272,9 +261,7 @@ function StatusColumn({
 }) {
   return (
     <div
-      className={`status-column min-h-[500px] flex flex-col gap-3 rounded-xl bg-muted/30 p-3 transition-colors ${
-        isDropTarget ? "drop-target" : isDropAvailable ? "drop-available" : ""
-      }`}
+      className="nx-col"
       role="region"
       aria-label={`${TASK_STATUS_LABELS[status]} tasks`}
       data-task-status={status}
@@ -283,29 +270,5 @@ function StatusColumn({
     >
       {children}
     </div>
-  );
-}
-
-function Metric({
-  icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  tone?: "warning" | "live" | "success" | "dirty";
-}) {
-  return (
-    <Card size="sm" className="metric border-none bg-muted/30 shadow-none" data-tone={tone}>
-      <CardHeader className="flex-row items-center justify-between pb-1">
-        <CardTitle className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{label}</CardTitle>
-        <CardAction className="text-muted-foreground">{icon}</CardAction>
-      </CardHeader>
-      <CardContent>
-        <strong className="text-2xl font-bold tabular-nums">{value}</strong>
-      </CardContent>
-    </Card>
   );
 }

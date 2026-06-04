@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import App from "../App";
 import { api } from "../api";
@@ -6,12 +6,26 @@ import { appRepo, appTask } from "./appFixtures";
 
 const mockedApi = vi.mocked(api);
 
+// The app now boots into Mission Control (cross-project triage); the per-project
+// kanban lives behind the "Board" rail button.
+async function gotoBoard() {
+  fireEvent.click(await screen.findByRole("button", { name: "Board" }));
+}
+
 export function defineAppSmokeTests() {
-  it("renders the empty repo state", async () => {
+  it("boots into Mission Control", async () => {
     render(<App />);
 
-    expect(await screen.findByText("No projects yet")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 2, name: "Connect a Project" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Mission Control" })).toBeInTheDocument();
+    expect(screen.getByText(/no agents yet/i)).toBeInTheDocument();
+  });
+
+  it("shows the connect-a-project board when there are no repos", async () => {
+    render(<App />);
+
+    await gotoBoard();
+
+    expect(await screen.findByRole("heading", { name: /connect a project/i })).toBeInTheDocument();
   });
 
   it("ignores legacy demo query parameters and loads normal app data", async () => {
@@ -19,13 +33,13 @@ export function defineAppSmokeTests() {
 
     render(<App />);
 
-    expect(await screen.findByText("No projects yet")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Mission Control" })).toBeInTheDocument();
     expect(mockedApi.listRepos).toHaveBeenCalled();
     expect(mockedApi.listTasks).toHaveBeenCalled();
     expect(screen.queryByRole("heading", { name: "Nectus Demo" })).not.toBeInTheDocument();
   });
 
-  it("opens a selected task as a focused terminal workspace with an inspector sidebar", async () => {
+  it("opens a task from Mission Control into a focused terminal workspace", async () => {
     mockedApi.listRepos.mockResolvedValue([appRepo]);
     mockedApi.listTasks.mockResolvedValue([
       appTask({
@@ -39,30 +53,26 @@ export function defineAppSmokeTests() {
 
     render(<App />);
 
-    const layout = await screen.findByTestId("dashboard-layout");
-    fireEvent.click(await within(layout).findByRole("button", { name: /inspect task detail/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /inspect task detail/i }));
 
-    expect(layout).toHaveAttribute("data-task-workspace", "true");
-    expect(screen.queryByRole("heading", { name: /task board/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: /agent terminal/i })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: /agent terminal/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/task inspector/i)).toBeInTheDocument();
-    expect(screen.getByText("feat/detail")).toBeInTheDocument();
+    expect(screen.getAllByText("feat/detail").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: /back to task board/i }));
 
-    expect(layout).toHaveAttribute("data-task-workspace", "false");
-    expect(screen.getByRole("heading", { name: /task board/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Mission Control" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /agent terminal/i })).not.toBeInTheDocument();
   });
 
   it("opens settings and saves appearance preferences", async () => {
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /settings/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
 
-    expect(screen.getByRole("heading", { name: /settings/i })).toBeInTheDocument();
-    expect(screen.getByText("Agent Profiles")).toBeInTheDocument();
-    expect(screen.getByText("Projects & Worktrees")).toBeInTheDocument();
-    expect(screen.getByText("Appearance")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Agent Profiles" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /projects & worktrees/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Appearance" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("radio", { name: /dark/i }));
     fireEvent.click(screen.getByRole("radio", { name: /compact/i }));
@@ -83,73 +93,6 @@ export function defineAppSmokeTests() {
         density: "compact",
       });
     });
-  });
-
-  it("nests all project tasks under the project above settings and opens them from the sidebar", async () => {
-    mockedApi.listRepos.mockResolvedValue([appRepo]);
-    mockedApi.listTasks.mockResolvedValue([
-      appTask({
-        id: 31,
-        title: "Keep terminal handy",
-        status: "in_progress",
-        activeSessionId: "session-31",
-        hasWorktree: true,
-        branchName: "feat/sidebar-session",
-      }),
-      appTask({
-        id: 32,
-        title: "No live process",
-        activeSessionId: null,
-      }),
-    ]);
-
-    render(<App />);
-
-    const openButton = await screen.findByRole("button", { name: /open keep terminal handy/i });
-    const settingsButton = screen.getByRole("button", { name: /settings/i });
-    expect(openButton.compareDocumentPosition(settingsButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // The selected project auto-expands, so every task shows regardless of session state.
-    expect(screen.getByRole("button", { name: /open no live process/i })).toBeInTheDocument();
-
-    fireEvent.click(openButton);
-
-    expect(await screen.findByRole("region", { name: /agent terminal/i })).toBeInTheDocument();
-    expect(screen.getByTestId("dashboard-layout")).toHaveAttribute("data-task-workspace", "true");
-  });
-
-  it("stops an active session from the sidebar", async () => {
-    mockedApi.listRepos.mockResolvedValue([appRepo]);
-    mockedApi.listTasks.mockResolvedValue([
-      appTask({
-        id: 31,
-        title: "Stop from sidebar",
-        activeSessionId: "session-31",
-      }),
-    ]);
-    mockedApi.stopSession.mockResolvedValue({
-      id: "session-31",
-      resumableSessionId: "resume-31",
-      resumableSessionLabel: "Stop from sidebar",
-      taskId: 31,
-      agentProfileId: 1,
-      state: "stopped",
-      pid: null,
-      startedAt: "2026-05-17T12:00:00.000Z",
-      stoppedAt: "2026-05-17T12:05:00.000Z",
-    });
-
-    render(<App />);
-
-    fireEvent.click(await screen.findByRole("button", { name: /stop stop from sidebar/i }));
-
-    await waitFor(() => {
-      expect(mockedApi.stopSession).toHaveBeenCalledWith("session-31");
-    });
-    await waitFor(() => {
-      expect(screen.queryByRole("button", { name: /stop stop from sidebar/i })).not.toBeInTheDocument();
-    });
-    // The task row stays in the tree once its session ends; only the stop action is gone.
-    expect(screen.getByRole("button", { name: /open stop from sidebar/i })).toBeInTheDocument();
   });
 
   it("does not render the temporary dummy notification preview on launch", async () => {

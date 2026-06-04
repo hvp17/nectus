@@ -1,15 +1,7 @@
 import { useState } from "react";
-import { ExternalLink, Plus } from "lucide-react";
+import { ExternalLink, Play, X } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog";
 import { Field, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
 import {
@@ -20,116 +12,103 @@ import {
   SelectValue,
 } from "./ui/select";
 import { Textarea } from "./ui/textarea";
+import { AgentLogo } from "./AgentBrand";
 import { JiraAvatar, JiraIssueTypeIcon } from "./jiraVisuals";
 import { jiraBrowseUrl } from "../lib/jira";
-import type { JiraWorkItem } from "../types";
+import type { AgentProfile, JiraWorkItem } from "../types";
 
-interface JiraWorkItemDialogProps {
-  item: JiraWorkItem | null;
+export interface JiraWorkItemPanelProps {
+  item: JiraWorkItem;
   statusOptions: string[];
   /** Connected JIRA site host, used to build the issue's browse URL. */
   site?: string | null;
+  agentProfiles: AgentProfile[];
+  /** Agent the launch row pre-selects; feeds the create-task composer. */
+  selectedAgentProfileId?: number;
   onClose: () => void;
   onTransition: (item: JiraWorkItem, statusName: string) => void;
   onAssign: (key: string, assignee: string) => void;
   onComment: (key: string, body: string) => void;
   onCreateTask: (item: JiraWorkItem) => void;
+  onPickAgent: (profileId: number) => void;
   onOpenUrl: (url: string) => void;
 }
 
-export function JiraWorkItemDialog({
+/**
+ * De-modaled JIRA work item: an inline side panel docked beside the board (the
+ * board stays visible). Same fields/handlers as the old dialog, plus a bottom
+ * launch row to go from story → running agent in one move.
+ */
+export function JiraWorkItemPanel({
   item,
   statusOptions,
   site,
+  agentProfiles,
+  selectedAgentProfileId,
   onClose,
   onTransition,
   onAssign,
   onComment,
   onCreateTask,
+  onPickAgent,
   onOpenUrl,
-}: JiraWorkItemDialogProps) {
-  return (
-    <Dialog open={Boolean(item)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[calc(100vh-32px)] max-w-[calc(100vw-2rem)] overflow-y-auto sm:max-w-2xl">
-        {item && (
-          <JiraWorkItemDialogBody
-            key={item.key}
-            item={item}
-            statusOptions={statusOptions}
-            site={site}
-            onTransition={onTransition}
-            onAssign={onAssign}
-            onComment={onComment}
-            onCreateTask={onCreateTask}
-            onOpenUrl={onOpenUrl}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-type JiraWorkItemDialogBodyProps = Omit<JiraWorkItemDialogProps, "onClose" | "item"> & {
-  item: JiraWorkItem;
-};
-
-function JiraWorkItemDialogBody({
-  item,
-  statusOptions,
-  site,
-  onTransition,
-  onAssign,
-  onComment,
-  onCreateTask,
-  onOpenUrl,
-}: JiraWorkItemDialogBodyProps) {
+}: JiraWorkItemPanelProps) {
   const [assignee, setAssignee] = useState("");
   const [comment, setComment] = useState("");
   const browseUrl = jiraBrowseUrl(site, item.key);
 
-  // Ensure the current status is selectable even if it is not one of the
-  // derived board columns (e.g. a status with no other items).
+  // Ensure the current status is selectable even if it is not one of the derived
+  // board columns (e.g. a status with no other items).
   const options = statusOptions.includes(item.statusName)
     ? statusOptions
     : [item.statusName, ...statusOptions];
 
+  const launchAgentId = selectedAgentProfileId ?? agentProfiles[0]?.id;
+  const launchAgent = agentProfiles.find((profile) => profile.id === launchAgentId);
+
   return (
-    <>
-      <DialogHeader>
+    <aside
+      className="flex min-w-0 flex-col overflow-hidden border-l bg-[color-mix(in_srgb,var(--card)_72%,var(--background))]"
+      aria-label={`Work item ${item.key}`}
+    >
+      <div className="flex flex-col gap-2.5 border-b px-[18px] py-[15px]">
         <div className="flex items-center gap-2">
-          <JiraIssueTypeIcon type={item.issueType} className="size-5 rounded-md" />
+          <JiraIssueTypeIcon type={item.issueType} className="size-4 rounded-[5px]" />
           <Badge variant="secondary" className="font-mono">
             {item.key}
           </Badge>
-          {item.issueType && (
-            <span className="text-xs font-medium text-muted-foreground">{item.issueType}</span>
-          )}
-          {browseUrl && (
+          {item.issueType && <span className="text-xs font-medium text-muted-foreground">{item.issueType}</span>}
+          <div className="ml-auto flex items-center gap-0.5">
+            {browseUrl && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                onClick={() => onOpenUrl(browseUrl)}
+              >
+                Open in JIRA
+                <ExternalLink className="size-3.5" />
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              className="ml-auto h-7 gap-1 text-xs"
-              onClick={() => onOpenUrl(browseUrl)}
+              size="icon-sm"
+              aria-label="Close work item"
+              onClick={onClose}
             >
-              Open in JIRA
-              <ExternalLink className="size-3.5" />
+              <X className="size-4" />
             </Button>
-          )}
+          </div>
         </div>
-        <DialogTitle className="text-lg">{item.summary}</DialogTitle>
-        <DialogDescription className="sr-only">
-          Manage the JIRA work item {item.key}.
-        </DialogDescription>
-      </DialogHeader>
+        <h2 className="text-base font-bold leading-snug tracking-tight">{item.summary}</h2>
+      </div>
 
-      <div className="flex flex-col gap-5">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-[18px] py-4">
         <Field>
           <FieldLabel htmlFor="jira-status">Status</FieldLabel>
-          <Select
-            value={item.statusName}
-            onValueChange={(value) => onTransition(item, value)}
-          >
+          <Select value={item.statusName} onValueChange={(value) => onTransition(item, value)}>
             <SelectTrigger id="jira-status">
               <SelectValue />
             </SelectTrigger>
@@ -146,7 +125,7 @@ function JiraWorkItemDialogBody({
         {item.description && (
           <Field>
             <FieldLabel>Description</FieldLabel>
-            <p className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">
+            <p className="max-h-[130px] overflow-y-auto whitespace-pre-wrap rounded-md border bg-muted/20 p-3 text-[12.5px] leading-relaxed text-muted-foreground">
               {item.description}
             </p>
           </Field>
@@ -210,12 +189,40 @@ function JiraWorkItemDialogBody({
         </Field>
       </div>
 
-      <DialogFooter>
-        <Button type="button" className="gap-2" onClick={() => onCreateTask(item)}>
-          <Plus className="size-4" />
-          Create task from this story
-        </Button>
-      </DialogFooter>
-    </>
+      <div className="flex flex-col gap-2.5 border-t bg-muted/25 px-[18px] py-3.5">
+        <span className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-muted-foreground">
+          Work this story
+        </span>
+        <div className="flex gap-2">
+          {agentProfiles.length > 0 && (
+            <Select
+              value={launchAgentId?.toString()}
+              onValueChange={(value) => onPickAgent(Number(value))}
+            >
+              <SelectTrigger aria-label="Agent for new task" className="h-9 flex-1">
+                <span className="flex min-w-0 items-center gap-2">
+                  {launchAgent && <AgentLogo agentKind={launchAgent.agentKind} size="sm" />}
+                  <span className="truncate">{launchAgent?.name ?? "Choose an agent"}</span>
+                </span>
+              </SelectTrigger>
+              <SelectContent position="popper">
+                {agentProfiles.map((profile) => (
+                  <SelectItem key={profile.id} value={profile.id.toString()} textValue={profile.name}>
+                    <span className="flex items-center gap-2">
+                      <AgentLogo agentKind={profile.agentKind} size="sm" />
+                      {profile.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Button type="button" className="gap-2" onClick={() => onCreateTask(item)}>
+            <Play className="size-4" />
+            Create task &amp; start
+          </Button>
+        </div>
+      </div>
+    </aside>
   );
 }

@@ -1,11 +1,22 @@
-import { useEffect, useState } from "react";
-import { Check, Copy, ExternalLink, LoaderCircle, RefreshCw, Trash2 } from "lucide-react";
+import { type CSSProperties, useEffect, useState } from "react";
+import {
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  Copy,
+  ExternalLink,
+  LoaderCircle,
+  Minus,
+  RefreshCw,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button } from "./ui/button";
-import { ScrollArea } from "./ui/scroll-area";
 import { Skeleton } from "./ui/skeleton";
-import { PrReviewBadge, PrReviewVerdictBadge } from "./PrReviewBadge";
-import type { PrReview, PrReviewRun, PrReviewStatus } from "../types";
+import { AgentLogo } from "./AgentBrand";
+import { PrReviewBadge } from "./PrReviewBadge";
+import type { PrReview, PrReviewConsensus, PrReviewStatus, PrReviewVerdict } from "../types";
 
 interface PrReviewDetailProps {
   review: PrReview;
@@ -16,38 +27,13 @@ interface PrReviewDetailProps {
 
 const inFlight = (status: PrReviewStatus) => status === "queued" || status === "reviewing";
 
-interface RoundGroup {
-  round: number;
-  runs: PrReviewRun[];
+function verdictLabel(verdict: PrReviewVerdict): string {
+  return verdict === "passed" ? "Passed" : verdict === "blockers" ? "Blocking" : "Unsure";
 }
 
-/// Bucket a consensus review's flat run list into ascending rounds for display.
-function groupRunsByRound(runs: PrReviewRun[]): RoundGroup[] {
-  const byRound = new Map<number, PrReviewRun[]>();
-  for (const run of runs) {
-    const list = byRound.get(run.round) ?? [];
-    list.push(run);
-    byRound.set(run.round, list);
-  }
-  return [...byRound.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([round, roundRuns]) => ({ round, runs: roundRuns }));
-}
-
-function consensusSummary(review: PrReview): string {
-  const count = review.reviewers.length;
-  if (review.status === "ready") {
-    return review.converged
-      ? `Converged in ${review.roundsCompleted} round${review.roundsCompleted === 1 ? "" : "s"}`
-      : `No consensus after ${review.roundsCompleted} round${review.roundsCompleted === 1 ? "" : "s"}`;
-  }
-  const cap = review.maxRounds ?? "?";
-  return `${count} reviewers · round ${review.roundsCompleted}/${cap}`;
-}
-
-export function PrReviewDetail({ review, runs, onRerun, onDelete }: PrReviewDetailProps) {
+export function PrReviewDetail({ review, onRerun, onDelete }: PrReviewDetailProps) {
   const [copied, setCopied] = useState(false);
-  const isConsensus = review.mode === "consensus";
+  const consensus = review.consensus ?? undefined;
 
   // Reset the copied affordance when switching reviews or after a re-run.
   useEffect(() => {
@@ -65,43 +51,34 @@ export function PrReviewDetail({ review, runs, onRerun, onDelete }: PrReviewDeta
   };
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col rounded-lg border bg-card" aria-label="PR review">
-      <header className="flex flex-col gap-2 border-b p-4">
-        <div className="flex items-center gap-2">
+    <section className="nx-rev-detail" aria-label="PR review">
+      <header className="nx-rev-dhead">
+        <div className="nx-rev-dtitle">
           <PrReviewBadge review={review} />
-          {isConsensus && (
-            <span className="text-[0.625rem] font-medium uppercase tracking-wide text-muted-foreground">
-              {review.reviewers.length}-model consensus
-            </span>
-          )}
-          <span className="text-sm font-semibold text-muted-foreground">#{review.prNumber}</span>
-          <span className="truncate text-sm font-semibold">{review.prTitle ?? review.prUrl}</span>
+          {consensus && <span className="nx-modeltag">{consensus.reviewers.length}-model consensus</span>}
+          <span className="nx-num">#{review.prNumber}</span>
+          <span className="nx-t">{review.prTitle ?? review.prUrl}</span>
         </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <div className="nx-rev-dmeta">
           <span>{review.repoName}</span>
           {review.prAuthor && <span>by {review.prAuthor}</span>}
           {review.baseBranch && <span>base {review.baseBranch}</span>}
-          {isConsensus && <span>{consensusSummary(review)}</span>}
-          <a
-            className="inline-flex items-center gap-1 text-foreground underline-offset-2 hover:underline"
-            href={review.prUrl}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open PR <ExternalLink size={11} />
+          {consensus && (
+            <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              Reviewers:
+              {consensus.reviewers.map((reviewer) => (
+                <span key={reviewer.profileId} className="nx-rev-reviewer-pill">
+                  <AgentLogo agentKind={reviewer.agentKind ?? "custom"} size="sm" />
+                  {reviewer.name.split(" ")[0]}
+                </span>
+              ))}
+            </span>
+          )}
+          <a href={review.prUrl} target="_blank" rel="noreferrer">
+            Open PR <ExternalLink aria-hidden="true" />
           </a>
         </div>
-        {isConsensus && review.reviewers.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            <span>Reviewers:</span>
-            {review.reviewers.map((reviewer) => (
-              <span key={reviewer.reviewerProfileId} className="rounded bg-muted px-1.5 py-0.5">
-                {reviewer.reviewerName ?? `#${reviewer.reviewerProfileId}`}
-              </span>
-            ))}
-          </div>
-        )}
-        <div className="flex items-center gap-2 pt-1">
+        <div className="nx-rev-dactions">
           <Button
             type="button"
             size="sm"
@@ -121,7 +98,7 @@ export function PrReviewDetail({ review, runs, onRerun, onDelete }: PrReviewDeta
             aria-label={isConsensus ? "Copy consensus review" : "Copy review"}
           >
             {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
-            {copied ? "Copied" : isConsensus ? "Copy consensus" : "Copy review"}
+            {copied ? "Copied" : consensus ? "Copy consensus" : "Copy review"}
           </Button>
           <Button
             type="button"
@@ -137,7 +114,7 @@ export function PrReviewDetail({ review, runs, onRerun, onDelete }: PrReviewDeta
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 p-4">{isConsensus ? renderConsensusBody() : renderSingleBody()}</div>
+      <div className="nx-rev-body">{renderBody()}</div>
     </section>
   );
 
@@ -149,6 +126,10 @@ export function PrReviewDetail({ review, runs, onRerun, onDelete }: PrReviewDeta
           <AlertDescription>{review.lastError ?? "Unknown error"}</AlertDescription>
         </Alert>
       );
+    }
+
+    if (consensus) {
+      return <ConsensusBody review={review} consensus={consensus} />;
     }
 
     if (inFlight(review.status)) {
@@ -165,13 +146,7 @@ export function PrReviewDetail({ review, runs, onRerun, onDelete }: PrReviewDeta
       );
     }
 
-    return (
-      <ScrollArea className="h-full">
-        <pre className="whitespace-pre-wrap break-words font-mono text-sm leading-relaxed text-foreground">
-          {review.reviewOutput ?? "The reviewer returned no output."}
-        </pre>
-      </ScrollArea>
-    );
+    return <div className="nx-rev-output">{review.reviewOutput ?? "The reviewer returned no output."}</div>;
   }
 
   function renderConsensusBody() {
@@ -242,4 +217,136 @@ export function PrReviewDetail({ review, runs, onRerun, onDelete }: PrReviewDeta
       </ScrollArea>
     );
   }
+}
+
+function ConsensusBody({ review, consensus }: { review: PrReview; consensus: PrReviewConsensus }) {
+  const rounds = consensus.rounds;
+  const ready = review.status === "ready";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <ConsensusBanner review={review} consensus={consensus} />
+
+      {rounds.length > 0 && (
+        <div className="nx-matrix" style={{ "--rounds": rounds.length } as CSSProperties}>
+          <div className="nx-matrix-row head">
+            <div className="nx-matrix-cell">Reviewer</div>
+            {rounds.map((round) => (
+              <div key={round.round} className="nx-matrix-cell">
+                Round {round.round}
+              </div>
+            ))}
+          </div>
+          {consensus.reviewers.map((reviewer) => (
+            <div key={reviewer.profileId} className="nx-matrix-row">
+              <div className="nx-matrix-cell">
+                <AgentLogo agentKind={reviewer.agentKind ?? "custom"} size="sm" />
+                <span className="nx-matrix-rev">
+                  {reviewer.name}
+                  {reviewer.synthesizer && <span className="sub"> · synthesizer</span>}
+                </span>
+              </div>
+              {rounds.map((round) => {
+                const verdict = round.verdicts[String(reviewer.profileId)];
+                return (
+                  <div key={round.round} className="nx-matrix-cell">
+                    {verdict ? (
+                      <>
+                        <VDot verdict={verdict} />
+                        <span className="nx-vlabel" data-v={verdict}>
+                          {verdictLabel(verdict)}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="empty">—</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {ready && review.reviewOutput ? (
+        <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <h3 className="nx-cons-h3">Consensus review</h3>
+          <div className="nx-cons-out">{review.reviewOutput}</div>
+        </section>
+      ) : (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <LoaderCircle size={14} className="animate-spin" />
+          {rounds.length === 0 ? "Reviewers are reading the pull request…" : "Synthesizing the consensus review…"}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ConsensusBanner({ review, consensus }: { review: PrReview; consensus: PrReviewConsensus }) {
+  const ready = review.status === "ready";
+
+  if (!ready) {
+    const round = consensus.rounds.length;
+    return (
+      <div className="nx-cons-banner warn">
+        <span className="nx-cb-ic">
+          <LoaderCircle className="animate-spin" />
+        </span>
+        <div>
+          <div className="nx-cb-t">
+            {round === 0
+              ? "Reviewers are reading the pull request"
+              : `Reviewing — round ${round} of ${consensus.maxRounds}`}
+          </div>
+          <div className="nx-cb-d">
+            {consensus.reviewers.length} reviewers compare notes each round and converge on a single verdict.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const verdictWord =
+    review.verdict === "passed" ? "Passed" : review.verdict === "blockers" ? "Blocking issues" : "Inconclusive";
+
+  if (consensus.converged) {
+    return (
+      <div className="nx-cons-banner">
+        <span className="nx-cb-ic">
+          <CheckCircle2 />
+        </span>
+        <div>
+          <div className="nx-cb-t">
+            Converged in {consensus.convergedInRounds ?? consensus.rounds.length} round
+            {(consensus.convergedInRounds ?? consensus.rounds.length) === 1 ? "" : "s"} — {verdictWord}
+          </div>
+          <div className="nx-cb-d">All reviewers agreed on the verdict. The synthesized review is below.</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="nx-cons-banner warn">
+      <span className="nx-cb-ic">
+        <AlertTriangle />
+      </span>
+      <div>
+        <div className="nx-cb-t">Did not fully converge — {verdictWord}</div>
+        <div className="nx-cb-d">
+          Reviewers disagreed after {consensus.rounds.length} round
+          {consensus.rounds.length === 1 ? "" : "s"}; the synthesizer used the majority position.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VDot({ verdict }: { verdict: PrReviewVerdict }) {
+  return (
+    <span className="nx-vdot" data-v={verdict}>
+      {verdict === "passed" ? <Check /> : verdict === "blockers" ? <X /> : <Minus />}
+    </span>
+  );
 }

@@ -13,6 +13,26 @@ function mockProject() {
   mockedApi.listRepos.mockResolvedValue([appRepo]);
 }
 
+// The "New Task" action lives on the per-project board (the app boots into Mission
+// Control). Open the board, then the inline composer view.
+async function openCreateTaskModal() {
+  fireEvent.click(await screen.findByRole("button", { name: "Board" }));
+  fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+}
+
+// The composer uses Selects for project/agent and a Switch for the worktree.
+async function selectAgent(name: RegExp) {
+  fireEvent.click(screen.getByRole("combobox", { name: "Agent" }));
+  fireEvent.click(await screen.findByRole("option", { name }));
+}
+
+function setWorktree(on: boolean) {
+  const toggle = screen.getByRole("switch", { name: /worktree/i });
+  if ((toggle.getAttribute("aria-checked") === "true") !== on) {
+    fireEvent.click(toggle);
+  }
+}
+
 function createTaskMock(title: string, overrides = {}) {
   mockedApi.createTask.mockResolvedValue(
     appTask({
@@ -27,14 +47,15 @@ function createTaskMock(title: string, overrides = {}) {
 }
 
 export function defineAppTaskCreationTests() {
-  it("opens the task modal at the larger setup width", async () => {
+  it("opens the New Task composer from the board", async () => {
     mockProject();
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+    await openCreateTaskModal();
 
-    expect(screen.getByRole("dialog")).toHaveClass("sm:max-w-3xl");
+    expect(screen.getByRole("heading", { name: "New Task" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /new task composer/i })).toBeInTheDocument();
   });
 
   it("renders one brand logo per agent choice", async () => {
@@ -42,11 +63,11 @@ export function defineAppTaskCreationTests() {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+    await openCreateTaskModal();
 
-    const dialog = screen.getByRole("dialog");
-    const logos = within(dialog).getAllByRole("img", { name: /logo/i });
-    expect(logos).toHaveLength(2);
+    fireEvent.click(screen.getByRole("combobox", { name: "Agent" }));
+    const options = await screen.findAllByRole("option");
+    const logos = options.flatMap((option) => within(option).queryAllByRole("img", { name: /logo/i }));
     expect(logos.map((logo) => logo.getAttribute("aria-label"))).toEqual(["Codex logo", "Claude logo"]);
   });
 
@@ -56,16 +77,16 @@ export function defineAppTaskCreationTests() {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+    await openCreateTaskModal();
 
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "New Task" })).toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/task title/i)).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText(/instructions/i), {
+    fireEvent.change(screen.getByLabelText(/prompt/i), {
       target: { value: "Review modal task flow" },
     });
-    fireEvent.click(screen.getByRole("radio", { name: /claude/i }));
-    fireEvent.click(screen.getByRole("radio", { name: /direct edit/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
+    await selectAgent(/claude/i);
+    setWorktree(false);
+    fireEvent.click(screen.getByRole("button", { name: /create & start/i }));
 
     await waitFor(() => {
       expect(mockedApi.createTask).toHaveBeenCalledWith({
@@ -82,7 +103,7 @@ export function defineAppTaskCreationTests() {
     });
   });
 
-  it("opens the task modal from a project's add-task action", async () => {
+  it("opens the task modal from the board's New Task action", async () => {
     mockProject();
     mockedApi.listTasks.mockResolvedValue([
       appTask({
@@ -94,9 +115,9 @@ export function defineAppTaskCreationTests() {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /add task to nectus-desktop/i }));
+    await openCreateTaskModal();
 
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "New Task" })).toBeInTheDocument();
   });
 
   it("creates a task when instructions are blank", async () => {
@@ -112,12 +133,12 @@ export function defineAppTaskCreationTests() {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+    await openCreateTaskModal();
     fireEvent.change(screen.getByLabelText(/title/i), {
       target: { value: "Create title-only task" },
     });
 
-    const createButton = screen.getByRole("button", { name: /^create task$/i });
+    const createButton = screen.getByRole("button", { name: /create & start/i });
     expect(createButton).toBeEnabled();
 
     fireEvent.click(createButton);
@@ -143,13 +164,13 @@ export function defineAppTaskCreationTests() {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
-    fireEvent.change(screen.getByLabelText(/instructions/i), {
+    await openCreateTaskModal();
+    fireEvent.change(screen.getByLabelText(/prompt/i), {
       target: { value: "Review modal task flow" },
     });
-    fireEvent.click(screen.getByRole("radio", { name: /claude/i }));
-    fireEvent.click(screen.getByRole("radio", { name: /direct edit/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
+    await selectAgent(/claude/i);
+    setWorktree(false);
+    fireEvent.click(screen.getByRole("button", { name: /create & start/i }));
 
     await waitFor(() => {
       expect(mockedApi.createTask).toHaveBeenCalledWith({
@@ -179,15 +200,15 @@ export function defineAppTaskCreationTests() {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+    await openCreateTaskModal();
     fireEvent.change(screen.getByLabelText(/title/i), {
       target: { value: "Create generated branch" },
     });
-    fireEvent.click(screen.getByRole("radio", { name: /new worktree/i }));
+    setWorktree(true);
 
     const branchInput = screen.getByLabelText(/branch name/i);
     fireEvent.change(branchInput, { target: { value: "   " } });
-    fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create & start/i }));
 
     await waitFor(() => {
       expect(mockedApi.createTask).toHaveBeenCalledWith(
@@ -223,16 +244,16 @@ export function defineAppTaskCreationTests() {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+    await openCreateTaskModal();
     fireEvent.change(screen.getByLabelText(/title/i), {
       target: { value: "Create prefixed branch" },
     });
-    fireEvent.click(screen.getByRole("radio", { name: /new worktree/i }));
+    setWorktree(true);
     const branchInput = screen.getByLabelText(/branch name/i);
     const suggestedBranchName = branchInput.getAttribute("placeholder");
 
     expect(suggestedBranchName).toMatch(/^feat\/task-[a-z0-9-]+$/);
-    fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create & start/i }));
 
     await waitFor(() => {
       expect(mockedApi.createTask).toHaveBeenCalledWith(
@@ -263,8 +284,8 @@ export function defineAppTaskCreationTests() {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
-    fireEvent.click(screen.getByRole("radio", { name: /new worktree/i }));
+    await openCreateTaskModal();
+    setWorktree(true);
 
     const branchInput = screen.getByLabelText(/branch name/i);
     const placeholder = branchInput.getAttribute("placeholder");
@@ -280,13 +301,13 @@ export function defineAppTaskCreationTests() {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
-    fireEvent.change(screen.getByLabelText(/instructions/i), {
+    await openCreateTaskModal();
+    fireEvent.change(screen.getByLabelText(/prompt/i), {
       target: { value: "Review modal task flow" },
     });
-    fireEvent.click(screen.getByRole("radio", { name: /claude/i }));
-    fireEvent.click(screen.getByRole("radio", { name: /direct edit/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
+    await selectAgent(/claude/i);
+    setWorktree(false);
+    fireEvent.click(screen.getByRole("button", { name: /create & start/i }));
 
     const createdToastBody = await screen.findByText("Created Review modal task flow");
     const createdToast = createdToastBody.closest("[data-sonner-toast]");
@@ -308,13 +329,13 @@ export function defineAppTaskCreationTests() {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
-    fireEvent.change(screen.getByLabelText(/instructions/i), {
+    await openCreateTaskModal();
+    fireEvent.change(screen.getByLabelText(/prompt/i), {
       target: { value: longTaskTitle },
     });
-    fireEvent.click(screen.getByRole("radio", { name: /claude/i }));
-    fireEvent.click(screen.getByRole("radio", { name: /direct edit/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
+    await selectAgent(/claude/i);
+    setWorktree(false);
+    fireEvent.click(screen.getByRole("button", { name: /create & start/i }));
 
     const toastBody = await screen.findByText(formatNotificationBody(`Created ${longTaskTitle}`));
 
@@ -336,13 +357,13 @@ export function defineAppTaskCreationTests() {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
-    fireEvent.change(screen.getByLabelText(/instructions/i), {
+    await openCreateTaskModal();
+    fireEvent.change(screen.getByLabelText(/prompt/i), {
       target: { value: "Review modal task flow" },
     });
-    fireEvent.click(screen.getByRole("radio", { name: /claude/i }));
-    fireEvent.click(screen.getByRole("radio", { name: /direct edit/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^create task$/i }));
+    await selectAgent(/claude/i);
+    setWorktree(false);
+    fireEvent.click(screen.getByRole("button", { name: /create & start/i }));
     await waitFor(() => {
       expect(mockedApi.createTask).toHaveBeenCalled();
     });

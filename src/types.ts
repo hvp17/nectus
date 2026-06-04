@@ -135,9 +135,28 @@ export interface ReviewLoopUpdatedEvent {
   reviewRun?: ReviewRun | null;
 }
 
+/** One reviewer participating in a consensus PR review. */
 export interface PrReviewReviewer {
-  reviewerProfileId: number;
-  reviewerName?: string | null;
+  profileId: number;
+  name: string;
+  agentKind?: AgentKind | null;
+  /** The synthesizer writes the final consolidated review. */
+  synthesizer: boolean;
+}
+
+/** Every reviewer's verdict in one round of a consensus review (keyed by profile id). */
+export interface PrReviewRound {
+  round: number;
+  verdicts: Record<string, PrReviewVerdict>;
+}
+
+/** The convergence record for a multi-model consensus review. */
+export interface PrReviewConsensus {
+  reviewers: PrReviewReviewer[];
+  rounds: PrReviewRound[];
+  maxRounds: number;
+  converged: boolean;
+  convergedInRounds?: number | null;
 }
 
 export interface PrReview {
@@ -157,15 +176,8 @@ export interface PrReview {
   reviewOutput?: string | null;
   lastError?: string | null;
   worktreePath?: string | null;
-  mode: PrReviewMode;
-  /** Consensus only: the iteration cap. */
-  maxRounds?: number | null;
-  /** Consensus only: how many parallel rounds have finished. */
-  roundsCompleted: number;
-  /** Consensus only: whether reviewers agreed before the cap (null until done). */
-  converged?: boolean | null;
-  /** Consensus only: the participating reviewers. Empty for single reviews. */
-  reviewers: PrReviewReviewer[];
+  /** Present only for multi-model consensus reviews; absent/null for single reviews. */
+  consensus?: PrReviewConsensus | null;
   createdAt: string;
   updatedAt: string;
 }

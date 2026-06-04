@@ -175,12 +175,12 @@ export const api = {
   async createPrReview(input: {
     prUrl: string;
     reviewerProfileIds?: number[] | null;
-    maxRounds?: number | null;
+    rounds?: number | null;
   }): Promise<PrReview> {
     return invoke("create_pr_review", {
       prUrl: input.prUrl,
       reviewerProfileIds: input.reviewerProfileIds ?? null,
-      maxRounds: input.maxRounds ?? null,
+      rounds: input.rounds ?? null,
     });
   },
   async listPrReviews(): Promise<PrReview[]> {
