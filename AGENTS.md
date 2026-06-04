@@ -87,7 +87,7 @@ Open:
 http://127.0.0.1:1420/
 ```
 
-Use this when working on layout, React state, styling, and non-Tauri UI behavior. In browser-only mode, Tauri commands are unavailable, so repo/worktree operations will only work inside the Tauri app.
+Use this when working on layout, React state, styling, and non-Tauri UI behavior. In browser-only mode, Tauri commands are unavailable, so repo/worktree operations will only work inside the Tauri app. To make every page previewable there, `src/lib/browserSeed.ts` seeds realistic read-path data (projects, cross-project tasks with attention states, JIRA board, PR reviews incl. a consensus example) — gated on `isBrowserPreview` (outside Tauri **and** outside the test runner), so the real backend and the test suite are unaffected. Live terminals still need the Tauri PTY.
 
 Do not start a dev server after making changes unless the user explicitly asks you to run one. The user decides when to launch `pnpm dev`, `pnpm desktop:dev`, or any other long-running local server.
 
