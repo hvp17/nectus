@@ -10,7 +10,7 @@ import {
 import type { VariantProps } from "class-variance-authority";
 import { Badge, badgeVariants } from "./ui/badge";
 import { cn } from "@/lib/utils";
-import type { PrReview } from "../types";
+import type { PrReview, PrReviewVerdict } from "../types";
 
 type BadgeVariant = VariantProps<typeof badgeVariants>["variant"];
 
@@ -23,9 +23,21 @@ interface BadgeSpec {
   spin?: boolean;
 }
 
+/// Map a completed verdict (passed / blocking / inconclusive) to a badge. Shared
+/// by the review badge's `ready` state and the per-reviewer consensus round cards.
+function verdictBadgeSpec(verdict: PrReviewVerdict | null | undefined): BadgeSpec {
+  switch (verdict) {
+    case "passed":
+      return { label: "Passed", variant: "secondary", Icon: CircleCheck, tone: "passed" };
+    case "blockers":
+      return { label: "Blocking issues", variant: "destructive", Icon: OctagonAlert, tone: "blockers" };
+    default:
+      return { label: "Inconclusive", variant: "outline", Icon: CircleHelp, tone: "inconclusive" };
+  }
+}
+
 /// Map a review's lifecycle + verdict to a single badge. A finished (`ready`)
-/// review surfaces its verdict (passed / blocking / inconclusive); the other
-/// statuses surface the lifecycle stage directly.
+/// review surfaces its verdict; the other statuses surface the lifecycle stage.
 function badgeSpec(review: PrReview): BadgeSpec {
   switch (review.status) {
     case "queued":
@@ -35,28 +47,37 @@ function badgeSpec(review: PrReview): BadgeSpec {
     case "error":
       return { label: "Error", variant: "outline", Icon: TriangleAlert, tone: "error" };
     case "ready":
-      switch (review.verdict) {
-        case "passed":
-          return { label: "Passed", variant: "secondary", Icon: CircleCheck, tone: "passed" };
-        case "blockers":
-          return { label: "Blocking issues", variant: "destructive", Icon: OctagonAlert, tone: "blockers" };
-        default:
-          return { label: "Inconclusive", variant: "outline", Icon: CircleHelp, tone: "inconclusive" };
-      }
+      return verdictBadgeSpec(review.verdict);
   }
 }
 
-export function PrReviewBadge({ review, className }: { review: PrReview; className?: string }) {
-  const { label, variant, Icon, tone, spin } = badgeSpec(review);
+function renderBadge(spec: BadgeSpec, dataAttrs: Record<string, string>, className?: string) {
+  const { label, variant, Icon, spin } = spec;
   return (
-    <Badge
-      variant={variant}
-      className={cn("rounded-md font-normal", className)}
-      data-pr-review-status={review.status}
-      data-pr-review-tone={tone}
-    >
+    <Badge variant={variant} className={cn("rounded-md font-normal", className)} {...dataAttrs}>
       <Icon data-icon="inline-start" className={spin ? "animate-spin" : undefined} />
       {label}
     </Badge>
   );
+}
+
+export function PrReviewBadge({ review, className }: { review: PrReview; className?: string }) {
+  const spec = badgeSpec(review);
+  return renderBadge(
+    spec,
+    { "data-pr-review-status": review.status, "data-pr-review-tone": spec.tone },
+    className,
+  );
+}
+
+/// Standalone verdict badge for a single reviewer's consensus round output.
+export function PrReviewVerdictBadge({
+  verdict,
+  className,
+}: {
+  verdict: PrReviewVerdict | null | undefined;
+  className?: string;
+}) {
+  const spec = verdictBadgeSpec(verdict);
+  return renderBadge(spec, { "data-pr-verdict-tone": spec.tone }, className);
 }

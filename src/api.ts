@@ -12,6 +12,7 @@ import type {
   JiraStatus,
   JiraWorkItem,
   PrReview,
+  PrReviewRun,
   PullRequestInfo,
   Repo,
   ReviewLoop,
@@ -173,11 +174,13 @@ export const api = {
   },
   async createPrReview(input: {
     prUrl: string;
-    reviewerProfileId?: number | null;
+    reviewerProfileIds?: number[] | null;
+    maxRounds?: number | null;
   }): Promise<PrReview> {
     return invoke("create_pr_review", {
       prUrl: input.prUrl,
-      reviewerProfileId: input.reviewerProfileId ?? null,
+      reviewerProfileIds: input.reviewerProfileIds ?? null,
+      maxRounds: input.maxRounds ?? null,
     });
   },
   async listPrReviews(): Promise<PrReview[]> {
@@ -187,6 +190,10 @@ export const api = {
   async getPrReview(reviewId: number): Promise<PrReview | null> {
     if (!isTauri) return null;
     return invoke("get_pr_review", { reviewId });
+  },
+  async listPrReviewRuns(reviewId: number): Promise<PrReviewRun[]> {
+    if (!isTauri) return [];
+    return invoke("list_pr_review_runs", { reviewId });
   },
   async rerunPrReview(reviewId: number): Promise<PrReview> {
     return invoke("rerun_pr_review", { reviewId });

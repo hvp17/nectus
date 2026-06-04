@@ -19,6 +19,7 @@ mod codex;
 #[cfg(test)]
 mod codex_tests;
 mod command;
+mod pr_consensus;
 mod pr_review;
 mod review_loop;
 
@@ -26,6 +27,7 @@ use agents::configure_agent_command;
 use claude::{cleanup_event_sink, spawn_claude_event_watcher};
 use codex::{latest_codex_session_metadata, spawn_codex_event_watcher};
 use command::resolve_agent_command;
+use pr_consensus::spawn_consensus_pr_review;
 use pr_review::spawn_pr_review;
 use review_loop::{spawn_review_on_session_idle, write_agent_submission};
 
@@ -499,6 +501,18 @@ impl SessionManager {
     /// running worker session.
     pub fn run_pr_review(&self, app: AppHandle, db: Arc<Mutex<Database>>, review_id: i64) {
         spawn_pr_review(app, db, review_id);
+    }
+
+    /// Kick off a multi-model consensus PR review on a background thread: several
+    /// reviewers review the PR head in parallel in one shared worktree, share
+    /// each other's reviews and iterate, and a synthesizer merges the result.
+    pub fn run_consensus_pr_review(
+        &self,
+        app: AppHandle,
+        db: Arc<Mutex<Database>>,
+        review_id: i64,
+    ) {
+        spawn_consensus_pr_review(app, db, review_id);
     }
 
     pub fn resize(&self, session_id: &str, rows: u16, cols: u16) -> Result<(), String> {

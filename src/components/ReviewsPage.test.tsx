@@ -44,6 +44,11 @@ const readyReview: PrReview = {
   reviewOutput: "## Review\nLooks good.",
   lastError: null,
   worktreePath: null,
+  mode: "single",
+  maxRounds: null,
+  roundsCompleted: 0,
+  converged: null,
+  reviewers: [],
   createdAt: "2026-06-02T00:00:00.000Z",
   updatedAt: "2026-06-02T00:01:00.000Z",
 };
@@ -53,6 +58,7 @@ function renderPage(overrides: Partial<Parameters<typeof ReviewsPage>[0]> = {}) 
     prReviews: [readyReview],
     selectedPrReview: readyReview,
     selectedPrReviewId: readyReview.id,
+    selectedPrReviewRuns: [],
     agentProfiles: profiles,
     defaultReviewerProfileId: 1,
     creatingReview: false,
@@ -81,7 +87,7 @@ it("shows the selected review output and copies it to the clipboard", async () =
   expect(await screen.findByText("Copied")).toBeInTheDocument();
 });
 
-it("submits a trimmed pull request URL with the default reviewer", () => {
+it("submits a trimmed pull request URL with the default single reviewer", () => {
   const onCreateReview = vi.fn();
   renderPage({ prReviews: [], selectedPrReview: undefined, selectedPrReviewId: undefined, onCreateReview });
 
@@ -90,7 +96,29 @@ it("submits a trimmed pull request URL with the default reviewer", () => {
   });
   fireEvent.click(screen.getByRole("button", { name: /review pull request/i }));
 
-  expect(onCreateReview).toHaveBeenCalledWith("https://github.com/owner/repo/pull/9", 1);
+  // One reviewer selected (the default) → single review, no round cap.
+  expect(onCreateReview).toHaveBeenCalledWith("https://github.com/owner/repo/pull/9", [1], undefined);
+});
+
+it("runs a consensus review when a second reviewer is selected", () => {
+  const onCreateReview = vi.fn();
+  renderPage({ prReviews: [], selectedPrReview: undefined, selectedPrReviewId: undefined, onCreateReview });
+
+  fireEvent.change(screen.getByLabelText("Pull request URL"), {
+    target: { value: "https://github.com/owner/repo/pull/9" },
+  });
+  // Add Claude alongside the default Codex → two reviewers → consensus + rounds.
+  fireEvent.click(screen.getByRole("button", { name: "Claude" }));
+  expect(screen.getByLabelText("Consensus rounds")).toBeInTheDocument();
+  // The submit button keeps its constant aria-label even as its text changes.
+  expect(screen.getByText("Review with consensus")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: /review pull request/i }));
+
+  const [url, reviewerIds, maxRounds] = onCreateReview.mock.calls[0];
+  expect(url).toBe("https://github.com/owner/repo/pull/9");
+  expect([...reviewerIds].sort()).toEqual([1, 2]);
+  expect(maxRounds).toBe(3);
 });
 
 it("offers an empty state when there are no reviews", () => {

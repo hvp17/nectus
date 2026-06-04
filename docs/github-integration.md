@@ -68,6 +68,26 @@ The PR Reviews section reviews a pull request opened by someone else (see
   this works for fork PRs because GitHub exposes `refs/pull/<n>/head` on the base
   repository's remote. The worktree is always removed after the review.
 
+### Single vs consensus reviews
+
+The reviewer toggles on the PR Reviews form choose how many models review:
+
+- **One reviewer → single review.** The original flow: one reviewer CLI runs once
+  in the ephemeral worktree (`native/src/sessions/pr_review.rs`) and returns the
+  Markdown review plus a `NECTUS_PR_VERDICT: BLOCKERS|CLEAN` marker.
+- **Two or more reviewers → consensus review.** All selected reviewers review the
+  same PR head in **one shared read-only worktree**, in parallel
+  (`native/src/sessions/pr_consensus.rs`). After each round every reviewer is shown
+  the others' reviews and asked to reconsider; rounds repeat until every reviewer
+  reports the same non-inconclusive verdict, or the round cap is hit (default 3,
+  max 5, chosen on the form). A final **synthesis pass** — run by the first selected
+  reviewer — merges the last round's reviews into one consensus review the human can
+  paste, preserving every distinct blocking issue and flagging any unresolved
+  disagreement. When the reviewers converged, that shared verdict is authoritative;
+  otherwise the synthesizer's verdict is used. Each reviewer's per-round output is
+  stored so the detail view can show the rounds; the consensus run emits
+  `pr_review_updated` as each round output lands.
+
 ## Requirements
 
 - The GitHub CLI (`gh`) must be installed and authenticated (`gh auth login`).

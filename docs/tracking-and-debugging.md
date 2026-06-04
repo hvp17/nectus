@@ -21,7 +21,9 @@ Core tables:
 | `tasks` | Primary work item, status, prompt, optional worktree, active session, saved session, and optional JIRA story link. |
 | `review_loops` | Current review configuration and status per task. |
 | `review_runs` | Reviewer prompts, outputs, verdicts, and errors by review attempt. |
-| `pr_reviews` | External pull-request reviews: PR metadata, status, `verdict` (`passed`/`blockers`/`inconclusive`, set when a review reaches `ready`), Markdown output, and ephemeral worktree path. |
+| `pr_reviews` | External pull-request reviews: PR metadata, status, `verdict` (`passed`/`blockers`/`inconclusive`, set when a review reaches `ready`), Markdown output, ephemeral worktree path, and the consensus columns `mode` (`single`/`consensus`), `max_rounds`, `rounds_completed`, `converged`. For consensus, `reviewer_profile_id` is the synthesizer. |
+| `pr_review_reviewers` | Consensus participants: the reviewer profiles taking part in a consensus PR review, in selection order. Cascade-deletes with the review. |
+| `pr_review_runs` | Consensus per-reviewer, per-round outputs: `round`, `verdict`, Markdown `output`, and `error`. One row per reviewer per round. Cascade-deletes with the review. |
 
 Schema owner: `native/src/db/schema.rs`
 
@@ -142,10 +144,11 @@ Current commands:
 | `stop_pair_loop` | Stop reviewer automation for a task. |
 | `get_task_review_loop` | Load a task's current review loop. |
 | `list_task_review_runs` | Load stored reviewer runs for a task. |
-| `create_pr_review` | Resolve a PR URL to a known project, queue a review, and start the background reviewer. |
+| `create_pr_review` | Resolve a PR URL to a known project, queue a review, and start the background reviewer. Takes `reviewer_profile_ids` + `max_rounds`: one reviewer runs a single review, two or more run a consensus review. |
 | `list_pr_reviews` | Load all PR reviews, newest first. |
 | `get_pr_review` | Load a single PR review by id. |
-| `rerun_pr_review` | Reset a PR review to queued and re-run it against the latest PR head. |
+| `list_pr_review_runs` | Load a consensus review's per-reviewer, per-round outputs (empty for single reviews). |
+| `rerun_pr_review` | Reset a PR review to queued and re-run it against the latest PR head (same single/consensus mode; clears prior rounds). |
 | `delete_pr_review` | Remove a PR review and any lingering ephemeral worktree. |
 | `start_session` | Start an agent in the task cwd. |
 | `resume_session` | Resume a Codex or Claude saved session. |
@@ -166,7 +169,7 @@ Backend-to-frontend events:
 | `session_idle` | Task id, session id, Codex turn id, optional message. | `native/src/sessions/codex.rs` |
 | `session_needs_input` | Task id, session id, reason, optional prompt. | `native/src/sessions/codex.rs` |
 | `review_loop_updated` | Review-loop state and optional review run. | `native/src/sessions/review_loop.rs` |
-| `pr_review_updated` | Updated external PR review (status, verdict, metadata, Markdown output). | `native/src/sessions/pr_review.rs` |
+| `pr_review_updated` | Updated external PR review (status, verdict, metadata, Markdown output), plus an optional `latest_run` carrying the consensus round output that triggered the update. | `native/src/sessions/pr_review.rs`, `native/src/sessions/pr_consensus.rs` |
 
 Frontend event listeners:
 
@@ -426,6 +429,11 @@ Check:
   `parse_pr_review_output` in `native/src/sessions/pr_review.rs` looks for. The
   review text is still stored; only the verdict could not be derived. Inspect it
   with `select status, verdict from pr_reviews order by id desc limit 10;`.
+- Consensus PR reviews never "converge" while any reviewer stays **Inconclusive**
+  (a failed or marker-less round counts as inconclusive), so they run to the round
+  cap and the synthesizer decides the verdict. Inspect a run's rounds with
+  `select round, reviewer_profile_id, verdict from pr_review_runs where pr_review_id = <id> order by id;`
+  and the outcome with `select mode, rounds_completed, converged, verdict from pr_reviews where id = <id>;`.
 
 Relevant code:
 

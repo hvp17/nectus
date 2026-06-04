@@ -116,25 +116,43 @@ describe("api", () => {
     });
   });
 
-  it("queues a PR review with a default-null reviewer", async () => {
+  it("queues a PR review with default-null reviewers and rounds", async () => {
     mockedInvoke.mockResolvedValueOnce({ id: 1, prNumber: 3 });
 
     await api.createPrReview({ prUrl: "https://github.com/owner/repo/pull/3" });
 
     expect(mockedInvoke).toHaveBeenCalledWith("create_pr_review", {
       prUrl: "https://github.com/owner/repo/pull/3",
-      reviewerProfileId: null,
+      reviewerProfileIds: null,
+      maxRounds: null,
     });
   });
 
-  it("passes a chosen reviewer when queuing a PR review", async () => {
+  it("passes a single chosen reviewer when queuing a PR review", async () => {
     mockedInvoke.mockResolvedValueOnce({ id: 1, prNumber: 3 });
 
-    await api.createPrReview({ prUrl: "https://github.com/owner/repo/pull/3", reviewerProfileId: 4 });
+    await api.createPrReview({ prUrl: "https://github.com/owner/repo/pull/3", reviewerProfileIds: [4] });
 
     expect(mockedInvoke).toHaveBeenCalledWith("create_pr_review", {
       prUrl: "https://github.com/owner/repo/pull/3",
-      reviewerProfileId: 4,
+      reviewerProfileIds: [4],
+      maxRounds: null,
+    });
+  });
+
+  it("passes multiple reviewers and a round cap for a consensus review", async () => {
+    mockedInvoke.mockResolvedValueOnce({ id: 1, prNumber: 3 });
+
+    await api.createPrReview({
+      prUrl: "https://github.com/owner/repo/pull/3",
+      reviewerProfileIds: [4, 2],
+      maxRounds: 3,
+    });
+
+    expect(mockedInvoke).toHaveBeenCalledWith("create_pr_review", {
+      prUrl: "https://github.com/owner/repo/pull/3",
+      reviewerProfileIds: [4, 2],
+      maxRounds: 3,
     });
   });
 

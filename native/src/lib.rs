@@ -9,9 +9,9 @@ mod sessions;
 use crate::db::Database;
 use crate::models::{
     AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings, AppSettingsInput,
-    GithubStatus, JiraProject, JiraStatus, JiraWorkItem, PrReview, PullRequestInfo, Repo,
-    ReviewLoop, ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskStatus,
-    TaskSummary,
+    GithubStatus, JiraProject, JiraStatus, JiraWorkItem, PrReview, PrReviewMode, PrReviewRun,
+    PullRequestInfo, Repo, ReviewLoop, ReviewRun, Session, SessionExitedEvent,
+    SessionOutputSnapshot, TaskStatus, TaskSummary,
 };
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
@@ -331,16 +331,28 @@ fn set_task_jira_link(
     )
 }
 
+/// Largest consensus round count a caller can request. Each round runs every
+/// reviewer once, so this bounds both wall-clock time and token spend.
+const MAX_CONSENSUS_ROUNDS: i64 = 5;
+
 /// Start a review of an external pull request: resolve its `owner/repo` to a
-/// known project, queue the review, and kick off the background reviewer.
+/// known project, queue the review, and kick off the background reviewer. One
+/// reviewer runs the original single-reviewer flow; two or more runs a
+/// multi-model consensus that iterates up to `max_rounds` (default 3) rounds.
 #[tauri::command]
 fn create_pr_review(
     pr_url: String,
-    reviewer_profile_id: Option<i64>,
+    reviewer_profile_ids: Option<Vec<i64>>,
+    max_rounds: Option<i64>,
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> AppResult<PrReview> {
-    let review = {
+    enum Kind {
+        Single,
+        Consensus,
+    }
+
+    let (review, kind) = {
         let db = state.db.lock();
         let parsed = github::parse_pull_request_url(&pr_url)?;
         let repo = db
@@ -351,19 +363,48 @@ fn create_pr_review(
                     parsed.owner, parsed.repo
                 ))
             })?;
-        let reviewer_profile_id = match reviewer_profile_id {
-            Some(id) => id,
-            None => db
-                .get_app_settings()?
-                .default_agent_profile_id
-                .ok_or_else(|| AppError::from("Choose a reviewer profile for the review"))?,
-        };
-        db.create_pr_review(repo.id, reviewer_profile_id, pr_url.trim(), parsed.number)?
+
+        // Fall back to the default reviewer profile when none were chosen, and
+        // drop duplicates so consensus runs across distinct reviewers.
+        let mut reviewer_ids = reviewer_profile_ids.unwrap_or_default();
+        reviewer_ids.retain(|id| *id > 0);
+        let mut seen = std::collections::HashSet::new();
+        reviewer_ids.retain(|id| seen.insert(*id));
+        if reviewer_ids.is_empty() {
+            reviewer_ids.push(
+                db.get_app_settings()?
+                    .default_agent_profile_id
+                    .ok_or_else(|| AppError::from("Choose a reviewer profile for the review"))?,
+            );
+        }
+
+        if reviewer_ids.len() <= 1 {
+            let review =
+                db.create_pr_review(repo.id, reviewer_ids[0], pr_url.trim(), parsed.number)?;
+            (review, Kind::Single)
+        } else {
+            // The first selected reviewer doubles as the synthesizer.
+            let rounds = max_rounds.unwrap_or(3).clamp(1, MAX_CONSENSUS_ROUNDS);
+            let review = db.create_consensus_pr_review(
+                repo.id,
+                reviewer_ids[0],
+                &reviewer_ids,
+                rounds,
+                pr_url.trim(),
+                parsed.number,
+            )?;
+            (review, Kind::Consensus)
+        }
     };
 
-    state
-        .sessions
-        .run_pr_review(app, state.db.clone(), review.id);
+    match kind {
+        Kind::Single => state
+            .sessions
+            .run_pr_review(app, state.db.clone(), review.id),
+        Kind::Consensus => state
+            .sessions
+            .run_consensus_pr_review(app, state.db.clone(), review.id),
+    }
     Ok(review)
 }
 
@@ -377,8 +418,18 @@ fn get_pr_review(review_id: i64, state: State<'_, AppState>) -> AppResult<Option
     app_result(state.db.lock().pr_review_by_id(review_id))
 }
 
+/// The per-reviewer, per-round outputs of a consensus review (empty for a
+/// single-reviewer review).
+#[tauri::command]
+fn list_pr_review_runs(
+    review_id: i64,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<PrReviewRun>> {
+    app_result(state.db.lock().list_pr_review_runs(review_id))
+}
+
 /// Re-run a finished review: re-fetch the PR head (picking up new commits) and
-/// review again.
+/// review again, using the same single/consensus mode it was created with.
 #[tauri::command]
 fn rerun_pr_review(
     review_id: i64,
@@ -386,9 +437,16 @@ fn rerun_pr_review(
     state: State<'_, AppState>,
 ) -> AppResult<PrReview> {
     let review = app_result(state.db.lock().reset_pr_review_for_rerun(review_id))?;
-    state
-        .sessions
-        .run_pr_review(app, state.db.clone(), review.id);
+    match review.mode {
+        PrReviewMode::Consensus => {
+            state
+                .sessions
+                .run_consensus_pr_review(app, state.db.clone(), review.id)
+        }
+        PrReviewMode::Single => state
+            .sessions
+            .run_pr_review(app, state.db.clone(), review.id),
+    }
     Ok(review)
 }
 
@@ -641,6 +699,7 @@ pub fn run() {
             create_pr_review,
             list_pr_reviews,
             get_pr_review,
+            list_pr_review_runs,
             rerun_pr_review,
             delete_pr_review,
             list_agent_profiles,

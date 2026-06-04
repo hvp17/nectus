@@ -1,8 +1,8 @@
 use crate::git_ops;
 #[cfg(test)]
 use crate::models::{
-    AgentKind, AgentProfileInput, DensityMode, PrReviewStatus, PrReviewVerdict, ReviewLoopStatus,
-    ReviewRunInput, ReviewVerdict, ThemeMode,
+    AgentKind, AgentProfileInput, DensityMode, PrReviewMode, PrReviewRunInput, PrReviewStatus,
+    PrReviewVerdict, ReviewLoopStatus, ReviewRunInput, ReviewVerdict, ThemeMode,
 };
 use crate::models::{AppSettings, AppSettingsInput, Repo, TaskStatus, TaskSummary};
 use chrono::Utc;

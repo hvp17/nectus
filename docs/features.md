@@ -260,8 +260,9 @@ reviewer-launch, and notification machinery under the hood.
 Current behavior:
 
 - Open the PR Reviews section from the sidebar footer.
-- Paste a pull request URL (`https://github.com/owner/repo/pull/123`) and pick a
-  reviewer profile, then start the review.
+- Paste a pull request URL (`https://github.com/owner/repo/pull/123`) and pick one
+  or more reviewer profiles, then start the review. One reviewer runs a single
+  review; two or more run a multi-model **consensus** review (see below).
 - Nectus resolves the PR's `owner/repo` to a project already added to Nectus by
   matching its git remote (`origin`). If no project matches, the action reports that
   the repository must be added as a project first. No filesystem scanning is done.
@@ -291,6 +292,25 @@ Current behavior:
   is the configured default agent profile. Claude and Gemini reviewers run with `-p`;
   Codex reviewers run with `codex exec`; custom reviewers receive the prompt on stdin.
 
+Consensus review (two or more reviewers):
+
+- Choosing 2+ reviewers turns on consensus mode and reveals a **Rounds** cap
+  (default 3, max 5). The first selected reviewer also acts as the synthesizer.
+- All reviewers review the same PR head in **one shared read-only ephemeral
+  worktree**, in parallel. Round 1 is independent; in each later round every
+  reviewer is shown the others' previous-round reviews and asked to reconsider.
+  Rounds repeat until every reviewer reports the same non-inconclusive verdict
+  (converged) or the cap is reached.
+- A final synthesis pass merges the last round's reviews into one consensus review
+  to paste into the PR, keeping every distinct blocking issue and flagging any
+  unresolved disagreement. The detail view shows the consensus summary
+  ("Converged in N rounds" / "No consensus after N rounds"), the reviewer chips,
+  the synthesized review, and a per-round breakdown with each reviewer's verdict and
+  output. Rounds stream in live while the review runs.
+- The list and detail badges still surface the overall verdict (the converged
+  verdict, or the synthesizer's when the reviewers did not agree). Re-run and Delete
+  behave as for single reviews; re-run discards the prior rounds.
+
 Key files:
 
 - Sidebar nav entry: `src/components/Sidebar.tsx`
@@ -300,10 +320,15 @@ Key files:
 - Frontend API: `src/api.ts`
 - PR URL parsing and `gh pr view` metadata: `native/src/github.rs`
 - Remote `owner/repo` parsing, PR-ref fetch, worktree-at-ref: `native/src/git_ops.rs`
-- Runtime worker: `native/src/sessions/pr_review.rs`
-- Backend commands: `create_pr_review`, `list_pr_reviews`, `get_pr_review`,
-  `rerun_pr_review`, `delete_pr_review`
-- Persistence: `pr_reviews` table; API in `native/src/db/pr_reviews.rs`
+- Runtime workers: `native/src/sessions/pr_review.rs` (single) and
+  `native/src/sessions/pr_consensus.rs` (consensus rounds + synthesis)
+- Backend commands: `create_pr_review` (takes `reviewer_profile_ids` + `max_rounds`;
+  one id → single, 2+ → consensus), `list_pr_reviews`, `get_pr_review`,
+  `list_pr_review_runs` (per-reviewer round outputs), `rerun_pr_review`,
+  `delete_pr_review`
+- Persistence: `pr_reviews` plus `pr_review_reviewers` (participants) and
+  `pr_review_runs` (per-reviewer, per-round outputs); API in
+  `native/src/db/pr_reviews.rs`
 
 Emitted event:
 

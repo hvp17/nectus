@@ -104,7 +104,13 @@ fn emit_pr_review_update(app: &AppHandle, db: &Arc<Mutex<Database>>, review_id: 
     let Ok(Some(pr_review)) = db.lock().pr_review_by_id(review_id) else {
         return;
     };
-    let _ = app.emit("pr_review_updated", PrReviewUpdatedEvent { pr_review });
+    let _ = app.emit(
+        "pr_review_updated",
+        PrReviewUpdatedEvent {
+            pr_review,
+            latest_run: None,
+        },
+    );
 }
 
 pub(super) fn build_pr_review_prompt(pr_number: i64, meta: &PrMeta) -> String {
@@ -141,13 +147,13 @@ After the review, on the final line by itself, output a machine-readable verdict
 
 /// Marker the reviewer appends so the review's outcome can be tracked without
 /// parsing prose. Kept out of the human-facing review by [`parse_pr_review_output`].
-const PR_VERDICT_MARKER: &str = "NECTUS_PR_VERDICT:";
+pub(super) const PR_VERDICT_MARKER: &str = "NECTUS_PR_VERDICT:";
 
 /// Split a raw reviewer response into its verdict and the human-facing Markdown.
 /// The reviewer appends a `NECTUS_PR_VERDICT:` line; it is parsed into a verdict
 /// and removed from the returned review. A missing or unrecognized marker yields
 /// `Inconclusive` and leaves the text otherwise untouched.
-fn parse_pr_review_output(raw: &str) -> (PrReviewVerdict, String) {
+pub(super) fn parse_pr_review_output(raw: &str) -> (PrReviewVerdict, String) {
     let mut verdict = PrReviewVerdict::Inconclusive;
     let mut kept = Vec::new();
     for line in raw.lines() {
