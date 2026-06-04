@@ -63,7 +63,7 @@ export function ReviewsPage({
     const initial = defaultReviewerProfileId ?? agentProfiles[0]?.id;
     return initial ? [initial] : [];
   });
-  const [rounds, setRounds] = useState(2);
+  const [rounds, setRounds] = useState(DEFAULT_ROUNDS);
 
   // Two or more reviewers turns the review into a multi-model consensus run.
   const consensus = selectedReviewerIds.length >= 2;
@@ -154,13 +154,15 @@ export function ReviewsPage({
                 Rounds
                 <input
                   type="number"
-                  min={1}
-                  max={5}
+                  min={MIN_ROUNDS}
+                  max={MAX_ROUNDS}
                   aria-label="Consensus rounds"
                   className="nx-in"
                   style={{ width: 56, textAlign: "center" }}
                   value={rounds}
-                  onChange={(event) => setRounds(Math.min(5, Math.max(1, Number(event.target.value) || 1)))}
+                  onChange={(event) =>
+                    setRounds(Math.min(MAX_ROUNDS, Math.max(MIN_ROUNDS, Number(event.target.value) || MIN_ROUNDS)))
+                  }
                 />
               </label>
             )}
@@ -193,8 +195,8 @@ export function ReviewsPage({
                     >
                       <div className="nx-rev-card-top">
                         <PrReviewBadge review={review} />
-                        {review.consensus && (
-                          <span className="nx-modeltag">{review.consensus.reviewers.length}-model</span>
+                        {review.mode === "consensus" && (
+                          <span className="nx-modeltag">{review.reviewers.length}-model</span>
                         )}
                         <span className="nx-num">#{review.prNumber}</span>
                       </div>
@@ -215,6 +217,7 @@ export function ReviewsPage({
           <PrReviewDetail
             review={selectedPrReview}
             runs={selectedPrReviewRuns}
+            agentProfiles={agentProfiles}
             onRerun={onRerunReview}
             onDelete={onDeleteReview}
           />

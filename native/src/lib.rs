@@ -343,7 +343,7 @@ const MAX_CONSENSUS_ROUNDS: i64 = 5;
 fn create_pr_review(
     pr_url: String,
     reviewer_profile_ids: Option<Vec<i64>>,
-    rounds: Option<i64>,
+    max_rounds: Option<i64>,
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> AppResult<PrReview> {
@@ -364,33 +364,36 @@ fn create_pr_review(
                 ))
             })?;
 
-        // Dedupe while preserving order so the first pick stays the synthesizer.
-        let mut reviewer_ids: Vec<i64> = Vec::new();
-        for id in reviewer_profile_ids.unwrap_or_default() {
-            if !reviewer_ids.contains(&id) {
-                reviewer_ids.push(id);
-            }
-        }
+        // Fall back to the default reviewer profile when none were chosen, and
+        // drop duplicates so consensus runs across distinct reviewers.
+        let mut reviewer_ids = reviewer_profile_ids.unwrap_or_default();
+        reviewer_ids.retain(|id| *id > 0);
+        let mut seen = std::collections::HashSet::new();
+        reviewer_ids.retain(|id| seen.insert(*id));
         if reviewer_ids.is_empty() {
-            let default_id = db
-                .get_app_settings()?
-                .default_agent_profile_id
-                .ok_or_else(|| AppError::from("Choose a reviewer profile for the review"))?;
-            reviewer_ids.push(default_id);
+            reviewer_ids.push(
+                db.get_app_settings()?
+                    .default_agent_profile_id
+                    .ok_or_else(|| AppError::from("Choose a reviewer profile for the review"))?,
+            );
         }
 
-        if reviewer_ids.len() >= 2 {
-            // Two or more reviewers run as a consensus review over up to `rounds`.
-            let rounds = rounds.unwrap_or(2).clamp(1, 5);
-            db.create_consensus_pr_review(
+        if reviewer_ids.len() <= 1 {
+            let review =
+                db.create_pr_review(repo.id, reviewer_ids[0], pr_url.trim(), parsed.number)?;
+            (review, Kind::Single)
+        } else {
+            // The first selected reviewer doubles as the synthesizer.
+            let rounds = max_rounds.unwrap_or(3).clamp(1, MAX_CONSENSUS_ROUNDS);
+            let review = db.create_consensus_pr_review(
                 repo.id,
+                reviewer_ids[0],
                 &reviewer_ids,
                 rounds,
                 pr_url.trim(),
                 parsed.number,
-            )?
-        } else {
-            db.create_pr_review(repo.id, reviewer_ids[0], pr_url.trim(), parsed.number)?
+            )?;
+            (review, Kind::Consensus)
         }
     };
 

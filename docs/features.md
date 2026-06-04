@@ -324,7 +324,7 @@ Current behavior:
   Codex reviewers run with `codex exec`; custom reviewers receive the prompt on stdin.
 
 **Consensus mode.** Selecting two or more reviewers (optionally setting a round
-count, 1–5, default 2) runs them as a consensus review:
+count, 1–5, default 3) runs them as a consensus review:
 
 - The PR head is checked out once and every reviewer reads it in round 1. From
   round 2 on, each reviewer also sees the other reviewers' prior-round notes and
@@ -338,9 +338,13 @@ count, 1–5, default 2) runs them as a consensus review:
   **reviewers × rounds** matrix of verdict dots that fills in live as each round
   is persisted, and the synthesized review. The list card and detail header carry
   an "N-model" tag.
-- Consensus state is persisted on the review row (`reviewer_profile_ids`, `rounds`,
-  `consensus_json`); a single-reviewer review stores none of these. Re-run resets
-  the matrix but keeps the reviewer roster and round budget.
+- Consensus state lives in the data model: the `pr_reviews` row carries `mode`,
+  `max_rounds`, `rounds_completed`, and `converged`; the participating reviewers
+  live in `pr_review_reviewers`, and each reviewer's per-round verdict + output in
+  `pr_review_runs`. A single-reviewer review is `mode = 'single'` with no
+  reviewers/runs. The detail matrix is built on the frontend by bucketing
+  `list_pr_review_runs` by round. Re-run clears the runs but keeps the reviewer
+  roster and round budget.
 
 Key files:
 
@@ -351,12 +355,15 @@ Key files:
 - Frontend API: `src/api.ts`
 - PR URL parsing and `gh pr view` metadata: `native/src/github.rs`
 - Remote `owner/repo` parsing, PR-ref fetch, worktree-at-ref: `native/src/git_ops.rs`
-- Runtime worker (single review + consensus rounds, convergence, synthesizer):
-  `native/src/sessions/pr_review.rs`
-- Backend commands: `create_pr_review` (takes `reviewerProfileIds` + `rounds`),
-  `list_pr_reviews`, `get_pr_review`, `rerun_pr_review`, `delete_pr_review`
-- Persistence: `pr_reviews` table (consensus adds `reviewer_profile_ids`, `rounds`,
-  `consensus_json`); API in `native/src/db/pr_reviews.rs`
+- Single-review runtime worker: `native/src/sessions/pr_review.rs`
+- Consensus runtime (parallel rounds in one shared worktree, cross-pollination,
+  convergence, synthesizer): `native/src/sessions/pr_consensus.rs`
+- Backend commands: `create_pr_review` (takes `reviewerProfileIds` + `maxRounds`),
+  `list_pr_reviews`, `get_pr_review`, `list_pr_review_runs`, `rerun_pr_review`,
+  `delete_pr_review`
+- Persistence: `pr_reviews` (with `mode`, `max_rounds`, `rounds_completed`,
+  `converged`), plus `pr_review_reviewers` and `pr_review_runs`; API in
+  `native/src/db/pr_reviews.rs`
 
 Emitted event:
 

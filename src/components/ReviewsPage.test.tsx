@@ -110,7 +110,7 @@ it("runs a consensus review when two or more reviewers are selected", () => {
   });
   fireEvent.click(screen.getByRole("button", { name: /review pull request/i }));
 
-  expect(onCreateReview).toHaveBeenCalledWith("https://github.com/owner/repo/pull/9", [1, 2], 2);
+  expect(onCreateReview).toHaveBeenCalledWith("https://github.com/owner/repo/pull/9", [1, 2], 3);
 });
 
 it("offers an empty state when there are no reviews", () => {

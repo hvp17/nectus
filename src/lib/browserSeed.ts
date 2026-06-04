@@ -13,6 +13,7 @@ import type {
   JiraStatus,
   JiraWorkItem,
   PrReview,
+  PrReviewRun,
   PullRequestInfo,
   Repo,
   ReviewLoop,
@@ -182,25 +183,21 @@ export const seedPrReviews: PrReview[] = [
     id: 1, repoId: 1, repoName: "web-app", reviewerProfileId: 2, reviewerName: "Claude Sonnet",
     prUrl: "https://github.com/hvp17/web-app/pull/412", prNumber: 412, prTitle: "Fix OAuth redirect loop on sign-in",
     prAuthor: "hvp17", baseBranch: "main", status: "ready", verdict: "passed", reviewOutput: singleOutput,
-    lastError: null, worktreePath: null, consensus: null, createdAt: ago(120), updatedAt: ago(118),
+    lastError: null, worktreePath: null,
+    mode: "single", maxRounds: null, roundsCompleted: 0, converged: null, reviewers: [],
+    createdAt: ago(120), updatedAt: ago(118),
   },
   {
     id: 2, repoId: 1, repoName: "web-app", reviewerProfileId: 2, reviewerName: "Claude Sonnet",
     prUrl: "https://github.com/hvp17/web-app/pull/408", prNumber: 408, prTitle: "Migrate session store to SQLite WAL",
     prAuthor: "hvp17", baseBranch: "main", status: "ready", verdict: "blockers", reviewOutput: consensusOutput,
     lastError: null, worktreePath: null,
-    consensus: {
-      reviewers: [
-        { profileId: 2, name: "Claude Sonnet", agentKind: "claude", synthesizer: true },
-        { profileId: 1, name: "Codex", agentKind: "codex", synthesizer: false },
-        { profileId: 3, name: "Gemini", agentKind: "gemini", synthesizer: false },
-      ],
-      rounds: [
-        { round: 1, verdicts: { "2": "blockers", "1": "blockers", "3": "inconclusive" } },
-        { round: 2, verdicts: { "2": "blockers", "1": "blockers", "3": "blockers" } },
-      ],
-      maxRounds: 3, converged: true, convergedInRounds: 2,
-    },
+    mode: "consensus", maxRounds: 3, roundsCompleted: 2, converged: true,
+    reviewers: [
+      { reviewerProfileId: 2, reviewerName: "Claude Sonnet" },
+      { reviewerProfileId: 1, reviewerName: "Codex" },
+      { reviewerProfileId: 3, reviewerName: "Gemini" },
+    ],
     createdAt: ago(200), updatedAt: ago(190),
   },
   {
@@ -208,23 +205,53 @@ export const seedPrReviews: PrReview[] = [
     prUrl: "https://github.com/hvp17/cli-tools/pull/415", prNumber: 415, prTitle: "Add --json output to status command",
     prAuthor: "kfowler", baseBranch: "main", status: "reviewing", verdict: null, reviewOutput: null,
     lastError: null, worktreePath: null,
-    consensus: {
-      reviewers: [
-        { profileId: 1, name: "Codex", agentKind: "codex", synthesizer: true },
-        { profileId: 3, name: "Gemini", agentKind: "gemini", synthesizer: false },
-      ],
-      rounds: [{ round: 1, verdicts: { "1": "passed", "3": "blockers" } }],
-      maxRounds: 2, converged: false, convergedInRounds: null,
-    },
+    mode: "consensus", maxRounds: 2, roundsCompleted: 1, converged: null,
+    reviewers: [
+      { reviewerProfileId: 1, reviewerName: "Codex" },
+      { reviewerProfileId: 3, reviewerName: "Gemini" },
+    ],
     createdAt: ago(6), updatedAt: ago(2),
   },
   {
     id: 4, repoId: 3, repoName: "design-system", reviewerProfileId: 2, reviewerName: "Claude Sonnet",
     prUrl: "https://github.com/hvp17/design-system/pull/217", prNumber: 217, prTitle: "Document elevation + shadow scale",
     prAuthor: "mreyes", baseBranch: "main", status: "queued", verdict: null, reviewOutput: null,
-    lastError: null, worktreePath: null, consensus: null, createdAt: ago(1), updatedAt: ago(1),
+    lastError: null, worktreePath: null,
+    mode: "single", maxRounds: null, roundsCompleted: 0, converged: null, reviewers: [],
+    createdAt: ago(1), updatedAt: ago(1),
   },
 ];
+
+// The per-(reviewer, round) verdict matrix for the consensus reviews above,
+// matching main's PrReviewRun shape that PrReviewDetail buckets by round.
+const run = (
+  id: number,
+  prReviewId: number,
+  reviewerProfileId: number,
+  reviewerName: string,
+  round: number,
+  verdict: PrReviewRun["verdict"],
+  output: string,
+): PrReviewRun => ({ id, prReviewId, reviewerProfileId, reviewerName, round, verdict, output, error: null, createdAt: ago(190) });
+
+const prReviewRunsByReview: Record<number, PrReviewRun[]> = {
+  2: [
+    run(1, 2, 2, "Claude Sonnet", 1, "blockers", "WAL alone leaves writers exposed to SQLITE_BUSY under parallel agents."),
+    run(2, 2, 1, "Codex", 1, "blockers", "No busy_timeout/retry — concurrent writers will fail intermittently."),
+    run(3, 2, 3, "Gemini", 1, "inconclusive", "Likely fine for low concurrency; need to see the writer path."),
+    run(4, 2, 2, "Claude Sonnet", 2, "blockers", "Confirmed after seeing round 1: add busy_timeout + retry before merge."),
+    run(5, 2, 1, "Codex", 2, "blockers", "Agree with Claude; this is a blocker."),
+    run(6, 2, 3, "Gemini", 2, "blockers", "Persuaded by the contention trace — blocking."),
+  ],
+  3: [
+    run(7, 3, 1, "Codex", 1, "passed", "Clean --json surface; matches the documented schema."),
+    run(8, 3, 3, "Gemini", 1, "blockers", "Non-zero exit still prints human text on stderr; breaks --json consumers."),
+  ],
+};
+
+export function seedPrReviewRuns(reviewId: number): PrReviewRun[] {
+  return prReviewRunsByReview[reviewId] ?? [];
+}
 
 export function seedPullRequest(taskId: number): PullRequestInfo {
   return {

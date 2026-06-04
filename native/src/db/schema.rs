@@ -146,12 +146,6 @@ impl Database {
         // databases created before then. `CREATE TABLE IF NOT EXISTS` never adds
         // columns to an existing table, so this ALTER is the only path for them.
         self.ensure_column("pr_reviews", "verdict", "TEXT")?;
-        // Multi-model consensus reviews, added after the table shipped: the set of
-        // reviewer profiles, the configured max rounds, and the serialized
-        // convergence matrix. All null for single-reviewer reviews.
-        self.ensure_column("pr_reviews", "reviewer_profile_ids", "TEXT")?;
-        self.ensure_column("pr_reviews", "rounds", "INTEGER")?;
-        self.ensure_column("pr_reviews", "consensus_json", "TEXT")?;
         self.run_migrations()
     }
 

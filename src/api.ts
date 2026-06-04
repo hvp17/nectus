@@ -10,6 +10,7 @@ import {
   seedJiraProjects,
   seedJiraStatus,
   seedPrReviews,
+  seedPrReviewRuns,
   seedProfiles,
   seedPullRequest,
   seedRepos,
@@ -197,12 +198,12 @@ export const api = {
   async createPrReview(input: {
     prUrl: string;
     reviewerProfileIds?: number[] | null;
-    rounds?: number | null;
+    maxRounds?: number | null;
   }): Promise<PrReview> {
     return invoke("create_pr_review", {
       prUrl: input.prUrl,
       reviewerProfileIds: input.reviewerProfileIds ?? null,
-      rounds: input.rounds ?? null,
+      maxRounds: input.maxRounds ?? null,
     });
   },
   async listPrReviews(): Promise<PrReview[]> {
@@ -216,6 +217,7 @@ export const api = {
     return invoke("get_pr_review", { reviewId });
   },
   async listPrReviewRuns(reviewId: number): Promise<PrReviewRun[]> {
+    if (isBrowserPreview) return seedPrReviewRuns(reviewId);
     if (!isTauri) return [];
     return invoke("list_pr_review_runs", { reviewId });
   },
