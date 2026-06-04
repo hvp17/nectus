@@ -60,7 +60,6 @@ export function CreateTaskComposer({
 }: CreateTaskComposerProps) {
   const submitDisabled = busy || !newTaskAgentProfileId || !newTaskRepoId;
   const selectedRepo = repos.find((repo) => repo.id === newTaskRepoId);
-  const selectedAgent = agentProfiles.find((profile) => profile.id === newTaskAgentProfileId);
   const repoLabel = selectedRepo?.name ?? "Board";
 
   return (
@@ -141,10 +140,7 @@ export function CreateTaskComposer({
                 onValueChange={(value) => setNewTaskAgentProfileId(Number(value))}
               >
                 <SelectTrigger id="new-task-agent" className="h-10" aria-label="Agent">
-                  <span className="flex min-w-0 items-center gap-2">
-                    {selectedAgent && <AgentLogo agentKind={selectedAgent.agentKind} size="sm" />}
-                    <SelectValue placeholder="Choose an agent" />
-                  </span>
+                  <SelectValue placeholder="Choose an agent" />
                 </SelectTrigger>
                 <SelectContent>
                   {agentProfiles.map((profile) => (

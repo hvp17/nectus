@@ -309,7 +309,10 @@ textarea.nx-in { height: auto; padding: 9px 11px; line-height: 1.5; resize: vert
 .nx-ov strong { display: block; font-size: 13.5px; font-weight: 700; margin-top: 2px; }
 .nx-ov strong.mono { font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
 
-.nx-set-section { background: var(--card); border-radius: var(--radius-xl); box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 9%, transparent), var(--shadow-xs); overflow: hidden; }
+/* `flex: none` keeps each section at its content height so the scroll container
+   (.nx-set-scroll) scrolls, instead of flex-shrinking the sections and clipping
+   their bodies under `overflow: hidden`. */
+.nx-set-section { flex: none; background: var(--card); border-radius: var(--radius-xl); box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 9%, transparent), var(--shadow-xs); overflow: hidden; }
 .nx-set-sec-head { display: flex; align-items: center; gap: 10px; padding: 15px 18px; border-bottom: 1px solid var(--border); }
 .nx-set-sec-head > svg { width: 16px; height: 16px; color: var(--primary); flex: none; }
 .nx-set-sec-head h3 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
