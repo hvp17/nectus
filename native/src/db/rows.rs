@@ -182,34 +182,8 @@ pub(super) fn pr_review_from_row(row: &Row<'_>) -> rusqlite::Result<PrReview> {
         created_at: row.get(14)?,
         updated_at: row.get(15)?,
         verdict: row.get(16)?,
-        mode: row.get(17)?,
-        max_rounds: row.get(18)?,
-        rounds_completed: row.get(19)?,
-        converged: row.get(20)?,
-        reviewers: Vec::new(),
-    })
-}
-
-/// Maps the joined `pr_review_runs` SELECT (see `db/pr_reviews.rs`): reviewer
-/// name comes from a LEFT JOIN on `agent_profiles`.
-pub(super) fn pr_review_run_from_row(row: &Row<'_>) -> rusqlite::Result<PrReviewRun> {
-    Ok(PrReviewRun {
-        id: row.get(0)?,
-        pr_review_id: row.get(1)?,
-        reviewer_profile_id: row.get(2)?,
-        reviewer_name: row.get(3)?,
-        round: row.get(4)?,
-        verdict: row.get(5)?,
-        output: row.get(6)?,
-        error: row.get(7)?,
-        created_at: row.get(8)?,
-    })
-}
-
-/// Maps a `pr_review_reviewers` row joined to `agent_profiles` for the name.
-pub(super) fn pr_review_reviewer_from_row(row: &Row<'_>) -> rusqlite::Result<PrReviewReviewer> {
-    Ok(PrReviewReviewer {
-        reviewer_profile_id: row.get(0)?,
-        reviewer_name: row.get(1)?,
+        consensus: row
+            .get::<_, Option<String>>(17)?
+            .and_then(|json| serde_json::from_str(&json).ok()),
     })
 }

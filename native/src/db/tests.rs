@@ -895,137 +895,67 @@ fn creates_a_consensus_pr_review_and_records_rounds() {
     let db = Database::open_in_memory().unwrap();
     let (_dir, repo) = add_repo_with_github_remote(&db, "hvp17", "nectus");
     let profiles = db.list_agent_profiles().unwrap();
-    let (codex, claude) = (profiles[0].clone(), profiles[1].clone());
+    let ids: Vec<i64> = profiles.iter().take(2).map(|profile| profile.id).collect();
 
     let review = db
-        .create_consensus_pr_review(
-            repo.id,
-            codex.id,
-            &[codex.id, claude.id],
-            3,
-            "https://github.com/hvp17/nectus/pull/8",
-            8,
-        )
-        .unwrap();
-    assert_eq!(review.mode, PrReviewMode::Consensus);
-    assert_eq!(review.max_rounds, Some(3));
-    assert_eq!(review.rounds_completed, 0);
-    assert_eq!(review.converged, None);
-    // The first selected reviewer is the synthesizer surfaced as the review name.
-    assert_eq!(review.reviewer_profile_id, codex.id);
-    assert_eq!(review.reviewers.len(), 2);
-    assert_eq!(review.reviewers[0].reviewer_profile_id, codex.id);
-    assert_eq!(review.reviewers[1].reviewer_profile_id, claude.id);
-
-    // Record one round of both reviewers, then read them back in order.
-    db.record_pr_review_run(PrReviewRunInput {
-        pr_review_id: review.id,
-        reviewer_profile_id: codex.id,
-        round: 1,
-        verdict: PrReviewVerdict::Blockers,
-        output: "Codex: missing test.".to_string(),
-        error: None,
-    })
-    .unwrap();
-    let claude_run = db
-        .record_pr_review_run(PrReviewRunInput {
-            pr_review_id: review.id,
-            reviewer_profile_id: claude.id,
-            round: 1,
-            verdict: PrReviewVerdict::Passed,
-            output: "Claude: looks fine.".to_string(),
-            error: None,
-        })
-        .unwrap();
-    assert_eq!(claude_run.reviewer_name.as_deref(), Some(claude.name.as_str()));
-    assert_eq!(claude_run.round, 1);
-
-    let runs = db.list_pr_review_runs(review.id).unwrap();
-    assert_eq!(runs.len(), 2);
-    assert_eq!(runs[0].verdict, PrReviewVerdict::Blockers);
-
-    db.set_pr_review_progress(review.id, 2).unwrap();
-    db.set_pr_review_consensus(review.id, "## Consensus\nmissing test.", PrReviewVerdict::Blockers, true)
+        .create_consensus_pr_review(repo.id, &ids, 3, "https://github.com/hvp17/nectus/pull/8", 8)
         .unwrap();
 
-    let loaded = db.pr_review_by_id(review.id).unwrap().unwrap();
-    assert_eq!(loaded.status, PrReviewStatus::Ready);
-    assert_eq!(loaded.rounds_completed, 2);
-    assert_eq!(loaded.converged, Some(true));
-    assert_eq!(loaded.verdict, Some(PrReviewVerdict::Blockers));
-    assert_eq!(loaded.review_output.as_deref(), Some("## Consensus\nmissing test."));
+    // The reviewer roster is stored immediately with an empty matrix, and the
+    // first reviewer is the synthesizer.
+    let consensus = review.consensus.clone().expect("consensus roster present");
+    assert_eq!(consensus.reviewers.len(), 2);
+    assert!(consensus.reviewers[0].synthesizer);
+    assert!(!consensus.reviewers[1].synthesizer);
+    assert_eq!(consensus.max_rounds, 3);
+    assert!(consensus.rounds.is_empty());
+    assert_eq!(review.reviewer_profile_id, ids[0]);
 
-    // A consensus review needs at least two reviewers.
-    assert!(db
-        .create_consensus_pr_review(repo.id, codex.id, &[codex.id], 3, "x", 9)
-        .is_err());
-}
-
-#[test]
-fn rerunning_a_consensus_review_clears_its_rounds() {
-    let db = Database::open_in_memory().unwrap();
-    let (_dir, repo) = add_repo_with_github_remote(&db, "hvp17", "nectus");
-    let profiles = db.list_agent_profiles().unwrap();
-    let review = db
-        .create_consensus_pr_review(
-            repo.id,
-            profiles[0].id,
-            &[profiles[0].id, profiles[1].id],
-            2,
-            "https://github.com/hvp17/nectus/pull/4",
-            4,
-        )
+    // The runtime resolves the roster + round budget via the consensus config; a
+    // single-reviewer review has none.
+    assert_eq!(
+        db.pr_review_consensus_config(review.id).unwrap(),
+        Some((ids.clone(), 3))
+    );
+    let single = db
+        .create_pr_review(repo.id, ids[0], "https://github.com/hvp17/nectus/pull/9", 9)
         .unwrap();
-    db.record_pr_review_run(PrReviewRunInput {
-        pr_review_id: review.id,
-        reviewer_profile_id: profiles[0].id,
-        round: 1,
-        verdict: PrReviewVerdict::Blockers,
-        output: "x".to_string(),
-        error: None,
-    })
-    .unwrap();
-    db.set_pr_review_progress(review.id, 1).unwrap();
+    assert!(db.pr_review_consensus_config(single.id).unwrap().is_none());
+    assert!(single.consensus.is_none());
 
-    let rerun = db.reset_pr_review_for_rerun(review.id).unwrap();
-    assert_eq!(rerun.status, PrReviewStatus::Queued);
-    assert_eq!(rerun.rounds_completed, 0);
-    assert_eq!(rerun.converged, None);
-    // The participating reviewers are kept; only the round outputs are cleared.
+    // Persisting a round fills the matrix and survives reload.
+    let mut updated = consensus.clone();
+    let mut verdicts = std::collections::BTreeMap::new();
+    verdicts.insert(ids[0].to_string(), PrReviewVerdict::Blockers);
+    verdicts.insert(ids[1].to_string(), PrReviewVerdict::Blockers);
+    updated.rounds.push(crate::models::PrReviewRound { round: 1, verdicts });
+    updated.converged = true;
+    updated.converged_in_rounds = Some(1);
+    db.set_pr_review_consensus(review.id, &updated).unwrap();
+
+    let loaded = db
+        .pr_review_by_id(review.id)
+        .unwrap()
+        .unwrap()
+        .consensus
+        .expect("consensus present");
+    assert_eq!(loaded.rounds.len(), 1);
+    assert!(loaded.converged);
+    assert_eq!(loaded.converged_in_rounds, Some(1));
+    assert_eq!(
+        loaded.rounds[0].verdicts.get(&ids[0].to_string()),
+        Some(&PrReviewVerdict::Blockers)
+    );
+
+    // Rerun resets the matrix but keeps the roster and round budget.
+    let rerun = db
+        .reset_pr_review_for_rerun(review.id)
+        .unwrap()
+        .consensus
+        .expect("consensus kept on rerun");
+    assert!(rerun.rounds.is_empty());
+    assert!(!rerun.converged);
     assert_eq!(rerun.reviewers.len(), 2);
-    assert!(db.list_pr_review_runs(review.id).unwrap().is_empty());
-}
-
-#[test]
-fn deleting_a_consensus_review_cascades_to_runs_and_reviewers() {
-    let db = Database::open_in_memory().unwrap();
-    let (_dir, repo) = add_repo_with_github_remote(&db, "hvp17", "nectus");
-    let profiles = db.list_agent_profiles().unwrap();
-    let review = db
-        .create_consensus_pr_review(
-            repo.id,
-            profiles[0].id,
-            &[profiles[0].id, profiles[1].id],
-            2,
-            "https://github.com/hvp17/nectus/pull/5",
-            5,
-        )
-        .unwrap();
-    db.record_pr_review_run(PrReviewRunInput {
-        pr_review_id: review.id,
-        reviewer_profile_id: profiles[0].id,
-        round: 1,
-        verdict: PrReviewVerdict::Passed,
-        output: "x".to_string(),
-        error: None,
-    })
-    .unwrap();
-
-    db.delete_pr_review(review.id).unwrap();
-
-    assert!(db.pr_review_by_id(review.id).unwrap().is_none());
-    assert!(db.list_pr_review_runs(review.id).unwrap().is_empty());
-    assert!(db.list_pr_review_reviewers(review.id).unwrap().is_empty());
 }
 
 #[test]

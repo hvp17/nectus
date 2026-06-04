@@ -207,29 +207,47 @@ impl PrReviewVerdict {
     }
 }
 
-/// How a PR review is run: a single reviewer (the original behavior) or a
-/// multi-model consensus where several reviewers review in parallel, share each
-/// other's reviews, iterate, and a final synthesis pass merges the result.
-#[derive(
-    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Display, EnumString, IntoStaticStr,
-)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum PrReviewMode {
-    Single,
-    Consensus,
+/// One reviewer participating in a consensus PR review. Resolved from the agent
+/// profile at review time and stored alongside the convergence matrix so the UI
+/// can label rows even if the profile is later renamed or deleted.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PrReviewReviewer {
+    pub profile_id: i64,
+    pub name: String,
+    pub agent_kind: Option<AgentKind>,
+    /// The synthesizer writes the final consolidated review. Exactly one reviewer
+    /// is marked the synthesizer (the first selected).
+    pub synthesizer: bool,
 }
 
-impl PrReviewMode {
-    pub fn as_str(&self) -> &'static str {
-        self.into()
-    }
+/// One round of a consensus review: every reviewer's verdict after reading the
+/// PR (round 1) or after also seeing the other reviewers' prior notes (round 2+).
+/// `verdicts` is keyed by reviewer profile id as a string for stable JSON.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PrReviewRound {
+    pub round: i64,
+    pub verdicts: std::collections::BTreeMap<String, PrReviewVerdict>,
+}
+
+/// The convergence record for a multi-model consensus review: which reviewers
+/// participated, their verdict each round, whether they converged, and in how
+/// many rounds. Persisted as JSON on the review row and rendered as a matrix.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PrReviewConsensus {
+    pub reviewers: Vec<PrReviewReviewer>,
+    pub rounds: Vec<PrReviewRound>,
+    pub max_rounds: i64,
+    pub converged: bool,
+    pub converged_in_rounds: Option<i64>,
 }
 
 /// A review of an external GitHub pull request, resolved against a known local
-/// project and reviewed in an ephemeral worktree. `mode` distinguishes a single
-/// reviewer from a consensus run; the consensus-only fields (`max_rounds`,
-/// `rounds_completed`, `converged`, `reviewers`) are inert for single reviews.
+/// project and reviewed in an ephemeral worktree. A review is single-reviewer
+/// unless `consensus` is set, in which case two or more reviewers converge on a
+/// verdict over one or more rounds and `review_output` is the synthesized result.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PrReview {
@@ -250,16 +268,8 @@ pub struct PrReview {
     pub review_output: Option<String>,
     pub last_error: Option<String>,
     pub worktree_path: Option<String>,
-    pub mode: PrReviewMode,
-    /// Consensus only: the iteration cap. `None` for single reviews.
-    pub max_rounds: Option<i64>,
-    /// Consensus only: how many parallel review rounds have finished so far.
-    pub rounds_completed: i64,
-    /// Consensus only: whether the reviewers reached the same verdict before the
-    /// cap. `None` until the run finishes (and for single reviews).
-    pub converged: Option<bool>,
-    /// Consensus only: the participating reviewers. Empty for single reviews.
-    pub reviewers: Vec<PrReviewReviewer>,
+    /// Present only for multi-model consensus reviews; `None` for single reviews.
+    pub consensus: Option<PrReviewConsensus>,
     pub created_at: String,
     pub updated_at: String,
 }

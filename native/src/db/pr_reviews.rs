@@ -4,8 +4,7 @@ use super::rows::{
 use super::{now, Database};
 use crate::git_ops;
 use crate::models::{
-    PrReview, PrReviewMode, PrReviewReviewer, PrReviewRun, PrReviewRunInput, PrReviewStatus,
-    PrReviewVerdict, Repo,
+    PrReview, PrReviewConsensus, PrReviewReviewer, PrReviewStatus, PrReviewVerdict, Repo,
 };
 use rusqlite::{params, OptionalExtension};
 use std::path::Path;
@@ -18,8 +17,7 @@ const PR_REVIEW_SELECT: &str = "
       pr.id, pr.repo_id, r.name, pr.reviewer_profile_id, a.name,
       pr.pr_url, pr.pr_number, pr.pr_title, pr.pr_author, pr.base_branch,
       pr.status, pr.review_output, pr.last_error, pr.worktree_path,
-      pr.created_at, pr.updated_at, pr.verdict,
-      pr.mode, pr.max_rounds, pr.rounds_completed, pr.converged
+      pr.created_at, pr.updated_at, pr.verdict, pr.consensus_json
     FROM pr_reviews pr
     JOIN repos r ON r.id = pr.repo_id
     LEFT JOIN agent_profiles a ON a.id = pr.reviewer_profile_id
@@ -89,6 +87,111 @@ impl Database {
 
         self.pr_review_by_id(self.conn.last_insert_rowid())?
             .ok_or_else(|| "PR review was saved but could not be loaded".to_string())
+    }
+
+    /// Create a multi-model consensus review. The first id is the synthesizer that
+    /// writes the final consolidated review; all ids participate each round. The
+    /// reviewer roster + an empty convergence matrix are stored immediately so the
+    /// UI shows the consensus shape while the review is still queued.
+    pub fn create_consensus_pr_review(
+        &self,
+        repo_id: i64,
+        reviewer_profile_ids: &[i64],
+        rounds: i64,
+        pr_url: &str,
+        pr_number: i64,
+    ) -> Result<PrReview, String> {
+        self.repo_by_id(repo_id)?
+            .ok_or_else(|| "Repository not found".to_string())?;
+        let primary = *reviewer_profile_ids
+            .first()
+            .ok_or_else(|| "Consensus review needs at least one reviewer".to_string())?;
+
+        let mut reviewers = Vec::with_capacity(reviewer_profile_ids.len());
+        for (index, id) in reviewer_profile_ids.iter().enumerate() {
+            let profile = self
+                .agent_profile_by_id(*id)?
+                .ok_or_else(|| "Reviewer profile not found".to_string())?;
+            reviewers.push(PrReviewReviewer {
+                profile_id: profile.id,
+                name: profile.name.clone(),
+                agent_kind: Some(profile.agent_kind),
+                synthesizer: index == 0,
+            });
+        }
+
+        let consensus = PrReviewConsensus {
+            reviewers,
+            rounds: Vec::new(),
+            max_rounds: rounds.max(1),
+            converged: false,
+            converged_in_rounds: None,
+        };
+        let consensus_json = serde_json::to_string(&consensus).map_err(|error| error.to_string())?;
+        let ids_json =
+            serde_json::to_string(reviewer_profile_ids).map_err(|error| error.to_string())?;
+        let now = now();
+        self.conn
+            .execute(
+                "
+                INSERT INTO pr_reviews
+                  (repo_id, reviewer_profile_id, reviewer_profile_ids, rounds, consensus_json,
+                   pr_url, pr_number, status, created_at, updated_at)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)
+                ",
+                params![
+                    repo_id,
+                    primary,
+                    ids_json,
+                    rounds.max(1),
+                    consensus_json,
+                    pr_url,
+                    pr_number,
+                    PrReviewStatus::Queued.as_str(),
+                    now
+                ],
+            )
+            .map_err(|error| format!("Failed to create consensus PR review: {error}"))?;
+
+        self.pr_review_by_id(self.conn.last_insert_rowid())?
+            .ok_or_else(|| "PR review was saved but could not be loaded".to_string())
+    }
+
+    /// The reviewer roster and configured max rounds for a consensus review, or
+    /// `None` for a single-reviewer review (fewer than two reviewers).
+    pub fn pr_review_consensus_config(&self, id: i64) -> Result<Option<(Vec<i64>, i64)>, String> {
+        let row: Option<(Option<String>, Option<i64>)> = self
+            .conn
+            .query_row(
+                "SELECT reviewer_profile_ids, rounds FROM pr_reviews WHERE id = ?1",
+                params![id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        let Some((Some(ids_json), rounds)) = row else {
+            return Ok(None);
+        };
+        let ids: Vec<i64> =
+            serde_json::from_str(&ids_json).map_err(|error| error.to_string())?;
+        if ids.len() < 2 {
+            return Ok(None);
+        }
+        Ok(Some((ids, rounds.unwrap_or(1).max(1))))
+    }
+
+    /// Persist the (possibly partial) convergence matrix so the UI can show it
+    /// filling in round by round.
+    pub fn set_pr_review_consensus(
+        &self,
+        id: i64,
+        consensus: &PrReviewConsensus,
+    ) -> Result<(), String> {
+        let json = serde_json::to_string(consensus).map_err(|error| error.to_string())?;
+        self.execute_pr_review_update(
+            "UPDATE pr_reviews SET consensus_json = ?1, updated_at = ?2 WHERE id = ?3",
+            params![json, now(), id],
+        )
     }
 
     pub fn list_pr_reviews(&self) -> Result<Vec<PrReview>, String> {
@@ -343,8 +446,21 @@ impl Database {
             "UPDATE pr_reviews SET status = ?1, review_output = NULL, verdict = NULL, last_error = NULL, rounds_completed = 0, converged = NULL, updated_at = ?2 WHERE id = ?3",
             params![PrReviewStatus::Queued.as_str(), now(), id],
         )?;
-        self.pr_review_by_id(id)?
-            .ok_or_else(|| "PR review not found".to_string())
+        let review = self
+            .pr_review_by_id(id)?
+            .ok_or_else(|| "PR review not found".to_string())?;
+        // A consensus rerun starts the convergence matrix over while keeping the
+        // reviewer roster and round budget.
+        if let Some(mut consensus) = review.consensus.clone() {
+            consensus.rounds.clear();
+            consensus.converged = false;
+            consensus.converged_in_rounds = None;
+            self.set_pr_review_consensus(id, &consensus)?;
+            return self
+                .pr_review_by_id(id)?
+                .ok_or_else(|| "PR review not found".to_string());
+        }
+        Ok(review)
     }
 
     pub fn delete_pr_review(&self, id: i64) -> Result<(), String> {
