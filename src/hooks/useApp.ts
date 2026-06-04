@@ -3,6 +3,7 @@ import { api } from "../api";
 import { toSettingsInput } from "../components/settings/profileDrafts";
 import { replaceById, upsertById } from "../lib/listState";
 import { jiraBrowseUrl } from "../lib/jira";
+import { isBrowserPreview, seedAttention } from "../lib/browserSeed";
 import { useGuardedAction } from "./useGuardedAction";
 import {
   clearTaskAttention,
@@ -37,14 +38,16 @@ export function useApp() {
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [settings, setSettings] = useState<AppSettings | undefined>();
-  const [currentView, setCurrentView] = useState<"dashboard" | "settings" | "reviews" | "jira">(
-    "dashboard",
+  const [currentView, setCurrentView] = useState<"mission" | "board" | "settings" | "reviews" | "jira">(
+    "mission",
   );
   const [selectedJiraItem, setSelectedJiraItem] = useState<JiraWorkItem | null>(null);
   const [selectedRepoId, setSelectedRepoId] = useState<number | undefined>();
   const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>();
   const [selectedAgentProfileId, setSelectedAgentProfileId] = useState<number | undefined>();
-  const [taskAttention, setTaskAttention] = useState<TaskAttention[]>([]);
+  const [taskAttention, setTaskAttention] = useState<TaskAttention[]>(() =>
+    isBrowserPreview ? seedAttention : [],
+  );
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -259,7 +262,7 @@ export function useApp() {
       });
       setNewTaskRepoId(selectedRepoId ?? repos[0]?.id);
       setSelectedJiraItem(null);
-      setCurrentView("dashboard");
+      setCurrentView("board");
       setSelectedTaskId(undefined);
       setCreateTaskOpen(true);
     },

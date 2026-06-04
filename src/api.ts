@@ -3,6 +3,22 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { formatNotificationBody } from "./notificationText";
+import {
+  isBrowserPreview,
+  seedGithubStatus,
+  seedJiraBoard,
+  seedJiraProjects,
+  seedJiraStatus,
+  seedPrReviews,
+  seedPrReviewRuns,
+  seedProfiles,
+  seedPullRequest,
+  seedRepos,
+  seedReviewLoop,
+  seedReviewRuns,
+  seedSettings,
+  seedTasks,
+} from "./lib/browserSeed";
 import type {
   AgentProfile,
   AppSettings,
@@ -52,6 +68,7 @@ const browserFallbackProfiles: AgentProfile[] = [
 
 export const api = {
   async listRepos(): Promise<Repo[]> {
+    if (isBrowserPreview) return seedRepos;
     if (!isTauri) return [];
     return invoke("list_repos");
   },
@@ -68,6 +85,7 @@ export const api = {
     return typeof selected === "string" ? selected : null;
   },
   async listTasks(repoId?: number): Promise<TaskSummary[]> {
+    if (isBrowserPreview) return repoId ? seedTasks.filter((t) => t.repoId === repoId) : seedTasks;
     if (!isTauri) return [];
     return invoke("list_tasks", { repoId: repoId ?? null });
   },
@@ -112,6 +130,7 @@ export const api = {
     return invoke("delete_task", { taskId });
   },
   async githubStatus(): Promise<GithubStatus> {
+    if (isBrowserPreview) return seedGithubStatus;
     if (!isTauri) return { installed: false, authenticated: false, account: null };
     return invoke("github_status");
   },
@@ -129,6 +148,7 @@ export const api = {
     });
   },
   async githubPullRequestStatus(taskId: number): Promise<PullRequestInfo> {
+    if (isBrowserPreview) return seedPullRequest(taskId);
     return invoke("github_pull_request_status", { taskId });
   },
   async detectGithubPullRequest(taskId: number): Promise<TaskSummary | null> {
@@ -136,14 +156,17 @@ export const api = {
     return invoke("detect_github_pull_request", { taskId });
   },
   async jiraStatus(): Promise<JiraStatus> {
+    if (isBrowserPreview) return seedJiraStatus;
     if (!isTauri) return { installed: false, authenticated: false, account: null, site: null };
     return invoke("jira_status");
   },
   async jiraListProjects(): Promise<JiraProject[]> {
+    if (isBrowserPreview) return seedJiraProjects;
     if (!isTauri) return [];
     return invoke("jira_list_projects");
   },
   async jiraSearchBoard(): Promise<JiraWorkItem[]> {
+    if (isBrowserPreview) return seedJiraBoard;
     if (!isTauri) return [];
     return invoke("jira_search_board");
   },
@@ -184,14 +207,17 @@ export const api = {
     });
   },
   async listPrReviews(): Promise<PrReview[]> {
+    if (isBrowserPreview) return seedPrReviews;
     if (!isTauri) return [];
     return invoke("list_pr_reviews");
   },
   async getPrReview(reviewId: number): Promise<PrReview | null> {
+    if (isBrowserPreview) return seedPrReviews.find((review) => review.id === reviewId) ?? null;
     if (!isTauri) return null;
     return invoke("get_pr_review", { reviewId });
   },
   async listPrReviewRuns(reviewId: number): Promise<PrReviewRun[]> {
+    if (isBrowserPreview) return seedPrReviewRuns(reviewId);
     if (!isTauri) return [];
     return invoke("list_pr_review_runs", { reviewId });
   },
@@ -202,6 +228,7 @@ export const api = {
     return invoke("delete_pr_review", { reviewId });
   },
   async listAgentProfiles(): Promise<AgentProfile[]> {
+    if (isBrowserPreview) return seedProfiles;
     if (!isTauri) return browserFallbackProfiles;
     return invoke("list_agent_profiles");
   },
@@ -220,14 +247,17 @@ export const api = {
     return invoke("stop_pair_loop", { taskId });
   },
   async getTaskReviewLoop(taskId: number): Promise<ReviewLoop | null> {
+    if (isBrowserPreview) return seedReviewLoop(taskId);
     if (!isTauri) return null;
     return invoke("get_task_review_loop", { taskId });
   },
   async listTaskReviewRuns(taskId: number): Promise<ReviewRun[]> {
+    if (isBrowserPreview) return seedReviewRuns(taskId);
     if (!isTauri) return [];
     return invoke("list_task_review_runs", { taskId });
   },
   async getAppSettings(): Promise<AppSettings> {
+    if (isBrowserPreview) return seedSettings;
     if (!isTauri) {
       return {
         defaultAgentProfileId: browserFallbackProfiles[0]?.id ?? null,
@@ -247,6 +277,7 @@ export const api = {
     return invoke("get_app_settings");
   },
   async updateAppSettings(settings: AppSettingsInput): Promise<AppSettings> {
+    if (isBrowserPreview) return { ...settings, updatedAt: new Date().toISOString() };
     return invoke("update_app_settings", { settings });
   },
   async startSession(taskId: number, agentProfileId: number): Promise<Session> {
@@ -259,15 +290,21 @@ export const api = {
     return invoke("stop_session", { sessionId });
   },
   async resizeSession(sessionId: string, rows: number, cols: number): Promise<void> {
+    if (isBrowserPreview) return;
     return invoke("resize_session", { sessionId, rows, cols });
   },
   async sendSessionInput(sessionId: string, data: string): Promise<void> {
+    if (isBrowserPreview) return;
     return invoke("send_session_input", { sessionId, data });
   },
   async submitSessionInput(sessionId: string, data: string): Promise<void> {
+    if (isBrowserPreview) return;
     return invoke("submit_session_input", { sessionId, data });
   },
   async sessionOutputSnapshot(sessionId: string): Promise<SessionOutputSnapshot> {
+    if (isBrowserPreview) {
+      return { sessionId, data: "", truncated: false, startOffset: 0, endOffset: 0, cols: 80, rows: 24 };
+    }
     return invoke("session_output_snapshot", { sessionId });
   },
   async openExternalUrl(url: string): Promise<void> {

@@ -13,9 +13,10 @@ import { appRepo, appTask } from "./appFixtures";
 
 const mockedApi = vi.mocked(api);
 
-// Task titles now appear both as board cards and as nested sidebar rows, so board
-// queries are scoped to the dashboard container (the sidebar is a sibling outside it).
+// The per-project kanban now lives behind the "Board" rail button (the app boots
+// into Mission Control). Navigate there, then scope card queries to the board.
 async function findBoardCard(title: RegExp) {
+  fireEvent.click(await screen.findByRole("button", { name: "Board" }));
   const board = await screen.findByTestId("dashboard-layout");
   return within(board).findByRole("button", { name: title });
 }

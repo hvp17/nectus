@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
   Check,
+  CheckCircle2,
   ChevronDown,
-  CircleCheckBig,
-  ExternalLink,
+  ChevronRight,
   GitBranch,
   LoaderCircle,
   Play,
@@ -13,9 +13,7 @@ import {
   Square,
   TerminalSquare,
 } from "lucide-react";
-import { openExternal } from "../lib/openExternal";
 import { AgentLogo } from "./AgentBrand";
-import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import {
@@ -34,7 +32,6 @@ import {
   StepperIndicator,
   StepperItem,
   StepperNav,
-  StepperSeparator,
   StepperTitle,
   StepperTrigger,
 } from "./reui/stepper";
@@ -68,6 +65,8 @@ export interface TaskWorkspaceProps {
   pullRequest?: PullRequestInfo | null;
   pullRequestLoading?: boolean;
   creatingPullRequest?: boolean;
+  /** Label for the back affordance, e.g. "Mission Control" or the project name. */
+  backLabel?: string;
   onClose: () => void;
   onStopSession: (sessionId: string) => void;
   onResumeSession: (task: TaskSummary) => void;
@@ -101,6 +100,7 @@ export function TaskWorkspace({
   pullRequest,
   pullRequestLoading = false,
   creatingPullRequest = false,
+  backLabel = "Task board",
   onClose,
   onStopSession,
   onResumeSession,
@@ -136,6 +136,7 @@ export function TaskWorkspace({
   const reviewInProgress = reviewLoop?.status === "reviewing";
   const canResumeSession = task.agentKind === "codex" || task.agentKind === "claude";
   const sessionAgentLabel = task.lastSessionAgent ?? task.agentName ?? "None";
+  const sessionId = task.activeSessionId ?? task.lastSessionId;
   const attentionDetail = attention?.prompt ?? attention?.message;
   const displayedAttentionDetail =
     attention?.kind === "idle" && attentionDetail ? truncateFinishedAttentionPreview(attentionDetail) : attentionDetail;
@@ -175,7 +176,7 @@ export function TaskWorkspace({
       completed: reviewReadyForNextStep || task.status === "done",
       loading: reviewInProgress,
       disabled: reviewerProfiles.length === 0 || reviewInProgress,
-      onClick: undefined,
+      onClick: undefined as (() => void) | undefined,
     },
     {
       title: "Create PR",
@@ -196,72 +197,197 @@ export function TaskWorkspace({
   ];
 
   return (
-    <section className="task-workspace" aria-label="Task workspace">
-      <main className="task-terminal-stage">
-        <header className="task-terminal-header">
-          <div className="task-terminal-heading">
-            <Button
-              variant="ghost"
-              onClick={onClose}
-              aria-label="Back to task board"
-              className="-ml-3 h-8 gap-2 px-3 text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft data-icon="inline-start" />
-              Task Board
-            </Button>
-            <div className="min-w-0">
-              <h2 className="truncate text-2xl font-bold tracking-tight">{task.title}</h2>
-            </div>
+    <section className="task-workspace grid h-full min-h-0 grid-cols-[minmax(0,1fr)_320px] overflow-hidden bg-background" aria-label="Task workspace">
+      {/* ---- stage: header, workflow ribbon, terminal + action bar ---- */}
+      <main className="flex min-h-0 min-w-0 flex-col gap-3 bg-gradient-to-b from-muted/25 to-transparent to-30% p-4">
+        <header className="flex items-center gap-3">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
+            onClick={onClose}
+            aria-label="Back to task board"
+          >
+            <ArrowLeft className="size-3.5" aria-hidden="true" />
+            {backLabel}
+          </button>
+          <h2 className="min-w-0 truncate text-lg font-bold tracking-tight">{task.title}</h2>
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            <TaskStatusBadges task={task} />
           </div>
-          <TaskStatusBadges task={task} />
         </header>
 
-        <section className="task-terminal-panel" aria-label="Agent terminal">
-          {task.activeSessionId ? (
-            <TerminalPane sessionId={task.activeSessionId} onSessionExit={onSessionExit} onSessionInput={onSessionInput} />
-          ) : (
-            <TaskTerminalLauncher
-              task={task}
-              canResumeSession={canResumeSession}
-              onResumeSession={onResumeSession}
-              onStartSession={onStartSession}
+        {/* the rework: workflow as a horizontal ribbon, always visible above the terminal */}
+        <Stepper
+          value={workflowStep}
+          orientation="horizontal"
+          indicators={{
+            completed: <Check className="size-3.5" />,
+            loading: <LoaderCircle className="size-3.5 animate-spin" />,
+          }}
+        >
+          <StepperNav className="flex w-full items-stretch rounded-lg border bg-card p-1 shadow-xs">
+            {workflowSteps.map((step, index) => (
+              <Fragment key={step.title}>
+                {index > 0 && (
+                  <span className="flex w-3.5 shrink-0 select-none items-center justify-center self-center text-border">
+                    <ChevronRight className="size-3.5" aria-hidden="true" />
+                  </span>
+                )}
+                <StepperItem
+                  step={index + 1}
+                  completed={step.completed}
+                  disabled={step.disabled}
+                  loading={step.loading}
+                  className="flex-1"
+                >
+                  <StepperTrigger
+                    className="flex flex-1 items-center gap-2.5 rounded-md px-3 py-2 text-left data-[state=active]:bg-primary/10"
+                    onClick={step.onClick}
+                  >
+                    <StepperIndicator className="size-6 rounded-full border-[1.5px] border-border bg-background text-[11px] font-bold text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:text-primary data-[state=completed]:border-primary data-[state=completed]:bg-primary data-[state=completed]:text-primary-foreground">
+                      {index + 1}
+                    </StepperIndicator>
+                    <span className="min-w-0">
+                      <StepperTitle className="text-[12.5px] font-bold leading-tight data-[state=completed]:text-muted-foreground">
+                        {step.title}
+                      </StepperTitle>
+                      <StepperDescription className="mt-0.5 truncate text-[11px]">
+                        {step.description}
+                      </StepperDescription>
+                    </span>
+                  </StepperTrigger>
+
+                  {index === 0 && (
+                    <div className="ml-auto flex shrink-0 items-center gap-1.5 pr-1.5">
+                      <Button
+                        type="button"
+                        size="sm"
+                        aria-label={reviewActionLabel}
+                        disabled={startReviewDisabled}
+                        onClick={startReview}
+                      >
+                        {reviewInProgress && <LoaderCircle data-icon="inline-start" className="animate-spin" />}
+                        <span>{reviewInProgress ? "Reviewing" : "Review"}</span>
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            aria-label="Change reviewer"
+                            className="max-w-[150px]"
+                            disabled={reviewActive || reviewerProfiles.length === 0}
+                          >
+                            {selectedReviewerProfile ? (
+                              <>
+                                <span aria-hidden="true">
+                                  <AgentLogo agentKind={selectedReviewerProfile.agentKind} size="sm" />
+                                </span>
+                                <span className="truncate">{selectedReviewerProfile.name}</span>
+                              </>
+                            ) : (
+                              <span className="truncate">Reviewer</span>
+                            )}
+                            <ChevronDown data-icon="inline-end" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="min-w-44">
+                          <DropdownMenuGroup>
+                            {reviewerProfiles.map((profile) => (
+                              <DropdownMenuItem
+                                key={profile.id}
+                                onSelect={() => setReviewerProfileId(profile.id)}
+                                className="justify-between"
+                              >
+                                <span className="select-option-with-logo">
+                                  <span aria-hidden="true">
+                                    <AgentLogo agentKind={profile.agentKind} size="sm" />
+                                  </span>
+                                  <span className="truncate">{profile.name}</span>
+                                </span>
+                                {profile.id === reviewerProfileId && <Check className="ml-2 size-3.5 text-primary" />}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  )}
+                </StepperItem>
+              </Fragment>
+            ))}
+          </StepperNav>
+        </Stepper>
+
+        <section
+          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border bg-card shadow-lg"
+          aria-label="Agent terminal"
+        >
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {task.activeSessionId ? (
+              <TerminalPane sessionId={task.activeSessionId} onSessionExit={onSessionExit} onSessionInput={onSessionInput} />
+            ) : (
+              <TaskTerminalLauncher
+                task={task}
+                canResumeSession={canResumeSession}
+                onResumeSession={onResumeSession}
+                onStartSession={onStartSession}
+              />
+            )}
+          </div>
+
+          {attention && (
+            <ActionBar
+              attention={attention}
+              agentName={task.agentName}
+              detail={displayedAttentionDetail}
+              detailTitle={isAttentionDetailTruncated ? attentionDetail ?? undefined : undefined}
+              activeSessionId={task.activeSessionId}
+              onStopSession={onStopSession}
             />
           )}
         </section>
       </main>
 
-      <aside className="task-inspector-sidebar" aria-label="Task inspector">
-        <div className="task-inspector-header">
-          <h3 className="truncate text-xl font-bold leading-tight">{task.title}</h3>
-          <TaskStatusBadges task={task} />
+      {/* ---- calm facts rail ---- */}
+      <aside
+        className="flex min-w-0 flex-col overflow-hidden border-l bg-[color-mix(in_srgb,var(--card)_74%,var(--background))]"
+        aria-label="Task inspector"
+      >
+        <div className="flex items-center gap-3 border-b px-4 py-3.5">
+          <span className="grid size-9 shrink-0 place-items-center rounded-md bg-card shadow-xs">
+            <AgentLogo agentKind={task.agentKind ?? "custom"} size="md" />
+          </span>
+          <span className="min-w-0">
+            <strong className="block truncate text-[13px] font-bold">{sessionAgentLabel}</strong>
+            <small className="block truncate text-[11px] text-muted-foreground">
+              {sessionId ? `session ${sessionId}` : "No active session"}
+            </small>
+          </span>
+          {task.activeSessionId && (
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              className="ml-auto"
+              aria-label="Stop session"
+              onClick={() => onStopSession(task.activeSessionId!)}
+            >
+              <Square data-icon="inline-start" fill="currentColor" />
+              Stop
+            </Button>
+          )}
         </div>
 
-        <div data-testid="task-detail-body" className="task-inspector-scroll">
-          {task.activeSessionId && (
-            <section className="task-control-strip" aria-label="Task controls">
-              <div className="task-session-actions">
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  aria-label="Stop session"
-                  className="task-session-button"
-                  onClick={() => onStopSession(task.activeSessionId!)}
-                >
-                  <Square data-icon="inline-start" fill="currentColor" />
-                  Stop
-                </Button>
-              </div>
-            </section>
-          )}
-
-          <section className="task-inspector-section" aria-label="Task metadata">
-            <div className="task-status-control">
-              <span className="task-meta-label">Status:</span>
+        <div data-testid="task-detail-body" className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <section className="flex flex-col gap-2.5 border-b px-4 py-3.5" aria-label="Task metadata">
+            <div className="flex items-center justify-between gap-2.5 text-xs">
+              <span className="text-muted-foreground">Status</span>
               <Select value={task.status} onValueChange={(val) => onUpdateStatus(task, val as TaskStatus)}>
                 <SelectTrigger
                   aria-label="Task status"
-                  className="task-status-trigger h-7 w-fit border-none bg-accent/50 text-xs font-medium hover:bg-accent focus:ring-0"
+                  className="h-7 w-fit border-none bg-accent/50 text-xs font-medium hover:bg-accent focus:ring-0"
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -277,236 +403,53 @@ export function TaskWorkspace({
               </Select>
             </div>
 
-            <div className="task-meta-row">
-              <span className="task-meta-label">Mode:</span>
+            <div className="flex items-center justify-between gap-2.5 text-xs">
+              <span className="text-muted-foreground">Mode</span>
               <Badge variant="outline">{task.hasWorktree ? "Worktree" : "Task only"}</Badge>
             </div>
 
             {task.hasWorktree && task.branchName && (
-              <div className="task-meta-row">
-                <span className="task-meta-label">Branch:</span>
-                <span className="task-meta-branch" title={task.branchName}>
-                  <GitBranch size={12} />
-                  <span>{task.branchName}</span>
+              <div className="flex items-center justify-between gap-2.5 text-xs">
+                <span className="text-muted-foreground">Branch</span>
+                <span className="flex min-w-0 items-center gap-1.5 font-mono text-[11.5px]" title={task.branchName}>
+                  <GitBranch className="size-3 shrink-0 opacity-70" />
+                  <span className="truncate">{task.branchName}</span>
                 </span>
               </div>
             )}
 
             {task.hasWorktree && task.worktreePath && (
-              <div className="task-meta-row">
-                <span className="task-meta-label">Worktree:</span>
-                <span className="task-meta-path" title={task.worktreePath}>
+              <div className="flex items-center justify-between gap-2.5 text-xs">
+                <span className="shrink-0 text-muted-foreground">Worktree</span>
+                <span className="truncate font-mono text-[11.5px] text-muted-foreground" title={task.worktreePath}>
                   {task.worktreePath}
                 </span>
               </div>
             )}
-
-            <div className="task-meta-row">
-              <span className="task-meta-label">PR:</span>
-              {task.prUrl ? (
-                <a
-                  className="task-meta-link"
-                  href={task.prUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    openExternal(task.prUrl!);
-                  }}
-                >
-                  Open <ExternalLink size={12} />
-                </a>
-              ) : (
-                <Badge variant="outline">Not linked</Badge>
-              )}
-            </div>
-
-            <div className="task-meta-row">
-              <span className="task-meta-label">Agent:</span>
-              <span className="truncate">{sessionAgentLabel}</span>
-            </div>
-
-            <div className="task-meta-row task-delete-row">
-              <span className="task-meta-label">Actions:</span>
-              <TaskDeleteDialog
-                task={task}
-                busy={busy}
-                isDeleting={isDeleting}
-                onDelete={onDeleteTask}
-                buttonVariant="destructive"
-                buttonSize="sm"
-                buttonClassName="task-delete-action"
-                showButtonText
-              />
-            </div>
           </section>
 
-          <GitHubPanel
-            task={task}
-            githubStatus={githubStatus}
-            pullRequest={pullRequest}
-            pullRequestLoading={pullRequestLoading}
-            creatingPullRequest={creatingPullRequest}
-            onCreatePullRequest={onCreatePullRequest}
-            onRefreshPullRequest={onRefreshPullRequest}
-          />
+          <div className="border-b px-4 py-3.5">
+            <GitHubPanel
+              task={task}
+              githubStatus={githubStatus}
+              pullRequest={pullRequest}
+              pullRequestLoading={pullRequestLoading}
+              creatingPullRequest={creatingPullRequest}
+              onCreatePullRequest={onCreatePullRequest}
+              onRefreshPullRequest={onRefreshPullRequest}
+            />
+          </div>
 
-          <JiraPanel task={task} site={jiraSite} onSetJiraLink={onSetJiraLink} />
-
-          {attention && (
-            <Alert
-              className={cn(
-                "mt-4 border-primary/25 bg-primary/5 px-3 py-3",
-                attention.kind === "needs_input" && "border-status-warning/35 bg-status-warning/10",
-              )}
-            >
-              {attention.kind === "needs_input" ? <AlertTriangle size={16} /> : <CircleCheckBig size={16} />}
-              <AlertTitle className="font-bold">
-                {attention.kind === "needs_input" ? formatAttentionReason(attention.reason) : "Agent finished"}
-              </AlertTitle>
-              {attentionDetail && (
-                <AlertDescription
-                  className="[overflow-wrap:anywhere]"
-                  title={isAttentionDetailTruncated ? attentionDetail : undefined}
-                >
-                  {displayedAttentionDetail}
-                </AlertDescription>
-              )}
-            </Alert>
-          )}
-
-          {task.prompt && (
-            <section className="task-brief-panel" aria-label="Task brief">
-              <span className="task-meta-label">Brief:</span>
-              <p className="task-brief">{task.prompt}</p>
-            </section>
-          )}
-
-          <section className="task-workflow-panel" aria-label="Task workflow">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Task Workflow</p>
-              <p className="mt-1 text-xs text-muted-foreground">Review, prepare, and close out the task.</p>
+          {task.jiraIssueKey && (
+            <div className="border-b px-4 py-3.5">
+              <JiraPanel task={task} site={jiraSite} onSetJiraLink={onSetJiraLink} />
             </div>
-
-            <Stepper
-              className="mt-4"
-              value={workflowStep}
-              orientation="vertical"
-              indicators={{
-                completed: <Check className="size-3.5" />,
-                loading: <LoaderCircle className="size-3.5 animate-spin" />,
-              }}
-            >
-              <StepperNav className="w-full">
-                {workflowSteps.map((step, index) => (
-                  <StepperItem
-                    key={step.title}
-                    step={index + 1}
-                    completed={step.completed}
-                    disabled={step.disabled}
-                    loading={step.loading}
-                    className="relative items-start not-last:flex-1"
-                  >
-                    <div className={cn("w-full", index < workflowSteps.length - 1 ? "pb-10" : "pb-0")}>
-                      <StepperTrigger
-                        className="w-full items-start gap-2.5 text-left disabled:cursor-not-allowed"
-                        onClick={step.onClick}
-                      >
-                        <StepperIndicator className="data-[state=completed]:bg-primary data-[state=completed]:text-primary-foreground">
-                          {index + 1}
-                        </StepperIndicator>
-                        <div className="mt-0.5 min-w-0 text-left">
-                          <StepperTitle>{step.title}</StepperTitle>
-                          <StepperDescription>
-                            {selectedReviewerProfile && index === 0 ? (
-                              <span className="task-review-step-description">
-                                <span aria-hidden="true">
-                                  <AgentLogo agentKind={selectedReviewerProfile.agentKind} size="sm" />
-                                </span>
-                                <span>{step.description}</span>
-                              </span>
-                            ) : (
-                              step.description
-                            )}
-                          </StepperDescription>
-                        </div>
-                      </StepperTrigger>
-
-                      {index === 0 && (
-                        <div className="task-review-action">
-                          <Button
-                            type="button"
-                            aria-label={reviewActionLabel}
-                            disabled={startReviewDisabled}
-                            onClick={startReview}
-                          >
-                            {reviewInProgress && (
-                              <LoaderCircle data-icon="inline-start" className="animate-spin" />
-                            )}
-                            <span>{reviewInProgress ? "Reviewing" : "Review"}</span>
-                          </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                aria-label="Change reviewer"
-                                className="task-reviewer-menu"
-                                disabled={reviewActive || reviewerProfiles.length === 0}
-                              >
-                                {selectedReviewerProfile ? (
-                                  <>
-                                    <span aria-hidden="true">
-                                      <AgentLogo agentKind={selectedReviewerProfile.agentKind} size="sm" />
-                                    </span>
-                                    <span className="task-reviewer-menu-label">{selectedReviewerProfile.name}</span>
-                                  </>
-                                ) : (
-                                  <span className="task-reviewer-menu-label">Reviewer</span>
-                                )}
-                                <ChevronDown data-icon="inline-end" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="min-w-44">
-                              <DropdownMenuGroup>
-                                {reviewerProfiles.map((profile) => (
-                                  <DropdownMenuItem
-                                    key={profile.id}
-                                    onSelect={() => setReviewerProfileId(profile.id)}
-                                    className="justify-between"
-                                  >
-                                    <span className="select-option-with-logo">
-                                      <span aria-hidden="true">
-                                        <AgentLogo agentKind={profile.agentKind} size="sm" />
-                                      </span>
-                                      <span className="truncate">{profile.name}</span>
-                                    </span>
-                                    {profile.id === reviewerProfileId && <Check className="ml-2 size-3.5 text-primary" />}
-                                  </DropdownMenuItem>
-                                ))}
-                              </DropdownMenuGroup>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      )}
-
-                    </div>
-                    {index < workflowSteps.length - 1 && (
-                      <StepperSeparator className="absolute inset-y-0 left-3 top-7 -order-1 m-0 -translate-x-1/2 group-data-[orientation=vertical]/stepper-nav:h-[calc(100%-2rem)] group-data-[state=completed]/step:bg-primary" />
-                    )}
-                  </StepperItem>
-                ))}
-              </StepperNav>
-            </Stepper>
-          </section>
+          )}
 
           {(reviewLoop || latestReviewRun) && (
-            <section className="review-panel" aria-label="Task review">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Review</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Latest reviewer status and feedback.</p>
-                </div>
+            <section className="flex flex-col gap-2.5 border-b px-4 py-3.5" aria-label="Task review">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-muted-foreground">Review</p>
                 {reviewLoop && (
                   <Badge variant="outline" className="rounded-md">
                     {REVIEW_LOOP_STATUS_SHORT_LABELS[reviewLoop.status]}
@@ -515,40 +458,120 @@ export function TaskWorkspace({
               </div>
 
               {latestReviewRun && (
-                <div className="review-run-summary">
+                <div className="rounded-md border bg-background p-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold">Review feedback</span>
                     <Badge variant="outline" className="rounded-md">
                       {REVIEW_VERDICT_LABELS[latestReviewRun.verdict]}
                     </Badge>
                   </div>
-                  <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-xs text-muted-foreground">
+                  <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-[11.5px] leading-relaxed text-muted-foreground">
                     {latestReviewRun.error ?? latestReviewRun.output}
                   </p>
                 </div>
               )}
             </section>
           )}
+
+          {task.prompt && (
+            <section className="flex flex-col gap-1.5 border-b px-4 py-3.5" aria-label="Task brief">
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-muted-foreground">Brief</p>
+              <p className="text-xs leading-relaxed text-foreground [overflow-wrap:anywhere]">{task.prompt}</p>
+            </section>
+          )}
+
+          <div className="mt-auto flex items-center justify-end px-4 py-3.5">
+            <TaskDeleteDialog
+              task={task}
+              busy={busy}
+              isDeleting={isDeleting}
+              onDelete={onDeleteTask}
+              buttonVariant="destructive"
+              buttonSize="sm"
+              showButtonText
+            />
+          </div>
         </div>
       </aside>
     </section>
   );
 }
 
+function ActionBar({
+  attention,
+  agentName,
+  detail,
+  detailTitle,
+  activeSessionId,
+  onStopSession,
+}: {
+  attention: TaskAttention;
+  agentName?: string | null;
+  detail?: string | null;
+  detailTitle?: string;
+  activeSessionId?: string | null;
+  onStopSession: (sessionId: string) => void;
+}) {
+  const needsInput = attention.kind === "needs_input";
+  return (
+    <div
+      role="status"
+      className={cn(
+        "flex items-center gap-3 border-t px-3.5 py-3",
+        needsInput ? "border-status-warning/30 bg-status-warning/10" : "border-primary/25 bg-primary/5",
+      )}
+    >
+      <span
+        className={cn(
+          "grid size-[30px] shrink-0 place-items-center rounded-md",
+          needsInput ? "bg-status-warning/15 text-status-warning" : "bg-primary/15 text-primary",
+        )}
+        aria-hidden="true"
+      >
+        {needsInput ? <AlertTriangle className="size-4" /> : <CheckCircle2 className="size-4" />}
+      </span>
+      <div className="min-w-0">
+        <div className="text-xs font-bold">{needsInput ? `${agentName ?? "Agent"} needs your decision` : "Agent finished"}</div>
+        {detail && (
+          <div className="truncate text-xs text-muted-foreground" title={detailTitle}>
+            {needsInput ? detail ?? formatAttentionReason(attention.reason) : detail}
+          </div>
+        )}
+      </div>
+      <div className="ml-auto flex shrink-0 items-center gap-2">
+        {needsInput && <span className="text-[11px] text-muted-foreground">Reply in the terminal</span>}
+        {needsInput && activeSessionId && (
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            aria-label="Stop session"
+            onClick={() => onStopSession(activeSessionId)}
+          >
+            <Square data-icon="inline-start" fill="currentColor" />
+            Stop
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TaskStatusBadges({ task }: { task: TaskSummary }) {
   return (
-    <div className="detail-status-row">
+    <div className="detail-status-row flex flex-wrap gap-1.5">
       <Badge variant="outline" data-status={task.status}>
         {TASK_STATUS_LABELS[task.status]}
       </Badge>
       {task.activeSessionId && (
         <Badge variant="outline" className="border-primary/40 text-primary">
+          <span className="dot live-dot bg-primary" aria-hidden="true" />
           Running
         </Badge>
       )}
       {task.isDirty && (
         <Badge variant="outline" className="text-status-info">
-          Dirty worktree
+          Dirty
         </Badge>
       )}
     </div>

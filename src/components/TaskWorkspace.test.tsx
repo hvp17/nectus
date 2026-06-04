@@ -132,11 +132,9 @@ describe("TaskWorkspace", () => {
     expect(screen.getByLabelText(/task inspector/i)).toBeInTheDocument();
     expect(screen.getByRole("region", { name: /agent terminal/i })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: /task status/i })).toBeInTheDocument();
-    expect(screen.getByText("Worktree")).toBeInTheDocument();
+    expect(screen.getByText("Worktree", { selector: '[data-slot="badge"]' })).toBeInTheDocument();
     expect(screen.getByText("feat/card-ellipsis")).toBeInTheDocument();
-    expect(screen.getByText(/PR:/i)).toBeInTheDocument();
-    expect(screen.getByText(/Not linked/i)).toBeInTheDocument();
-    expect(screen.getByText(/Agent:/i)).toBeInTheDocument();
+    // The agent now identifies the session at the top of the facts rail.
     expect(screen.getByText("codex")).toBeInTheDocument();
   });
 
@@ -278,13 +276,13 @@ describe("TaskWorkspace", () => {
     expect(onCreatePullRequest).toHaveBeenCalledWith(worktreeTask, { draft: false });
   });
 
-  it("opens the linked pull request in the default browser from the metadata strip", () => {
+  it("opens the linked pull request in the default browser from the pull request card", () => {
     const prUrl = "https://github.com/hvp17/nectus/pull/123";
     const linkedTask: TaskSummary = { ...task, prUrl };
 
     renderTaskWorkspace({ task: linkedTask });
 
-    screen.getByRole("link", { name: "Open" }).click();
+    screen.getByRole("link", { name: /open pull request/i }).click();
 
     expect(mockedOpenExternal).toHaveBeenCalledWith(prUrl);
   });

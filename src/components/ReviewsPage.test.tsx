@@ -96,35 +96,27 @@ it("submits a trimmed pull request URL with the default single reviewer", () => 
   });
   fireEvent.click(screen.getByRole("button", { name: /review pull request/i }));
 
-  // One reviewer selected (the default) → single review, no round cap.
   expect(onCreateReview).toHaveBeenCalledWith("https://github.com/owner/repo/pull/9", [1], undefined);
 });
 
-it("runs a consensus review when a second reviewer is selected", () => {
+it("runs a consensus review when two or more reviewers are selected", () => {
   const onCreateReview = vi.fn();
   renderPage({ prReviews: [], selectedPrReview: undefined, selectedPrReviewId: undefined, onCreateReview });
 
+  // Default reviewer (Codex, id 1) is preselected; add Claude (id 2) for consensus.
+  fireEvent.click(screen.getByRole("button", { name: /claude/i }));
   fireEvent.change(screen.getByLabelText("Pull request URL"), {
     target: { value: "https://github.com/owner/repo/pull/9" },
   });
-  // Add Claude alongside the default Codex → two reviewers → consensus + rounds.
-  fireEvent.click(screen.getByRole("button", { name: "Claude" }));
-  expect(screen.getByLabelText("Consensus rounds")).toBeInTheDocument();
-  // The submit button keeps its constant aria-label even as its text changes.
-  expect(screen.getByText("Review with consensus")).toBeInTheDocument();
-
   fireEvent.click(screen.getByRole("button", { name: /review pull request/i }));
 
-  const [url, reviewerIds, maxRounds] = onCreateReview.mock.calls[0];
-  expect(url).toBe("https://github.com/owner/repo/pull/9");
-  expect([...reviewerIds].sort()).toEqual([1, 2]);
-  expect(maxRounds).toBe(3);
+  expect(onCreateReview).toHaveBeenCalledWith("https://github.com/owner/repo/pull/9", [1, 2], 3);
 });
 
 it("offers an empty state when there are no reviews", () => {
   renderPage({ prReviews: [], selectedPrReview: undefined, selectedPrReviewId: undefined });
 
-  expect(screen.getByText("No reviews yet")).toBeInTheDocument();
+  expect(screen.getByText(/no reviews yet/i)).toBeInTheDocument();
 });
 
 it("groups reviews into lifecycle sections with verdict badges", () => {

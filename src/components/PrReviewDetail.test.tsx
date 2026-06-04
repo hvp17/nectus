@@ -1,7 +1,12 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { PrReviewDetail } from "./PrReviewDetail";
-import type { PrReview, PrReviewRun } from "../types";
+import type { AgentProfile, PrReview, PrReviewRun } from "../types";
+
+const agentProfiles: AgentProfile[] = [
+  { id: 1, name: "Codex", agentKind: "codex", command: "codex", model: null, args: [], env: {}, createdAt: "", updatedAt: "" },
+  { id: 2, name: "Claude", agentKind: "claude", command: "claude", model: null, args: [], env: {}, createdAt: "", updatedAt: "" },
+];
 
 const consensusReview: PrReview = {
   id: 11,
@@ -78,20 +83,30 @@ const runs: PrReviewRun[] = [
   },
 ];
 
-it("renders the consensus summary, synthesized review, and per-round reviewer cards", () => {
-  render(<PrReviewDetail review={consensusReview} runs={runs} onRerun={vi.fn()} onDelete={vi.fn()} />);
+it("renders the consensus banner, reviewers × rounds matrix, and synthesized review", () => {
+  render(
+    <PrReviewDetail
+      review={consensusReview}
+      runs={runs}
+      agentProfiles={agentProfiles}
+      onRerun={vi.fn()}
+      onDelete={vi.fn()}
+    />,
+  );
 
-  // Header shows the consensus mode and convergence summary.
+  // Header shows the consensus mode; the banner shows the convergence summary.
   expect(screen.getByText("2-model consensus")).toBeInTheDocument();
-  expect(screen.getByText("Converged in 2 rounds")).toBeInTheDocument();
+  expect(screen.getByText(/Converged in 2 rounds/)).toBeInTheDocument();
 
   // The synthesized consensus review is shown.
   expect(screen.getByText(/missing test for the cache eviction path/)).toBeInTheDocument();
 
-  // Both rounds render, each with both reviewers' outputs.
-  expect(screen.getByRole("group", { name: "Round 1" })).toBeInTheDocument();
-  const roundTwo = within(screen.getByRole("group", { name: "Round 2" }));
-  expect(roundTwo.getByText(/agreed, the eviction test is missing/)).toBeInTheDocument();
+  // The matrix renders a column per round, the synthesizer tag, and per-cell verdicts.
+  expect(screen.getByText("Round 1")).toBeInTheDocument();
+  expect(screen.getByText("Round 2")).toBeInTheDocument();
+  expect(screen.getByText(/synthesizer/)).toBeInTheDocument();
+  expect(screen.getByText("Passed")).toBeInTheDocument(); // Claude, round 1
+  expect(screen.getAllByText("Blocking").length).toBeGreaterThanOrEqual(3);
 });
 
 it("falls back to a verdict-only view for a single review", () => {
@@ -106,8 +121,10 @@ it("falls back to a verdict-only view for a single review", () => {
     reviewOutput: "## Review\nLooks good.",
   };
 
-  render(<PrReviewDetail review={single} runs={[]} onRerun={vi.fn()} onDelete={vi.fn()} />);
+  render(
+    <PrReviewDetail review={single} runs={[]} agentProfiles={agentProfiles} onRerun={vi.fn()} onDelete={vi.fn()} />,
+  );
 
-  expect(screen.queryByText("Rounds")).not.toBeInTheDocument();
+  expect(screen.queryByText(/round 1/i)).not.toBeInTheDocument();
   expect(screen.getByText(/Looks good\./)).toBeInTheDocument();
 });

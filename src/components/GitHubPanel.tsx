@@ -62,11 +62,11 @@ export function GitHubPanel({
   const [draft, setDraft] = useState(false);
 
   return (
-    <section className="mt-4 border-t pt-4" aria-label="GitHub">
+    <section aria-label="GitHub" className="flex flex-col gap-2.5">
       <div className="flex items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-          <Github size={14} />
-          GitHub
+        <p className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[0.08em] text-muted-foreground">
+          <GitPullRequest size={12} />
+          Pull request
         </p>
         {githubStatus?.authenticated && (
           <Badge variant="outline" className="font-normal">
@@ -75,11 +75,16 @@ export function GitHubPanel({
         )}
       </div>
 
-      <div className="mt-3">{renderBody()}</div>
+      <div>{renderBody()}</div>
     </section>
   );
 
   function renderBody() {
+    // A linked pull request is known from the task alone, so its card shows even
+    // when the gh CLI is not connected (only the live checks need gh).
+    if (task.prUrl) {
+      return renderPullRequest(task.prUrl);
+    }
     if (!githubStatus) {
       return <Skeleton className="h-9 w-full" />;
     }
@@ -106,10 +111,6 @@ export function GitHubPanel({
           </AlertDescription>
         </Alert>
       );
-    }
-
-    if (task.prUrl) {
-      return renderPullRequest(task.prUrl);
     }
 
     if (!task.hasWorktree) {
@@ -152,37 +153,44 @@ export function GitHubPanel({
 
   function renderPullRequest(prUrl: string) {
     return (
-      <div className="rounded-lg border bg-muted/40 p-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs font-bold">{pullRequest ? `#${pullRequest.number}` : "Pull request"}</span>
+      <div className="overflow-hidden rounded-lg border bg-background">
+        <div className="flex flex-wrap items-center gap-1.5 px-3 py-2.5">
+          <span className="font-mono text-xs font-bold">
+            {pullRequest ? `#${pullRequest.number}` : "Pull request"}
+          </span>
           {pullRequest && (
-            <Badge variant="outline" data-pr-state={pullRequest.state}>
+            <span
+              data-pr-state={pullRequest.state}
+              className={`inline-flex h-[19px] items-center gap-1 rounded-[5px] border px-1.5 text-[10.5px] font-bold ${prStateClassName(
+                pullRequest,
+              )}`}
+            >
               {prStateLabel(pullRequest)}
-            </Badge>
+            </span>
           )}
           {pullRequest?.reviewDecision && (
-            <Badge variant="outline" className="font-normal">
+            <span className="inline-flex h-[19px] items-center rounded-[5px] border px-1.5 text-[10.5px] font-semibold text-muted-foreground">
               {reviewDecisionLabels[pullRequest.reviewDecision]}
-            </Badge>
+            </span>
           )}
         </div>
 
         {pullRequest && pullRequest.checks.total > 0 && (
-          <div className="mt-2 flex items-center gap-3" aria-label="Pull request checks">
+          <div className="flex items-center gap-3.5 px-3 pb-2.5" aria-label="Pull request checks">
             {pullRequest.checks.passed > 0 && (
-              <span data-check="passed" className="inline-flex items-center gap-1 text-xs font-bold text-status-success">
+              <span data-check="passed" className="inline-flex items-center gap-1 text-[11.5px] font-bold tabular-nums text-status-success">
                 <CheckCircle2 size={13} />
                 {pullRequest.checks.passed}
               </span>
             )}
             {pullRequest.checks.failed > 0 && (
-              <span data-check="failed" className="inline-flex items-center gap-1 text-xs font-bold text-destructive">
+              <span data-check="failed" className="inline-flex items-center gap-1 text-[11.5px] font-bold tabular-nums text-destructive">
                 <XCircle size={13} />
                 {pullRequest.checks.failed}
               </span>
             )}
             {pullRequest.checks.pending > 0 && (
-              <span data-check="pending" className="inline-flex items-center gap-1 text-xs font-bold text-muted-foreground">
+              <span data-check="pending" className="inline-flex items-center gap-1 text-[11.5px] font-bold tabular-nums text-muted-foreground">
                 <Clock size={13} />
                 {pullRequest.checks.pending}
               </span>
@@ -191,13 +199,13 @@ export function GitHubPanel({
         )}
 
         {pullRequestLoading && !pullRequest && (
-          <div className="mt-2 flex flex-col gap-1.5" aria-label="Loading pull request status">
+          <div className="flex flex-col gap-1.5 px-3 pb-2.5" aria-label="Loading pull request status">
             <Skeleton className="h-4 w-2/3" />
             <Skeleton className="h-4 w-1/2" />
           </div>
         )}
 
-        <div className="mt-2.5 flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 border-t bg-muted/30 px-3 py-2">
           <a
             className="inline-flex items-center gap-1 text-xs font-semibold hover:underline"
             href={prUrl}
@@ -226,4 +234,14 @@ export function GitHubPanel({
       </div>
     );
   }
+}
+
+// State pill colours: open → success-tinted, merged → chart-3, draft/closed → muted.
+function prStateClassName(pr: PullRequestInfo): string {
+  if (pr.isDraft && pr.state === "open") return "border-border text-muted-foreground";
+  if (pr.state === "open") {
+    return "border-status-success/40 bg-status-success/10 text-status-success";
+  }
+  if (pr.state === "merged") return "border-[var(--chart-3)]/40 text-[var(--chart-3)]";
+  return "border-border text-muted-foreground";
 }
