@@ -382,9 +382,9 @@ export function TaskWorkspace({
                   completed={step.completed}
                   disabled={step.disabled}
                   loading={step.loading}
-                  className="flex-1"
+                  className="flex-1 rounded-md data-[state=active]:bg-primary/[0.11]"
                 >
-                  <StepperTrigger className="flex flex-1 items-center gap-2.5 rounded-md px-3 py-2 text-left data-[state=active]:bg-primary/[0.11]">
+                  <StepperTrigger className="flex flex-1 items-center gap-2.5 rounded-md px-3 py-2 text-left">
                     <StepperIndicator className="size-6 rounded-full border-[1.5px] border-border bg-background text-[11px] font-bold text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:text-primary data-[state=completed]:border-primary data-[state=completed]:bg-primary data-[state=completed]:text-primary-foreground">
                       {index + 1}
                     </StepperIndicator>
@@ -399,7 +399,7 @@ export function TaskWorkspace({
                   </StepperTrigger>
 
                   {index + 1 === workflowStep && step.action && (
-                    <div className="ml-auto flex shrink-0 items-center gap-1.5 self-center pr-1.5">
+                    <div className="flex shrink-0 items-center gap-1.5 self-center pl-1 pr-2">
                       {step.action}
                     </div>
                   )}
