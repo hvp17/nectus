@@ -208,6 +208,8 @@ Tauri commands exposed to the frontend include:
 - `list_tasks`
 - `update_task_metadata`
 - `delete_task`
+- `task_diff_summary`
+- `task_diff_file`
 - `github_status`
 - `create_github_pull_request`
 - `github_pull_request_status`
@@ -300,6 +302,7 @@ Important frontend files:
 - `src/hooks/useGithub.ts`: `gh` connection status and pull request create/detect/status orchestration
 - `src/hooks/useJira.ts`: `acli` connection status, board items, auto-derived columns, and optimistic transition
 - `src/hooks/useTaskReviewLoop.ts`: selected-task review-loop loading and event handling
+- `src/hooks/useTaskDiff.ts`: task diff data — summary load, lazy per-file patches, and `session_idle` refresh
 - `src/hooks/useTaskCardPointerDrag.ts`: task-card pointer drag and ghost lifecycle
 - `src/hooks/useTaskDeletion.ts`: task deletion workflow and deletion toasts
 - `src/hooks/useSessionAttentionControls.ts`: session controls that clear task attention
@@ -307,6 +310,8 @@ Important frontend files:
 - `src/api.ts`: typed Tauri command wrapper
 - `src/types.ts`: frontend data contracts matching Rust serde output
 - `src/components/`: icon rail, Mission Control, board, task workspace (workflow ribbon + facts rail), settings, GitHub panel, and the inline composer/side-panel UI (no modals/dialogs for create-task or JIRA work items)
+- `src/components/TaskWorkspace.tsx`: selected-task workspace; the stage has a `Terminal | Diff` toggle, with the diff getting the full stage when active
+- `src/components/TaskDiffView.tsx`: task diff view — changed-file list plus the lazy-loaded, line-colorized unified patch pane
 - `src/components/GitHubPanel.tsx`: task-inspector GitHub panel for connection state and pull request actions
 - `src/components/JiraBoardPage.tsx`: global JIRA board view — JQL config, auto-derived columns, drag-to-transition
 - `src/components/JiraWorkItemDialog.tsx`: `JiraWorkItemPanel` — the de-modaled work-item side panel docked beside the board (transition/assign/comment + an agent-select "Create task & start" launch row)
@@ -315,7 +320,7 @@ Important frontend files:
 - `src/test/testUtils.tsx`: shared frontend test helpers for providers, pointer events, DOM rects, and async deferrals
 - `src/test/app*Tests.tsx`: focused App test groups registered by `src/App.test.tsx`
 - `src/styles.css`: Tailwind imports, theme tokens, and global base rules
-- `src/styles/`: focused CSS files imported by `src/main.tsx` for layout, settings, task board, detail, forms, and the reimagined shell/Mission Control/board/workspace and secondary views (`redesign.css`, all `nx-` prefixed)
+- `src/styles/`: focused CSS files imported by `src/main.tsx` for layout, settings, task board, detail, the task diff (`diff.css`), forms, and the reimagined shell/Mission Control/board/workspace and secondary views (`redesign.css`, all `nx-` prefixed)
 
 Do not call shell/git directly from the frontend. Add Rust commands instead.
 

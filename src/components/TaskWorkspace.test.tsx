@@ -130,7 +130,7 @@ describe("TaskWorkspace", () => {
 
     expect(onStopSession).toHaveBeenCalledWith("session-123");
     expect(screen.getByLabelText(/task inspector/i)).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: /agent terminal/i })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /agent workspace stage/i })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: /task status/i })).toBeInTheDocument();
     expect(screen.getByText("Worktree", { selector: '[data-slot="badge"]' })).toBeInTheDocument();
     expect(screen.getByText("feat/card-ellipsis")).toBeInTheDocument();
@@ -149,7 +149,7 @@ describe("TaskWorkspace", () => {
 
     renderTaskWorkspace({ task: resumableTask, onResumeSession, onStartSession });
 
-    expect(screen.getByRole("region", { name: /agent terminal/i })).toHaveTextContent("No active session");
+    expect(screen.getByRole("region", { name: /agent workspace stage/i })).toHaveTextContent("No active session");
     screen.getByRole("button", { name: /resume session/i }).click();
     screen.getByRole("button", { name: /restart agent/i }).click();
 
@@ -396,9 +396,19 @@ describe("TaskWorkspace", () => {
   it("uses the live terminal stage for an active session", () => {
     renderTaskWorkspace({ task: { ...task, activeSessionId: "session-123" } });
 
-    const terminalPanel = screen.getByRole("region", { name: /agent terminal/i });
+    const terminalPanel = screen.getByRole("region", { name: /agent workspace stage/i });
 
     expect(terminalPanel).not.toHaveTextContent("No active session");
     expect(screen.queryByRole("separator", { name: /resize terminal/i })).not.toBeInTheDocument();
+  });
+
+  it("switches the workspace stage to the diff view", async () => {
+    renderTaskWorkspace();
+
+    fireEvent.click(screen.getByText("Diff"));
+
+    // The non-Tauri api fallback returns an empty diff, so the stage shows the
+    // diff's empty state rather than the terminal.
+    expect(await screen.findByText("No changes yet")).toBeInTheDocument();
   });
 });

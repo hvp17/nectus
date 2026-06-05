@@ -17,6 +17,8 @@ import {
   seedReviewLoop,
   seedReviewRuns,
   seedSettings,
+  seedTaskDiffFile,
+  seedTaskDiffSummary,
   seedTasks,
 } from "./lib/browserSeed";
 import type {
@@ -35,6 +37,7 @@ import type {
   ReviewRun,
   Session,
   SessionOutputSnapshot,
+  TaskDiffSummary,
   TaskStatus,
   TaskSummary,
 } from "./types";
@@ -128,6 +131,16 @@ export const api = {
   },
   async deleteTask(taskId: number): Promise<void> {
     return invoke("delete_task", { taskId });
+  },
+  async taskDiffSummary(taskId: number): Promise<TaskDiffSummary> {
+    if (isBrowserPreview) return seedTaskDiffSummary(taskId);
+    if (!isTauri) return { baseLabel: null, files: [] };
+    return invoke("task_diff_summary", { taskId });
+  },
+  async taskDiffFile(taskId: number, file: string): Promise<string> {
+    if (isBrowserPreview) return seedTaskDiffFile(taskId, file);
+    if (!isTauri) return "";
+    return invoke("task_diff_file", { taskId, file });
   },
   async githubStatus(): Promise<GithubStatus> {
     if (isBrowserPreview) return seedGithubStatus;

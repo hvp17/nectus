@@ -8,6 +8,7 @@
 import type {
   AgentProfile,
   AppSettings,
+  DiffFileEntry,
   GithubStatus,
   JiraProject,
   JiraStatus,
@@ -18,6 +19,7 @@ import type {
   Repo,
   ReviewLoop,
   ReviewRun,
+  TaskDiffSummary,
   TaskSummary,
 } from "../types";
 import type { TaskAttention } from "../sessionAttention";
@@ -283,4 +285,55 @@ export function seedReviewRuns(taskId: number): ReviewRun[] {
     ];
   }
   return [];
+}
+
+// A small, realistic diff for the OAuth task so the Diff tab renders in `pnpm dev`;
+// every other task gets a one-file fallback so the tab is never empty in preview.
+const seedDiffFiles: DiffFileEntry[] = [
+  { path: "src/auth/session.ts", change: "modified", additions: 12, deletions: 4, binary: false },
+  { path: "src/auth/redirect.ts", change: "modified", additions: 3, deletions: 9, binary: false },
+  { path: "src/auth/__tests__/redirect.test.ts", change: "added", additions: 38, deletions: 0, binary: false },
+  { path: "docs/auth-flow.md", change: "untracked", additions: 21, deletions: 0, binary: false },
+];
+
+const seedDiffPatches: Record<string, string> = {
+  "src/auth/redirect.ts": `diff --git a/src/auth/redirect.ts b/src/auth/redirect.ts
+index 1a2b3c4..5d6e7f8 100644
+--- a/src/auth/redirect.ts
++++ b/src/auth/redirect.ts
+@@ -10,13 +10,7 @@ export function resolveRedirect(session: Session, target: string) {
+-  // Stale cookies bounce between /login and the callback forever.
+-  if (!session.isValid()) {
+-    return "/login";
+-  }
+-  if (target.startsWith("/login")) {
+-    return "/login";
+-  }
+-  return target;
++  if (!session.isValid()) return "/login";
++  // Break the loop: never redirect back to an auth route.
++  return isAuthRoute(target) ? "/" : target;
+ }`,
+};
+
+export function seedTaskDiffSummary(taskId: number): TaskDiffSummary {
+  if (taskId === 1) return { baseLabel: "origin/main", files: seedDiffFiles };
+  return {
+    baseLabel: "origin/main",
+    files: [{ path: "src/index.ts", change: "modified", additions: 6, deletions: 2, binary: false }],
+  };
+}
+
+export function seedTaskDiffFile(taskId: number, file: string): string {
+  if (taskId === 1 && seedDiffPatches[file]) return seedDiffPatches[file];
+  return `diff --git a/${file} b/${file}
+index 0000000..1111111 100644
+--- a/${file}
++++ b/${file}
+@@ -1,4 +1,5 @@
+ export function handler() {
+-  return run();
++  // Preview-only sample patch.
++  return run({ retries: 2 });
+ }`;
 }

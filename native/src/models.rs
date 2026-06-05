@@ -86,6 +86,39 @@ pub struct TaskSummary {
     pub updated_at: String,
 }
 
+/// How a single file changed in a task diff. `Untracked` is a new file git is not
+/// yet tracking (distinct from a staged `Added`). Rename detection is disabled, so
+/// a rename surfaces as a `Deleted` + `Added` pair rather than a dedicated kind.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DiffChangeKind {
+    Added,
+    Modified,
+    Deleted,
+    Untracked,
+}
+
+/// One changed file in a task diff. `additions`/`deletions` are line counts;
+/// `binary` files carry no line counts and no patch body.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffFileEntry {
+    pub path: String,
+    pub change: DiffChangeKind,
+    pub additions: u32,
+    pub deletions: u32,
+    pub binary: bool,
+}
+
+/// The changed-file list for a task. `base_label` names what the diff is compared
+/// against (e.g. `origin/main`); `None` for a direct-edit working-tree diff.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskDiffSummary {
+    pub base_label: Option<String>,
+    pub files: Vec<DiffFileEntry>,
+}
+
 #[derive(
     Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Display, EnumString, IntoStaticStr,
 )]

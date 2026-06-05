@@ -6,12 +6,14 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  FileDiff,
   GitBranch,
   GitPullRequest,
   LoaderCircle,
   MessageSquareReply,
   Play,
   RotateCcw,
+  RotateCw,
   Square,
   TerminalSquare,
   XCircle,
@@ -39,7 +41,10 @@ import {
   StepperTrigger,
 } from "./reui/stepper";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
+import { TaskDiffView } from "./TaskDiffView";
 import { truncateFinishedAttentionPreview } from "./attentionPreview";
+import { useTaskDiff } from "../hooks/useTaskDiff";
 import { TerminalPane } from "../TerminalPane";
 import { cn } from "../lib/utils";
 import { openExternal } from "../lib/openExternal";
@@ -136,9 +141,18 @@ export function TaskWorkspace({
     setReviewerProfileId(reviewLoop?.reviewerProfileId ?? defaultReviewerProfileId);
   }, [defaultReviewerProfileId, reviewLoop?.reviewerProfileId]);
 
+  const diff = useTaskDiff(task?.id);
+  const { refresh: refreshDiff } = diff;
+  const [stageTab, setStageTab] = useState<"terminal" | "diff">("terminal");
+  // Load (or reload) the diff whenever the Diff tab is shown or the task changes.
+  useEffect(() => {
+    if (stageTab === "diff") void refreshDiff();
+  }, [stageTab, refreshDiff]);
+
   if (!task) return null;
 
   const latestReviewRun = reviewRuns.at(-1);
+  const diffFileCount = diff.summary?.files.length ?? 0;
   const selectedReviewerProfile = reviewerProfiles.find((profile) => profile.id === reviewerProfileId);
   const reviewActive = Boolean(reviewLoop && !["passed", "feedback_sent", "error", "stopped"].includes(reviewLoop.status));
   const reviewInProgress = reviewLoop?.status === "reviewing";
@@ -368,10 +382,56 @@ export function TaskWorkspace({
 
         <section
           className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border bg-card shadow-lg"
-          aria-label="Agent terminal"
+          aria-label="Agent workspace stage"
         >
+          <div className="flex items-center justify-between gap-2 border-b px-2 py-1.5">
+            <ToggleGroup
+              type="single"
+              value={stageTab}
+              onValueChange={(value) => value && setStageTab(value as "terminal" | "diff")}
+              variant="outline"
+            >
+              <ToggleGroupItem value="terminal" aria-label="Show terminal" className="h-7 gap-1.5 px-2.5 text-xs">
+                <TerminalSquare className="size-3.5" aria-hidden="true" />
+                Terminal
+              </ToggleGroupItem>
+              <ToggleGroupItem value="diff" aria-label="Show diff" className="h-7 gap-1.5 px-2.5 text-xs">
+                <FileDiff className="size-3.5" aria-hidden="true" />
+                Diff
+                {diffFileCount > 0 && (
+                  <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 justify-center px-1 text-[10px]">
+                    {diffFileCount}
+                  </Badge>
+                )}
+              </ToggleGroupItem>
+            </ToggleGroup>
+
+            {stageTab === "diff" && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7"
+                aria-label="Refresh diff"
+                disabled={diff.loading}
+                onClick={() => void diff.refresh()}
+              >
+                <RotateCw data-icon="inline-start" className={cn(diff.loading && "animate-spin")} />
+                Refresh
+              </Button>
+            )}
+          </div>
+
           <div className="min-h-0 flex-1 overflow-hidden">
-            {task.activeSessionId ? (
+            {stageTab === "diff" ? (
+              <TaskDiffView
+                summary={diff.summary}
+                loading={diff.loading}
+                error={diff.error}
+                files={diff.files}
+                onSelectFile={diff.loadFile}
+              />
+            ) : task.activeSessionId ? (
               <TerminalPane sessionId={task.activeSessionId} onSessionExit={onSessionExit} onSessionInput={onSessionInput} />
             ) : (
               <TaskTerminalLauncher
@@ -383,7 +443,7 @@ export function TaskWorkspace({
             )}
           </div>
 
-          {attention && (
+          {attention && stageTab === "terminal" && (
             <ActionBar
               attention={attention}
               agentName={task.agentName}

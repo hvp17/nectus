@@ -47,6 +47,22 @@ export interface TaskSummary {
   updatedAt: string;
 }
 
+export type DiffChangeKind = "added" | "modified" | "deleted" | "untracked";
+
+export interface DiffFileEntry {
+  path: string;
+  change: DiffChangeKind;
+  additions: number;
+  deletions: number;
+  binary: boolean;
+}
+
+export interface TaskDiffSummary {
+  /** What the diff is compared against (e.g. `origin/main`); null for a direct-edit working-tree diff. */
+  baseLabel?: string | null;
+  files: DiffFileEntry[];
+}
+
 export interface GithubStatus {
   installed: boolean;
   authenticated: boolean;

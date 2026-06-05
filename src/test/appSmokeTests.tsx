@@ -55,14 +55,14 @@ export function defineAppSmokeTests() {
 
     fireEvent.click(await screen.findByRole("button", { name: /inspect task detail/i }));
 
-    expect(await screen.findByRole("region", { name: /agent terminal/i })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: /agent workspace stage/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/task inspector/i)).toBeInTheDocument();
     expect(screen.getAllByText("feat/detail").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: /back to task board/i }));
 
     expect(await screen.findByRole("heading", { name: "Mission Control" })).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: /agent terminal/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /agent workspace stage/i })).not.toBeInTheDocument();
   });
 
   it("opens settings and saves appearance preferences", async () => {

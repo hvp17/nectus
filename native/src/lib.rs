@@ -11,7 +11,7 @@ use crate::models::{
     AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings, AppSettingsInput,
     GithubStatus, JiraProject, JiraStatus, JiraWorkItem, PrReview, PrReviewMode, PrReviewRun,
     PullRequestInfo, Repo, ReviewLoop, ReviewRun, Session, SessionExitedEvent,
-    SessionOutputSnapshot, TaskStatus, TaskSummary,
+    SessionOutputSnapshot, TaskDiffSummary, TaskStatus, TaskSummary,
 };
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
@@ -235,6 +235,79 @@ async fn detect_github_pull_request(
     })
     .await
     .map_err(|error| AppError::from(format!("Failed to detect pull request: {error}")))?
+    .map_err(Into::into)
+}
+
+/// Resolve the working directory a task's diff is computed in, plus whether it is a
+/// worktree task. Worktree tasks diff against their branch base; direct-edit tasks
+/// diff the working tree against `HEAD`.
+fn task_diff_target(db: &Database, task_id: i64) -> Result<(String, bool), String> {
+    let task = db
+        .task_by_id(task_id)?
+        .ok_or_else(|| "Task not found".to_string())?;
+    if task.has_worktree {
+        let path = task
+            .worktree_path
+            .ok_or_else(|| "Worktree task is missing its path".to_string())?;
+        Ok((path, true))
+    } else {
+        let repo = db
+            .repo_by_id(task.repo_id)?
+            .ok_or_else(|| "Repository not found".to_string())?;
+        Ok((repo.path, false))
+    }
+}
+
+/// Summarize the files a task changed: its branch vs the base branch for worktree
+/// tasks, or the working tree vs `HEAD` for direct-edit tasks.
+#[tauri::command]
+async fn task_diff_summary(task_id: i64, state: State<'_, AppState>) -> AppResult<TaskDiffSummary> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<TaskDiffSummary, String> {
+        let (path, has_worktree) = {
+            let db = db.lock();
+            task_diff_target(&db, task_id)?
+        };
+        let path = Path::new(&path);
+        let base = if has_worktree {
+            git_ops::resolve_diff_base(path)
+        } else {
+            None
+        };
+        let files = git_ops::diff_summary(path, base.as_ref().map(|base| base.commit.as_str()))?;
+        Ok(TaskDiffSummary {
+            base_label: base.map(|base| base.label),
+            files,
+        })
+    })
+    .await
+    .map_err(|error| AppError::from(format!("Failed to load task diff: {error}")))?
+    .map_err(Into::into)
+}
+
+/// Return the unified patch for one file in a task's diff (lazy-loaded per file).
+#[tauri::command]
+async fn task_diff_file(
+    task_id: i64,
+    file: String,
+    state: State<'_, AppState>,
+) -> AppResult<String> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<String, String> {
+        let (path, has_worktree) = {
+            let db = db.lock();
+            task_diff_target(&db, task_id)?
+        };
+        let path = Path::new(&path);
+        let base = if has_worktree {
+            git_ops::resolve_diff_base(path)
+        } else {
+            None
+        };
+        git_ops::diff_file(path, base.as_ref().map(|base| base.commit.as_str()), &file)
+    })
+    .await
+    .map_err(|error| AppError::from(format!("Failed to load file diff: {error}")))?
     .map_err(Into::into)
 }
 
@@ -684,6 +757,8 @@ pub fn run() {
             list_tasks,
             update_task_metadata,
             delete_task,
+            task_diff_summary,
+            task_diff_file,
             github_status,
             create_github_pull_request,
             github_pull_request_status,

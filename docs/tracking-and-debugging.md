@@ -129,6 +129,8 @@ Current commands:
 | `list_tasks` | Load task summaries and dirty-state checks. |
 | `update_task_metadata` | Update title, status, or PR URL. |
 | `delete_task` | Delete a task and remove its worktree when applicable. |
+| `task_diff_summary` | List the files a task changed: a worktree task's branch vs the locally-resolved base (`origin/HEAD` merge-base, committed + uncommitted), or a direct-edit task's working tree vs `HEAD`. Returns the base label plus per-file change kind and `+/-` counts. |
+| `task_diff_file` | Return the unified patch for one file in a task's diff (lazy-loaded per file; untracked files diff against `/dev/null`). |
 | `jira_status` | Report whether `acli` is installed, authenticated, and the active site. |
 | `jira_list_projects` | List visible JIRA projects for the board's project picker (`acli jira project list --json`). |
 | `jira_search_board` | Load board work items; the JQL is built from the structured board config (project + filter flags), so no JQL is typed. |

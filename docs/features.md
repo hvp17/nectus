@@ -168,6 +168,40 @@ Emitted events:
 - `session_needs_input`
 - `review_loop_updated`
 
+## Task Diff
+
+The task workspace stage has a `Terminal | Diff` segmented control, so you can see
+what an agent changed without leaving the app. The Diff tab carries a changed-file
+count badge and a refresh control.
+
+Current behavior:
+
+- The diff shown is the **full task diff**: for a worktree task it compares the
+  branch against the base branch — the merge-base of the repo's default branch
+  (`origin/HEAD`), resolved entirely from local refs (no network) — and includes
+  both committed and uncommitted changes, the same set the eventual PR carries. A
+  direct-edit task has no dedicated branch, so it falls back to the working tree vs
+  `HEAD`. The base label (e.g. `origin/main`) is shown above the file list.
+- The view is master-detail: a left list of changed files (status glyph · path ·
+  `+a −d`), and a right unified-diff pane for the selected file. The first file is
+  auto-selected; patch bodies are lazy-loaded per file so a large refactor diff
+  stays cheap. Untracked files appear as new files; binary files show
+  "Binary file" instead of a patch.
+- The summary loads when the Diff tab is shown and on its refresh control, and it
+  re-loads automatically when the task's agent finishes a turn (`session_idle`), so
+  the diff stays current while the agent works.
+- Rename detection is disabled, so a rename shows as a delete + add pair.
+
+Key files:
+
+- Stage toggle + diff mounting: `src/components/TaskWorkspace.tsx`
+- Diff view (file list + unified patch, line colorization): `src/components/TaskDiffView.tsx`
+- Diff styling: `src/styles/diff.css`
+- Diff data hook (summary load, lazy per-file patches, idle refresh): `src/hooks/useTaskDiff.ts`
+- Frontend API: `src/api.ts`
+- Backend commands: `task_diff_summary`, `task_diff_file`
+- Git diff helpers (base resolution, numstat/name-status parsing, untracked patches): `native/src/git_ops.rs`
+
 ## Session Resume
 
 Codex and Claude profiles support resume from a saved session id.

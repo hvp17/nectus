@@ -7,6 +7,7 @@ import "./styles/layout.css";
 import "./styles/settings.css";
 import "./styles/task-board.css";
 import "./styles/detail.css";
+import "./styles/diff.css";
 import "./styles/redesign.css";
 import "@xterm/xterm/css/xterm.css";
 
