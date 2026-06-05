@@ -16,19 +16,36 @@ const terminalTestState = vi.hoisted(() => {
     dispose = vi.fn();
   }
 
+  // Capture the WebLinksAddon click handler so a test can invoke it.
+  let webLinksHandler: ((event: { preventDefault(): void }, uri: string) => void) | undefined;
+  class MockWebLinksAddon {
+    constructor(handler?: (event: { preventDefault(): void }, uri: string) => void) {
+      webLinksHandler = handler;
+    }
+  }
+  class MockUnicode11Addon {}
+
   class MockTerminal {
     rows = 24;
     cols = 80;
+    options: Record<string, unknown>;
+    unicode = { activeVersion: "6" };
     resize = vi.fn();
     write = vi.fn();
     loadAddon = vi.fn((addon: unknown) => {
+      // Unicode11Addon touches proposed API, which xterm guards behind
+      // allowProposedApi — mirror that so a missing flag fails the test, not prod.
+      if (addon instanceof MockUnicode11Addon && this.options.allowProposedApi !== true) {
+        throw new Error("You must set the allowProposedApi option to true to use proposed API");
+      }
       if (shouldFailWebgl && addon instanceof MockWebglAddon) {
         throw new Error("WebGL2 is not supported");
       }
     });
     private dataHandler?: (data: string) => void;
 
-    constructor() {
+    constructor(options: Record<string, unknown> = {}) {
+      this.options = options;
       instances.push(this);
     }
 
@@ -54,6 +71,9 @@ const terminalTestState = vi.hoisted(() => {
     instances,
     handlers,
     MockWebglAddon,
+    MockWebLinksAddon,
+    MockUnicode11Addon,
+    getWebLinksHandler: () => webLinksHandler,
     setWebglFailure: (value: boolean) => {
       shouldFailWebgl = value;
     },
@@ -90,6 +110,14 @@ vi.mock("@xterm/addon-webgl", () => ({
   WebglAddon: terminalTestState.MockWebglAddon,
 }));
 
+vi.mock("@xterm/addon-web-links", () => ({
+  WebLinksAddon: terminalTestState.MockWebLinksAddon,
+}));
+
+vi.mock("@xterm/addon-unicode11", () => ({
+  Unicode11Addon: terminalTestState.MockUnicode11Addon,
+}));
+
 vi.mock("@tauri-apps/api/event", () => ({
   listen: terminalTestState.listen,
 }));
@@ -102,14 +130,17 @@ vi.mock("./api", () => ({
   api: {
     resizeSession: vi.fn().mockResolvedValue(undefined),
     sendSessionInput: vi.fn().mockResolvedValue(undefined),
+    openExternalUrl: vi.fn().mockResolvedValue(undefined),
     sessionOutputSnapshot: vi.fn().mockResolvedValue({
       sessionId: "session-21",
       data: "",
       truncated: false,
       startOffset: 0,
       endOffset: 0,
-      cols: 80,
-      rows: 24,
+      // Differs from the mock terminal's 80x24 pane so the post-replay PTY sync
+      // still fires past the "skip unchanged size" guard.
+      cols: 100,
+      rows: 28,
     }),
   },
 }));
@@ -252,5 +283,36 @@ describe("TerminalPane", () => {
       "session-21",
       "/Users/tomas/Desktop/screenshot\\ 1.png /tmp/report\\ \\(final\\).pdf ",
     );
+  });
+
+  it("activates Unicode 11 width tables so wide glyphs match the agent's layout", async () => {
+    render(
+      <TerminalPane sessionId="session-21" onSessionExit={vi.fn()} onSessionInput={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      expect(terminalTestState.instances).toHaveLength(1);
+    });
+
+    expect(terminalTestState.instances[0].unicode.activeVersion).toBe("11");
+  });
+
+  it("opens terminal hyperlinks in the system browser", async () => {
+    render(
+      <TerminalPane sessionId="session-21" onSessionExit={vi.fn()} onSessionInput={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      expect(terminalTestState.instances).toHaveLength(1);
+    });
+
+    const openLink = terminalTestState.getWebLinksHandler();
+    expect(openLink).toBeTypeOf("function");
+
+    const preventDefault = vi.fn();
+    openLink?.({ preventDefault }, "https://example.com/docs");
+
+    expect(preventDefault).toHaveBeenCalled();
+    expect(mockedApi.openExternalUrl).toHaveBeenCalledWith("https://example.com/docs");
   });
 });

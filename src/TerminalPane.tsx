@@ -1,6 +1,8 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { FitAddon } from "@xterm/addon-fit";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import { useEffect, useRef } from "react";
@@ -23,6 +25,9 @@ interface CachedTerminal {
   renderedOffset: number;
   loadingSnapshot: boolean;
   pendingOutput: SessionOutputEvent[];
+  /** Last rows/cols pushed to the PTY, so we skip redundant SIGWINCH resizes. */
+  ptyRows: number;
+  ptyCols: number;
 }
 
 const SHELL_PATH_SAFE_CHAR = /[A-Za-z0-9_@%+=:,./-]/;
@@ -49,6 +54,8 @@ function escapeShellPath(path: string) {
 function loadWebglRenderer(terminal: Terminal) {
   try {
     const webgl = new WebglAddon();
+    // A lost GPU context can't be recovered in place; dispose so xterm reverts to
+    // the DOM renderer instead of freezing on a dead canvas.
     webgl.onContextLoss(() => webgl.dispose());
     terminal.loadAddon(webgl);
   } catch (error) {
@@ -136,8 +143,16 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
       }
     });
 
+    // Coalesce resize bursts (a window drag fires dozens of ticks) into one fit
+    // per frame, so the agent repaints its cursor-addressed UI once, not on every
+    // intermediate pixel — repeated repaints overlap into ghosted/duplicate lines.
+    let resizeFrame = 0;
     const resizeObserver = new ResizeObserver(() => {
-      fitActiveTerminal();
+      if (resizeFrame) cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = 0;
+        fitActiveTerminal();
+      });
     });
     resizeObserver.observe(hostRef.current);
 
@@ -154,6 +169,7 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
 
     return () => {
       disposed = true;
+      if (resizeFrame) cancelAnimationFrame(resizeFrame);
       resizeObserver.disconnect();
       themeObserver.disconnect();
       unlistenCallbacks.forEach((unlisten) => unlisten());
@@ -222,12 +238,25 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
     const terminal = new Terminal({
       cursorBlink: true,
       convertEol: true,
+      // Required by Unicode11Addon (terminal.unicode.activeVersion is proposed API).
+      allowProposedApi: true,
       fontFamily: "'JetBrains Mono Variable', 'JetBrains Mono', SFMono-Regular, Menlo, monospace",
       fontSize: 13,
       theme: readTerminalTheme(),
     });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
+    // Unicode 11 width tables so emoji/CJK occupy the same cell count the agent
+    // assumes; a width disagreement desyncs its cursor-addressed redraws.
+    terminal.loadAddon(new Unicode11Addon());
+    terminal.unicode.activeVersion = "11";
+    // Highlight URLs and open clicks in the system browser, not inside the webview.
+    terminal.loadAddon(
+      new WebLinksAddon((event, uri) => {
+        event.preventDefault();
+        void api.openExternalUrl(uri);
+      }),
+    );
     terminal.open(container);
     // Must run after open(): the WebGL renderer needs the terminal's canvas.
     loadWebglRenderer(terminal);
@@ -246,6 +275,8 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
       renderedOffset: 0,
       loadingSnapshot: false,
       pendingOutput: [],
+      ptyRows: 0,
+      ptyCols: 0,
     };
     terminalsRef.current.set(sessionId, cached);
     return cached;
@@ -264,6 +295,10 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
         // terminals already hold rendered content, so leave their size to the fit.
         if (cached.renderedOffset === 0 && snapshot.cols > 0 && snapshot.rows > 0) {
           cached.terminal.resize(snapshot.cols, snapshot.rows);
+          // The PTY already runs at its recorded generation size, so treat that as
+          // the live size: syncTerminalToPane only resizes if the pane differs.
+          cached.ptyRows = snapshot.rows;
+          cached.ptyCols = snapshot.cols;
         }
         writeOutput(cached, snapshot.data, snapshot.startOffset);
         cached.pendingOutput.splice(0).forEach((output) => {
@@ -288,7 +323,14 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
   const syncTerminalToPane = (sessionId: string, cached: CachedTerminal) => {
     if (cached.container.hidden) return;
     cached.fit.fit();
-    api.resizeSession(sessionId, cached.terminal.rows, cached.terminal.cols).catch(() => undefined);
+    const { rows, cols } = cached.terminal;
+    // Only SIGWINCH the PTY when the grid actually changed. A redundant resize
+    // forces the agent to repaint its cursor-addressed UI, which — especially in a
+    // short pane — overlaps into ghosted/duplicate lines.
+    if (rows === cached.ptyRows && cols === cached.ptyCols) return;
+    cached.ptyRows = rows;
+    cached.ptyCols = cols;
+    api.resizeSession(sessionId, rows, cols).catch(() => undefined);
   };
 
   const fitActiveTerminal = () => {
