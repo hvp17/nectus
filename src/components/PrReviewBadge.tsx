@@ -1,9 +1,8 @@
 import {
   CircleCheck,
   CircleHelp,
-  Clock,
+  Loader,
   LoaderCircle,
-  OctagonAlert,
   TriangleAlert,
   type LucideIcon,
 } from "lucide-react";
@@ -28,9 +27,9 @@ interface BadgeSpec {
 function verdictBadgeSpec(verdict: PrReviewVerdict | null | undefined): BadgeSpec {
   switch (verdict) {
     case "passed":
-      return { label: "Passed", variant: "secondary", Icon: CircleCheck, tone: "passed" };
+      return { label: "Passed", variant: "success", Icon: CircleCheck, tone: "passed" };
     case "blockers":
-      return { label: "Blocking issues", variant: "destructive", Icon: OctagonAlert, tone: "blockers" };
+      return { label: "Blocking issues", variant: "destructive", Icon: TriangleAlert, tone: "blockers" };
     default:
       return { label: "Inconclusive", variant: "outline", Icon: CircleHelp, tone: "inconclusive" };
   }
@@ -41,7 +40,7 @@ function verdictBadgeSpec(verdict: PrReviewVerdict | null | undefined): BadgeSpe
 function badgeSpec(review: PrReview): BadgeSpec {
   switch (review.status) {
     case "queued":
-      return { label: "Queued", variant: "outline", Icon: Clock, tone: "queued" };
+      return { label: "Queued", variant: "outline", Icon: Loader, tone: "queued" };
     case "reviewing":
       return { label: "Reviewing", variant: "secondary", Icon: LoaderCircle, tone: "reviewing", spin: true };
     case "error":
@@ -62,6 +61,20 @@ function renderBadge(spec: BadgeSpec, dataAttrs: Record<string, string>, classNa
 }
 
 export function PrReviewBadge({ review, className }: { review: PrReview; className?: string }) {
+  // Reviewing leads with a pulsing primary live-dot (not a spinner) to read as "live".
+  if (review.status === "reviewing") {
+    return (
+      <Badge
+        variant="outline"
+        className={cn("rounded-md border-primary/40 bg-primary/10 font-normal text-primary", className)}
+        data-pr-review-status="reviewing"
+        data-pr-review-tone="reviewing"
+      >
+        <span className="nx-badge-dot live-dot" />
+        Reviewing
+      </Badge>
+    );
+  }
   const spec = badgeSpec(review);
   return renderBadge(
     spec,

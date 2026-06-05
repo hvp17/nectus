@@ -50,7 +50,7 @@ pnpm exec shadcn docs <component>
 Prefer shadcn primitives from `src/components/ui/` over custom markup and styling. Before creating a custom component, check whether an installed shadcn primitive or official registry item already covers the need:
 
 - actions: `Button`
-- forms: `Field`, `Input`, `Textarea`, `Select`, `RadioGroup`, `ToggleGroup`
+- forms: `Field`, `Input`, `Textarea`, `Select`, `Switch`, `RadioGroup`, `ToggleGroup`
 - overlays: `Dialog`, `AlertDialog`, `Sheet`, `Tooltip`, `DropdownMenu`
 - structure and display: `Card`, `Badge`, `Separator`, `Sidebar`, `ScrollArea`
 - feedback and states: `Alert`, `Empty`, `Skeleton`, `sonner`
@@ -64,6 +64,23 @@ pnpm dlx shadcn@latest add @shadcn/<component>
 When the CLI reports that existing UI files would be overwritten, inspect the impact first and only use `--overwrite` after explicit user approval. After adding a component, read the generated files and update app code to use the exported primitive APIs instead of preserving parallel custom implementations.
 
 Keep custom React components focused on Nectus-specific composition, data flow, drag behavior, terminal behavior, and product workflow. Do not reimplement generic buttons, forms, empty states, badges, alerts, dialogs, menus, tooltips, cards, separators, or sidebars when shadcn provides the primitive.
+
+## Importing a Claude Design Export
+
+Claude Design (Anthropic Labs, `claude.ai/design`) hands a redesign back as a self-contained bundle, not an API. A share link of the form `https://api.anthropic.com/v1/design/h/<id>` returns a **gzip tarball** (fetch it, then `tar -xzf`); the curated handoff lives under `…/design_handoff_*/` and contains:
+
+- `colors_and_type.css` — the design system. It is **ported verbatim from this repo's `src/styles.css`**, so the OKLCH tokens already match 1:1.
+- `app/*.jsx` + `app/{views,details,mocks}.css` — prototype artboards. The exact px/rem/weight/radius/gap values live in these `nx-`prefixed prototype classes; treat them as the spec. **Do not ship the prototype HTML/JSX.**
+- `README.md` — per-surface intent and the real repo files each one touches.
+- `reference/` — a snapshot of the prior app for diffing.
+
+Integrate it **deeply into the existing theme and components**, never as a parallel layer:
+
+1. **Tokens are the source of truth.** `src/styles.css` owns the OKLCH palette, radius, shadow, tracking, and font roles (`--font-sans` Geist, `--font-mono` Geist/JetBrains, `--font-serif` Source Serif 4). Map every color to an existing token (`--primary`, `--status-success|warning|info`, `--destructive`, `--muted-foreground`, `--border`, …). **Introduce no new colors/hex.**
+2. **Recreate, don't paste.** Rebuild each surface with the installed shadcn primitives in `src/components/ui/*` plus the `nx-` classes in `src/styles/redesign.css` and the per-surface CSS (`settings.css`, `detail.css`, `task-board.css`). Translate the prototype's `nx-` classes to these conventions.
+3. **Install shadcn primitives as needed.** When a surface calls for a primitive that is not yet vendored (e.g. `Switch`), add it with `pnpm dlx shadcn@latest add <component>` and use the exported API rather than a hand-rolled control.
+4. **Preserve behavior.** These are presentation reworks: keep all data, handlers, `data-testid`s, `aria-label`s, and `data-*` hooks; update the tests when an interaction model intentionally changes.
+5. **Audit fidelity per surface.** Diff each surface against its prototype (spacing, type scale, weights, element states, ordering) and fix divergences; run `pnpm test` and `pnpm build` before claiming done.
 
 ## Development Flow
 

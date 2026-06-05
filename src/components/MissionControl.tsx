@@ -1,4 +1,4 @@
-import { ArrowUpRight, CheckCheck, GitBranch, MessageSquareReply, RefreshCw, Radio, Terminal } from "lucide-react";
+import { CheckCheck, GitBranch, GitPullRequest, MessageSquareReply, RefreshCw, Radio, Terminal } from "lucide-react";
 import { Button } from "./ui/button";
 import { AgentLogo } from "./AgentBrand";
 import {
@@ -165,7 +165,7 @@ function AttentionRow({
           )}
         </span>
         <span className="nx-row-agent">
-          <AgentLogo agentKind={agentKind} size="sm" />
+          <AgentLogo agentKind={agentKind} size="xs" />
           {task.agentName ?? "Agent"}
         </span>
       </div>
@@ -233,7 +233,7 @@ function RowActions({
   if (state === "done" && task.prUrl) {
     return (
       <Button size="sm" variant="ghost" onClick={() => task.prUrl && onOpenPr(task.prUrl)}>
-        <ArrowUpRight data-icon="inline-start" />
+        <GitPullRequest data-icon="inline-start" />
         PR
       </Button>
     );

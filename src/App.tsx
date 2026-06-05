@@ -300,6 +300,7 @@ function App() {
                 pullRequestLoading={pullRequestLoading}
                 creatingPullRequest={creatingPullRequest}
                 backLabel={currentView === "mission" ? "Mission Control" : selectedRepo?.name ?? "Board"}
+                repoName={repos.find((repo) => repo.id === selectedTask.repoId)?.name}
                 onClose={() => {
                   setSelectedTaskId(undefined);
                 }}

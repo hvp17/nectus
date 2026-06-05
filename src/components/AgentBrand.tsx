@@ -6,7 +6,7 @@ import { cn } from "../lib/utils";
 import type { AgentKind } from "../types";
 
 type BrandKey = "codex" | "claude" | "gemini" | "custom";
-type LogoSize = "sm" | "md" | "lg";
+type LogoSize = "xs" | "sm" | "md" | "lg";
 
 const brandLabels: Record<BrandKey, string> = {
   codex: "Codex",

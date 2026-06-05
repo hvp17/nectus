@@ -7,11 +7,14 @@ import {
   ChevronDown,
   ChevronRight,
   GitBranch,
+  GitPullRequest,
   LoaderCircle,
+  MessageSquareReply,
   Play,
   RotateCcw,
   Square,
   TerminalSquare,
+  XCircle,
 } from "lucide-react";
 import { AgentLogo } from "./AgentBrand";
 import { Badge } from "./ui/badge";
@@ -39,8 +42,10 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { truncateFinishedAttentionPreview } from "./attentionPreview";
 import { TerminalPane } from "../TerminalPane";
 import { cn } from "../lib/utils";
+import { openExternal } from "../lib/openExternal";
 import { formatAttentionReason, type TaskAttention } from "../sessionAttention";
 import {
+  REVIEW_LOOP_BADGE_VARIANTS,
   REVIEW_LOOP_STATUS_SHORT_LABELS,
   REVIEW_VERDICT_LABELS,
   TASK_STATUS_LABELS,
@@ -67,6 +72,8 @@ export interface TaskWorkspaceProps {
   creatingPullRequest?: boolean;
   /** Label for the back affordance, e.g. "Mission Control" or the project name. */
   backLabel?: string;
+  /** Project/repo name shown in the identity line ("{repo} · session {id}"). */
+  repoName?: string;
   onClose: () => void;
   onStopSession: (sessionId: string) => void;
   onResumeSession: (task: TaskSummary) => void;
@@ -101,6 +108,7 @@ export function TaskWorkspace({
   pullRequestLoading = false,
   creatingPullRequest = false,
   backLabel = "Task board",
+  repoName,
   onClose,
   onStopSession,
   onResumeSession,
@@ -165,6 +173,97 @@ export function TaskWorkspace({
     if (!reviewerProfileId || startReviewDisabled) return;
     onStartReview(task, reviewerProfileId);
   };
+  // Each step carries the inline action shown when it is the CURRENT step. The
+  // prototype attaches the action to the active step (Review controls, then the
+  // Create PR button, then Move to done), not to a fixed index.
+  const reviewAction = (
+    <>
+      <Button
+        type="button"
+        size="sm"
+        className="h-8"
+        aria-label={reviewActionLabel}
+        disabled={startReviewDisabled}
+        onClick={startReview}
+      >
+        {reviewInProgress && <LoaderCircle data-icon="inline-start" className="animate-spin" />}
+        <span>{reviewInProgress ? "Reviewing" : "Review"}</span>
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label="Change reviewer"
+            className="h-8 max-w-[150px]"
+            disabled={reviewActive || reviewerProfiles.length === 0}
+          >
+            {selectedReviewerProfile ? (
+              <>
+                <span aria-hidden="true">
+                  <AgentLogo agentKind={selectedReviewerProfile.agentKind} size="sm" />
+                </span>
+                <span className="truncate">{selectedReviewerProfile.name}</span>
+              </>
+            ) : (
+              <span className="truncate">Reviewer</span>
+            )}
+            <ChevronDown data-icon="inline-end" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-44">
+          <DropdownMenuGroup>
+            {reviewerProfiles.map((profile) => (
+              <DropdownMenuItem
+                key={profile.id}
+                onSelect={() => setReviewerProfileId(profile.id)}
+                className="justify-between"
+              >
+                <span className="select-option-with-logo">
+                  <span aria-hidden="true">
+                    <AgentLogo agentKind={profile.agentKind} size="sm" />
+                  </span>
+                  <span className="truncate">{profile.name}</span>
+                </span>
+                {profile.id === reviewerProfileId && <Check className="ml-2 size-3.5 text-primary" />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  );
+  const createPrAction = (
+    <Button
+      type="button"
+      size="sm"
+      className="h-8"
+      aria-label="Create pull request"
+      disabled={!canCreatePullRequest || creatingPullRequest}
+      onClick={() => onCreatePullRequest(task)}
+    >
+      {creatingPullRequest ? (
+        <LoaderCircle data-icon="inline-start" className="animate-spin" />
+      ) : (
+        <GitPullRequest data-icon="inline-start" />
+      )}
+      Create PR
+    </Button>
+  );
+  const doneAction = (
+    <Button
+      type="button"
+      size="sm"
+      className="h-8"
+      aria-label="Move to done"
+      disabled={task.status === "done"}
+      onClick={() => onUpdateStatus(task, "done")}
+    >
+      <Check data-icon="inline-start" />
+      Move to done
+    </Button>
+  );
   const workflowSteps = [
     {
       title: reviewInProgress ? "Reviewing..." : "Review",
@@ -176,7 +275,7 @@ export function TaskWorkspace({
       completed: reviewReadyForNextStep || task.status === "done",
       loading: reviewInProgress,
       disabled: reviewerProfiles.length === 0 || reviewInProgress,
-      onClick: undefined as (() => void) | undefined,
+      action: reviewAction,
     },
     {
       title: "Create PR",
@@ -184,7 +283,7 @@ export function TaskWorkspace({
       completed: Boolean(task.prUrl),
       loading: false,
       disabled: !canCreatePullRequest,
-      onClick: canCreatePullRequest ? () => onCreatePullRequest(task) : undefined,
+      action: createPrAction,
     },
     {
       title: "Move to done",
@@ -192,7 +291,7 @@ export function TaskWorkspace({
       completed: task.status === "done",
       loading: false,
       disabled: task.status === "done",
-      onClick: () => onUpdateStatus(task, "done"),
+      action: doneAction,
     },
   ];
 
@@ -242,10 +341,7 @@ export function TaskWorkspace({
                   loading={step.loading}
                   className="flex-1"
                 >
-                  <StepperTrigger
-                    className="flex flex-1 items-center gap-2.5 rounded-md px-3 py-2 text-left data-[state=active]:bg-primary/10"
-                    onClick={step.onClick}
-                  >
+                  <StepperTrigger className="flex flex-1 items-center gap-2.5 rounded-md px-3 py-2 text-left data-[state=active]:bg-primary/[0.11]">
                     <StepperIndicator className="size-6 rounded-full border-[1.5px] border-border bg-background text-[11px] font-bold text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:text-primary data-[state=completed]:border-primary data-[state=completed]:bg-primary data-[state=completed]:text-primary-foreground">
                       {index + 1}
                     </StepperIndicator>
@@ -259,62 +355,9 @@ export function TaskWorkspace({
                     </span>
                   </StepperTrigger>
 
-                  {index === 0 && (
+                  {index + 1 === workflowStep && step.action && (
                     <div className="ml-auto flex shrink-0 items-center gap-1.5 self-center pr-1.5">
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="h-8"
-                        aria-label={reviewActionLabel}
-                        disabled={startReviewDisabled}
-                        onClick={startReview}
-                      >
-                        {reviewInProgress && <LoaderCircle data-icon="inline-start" className="animate-spin" />}
-                        <span>{reviewInProgress ? "Reviewing" : "Review"}</span>
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            aria-label="Change reviewer"
-                            className="h-8 max-w-[150px]"
-                            disabled={reviewActive || reviewerProfiles.length === 0}
-                          >
-                            {selectedReviewerProfile ? (
-                              <>
-                                <span aria-hidden="true">
-                                  <AgentLogo agentKind={selectedReviewerProfile.agentKind} size="sm" />
-                                </span>
-                                <span className="truncate">{selectedReviewerProfile.name}</span>
-                              </>
-                            ) : (
-                              <span className="truncate">Reviewer</span>
-                            )}
-                            <ChevronDown data-icon="inline-end" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="min-w-44">
-                          <DropdownMenuGroup>
-                            {reviewerProfiles.map((profile) => (
-                              <DropdownMenuItem
-                                key={profile.id}
-                                onSelect={() => setReviewerProfileId(profile.id)}
-                                className="justify-between"
-                              >
-                                <span className="select-option-with-logo">
-                                  <span aria-hidden="true">
-                                    <AgentLogo agentKind={profile.agentKind} size="sm" />
-                                  </span>
-                                  <span className="truncate">{profile.name}</span>
-                                </span>
-                                {profile.id === reviewerProfileId && <Check className="ml-2 size-3.5 text-primary" />}
-                              </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuGroup>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      {step.action}
                     </div>
                   )}
                 </StepperItem>
@@ -346,8 +389,9 @@ export function TaskWorkspace({
               agentName={task.agentName}
               detail={displayedAttentionDetail}
               detailTitle={isAttentionDetailTruncated ? attentionDetail ?? undefined : undefined}
-              activeSessionId={task.activeSessionId}
-              onStopSession={onStopSession}
+              prUrl={task.prUrl}
+              canCreatePullRequest={canCreatePullRequest}
+              onCreatePullRequest={() => onCreatePullRequest(task)}
             />
           )}
         </section>
@@ -365,7 +409,7 @@ export function TaskWorkspace({
           <span className="min-w-0">
             <strong className="block truncate text-[13px] font-bold">{sessionAgentLabel}</strong>
             <small className="block truncate text-[11px] text-muted-foreground">
-              {sessionId ? `session ${sessionId}` : "No active session"}
+              {[repoName, sessionId ? `session ${sessionId}` : "No active session"].filter(Boolean).join(" · ")}
             </small>
           </span>
           {task.activeSessionId && (
@@ -454,7 +498,7 @@ export function TaskWorkspace({
               <div className="flex items-center justify-between gap-2">
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-muted-foreground">Review</p>
                 {reviewLoop && (
-                  <Badge variant="outline" className="rounded-md">
+                  <Badge variant={REVIEW_LOOP_BADGE_VARIANTS[reviewLoop.status]} className="rounded-md">
                     {REVIEW_LOOP_STATUS_SHORT_LABELS[reviewLoop.status]}
                   </Badge>
                 )}
@@ -464,7 +508,18 @@ export function TaskWorkspace({
                 <div className="rounded-md border bg-background p-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold">Review feedback</span>
-                    <Badge variant="outline" className="rounded-md">
+                    <Badge
+                      variant={
+                        latestReviewRun.verdict === "pass"
+                          ? "success"
+                          : latestReviewRun.verdict === "needs_changes"
+                            ? "destructive"
+                            : "outline"
+                      }
+                      className="rounded-md"
+                    >
+                      {latestReviewRun.verdict === "pass" && <CheckCircle2 data-icon="inline-start" />}
+                      {latestReviewRun.verdict === "needs_changes" && <XCircle data-icon="inline-start" />}
                       {REVIEW_VERDICT_LABELS[latestReviewRun.verdict]}
                     </Badge>
                   </div>
@@ -505,17 +560,29 @@ function ActionBar({
   agentName,
   detail,
   detailTitle,
-  activeSessionId,
-  onStopSession,
+  prUrl,
+  canCreatePullRequest,
+  onCreatePullRequest,
 }: {
   attention: TaskAttention;
   agentName?: string | null;
   detail?: string | null;
   detailTitle?: string;
-  activeSessionId?: string | null;
-  onStopSession: (sessionId: string) => void;
+  prUrl?: string | null;
+  canCreatePullRequest: boolean;
+  onCreatePullRequest: () => void;
 }) {
   const needsInput = attention.kind === "needs_input";
+  // Reply focuses the live terminal so the user can type their answer inline.
+  const focusTerminal = () => {
+    if (typeof document === "undefined") return;
+    document.querySelector<HTMLTextAreaElement>(".task-workspace .xterm-helper-textarea")?.focus();
+  };
+  const showOpenPr = Boolean(prUrl || canCreatePullRequest);
+  const openPr = () => {
+    if (prUrl) openExternal(prUrl);
+    else if (canCreatePullRequest) onCreatePullRequest();
+  };
   return (
     <div
       role="status"
@@ -542,17 +609,16 @@ function ActionBar({
         )}
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-2">
-        {needsInput && <span className="text-[11px] text-muted-foreground">Reply in the terminal</span>}
-        {needsInput && activeSessionId && (
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            aria-label="Stop session"
-            onClick={() => onStopSession(activeSessionId)}
-          >
-            <Square data-icon="inline-start" fill="currentColor" />
-            Stop
+        {needsInput && (
+          <Button type="button" variant="outline" size="sm" onClick={focusTerminal}>
+            <MessageSquareReply data-icon="inline-start" />
+            Reply
+          </Button>
+        )}
+        {showOpenPr && (
+          <Button type="button" size="sm" onClick={openPr}>
+            <GitPullRequest data-icon="inline-start" />
+            {prUrl ? "Open PR" : "Create PR"}
           </Button>
         )}
       </div>

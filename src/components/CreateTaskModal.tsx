@@ -4,9 +4,9 @@ import { Button } from "./ui/button";
 import { Field, FieldDescription, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Switch } from "./ui/switch";
 import { Textarea } from "./ui/textarea";
 import { AgentLogo } from "./AgentBrand";
-import { cn } from "../lib/utils";
 import { AgentProfile, Repo } from "../types";
 
 interface CreateTaskComposerProps {
@@ -64,7 +64,7 @@ export function CreateTaskComposer({
 
   return (
     <div
-      className="flex h-full min-h-0 flex-col items-center overflow-y-auto px-6 py-7"
+      className="flex h-full min-h-0 flex-col items-center overflow-y-auto px-6 py-[26px]"
       role="region"
       aria-label="New task composer"
     >
@@ -89,20 +89,20 @@ export function CreateTaskComposer({
           )}
         </div>
 
-        <div className="flex flex-col gap-4 rounded-xl border bg-card p-5 shadow-sm">
+        <div className="flex flex-col gap-4 rounded-xl border bg-card px-[22px] py-5 shadow-sm">
           <Field>
-            <FieldLabel htmlFor="new-task-title">Title (Optional)</FieldLabel>
+            <FieldLabel htmlFor="new-task-title" className="text-[11px] font-bold tracking-[0.02em]">Title</FieldLabel>
             <Input
               id="new-task-title"
               placeholder="What should the agent do?"
               value={newTaskTitle}
               onChange={(e) => setNewTaskTitle(e.target.value)}
-              className="h-10"
+              className="h-[34px]"
             />
           </Field>
 
           <Field>
-            <FieldLabel htmlFor="new-task-prompt">Prompt (Optional)</FieldLabel>
+            <FieldLabel htmlFor="new-task-prompt" className="text-[11px] font-bold tracking-[0.02em]">Prompt</FieldLabel>
             <Textarea
               id="new-task-prompt"
               value={newTaskPrompt}
@@ -115,9 +115,9 @@ export function CreateTaskComposer({
 
           <div className="grid grid-cols-2 gap-4">
             <Field>
-              <FieldLabel htmlFor="new-task-repo">Project</FieldLabel>
+              <FieldLabel htmlFor="new-task-repo" className="text-[11px] font-bold tracking-[0.02em]">Project</FieldLabel>
               <Select value={newTaskRepoId?.toString()} onValueChange={(value) => setNewTaskRepoId(Number(value))}>
-                <SelectTrigger id="new-task-repo" className="h-10" aria-label="Project">
+                <SelectTrigger id="new-task-repo" className="h-[34px]" aria-label="Project">
                   <span className="flex min-w-0 items-center gap-2">
                     <GitBranch className="size-3.5 shrink-0 opacity-70" aria-hidden="true" />
                     <SelectValue placeholder="Choose a project" />
@@ -134,12 +134,12 @@ export function CreateTaskComposer({
             </Field>
 
             <Field>
-              <FieldLabel htmlFor="new-task-agent">Agent</FieldLabel>
+              <FieldLabel htmlFor="new-task-agent" className="text-[11px] font-bold tracking-[0.02em]">Agent</FieldLabel>
               <Select
                 value={newTaskAgentProfileId?.toString()}
                 onValueChange={(value) => setNewTaskAgentProfileId(Number(value))}
               >
-                <SelectTrigger id="new-task-agent" className="h-10" aria-label="Agent">
+                <SelectTrigger id="new-task-agent" className="h-[34px]" aria-label="Agent">
                   <SelectValue placeholder="Choose an agent" />
                 </SelectTrigger>
                 <SelectContent>
@@ -163,38 +163,26 @@ export function CreateTaskComposer({
                 Isolate this task on its own branch.
               </small>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={newTaskHasWorktree}
+            <Switch
+              checked={newTaskHasWorktree}
+              onCheckedChange={setNewTaskHasWorktree}
               aria-label="Create a git worktree"
-              onClick={() => setNewTaskHasWorktree(!newTaskHasWorktree)}
-              className={cn(
-                "relative ml-auto h-[22px] w-[38px] shrink-0 rounded-full transition-colors",
-                newTaskHasWorktree ? "bg-primary" : "bg-muted-foreground/40",
-              )}
-            >
-              <span
-                className={cn(
-                  "absolute top-0.5 left-0.5 size-[18px] rounded-full bg-white shadow-sm transition-transform",
-                  newTaskHasWorktree && "translate-x-4",
-                )}
-              />
-            </button>
+              className="ml-auto"
+            />
           </div>
 
           {newTaskHasWorktree && (
             <Field className="animate-in slide-in-from-top-2 duration-200">
-              <FieldLabel htmlFor="new-task-branch" className="flex items-center gap-1.5">
+              <FieldLabel htmlFor="new-task-branch" className="flex items-center gap-1.5 text-[11px] font-bold tracking-[0.02em]">
                 <GitBranch className="size-3.5 opacity-70" aria-hidden="true" />
-                Branch name (Optional)
+                Branch name
               </FieldLabel>
               <Input
                 id="new-task-branch"
                 placeholder={suggestedBranchName}
                 value={newTaskBranchName}
                 onChange={(e) => setNewTaskBranchName(e.target.value)}
-                className="h-10 font-mono text-xs"
+                className="h-[34px] font-mono text-xs"
               />
               <FieldDescription>Blank generates a {"task-…"} branch with the configured prefix.</FieldDescription>
             </Field>
