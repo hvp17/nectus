@@ -14,9 +14,11 @@
   isolation: isolate;
   display: grid;
   grid-template-columns: 58px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
   width: 100%;
   height: 100%;
-  min-height: 0;
+  min-height: 100dvh;
   min-width: 0;
   overflow: hidden;
   color: var(--foreground);
@@ -33,6 +35,8 @@
   position: relative;
   min-width: 0;
   min-height: 0;
+  height: 100%;
+  align-self: stretch;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -89,6 +93,7 @@
 /* ---------- Icon rail ---------- */
 .nx-rail {
   display: flex; flex-direction: column; align-items: center; gap: 4px;
+  min-height: 0; height: 100%; align-self: stretch;
   padding: 12px 0; border-right: 1px solid var(--sidebar-border); background: var(--sidebar);
 }
 .nx-brand-mark {
@@ -116,7 +121,7 @@
 /* ---------- Contextual panel (project tree) ---------- */
 .nx-panel {
   border-right: 1px solid var(--sidebar-border); background: color-mix(in srgb, var(--sidebar) 60%, var(--background));
-  display: flex; flex-direction: column; min-width: 0; overflow: hidden;
+  display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; align-self: stretch; overflow: hidden;
 }
 .nx-panel-head { padding: 14px 14px 8px; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
 .nx-panel-scroll { flex: 1; min-height: 0; overflow-y: auto; }
