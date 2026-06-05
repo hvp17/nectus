@@ -1,7 +1,8 @@
 use crate::db::Database;
 use crate::models::{
-    AgentKind, AgentProfile, Repo, Session, SessionExitedEvent, SessionIdleEvent,
-    SessionNeedsInputEvent, SessionOutputEvent, SessionOutputSnapshot, SessionState, TaskSummary,
+    AgentKind, AgentProfile, Repo, Session, SessionActivityEvent, SessionExitedEvent,
+    SessionIdleEvent, SessionNeedsInputEvent, SessionOutputEvent, SessionOutputSnapshot,
+    SessionState, TaskSummary,
 };
 use chrono::Utc;
 use parking_lot::Mutex;
@@ -10,6 +11,7 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
@@ -32,6 +34,9 @@ use pr_review::spawn_pr_review;
 use review_loop::{spawn_review_on_session_idle, write_agent_submission};
 
 const OUTPUT_BUFFER_LIMIT: usize = 2 * 1024 * 1024;
+// Minimum gap between `session_activity` emissions per session, so spinner
+// repaints don't flood the event bus. The UI samples the latest line each tick.
+const ACTIVITY_THROTTLE: Duration = Duration::from_millis(300);
 // Default PTY size for a freshly spawned agent, before the frontend fits the
 // terminal to its pane and resizes. The renderer replays buffered output at the
 // session's recorded size, so this is also the width early output is generated at.
@@ -128,6 +133,10 @@ struct RunningSession {
     output_end_offset: u64,
     rows: u16,
     cols: u16,
+    /// Last activity line forwarded to the UI, for de-duplication.
+    last_activity_line: Option<String>,
+    /// When that line was forwarded, for throttling.
+    last_activity_at: Option<Instant>,
 }
 
 struct ReviewSessionTarget {
@@ -283,6 +292,8 @@ impl SessionManager {
                 output_end_offset: 0,
                 rows: DEFAULT_PTY_ROWS,
                 cols: DEFAULT_PTY_COLS,
+                last_activity_line: None,
+                last_activity_at: None,
             },
         );
 
@@ -323,11 +334,12 @@ impl SessionManager {
                         Ok(0) => break,
                         Ok(count) => {
                             let data = String::from_utf8_lossy(&buffer[..count]).to_string();
-                            let start_offset = sessions
-                                .lock()
-                                .get_mut(&session_id)
-                                .map(|running| append_output_buffer(running, &data))
-                                .unwrap_or(0);
+                            let mut start_offset = 0;
+                            let mut activity_line = None;
+                            if let Some(running) = sessions.lock().get_mut(&session_id) {
+                                start_offset = append_output_buffer(running, &data);
+                                activity_line = next_activity_line(running);
+                            }
                             let _ = app
                                 .emit(
                                     "session_output",
@@ -344,6 +356,24 @@ impl SessionManager {
                                         "failed to emit session output"
                                     )
                                 });
+                            if let Some(line) = activity_line {
+                                let _ = app
+                                    .emit(
+                                        "session_activity",
+                                        SessionActivityEvent {
+                                            session_id: session_id.clone(),
+                                            task_id,
+                                            line,
+                                        },
+                                    )
+                                    .inspect_err(|error| {
+                                        tracing::warn!(
+                                            ?error,
+                                            session_id = %session_id,
+                                            "failed to emit session activity"
+                                        )
+                                    });
+                            }
                         }
                         Err(error) => {
                             tracing::debug!(
@@ -598,6 +628,205 @@ mod tests {
         assert_eq!(target.session_id, "claude-session");
         assert_eq!(target.cwd, claude_cwd);
     }
+
+    #[test]
+    fn activity_line_strips_ansi_and_returns_clean_text() {
+        let buffer = "\u{1b}[2m\u{1b}[38;5;244mReading TaskCard.tsx\u{1b}[0m";
+        assert_eq!(
+            latest_activity_line(buffer),
+            Some("Reading TaskCard.tsx".to_string())
+        );
+    }
+
+    #[test]
+    fn activity_line_picks_last_meaningful_line() {
+        let buffer = "Editing styles.css\nRunning tests\n";
+        assert_eq!(
+            latest_activity_line(buffer),
+            Some("Running tests".to_string())
+        );
+    }
+
+    #[test]
+    fn activity_line_uses_final_segment_of_carriage_return_repaint() {
+        let buffer = "Thinking...\rApplying patch to mod.rs";
+        assert_eq!(
+            latest_activity_line(buffer),
+            Some("Applying patch to mod.rs".to_string())
+        );
+    }
+
+    #[test]
+    fn activity_line_skips_spinner_and_box_only_frames() {
+        let buffer = "Compiling project\n\u{2807} \n\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}";
+        assert_eq!(
+            latest_activity_line(buffer),
+            Some("Compiling project".to_string())
+        );
+    }
+
+    #[test]
+    fn activity_line_is_none_when_no_readable_text() {
+        assert_eq!(latest_activity_line("   \n\r\n  \u{2500}\u{2500} "), None);
+        assert_eq!(latest_activity_line(""), None);
+    }
+
+    #[test]
+    fn activity_line_truncates_to_payload_cap() {
+        let long = "x".repeat(ACTIVITY_LINE_MAX + 50);
+        let line = latest_activity_line(&long).expect("a long line survives");
+        assert_eq!(line.chars().count(), ACTIVITY_LINE_MAX);
+    }
+
+    #[test]
+    fn activity_emit_forwards_first_line() {
+        let now = Instant::now();
+        assert_eq!(
+            activity_to_emit(Some("Reading file".to_string()), None, None, now),
+            Some("Reading file".to_string())
+        );
+    }
+
+    #[test]
+    fn activity_emit_skips_unchanged_line() {
+        let now = Instant::now();
+        let earlier = now - ACTIVITY_THROTTLE - Duration::from_millis(10);
+        assert_eq!(
+            activity_to_emit(Some("Reading file".to_string()), Some("Reading file"), Some(earlier), now),
+            None
+        );
+    }
+
+    #[test]
+    fn activity_emit_throttles_rapid_changes() {
+        let now = Instant::now();
+        let just_now = now - Duration::from_millis(50);
+        assert_eq!(
+            activity_to_emit(Some("Newer line".to_string()), Some("Older line"), Some(just_now), now),
+            None
+        );
+    }
+
+    #[test]
+    fn activity_emit_forwards_changed_line_after_throttle() {
+        let now = Instant::now();
+        let earlier = now - ACTIVITY_THROTTLE - Duration::from_millis(10);
+        assert_eq!(
+            activity_to_emit(Some("Newer line".to_string()), Some("Older line"), Some(earlier), now),
+            Some("Newer line".to_string())
+        );
+    }
+
+    #[test]
+    fn activity_emit_skips_when_no_candidate() {
+        let now = Instant::now();
+        assert_eq!(activity_to_emit(None, Some("Older line"), None, now), None);
+    }
+}
+
+/// Longest activity line we forward to the UI; the card truncates further with
+/// an ellipsis, this just bounds the payload.
+const ACTIVITY_LINE_MAX: usize = 200;
+
+/// Derive the agent's latest human-readable activity line from raw PTY output.
+///
+/// Agents render full-screen TUIs, so the raw tail is mostly ANSI escapes,
+/// carriage-return repaints, spinners, and box-drawing chrome. This strips the
+/// escape sequences, treats `\r` and `\n` as line breaks (so an in-place repaint
+/// keeps only its final text), and returns the last line that still carries a
+/// readable token — skipping spinner/box-only frames. Returns `None` when no
+/// meaningful line is present yet.
+fn latest_activity_line(buffer: &str) -> Option<String> {
+    buffer
+        .split(['\n', '\r'])
+        .rev()
+        .map(|segment| strip_ansi(segment).trim().to_string())
+        .find(|line| line.chars().any(char::is_alphanumeric))
+        .map(|line| line.chars().take(ACTIVITY_LINE_MAX).collect())
+}
+
+/// Remove ANSI escape sequences (CSI and OSC) and stray control bytes from a
+/// single line of terminal output. Callers split on `\n`/`\r` first, so neither
+/// appears here.
+fn strip_ansi(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match ch {
+            '\u{1b}' => match chars.peek() {
+                // CSI `ESC [ … final`: drop through a final byte in 0x40..=0x7E.
+                Some('[') => {
+                    chars.next();
+                    while let Some(&c) = chars.peek() {
+                        chars.next();
+                        if ('\u{40}'..='\u{7e}').contains(&c) {
+                            break;
+                        }
+                    }
+                }
+                // OSC `ESC ] … BEL` or `… ESC \`: drop through the terminator.
+                Some(']') => {
+                    chars.next();
+                    while let Some(c) = chars.next() {
+                        if c == '\u{07}' {
+                            break;
+                        }
+                        if c == '\u{1b}' {
+                            if chars.peek() == Some(&'\\') {
+                                chars.next();
+                            }
+                            break;
+                        }
+                    }
+                }
+                // Other two-byte escapes: drop ESC and its single intro byte.
+                Some(_) => {
+                    chars.next();
+                }
+                None => {}
+            },
+            // Keep tabs (trimmed/collapsed downstream); drop other control bytes.
+            c if c.is_control() && c != '\t' => {}
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// Compute the activity line to emit for a session after new output, applying
+/// de-duplication and throttling, and record what was emitted on the session.
+fn next_activity_line(running: &mut RunningSession) -> Option<String> {
+    let now = Instant::now();
+    let candidate = latest_activity_line(&running.output_buffer);
+    let line = activity_to_emit(
+        candidate,
+        running.last_activity_line.as_deref(),
+        running.last_activity_at,
+        now,
+    )?;
+    running.last_activity_line = Some(line.clone());
+    running.last_activity_at = Some(now);
+    Some(line)
+}
+
+/// Pure throttle/de-dup decision: forward `candidate` only when it is present,
+/// differs from the last forwarded line, and the throttle window has elapsed.
+fn activity_to_emit(
+    candidate: Option<String>,
+    last_line: Option<&str>,
+    last_at: Option<Instant>,
+    now: Instant,
+) -> Option<String> {
+    let line = candidate?;
+    if last_line == Some(line.as_str()) {
+        return None;
+    }
+    if let Some(at) = last_at {
+        if now.duration_since(at) < ACTIVITY_THROTTLE {
+            return None;
+        }
+    }
+    Some(line)
 }
 
 fn append_output_buffer(running: &mut RunningSession, data: &str) -> u64 {

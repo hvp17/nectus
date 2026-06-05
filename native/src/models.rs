@@ -631,3 +631,14 @@ pub struct SessionNeedsInputEvent {
     pub reason: String,
     pub prompt: Option<String>,
 }
+
+/// The agent's latest human-readable activity line, derived from live PTY output
+/// and forwarded (throttled, de-duplicated) so task cards can show what a running
+/// session is doing without subscribing to the raw terminal stream.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionActivityEvent {
+    pub session_id: String,
+    pub task_id: i64,
+    pub line: String,
+}

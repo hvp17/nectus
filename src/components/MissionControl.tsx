@@ -15,6 +15,7 @@ interface MissionControlProps {
   repos: Repo[];
   tasks: TaskSummary[];
   taskAttention: TaskAttention[];
+  liveLines: Record<number, string>;
   loading: boolean;
   onOpenTask: (taskId: number) => void;
   onOpenPr: (url: string) => void;
@@ -30,13 +31,14 @@ export function MissionControl({
   repos,
   tasks,
   taskAttention,
+  liveLines,
   loading,
   onOpenTask,
   onOpenPr,
   onRefresh,
 }: MissionControlProps) {
   const repoNames = new Map(repos.map((repo) => [repo.id, repo.name]));
-  const rows = buildAgentRows(tasks, taskAttention, repoNames);
+  const rows = buildAgentRows(tasks, taskAttention, repoNames, liveLines);
   const byState = (state: AgentState) => rows.filter((row) => row.state === state);
   const count = (state: AgentState) => byState(state).length;
 

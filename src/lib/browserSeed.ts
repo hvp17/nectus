@@ -132,6 +132,17 @@ export const seedAttention: TaskAttention[] = [
   },
 ];
 
+/**
+ * Live activity lines for running seed tasks (those with a `Live` badge), so the
+ * board and Mission Control show the "what it's doing" stream in browser preview.
+ */
+export const seedLiveLines: Record<number, string> = {
+  3: "Writing the file-sink adapter in src/sinks/file.ts",
+  4: "Running pnpm test — 12 passed, 1 pending",
+  5: "Auditing --muted-foreground contrast on dark surfaces",
+  7: "Reviewing the diff against feat/json-status",
+};
+
 export const seedSettings: AppSettings = {
   defaultAgentProfileId: 1,
   defaultWorktreeRootPattern: "../{repoName}-worktrees",

@@ -167,6 +167,7 @@ Backend-to-frontend events:
 | Event | Payload | Source |
 | --- | --- | --- |
 | `session_output` | PTY output chunk and stream offset. | `native/src/sessions/mod.rs` |
+| `session_activity` | Task id, session id, and the agent's latest human-readable activity line (ANSI-stripped tail of PTY output, throttled and de-duplicated). | `native/src/sessions/mod.rs` |
 | `session_exited` | Session id and optional exit code. | `native/src/sessions/mod.rs`, `native/src/lib.rs` |
 | `session_idle` | Task id, session id, Codex turn id, optional message. | `native/src/sessions/codex.rs` |
 | `session_needs_input` | Task id, session id, reason, optional prompt. | `native/src/sessions/codex.rs` |
@@ -181,7 +182,9 @@ Frontend event listeners:
 - `native/tauri.conf.json` keeps `dragDropEnabled` enabled on the main window so
   Tauri emits native file-drop events instead of relying on browser-only drops.
 - `src/hooks/useSessionEvents.ts` listens for attention events and sends
-  notifications.
+  notifications. It also records `session_activity` into a per-task `liveLines`
+  map (cleared on `session_exited`) that drives the live "what it's doing" line on
+  task cards and Mission Control rows.
 - `src/hooks/useTaskReviewLoop.ts` listens for `review_loop_updated`.
 - `src/hooks/usePrReviews.ts` listens for `pr_review_updated` and notifies when a
   review becomes ready or errors.

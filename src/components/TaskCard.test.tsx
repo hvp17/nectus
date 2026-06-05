@@ -28,11 +28,16 @@ const task: TaskSummary = {
   updatedAt: "2026-05-15T00:00:00.000Z",
 };
 
-function renderTaskCard(attention?: TaskAttention, taskOverride: Partial<TaskSummary> = {}) {
+function renderTaskCard(
+  attention?: TaskAttention,
+  taskOverride: Partial<TaskSummary> = {},
+  liveLine?: string,
+) {
   return renderWithTooltipProvider(
     <TaskCard
       task={{ ...task, ...taskOverride }}
       attention={attention}
+      liveLine={liveLine}
       isSelected={false}
       busy={false}
       onSelect={vi.fn()}
@@ -67,6 +72,27 @@ describe("TaskCard", () => {
 
     expect(screen.queryByText(message)).not.toBeInTheDocument();
     expect(detail).toHaveAttribute("title", message);
+  });
+
+  it("shows the live activity line for a running task", () => {
+    renderTaskCard(undefined, { status: "in_progress", activeSessionId: "s-9" }, "Editing TaskCard.tsx");
+
+    const line = screen.getByText("Editing TaskCard.tsx");
+    expect(line).toHaveAttribute("data-live", "true");
+    expect(line).toHaveAttribute("title", "Editing TaskCard.tsx");
+  });
+
+  it("falls back to a working placeholder before the first live line arrives", () => {
+    renderTaskCard(undefined, { status: "in_progress", activeSessionId: "s-9" });
+
+    expect(screen.getByText("Working…")).toBeInTheDocument();
+  });
+
+  it("does not show a live line for a task without a running session", () => {
+    renderTaskCard(undefined, { status: "in_progress" }, "Editing TaskCard.tsx");
+
+    expect(screen.queryByText("Editing TaskCard.tsx")).not.toBeInTheDocument();
+    expect(screen.queryByText("Working…")).not.toBeInTheDocument();
   });
 
   it("shows completed review status on the card", () => {

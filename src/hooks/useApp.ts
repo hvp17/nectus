@@ -3,7 +3,7 @@ import { api } from "../api";
 import { toSettingsInput } from "../components/settings/profileDrafts";
 import { replaceById, upsertById } from "../lib/listState";
 import { jiraBrowseUrl } from "../lib/jira";
-import { isBrowserPreview, seedAttention } from "../lib/browserSeed";
+import { isBrowserPreview, seedAttention, seedLiveLines } from "../lib/browserSeed";
 import { useGuardedAction } from "./useGuardedAction";
 import {
   clearTaskAttention,
@@ -47,6 +47,9 @@ export function useApp() {
   const [selectedAgentProfileId, setSelectedAgentProfileId] = useState<number | undefined>();
   const [taskAttention, setTaskAttention] = useState<TaskAttention[]>(() =>
     isBrowserPreview ? seedAttention : [],
+  );
+  const [liveLines, setLiveLines] = useState<Record<number, string>>(() =>
+    isBrowserPreview ? seedLiveLines : {},
   );
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -186,7 +189,7 @@ export function useApp() {
     }
   }, [applyReviewLoopToTask, selectedReviewLoop]);
 
-  useSessionEvents({ tasksRef, setTasks, setMessage, setTaskAttention });
+  useSessionEvents({ tasksRef, setTasks, setMessage, setTaskAttention, setLiveLines });
 
   const sessionCommands = useSessionCommands({
     agentProfiles,
@@ -494,6 +497,7 @@ export function useApp() {
     selectedReviewLoop,
     selectedReviewRuns,
     taskAttention,
+    liveLines,
     selectedTaskAttention: selectedTask ? getTaskAttention(taskAttention, selectedTask.id) : undefined,
     counts,
     message,
