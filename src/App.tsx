@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -13,7 +13,9 @@ import { ReviewsPage } from "./components/ReviewsPage";
 import { JiraBoardPage } from "./components/JiraBoardPage";
 import { useApp } from "./hooks/useApp";
 import { useAppTheme } from "./hooks/useAppTheme";
+import { useTaskNotificationToast } from "./hooks/useTaskNotificationToast";
 import { formatNotificationBody } from "./notificationText";
+import { planTaskFocus } from "./taskNavigation";
 import { api } from "./api";
 
 function getToastContent(message: string) {
@@ -51,6 +53,8 @@ function App() {
     counts,
     message,
     setMessage,
+    taskToast,
+    setTaskToast,
     busy,
     deletingTaskIds,
     loading,
@@ -142,15 +146,24 @@ function App() {
     setCreateTaskOpen(true);
   };
 
-  // Focus a task into the workspace from anywhere (Mission Control, board, JIRA card).
-  const openTask = (taskId: number) => {
-    const task = tasks.find((item) => item.id === taskId);
-    if (task) {
-      setSelectedRepoId(task.repoId);
-    }
-    setSelectedTaskId(taskId);
-    setCurrentView((view) => (view === "mission" || view === "board" ? view : "board"));
-  };
+  // Focus a task into the workspace from anywhere (Mission Control, board, JIRA
+  // card, or an attention toast). Dismissing the composer matters because it
+  // overlays the viewport and would otherwise hide the task we just opened.
+  const openTask = useCallback(
+    (taskId: number) => {
+      const task = tasks.find((item) => item.id === taskId);
+      const plan = planTaskFocus(currentView, task, createTaskOpen);
+      if (plan.dismissComposer) closeCreateTaskModal();
+      if (plan.repoId !== undefined) setSelectedRepoId(plan.repoId);
+      setSelectedTaskId(taskId);
+      setCurrentView(plan.view);
+    },
+    [tasks, currentView, createTaskOpen, closeCreateTaskModal, setSelectedRepoId, setSelectedTaskId, setCurrentView],
+  );
+
+  // A finished / needs-input notification opens that task's workspace on click.
+  const clearTaskToast = useCallback(() => setTaskToast(null), [setTaskToast]);
+  useTaskNotificationToast({ notification: taskToast, onOpenTask: openTask, onShown: clearTaskToast });
 
   // Top-level rail navigation. Board needs a selected project to show its kanban.
   const navigate = (view: RailView) => {

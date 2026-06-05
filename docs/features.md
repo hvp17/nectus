@@ -248,11 +248,19 @@ Attention tracking is UI state derived from backend events.
   badge.
 - macOS notifications are sent for idle and needs-input events when permission is
   granted.
+- The matching in-app toast for a known task carries an **Open task** action that
+  focuses that task's workspace (selecting its repo and switching to the board
+  view when needed). The macOS notification itself cannot be made clickable on
+  desktop — the notification plugin's desktop `show()` is fire-and-forget and its
+  `onAction` listener is mobile-only — so the toast is the navigable surface.
+  Events that cannot be matched to a loaded task fall back to a plain toast.
 
 Key files:
 
 - Attention model: `src/sessionAttention.ts`
 - Notification wrapper: `src/sessionNotifications.ts`
+- Task toast payload builders: `src/taskNotification.ts`
+- Clickable toast hook: `src/hooks/useTaskNotificationToast.ts`
 - Event listener hook: `src/hooks/useSessionEvents.ts`
 - Codex event source: `native/src/sessions/codex.rs`
 
