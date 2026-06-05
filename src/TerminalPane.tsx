@@ -49,8 +49,15 @@ function escapeShellPath(path: string) {
 function loadWebglRenderer(terminal: Terminal) {
   try {
     const webgl = new WebglAddon();
-    webgl.onContextLoss(() => webgl.dispose());
+    webgl.onContextLoss(() => {
+      // TEMP DIAG (remove after rendering investigation): a lost GPU context
+      // permanently reverts this terminal to the DOM renderer (ghosting returns).
+      console.warn("[term-diag] WebGL2 context lost at runtime -> DOM renderer fallback");
+      webgl.dispose();
+    });
     terminal.loadAddon(webgl);
+    // TEMP DIAG (remove after rendering investigation)
+    console.info("[term-diag] WebGL2 renderer loaded (GPU rendering active)");
   } catch (error) {
     console.warn("Terminal: WebGL2 renderer unavailable, using the DOM renderer", error);
   }
@@ -82,10 +89,24 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
 
     const unlistenCallbacks: UnlistenFn[] = [];
     let disposed = false;
+    // TEMP DIAG (remove after rendering investigation): throttle live heartbeat.
+    let lastOutputLogAt = 0;
 
     listen<SessionOutputEvent>("session_output", (event) => {
       const cached = terminalsRef.current.get(event.payload.sessionId);
       if (!cached) return;
+
+      // TEMP DIAG (remove after rendering investigation): heartbeat the live
+      // xterm grid size during streaming, so we can see whether it stays stable
+      // (size desync would show the cols/rows changing under the agent's redraws).
+      const now = Date.now();
+      if (now - lastOutputLogAt > 500) {
+        lastOutputLogAt = now;
+        console.info(
+          `[term-diag] live ${event.payload.sessionId}: xterm=${cached.terminal.cols}x${cached.terminal.rows}` +
+            ` rendered=${cached.renderedOffset} loadingSnapshot=${cached.loadingSnapshot}`,
+        );
+      }
 
       if (cached.loadingSnapshot) {
         cached.pendingOutput.push(event.payload);
@@ -259,6 +280,14 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
       .sessionOutputSnapshot(sessionId)
       .then((snapshot) => {
         if (snapshot.sessionId !== sessionId || terminalsRef.current.get(sessionId) !== cached) return;
+        // TEMP DIAG (remove after rendering investigation): compare the width the
+        // buffer was generated at against the xterm we're about to replay into.
+        console.info(
+          `[term-diag] snapshot ${sessionId}: gen=${snapshot.cols}x${snapshot.rows}` +
+            ` xterm=${cached.terminal.cols}x${cached.terminal.rows}` +
+            ` bytes=[${snapshot.startOffset},${snapshot.endOffset}) truncated=${snapshot.truncated}` +
+            ` pending=${cached.pendingOutput.length}`,
+        );
         // For a fresh terminal, match the width the buffer was generated at before
         // replaying so cursor-addressed redraws reproduce faithfully. Existing
         // terminals already hold rendered content, so leave their size to the fit.
@@ -287,7 +316,15 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
 
   const syncTerminalToPane = (sessionId: string, cached: CachedTerminal) => {
     if (cached.container.hidden) return;
+    // TEMP DIAG (remove after rendering investigation): record the fit transition
+    // and the size we push to the PTY. A flood of these = resize churn; a fit into
+    // a 0px container = the cause of a bogus PTY size and mis-landed redraws.
+    const before = `${cached.terminal.cols}x${cached.terminal.rows}`;
     cached.fit.fit();
+    console.info(
+      `[term-diag] sync ${sessionId}: container=${cached.container.clientWidth}x${cached.container.clientHeight}px` +
+        ` xterm ${before} -> ${cached.terminal.cols}x${cached.terminal.rows} (PTY resize sent)`,
+    );
     api.resizeSession(sessionId, cached.terminal.rows, cached.terminal.cols).catch(() => undefined);
   };
 
