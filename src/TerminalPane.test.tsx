@@ -7,19 +7,31 @@ const terminalTestState = vi.hoisted(() => {
   const instances: MockTerminal[] = [];
   const handlers = new Map<string, (event: { payload: unknown }) => void>();
   let dragDropHandler: ((event: { payload: unknown }) => void) | undefined;
+  // Simulates a browser without WebGL2 (or a lost context): loading the WebGL
+  // addon throws, exercising the DOM-renderer fallback in loadWebglRenderer.
+  let shouldFailWebgl = false;
+
+  class MockWebglAddon {
+    onContextLoss = vi.fn();
+    dispose = vi.fn();
+  }
 
   class MockTerminal {
     rows = 24;
     cols = 80;
     resize = vi.fn();
     write = vi.fn();
+    loadAddon = vi.fn((addon: unknown) => {
+      if (shouldFailWebgl && addon instanceof MockWebglAddon) {
+        throw new Error("WebGL2 is not supported");
+      }
+    });
     private dataHandler?: (data: string) => void;
 
     constructor() {
       instances.push(this);
     }
 
-    loadAddon() {}
     open() {}
     writeln() {}
     dispose() {}
@@ -41,6 +53,10 @@ const terminalTestState = vi.hoisted(() => {
   return {
     instances,
     handlers,
+    MockWebglAddon,
+    setWebglFailure: (value: boolean) => {
+      shouldFailWebgl = value;
+    },
     getDragDropHandler: () => dragDropHandler,
     listen: vi.fn(async (eventName: string, handler: (event: { payload: unknown }) => void) => {
       handlers.set(eventName, handler);
@@ -68,6 +84,10 @@ vi.mock("@xterm/xterm", () => ({
 
 vi.mock("@xterm/addon-fit", () => ({
   FitAddon: terminalTestState.MockFitAddon,
+}));
+
+vi.mock("@xterm/addon-webgl", () => ({
+  WebglAddon: terminalTestState.MockWebglAddon,
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -102,6 +122,7 @@ describe("TerminalPane", () => {
     terminalTestState.instances.length = 0;
     terminalTestState.handlers.clear();
     terminalTestState.resetDragDropHandler();
+    terminalTestState.setWebglFailure(false);
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
       configurable: true,
       value: {},
@@ -129,6 +150,38 @@ describe("TerminalPane", () => {
 
     expect(onSessionInput).toHaveBeenCalledWith("session-21");
     expect(mockedApi.sendSessionInput).toHaveBeenCalledWith("session-21", "Continue\n");
+  });
+
+  it("loads the WebGL renderer for crisp, flicker-free terminal output", async () => {
+    render(
+      <TerminalPane sessionId="session-21" onSessionExit={vi.fn()} onSessionInput={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      expect(terminalTestState.instances).toHaveLength(1);
+    });
+
+    expect(terminalTestState.instances[0].loadAddon).toHaveBeenCalledWith(
+      expect.any(terminalTestState.MockWebglAddon),
+    );
+  });
+
+  it("falls back to the DOM renderer when WebGL2 is unavailable", async () => {
+    terminalTestState.setWebglFailure(true);
+
+    render(
+      <TerminalPane sessionId="session-21" onSessionExit={vi.fn()} onSessionInput={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      expect(terminalTestState.instances).toHaveLength(1);
+    });
+
+    // The WebGL load was attempted but threw; the session must still finish
+    // wiring up (history replay + PTY sync) instead of crashing.
+    await waitFor(() => {
+      expect(mockedApi.resizeSession).toHaveBeenCalledWith("session-21", 24, 80);
+    });
   });
 
   it("replays history at the snapshot's generation size, then syncs the PTY to the pane", async () => {

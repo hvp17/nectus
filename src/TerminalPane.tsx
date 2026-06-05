@@ -1,6 +1,7 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { useEffect, useRef } from "react";
 import { api } from "./api";
@@ -59,6 +60,22 @@ function readTerminalTheme(): ITheme {
   };
   probe.remove();
   return theme;
+}
+
+// Prefer xterm's GPU (WebGL2) renderer over the default DOM renderer. The DOM
+// renderer leaves stale cells behind during the rapid cursor-addressed redraws
+// that TUIs like Claude Code use for their status line (ghosting/overlap), and
+// mismeasures some glyphs into tofu boxes. WebGL repaints the whole cell grid
+// from a texture atlas each frame, so both go away. Fall back to the DOM
+// renderer when WebGL2 is unavailable or the context is lost at runtime.
+function loadWebglRenderer(terminal: Terminal) {
+  try {
+    const webgl = new WebglAddon();
+    webgl.onContextLoss(() => webgl.dispose());
+    terminal.loadAddon(webgl);
+  } catch (error) {
+    console.warn("Terminal: WebGL2 renderer unavailable, using the DOM renderer", error);
+  }
 }
 
 export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: TerminalPaneProps) {
@@ -234,6 +251,8 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     terminal.open(container);
+    // Must run after open(): the WebGL renderer needs the terminal's canvas.
+    loadWebglRenderer(terminal);
 
     const dataDisposable = terminal.onData((data) => {
       if (sessionIdRef.current === sessionId) {
