@@ -9,6 +9,11 @@ import { readTerminalTheme } from "./lib/terminalTheme";
 import { isTauriRuntime } from "./sessionNotifications";
 import type { SessionExitedEvent, SessionOutputEvent } from "./types";
 
+// TEMP DIAG (remove after rendering investigation): fires the instant this module
+// is evaluated. If you do NOT see this in the console after a full restart, the
+// running build does not include this code (stale dev server / wrong console).
+console.warn("[term-diag] TerminalPane module loaded");
+
 interface TerminalPaneProps {
   sessionId?: string | null;
   onSessionExit: (sessionId: string) => void;
@@ -57,7 +62,7 @@ function loadWebglRenderer(terminal: Terminal) {
     });
     terminal.loadAddon(webgl);
     // TEMP DIAG (remove after rendering investigation)
-    console.info("[term-diag] WebGL2 renderer loaded (GPU rendering active)");
+    console.warn("[term-diag] WebGL2 renderer loaded (GPU rendering active)");
   } catch (error) {
     console.warn("Terminal: WebGL2 renderer unavailable, using the DOM renderer", error);
   }
@@ -85,6 +90,11 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
   }, [sessionId]);
 
   useEffect(() => {
+    // TEMP DIAG (remove after rendering investigation): confirm the listener
+    // effect runs inside the Tauri webview (a plain browser tab bails here).
+    console.warn(
+      `[term-diag] mount effect: host=${!!hostRef.current} tauri=${isTauriRuntime()}`,
+    );
     if (!hostRef.current || !isTauriRuntime()) return;
 
     const unlistenCallbacks: UnlistenFn[] = [];
@@ -102,7 +112,7 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
       const now = Date.now();
       if (now - lastOutputLogAt > 500) {
         lastOutputLogAt = now;
-        console.info(
+        console.warn(
           `[term-diag] live ${event.payload.sessionId}: xterm=${cached.terminal.cols}x${cached.terminal.rows}` +
             ` rendered=${cached.renderedOffset} loadingSnapshot=${cached.loadingSnapshot}`,
         );
@@ -282,7 +292,7 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
         if (snapshot.sessionId !== sessionId || terminalsRef.current.get(sessionId) !== cached) return;
         // TEMP DIAG (remove after rendering investigation): compare the width the
         // buffer was generated at against the xterm we're about to replay into.
-        console.info(
+        console.warn(
           `[term-diag] snapshot ${sessionId}: gen=${snapshot.cols}x${snapshot.rows}` +
             ` xterm=${cached.terminal.cols}x${cached.terminal.rows}` +
             ` bytes=[${snapshot.startOffset},${snapshot.endOffset}) truncated=${snapshot.truncated}` +
@@ -321,7 +331,7 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
     // a 0px container = the cause of a bogus PTY size and mis-landed redraws.
     const before = `${cached.terminal.cols}x${cached.terminal.rows}`;
     cached.fit.fit();
-    console.info(
+    console.warn(
       `[term-diag] sync ${sessionId}: container=${cached.container.clientWidth}x${cached.container.clientHeight}px` +
         ` xterm ${before} -> ${cached.terminal.cols}x${cached.terminal.rows} (PTY resize sent)`,
     );
