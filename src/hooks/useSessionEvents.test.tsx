@@ -56,6 +56,7 @@ function setup(initialTasks: TaskSummary[]) {
           typeof update === "function" ? update(tasksRef.current) : update;
       }),
       setMessage: vi.fn(),
+      setTaskToast: vi.fn(),
       setTaskAttention: vi.fn(),
       setLiveLines,
     }),
