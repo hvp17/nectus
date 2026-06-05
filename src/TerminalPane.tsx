@@ -1,6 +1,8 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { FitAddon } from "@xterm/addon-fit";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import { useEffect, useRef } from "react";
@@ -8,11 +10,6 @@ import { api } from "./api";
 import { readTerminalTheme } from "./lib/terminalTheme";
 import { isTauriRuntime } from "./sessionNotifications";
 import type { SessionExitedEvent, SessionOutputEvent } from "./types";
-
-// TEMP DIAG (remove after rendering investigation): fires the instant this module
-// is evaluated. If you do NOT see this in the console after a full restart, the
-// running build does not include this code (stale dev server / wrong console).
-console.warn("[term-diag] TerminalPane module loaded");
 
 interface TerminalPaneProps {
   sessionId?: string | null;
@@ -28,6 +25,9 @@ interface CachedTerminal {
   renderedOffset: number;
   loadingSnapshot: boolean;
   pendingOutput: SessionOutputEvent[];
+  /** Last rows/cols pushed to the PTY, so we skip redundant SIGWINCH resizes. */
+  ptyRows: number;
+  ptyCols: number;
 }
 
 const SHELL_PATH_SAFE_CHAR = /[A-Za-z0-9_@%+=:,./-]/;
@@ -54,15 +54,10 @@ function escapeShellPath(path: string) {
 function loadWebglRenderer(terminal: Terminal) {
   try {
     const webgl = new WebglAddon();
-    webgl.onContextLoss(() => {
-      // TEMP DIAG (remove after rendering investigation): a lost GPU context
-      // permanently reverts this terminal to the DOM renderer (ghosting returns).
-      console.warn("[term-diag] WebGL2 context lost at runtime -> DOM renderer fallback");
-      webgl.dispose();
-    });
+    // A lost GPU context can't be recovered in place; dispose so xterm reverts to
+    // the DOM renderer instead of freezing on a dead canvas.
+    webgl.onContextLoss(() => webgl.dispose());
     terminal.loadAddon(webgl);
-    // TEMP DIAG (remove after rendering investigation)
-    console.warn("[term-diag] WebGL2 renderer loaded (GPU rendering active)");
   } catch (error) {
     console.warn("Terminal: WebGL2 renderer unavailable, using the DOM renderer", error);
   }
@@ -90,33 +85,14 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
   }, [sessionId]);
 
   useEffect(() => {
-    // TEMP DIAG (remove after rendering investigation): confirm the listener
-    // effect runs inside the Tauri webview (a plain browser tab bails here).
-    console.warn(
-      `[term-diag] mount effect: host=${!!hostRef.current} tauri=${isTauriRuntime()}`,
-    );
     if (!hostRef.current || !isTauriRuntime()) return;
 
     const unlistenCallbacks: UnlistenFn[] = [];
     let disposed = false;
-    // TEMP DIAG (remove after rendering investigation): throttle live heartbeat.
-    let lastOutputLogAt = 0;
 
     listen<SessionOutputEvent>("session_output", (event) => {
       const cached = terminalsRef.current.get(event.payload.sessionId);
       if (!cached) return;
-
-      // TEMP DIAG (remove after rendering investigation): heartbeat the live
-      // xterm grid size during streaming, so we can see whether it stays stable
-      // (size desync would show the cols/rows changing under the agent's redraws).
-      const now = Date.now();
-      if (now - lastOutputLogAt > 500) {
-        lastOutputLogAt = now;
-        console.warn(
-          `[term-diag] live ${event.payload.sessionId}: xterm=${cached.terminal.cols}x${cached.terminal.rows}` +
-            ` rendered=${cached.renderedOffset} loadingSnapshot=${cached.loadingSnapshot}`,
-        );
-      }
 
       if (cached.loadingSnapshot) {
         cached.pendingOutput.push(event.payload);
@@ -167,8 +143,16 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
       }
     });
 
+    // Coalesce resize bursts (a window drag fires dozens of ticks) into one fit
+    // per frame, so the agent repaints its cursor-addressed UI once, not on every
+    // intermediate pixel — repeated repaints overlap into ghosted/duplicate lines.
+    let resizeFrame = 0;
     const resizeObserver = new ResizeObserver(() => {
-      fitActiveTerminal();
+      if (resizeFrame) cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = 0;
+        fitActiveTerminal();
+      });
     });
     resizeObserver.observe(hostRef.current);
 
@@ -185,6 +169,7 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
 
     return () => {
       disposed = true;
+      if (resizeFrame) cancelAnimationFrame(resizeFrame);
       resizeObserver.disconnect();
       themeObserver.disconnect();
       unlistenCallbacks.forEach((unlisten) => unlisten());
@@ -253,12 +238,25 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
     const terminal = new Terminal({
       cursorBlink: true,
       convertEol: true,
+      // Required by Unicode11Addon (terminal.unicode.activeVersion is proposed API).
+      allowProposedApi: true,
       fontFamily: "'JetBrains Mono Variable', 'JetBrains Mono', SFMono-Regular, Menlo, monospace",
       fontSize: 13,
       theme: readTerminalTheme(),
     });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
+    // Unicode 11 width tables so emoji/CJK occupy the same cell count the agent
+    // assumes; a width disagreement desyncs its cursor-addressed redraws.
+    terminal.loadAddon(new Unicode11Addon());
+    terminal.unicode.activeVersion = "11";
+    // Highlight URLs and open clicks in the system browser, not inside the webview.
+    terminal.loadAddon(
+      new WebLinksAddon((event, uri) => {
+        event.preventDefault();
+        void api.openExternalUrl(uri);
+      }),
+    );
     terminal.open(container);
     // Must run after open(): the WebGL renderer needs the terminal's canvas.
     loadWebglRenderer(terminal);
@@ -277,6 +275,8 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
       renderedOffset: 0,
       loadingSnapshot: false,
       pendingOutput: [],
+      ptyRows: 0,
+      ptyCols: 0,
     };
     terminalsRef.current.set(sessionId, cached);
     return cached;
@@ -290,19 +290,15 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
       .sessionOutputSnapshot(sessionId)
       .then((snapshot) => {
         if (snapshot.sessionId !== sessionId || terminalsRef.current.get(sessionId) !== cached) return;
-        // TEMP DIAG (remove after rendering investigation): compare the width the
-        // buffer was generated at against the xterm we're about to replay into.
-        console.warn(
-          `[term-diag] snapshot ${sessionId}: gen=${snapshot.cols}x${snapshot.rows}` +
-            ` xterm=${cached.terminal.cols}x${cached.terminal.rows}` +
-            ` bytes=[${snapshot.startOffset},${snapshot.endOffset}) truncated=${snapshot.truncated}` +
-            ` pending=${cached.pendingOutput.length}`,
-        );
         // For a fresh terminal, match the width the buffer was generated at before
         // replaying so cursor-addressed redraws reproduce faithfully. Existing
         // terminals already hold rendered content, so leave their size to the fit.
         if (cached.renderedOffset === 0 && snapshot.cols > 0 && snapshot.rows > 0) {
           cached.terminal.resize(snapshot.cols, snapshot.rows);
+          // The PTY already runs at its recorded generation size, so treat that as
+          // the live size: syncTerminalToPane only resizes if the pane differs.
+          cached.ptyRows = snapshot.rows;
+          cached.ptyCols = snapshot.cols;
         }
         writeOutput(cached, snapshot.data, snapshot.startOffset);
         cached.pendingOutput.splice(0).forEach((output) => {
@@ -326,16 +322,15 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
 
   const syncTerminalToPane = (sessionId: string, cached: CachedTerminal) => {
     if (cached.container.hidden) return;
-    // TEMP DIAG (remove after rendering investigation): record the fit transition
-    // and the size we push to the PTY. A flood of these = resize churn; a fit into
-    // a 0px container = the cause of a bogus PTY size and mis-landed redraws.
-    const before = `${cached.terminal.cols}x${cached.terminal.rows}`;
     cached.fit.fit();
-    console.warn(
-      `[term-diag] sync ${sessionId}: container=${cached.container.clientWidth}x${cached.container.clientHeight}px` +
-        ` xterm ${before} -> ${cached.terminal.cols}x${cached.terminal.rows} (PTY resize sent)`,
-    );
-    api.resizeSession(sessionId, cached.terminal.rows, cached.terminal.cols).catch(() => undefined);
+    const { rows, cols } = cached.terminal;
+    // Only SIGWINCH the PTY when the grid actually changed. A redundant resize
+    // forces the agent to repaint its cursor-addressed UI, which — especially in a
+    // short pane — overlaps into ghosted/duplicate lines.
+    if (rows === cached.ptyRows && cols === cached.ptyCols) return;
+    cached.ptyRows = rows;
+    cached.ptyCols = cols;
+    api.resizeSession(sessionId, rows, cols).catch(() => undefined);
   };
 
   const fitActiveTerminal = () => {

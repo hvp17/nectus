@@ -344,29 +344,43 @@ Relevant code:
 - `src/hooks/useSessionCommands.ts`
 - `native/src/sessions/mod.rs`
 
-### Terminal Shows Ghosted Text Or Tofu Boxes
+### Terminal Shows Doubled / Ghosted Text Or Tofu Boxes
 
-`src/TerminalPane.tsx` renders with xterm's GPU (WebGL2) renderer via
-`@xterm/addon-webgl`, loaded by `loadWebglRenderer` right after
-`terminal.open(...)`. The WebGL renderer is required for correct output from
-agents like Claude Code that repaint a status line with rapid cursor-addressed
-redraws: xterm's default DOM renderer leaves stale cells behind (ghosting and
-overlapping spinner lines) and mismeasures some glyphs into `■` tofu boxes.
+Agents like Claude Code repaint a multi-line sticky UI (input box + status line)
+with rapid cursor-addressed redraws. Those redraws only land correctly when
+xterm's grid matches the PTY's grid; when they don't, the old lines aren't
+overwritten and you see **duplicate spinner/footer lines**. `src/TerminalPane.tsx`
+defends this on several fronts:
 
-Check:
+- **Terminal height.** The pane height is driven by the layout (the `height:100%`
+  chain `html`→`#root`→`.nx-app`→`.task-workspace`→`.terminal-host`). A very short
+  pane (≈10 rows) leaves the agent no room and its redraws overlap — confirmed via
+  the `[term-diag]` logs as the real cause of "double rendering". If the terminal
+  looks cramped, the window/pane is too short, not a renderer bug.
+- **No redundant SIGWINCH.** `syncTerminalToPane` only calls `resizeSession` when
+  the fitted rows/cols actually changed (tracked in `CachedTerminal.ptyRows/Cols`).
+  A no-op resize would force the agent to repaint and re-ghost.
+- **Coalesced resizes.** The `ResizeObserver` debounces fits into one per animation
+  frame, so a window drag repaints the agent UI once, not on every pixel.
+- **Generation-size replay.** On first attach, history is replayed at the recorded
+  generation width before fitting to the pane (`loadSnapshotDelta`), so buffered
+  cursor-addressed redraws reproduce on the right rows.
+- **Unicode 11 widths.** `Unicode11Addon` + `terminal.unicode.activeVersion = "11"`
+  make emoji/CJK occupy the cell count the agent assumes; a width disagreement
+  desyncs cursor math.
+- **GPU renderer.** `loadWebglRenderer` loads `@xterm/addon-webgl` after
+  `terminal.open(...)`; the DOM renderer leaves stale cells and renders `■` tofu.
+  If the console logs `Terminal: WebGL2 renderer unavailable, using the DOM
+  renderer`, WebGL2 was missing and xterm fell back to DOM (artifacts can return);
+  a lost GPU context disposes the addon (`onContextLoss`) and also reverts to DOM.
 
-- The console does not log `Terminal: WebGL2 renderer unavailable, using the DOM
-  renderer`. That warning means `WebglAddon` failed to load (no WebGL2 context),
-  so xterm silently fell back to the DOM renderer and the artifacts above can
-  return. On runtime context loss the addon disposes itself (`onContextLoss`) and
-  also reverts to the DOM renderer.
-- History replay still matches the recorded generation width before the pane
-  fit, so cursor-addressed redraws land on the right rows (see
-  `loadSnapshotDelta`/`syncTerminalToPane`).
+Hyperlinks: `WebLinksAddon` highlights URLs and opens clicks via
+`api.openExternalUrl` (Tauri opener → system browser), not inside the webview.
 
 Relevant code:
 
-- `src/TerminalPane.tsx` (`loadWebglRenderer`)
+- `src/TerminalPane.tsx` (`getOrCreateTerminal`, `syncTerminalToPane`,
+  `loadWebglRenderer`)
 
 ### Session Resume Is Disabled
 
