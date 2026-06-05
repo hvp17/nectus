@@ -176,7 +176,7 @@ export function ProfileEditor({ profile, isDefault, busy, onChange, onSave }: Pr
               value={profile.argsText}
               onChange={(event) => onChange({ argsText: event.target.value })}
               placeholder="One CLI argument per line"
-              className="min-h-[82px] resize-y font-mono"
+              className="min-h-[56px] resize-y font-mono"
             />
           </Field>
           <Field>
@@ -189,7 +189,7 @@ export function ProfileEditor({ profile, isDefault, busy, onChange, onSave }: Pr
               value={profile.envText}
               onChange={(event) => onChange({ envText: event.target.value })}
               placeholder="KEY=value"
-              className="min-h-[82px] resize-y font-mono"
+              className="min-h-[56px] resize-y font-mono"
             />
           </Field>
         </FieldGroup>

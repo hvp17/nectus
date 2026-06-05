@@ -296,9 +296,21 @@ function BoardBody({
   }
   if (loading && columns.length === 0) {
     return (
-      <div className="nx-jira-cols">
-        {[0, 1, 2].map((index) => (
-          <Skeleton key={index} className="h-64 w-72 shrink-0" />
+      <div className="nx-jira-cols" aria-busy="true" aria-label="Loading JIRA board">
+        {["To Do", "In Progress", "In Review", "Done"].map((label) => (
+          <section key={label} className="nx-jira-col">
+            <div className="nx-jira-col-head">
+              <Skeleton className="size-2 rounded-full" />
+              <Skeleton className="h-3.5 w-24" />
+              <span className="nx-cc">
+                <Skeleton className="h-5 w-6 rounded-full" />
+              </span>
+            </div>
+            <div className="nx-jira-col-body">
+              <Skeleton className="h-28 w-full rounded-lg" />
+              <Skeleton className="h-24 w-full rounded-lg" />
+            </div>
+          </section>
         ))}
       </div>
     );

@@ -197,21 +197,23 @@ export function TaskWorkspace({
   ];
 
   return (
-    <section className="task-workspace grid h-full min-h-0 grid-cols-[minmax(0,1fr)_320px] overflow-hidden bg-background" aria-label="Task workspace">
+    <section className="task-workspace" aria-label="Task workspace">
       {/* ---- stage: header, workflow ribbon, terminal + action bar ---- */}
       <main className="flex min-h-0 min-w-0 flex-col gap-3 bg-gradient-to-b from-muted/25 to-transparent to-30% p-4">
-        <header className="flex items-center gap-3">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
-            onClick={onClose}
-            aria-label="Back to task board"
-          >
-            <ArrowLeft className="size-3.5" aria-hidden="true" />
-            {backLabel}
-          </button>
-          <h2 className="min-w-0 truncate text-lg font-bold tracking-tight">{task.title}</h2>
-          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <header className="task-workspace-header">
+          <div className="task-workspace-heading">
+            <button
+              type="button"
+              className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
+              onClick={onClose}
+              aria-label="Back to task board"
+            >
+              <ArrowLeft className="size-3.5" aria-hidden="true" />
+              {backLabel}
+            </button>
+            <h2 className="min-w-0 truncate text-lg font-bold tracking-tight">{task.title}</h2>
+          </div>
+          <div className="task-workspace-badges">
             <TaskStatusBadges task={task} />
           </div>
         </header>
@@ -225,7 +227,7 @@ export function TaskWorkspace({
             loading: <LoaderCircle className="size-3.5 animate-spin" />,
           }}
         >
-          <StepperNav className="flex w-full items-stretch rounded-lg border bg-card p-1 shadow-xs">
+          <StepperNav className="flex w-full items-center rounded-lg border bg-card p-1 shadow-xs">
             {workflowSteps.map((step, index) => (
               <Fragment key={step.title}>
                 {index > 0 && (
@@ -258,10 +260,11 @@ export function TaskWorkspace({
                   </StepperTrigger>
 
                   {index === 0 && (
-                    <div className="ml-auto flex shrink-0 items-center gap-1.5 pr-1.5">
+                    <div className="ml-auto flex shrink-0 items-center gap-1.5 self-center pr-1.5">
                       <Button
                         type="button"
                         size="sm"
+                        className="h-8"
                         aria-label={reviewActionLabel}
                         disabled={startReviewDisabled}
                         onClick={startReview}
@@ -276,7 +279,7 @@ export function TaskWorkspace({
                             variant="outline"
                             size="sm"
                             aria-label="Change reviewer"
-                            className="max-w-[150px]"
+                            className="h-8 max-w-[150px]"
                             disabled={reviewActive || reviewerProfiles.length === 0}
                           >
                             {selectedReviewerProfile ? (
