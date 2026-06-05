@@ -153,6 +153,16 @@ export function TaskWorkspace({
 
   const latestReviewRun = reviewRuns.at(-1);
   const diffFileCount = diff.summary?.files.length ?? 0;
+  // Aggregate line-change totals so the stage header can summarize the diff size
+  // next to the Diff toggle (binary files contribute 0 and are simply skipped).
+  const diffTotals = (diff.summary?.files ?? []).reduce(
+    (totals, file) => {
+      totals.additions += file.additions;
+      totals.deletions += file.deletions;
+      return totals;
+    },
+    { additions: 0, deletions: 0 },
+  );
   const selectedReviewerProfile = reviewerProfiles.find((profile) => profile.id === reviewerProfileId);
   const reviewActive = Boolean(reviewLoop && !["passed", "feedback_sent", "error", "stopped"].includes(reviewLoop.status));
   const reviewInProgress = reviewLoop?.status === "reviewing";
@@ -385,26 +395,38 @@ export function TaskWorkspace({
           aria-label="Agent workspace stage"
         >
           <div className="flex items-center justify-between gap-2 border-b px-2 py-1.5">
-            <ToggleGroup
-              type="single"
-              value={stageTab}
-              onValueChange={(value) => value && setStageTab(value as "terminal" | "diff")}
-              variant="outline"
-            >
-              <ToggleGroupItem value="terminal" aria-label="Show terminal" className="h-7 gap-1.5 px-2.5 text-xs">
-                <TerminalSquare className="size-3.5" aria-hidden="true" />
-                Terminal
-              </ToggleGroupItem>
-              <ToggleGroupItem value="diff" aria-label="Show diff" className="h-7 gap-1.5 px-2.5 text-xs">
-                <FileDiff className="size-3.5" aria-hidden="true" />
-                Diff
-                {diffFileCount > 0 && (
-                  <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 justify-center px-1 text-[10px]">
-                    {diffFileCount}
-                  </Badge>
-                )}
-              </ToggleGroupItem>
-            </ToggleGroup>
+            <div className="flex min-w-0 items-center gap-2.5">
+              <ToggleGroup
+                type="single"
+                value={stageTab}
+                onValueChange={(value) => value && setStageTab(value as "terminal" | "diff")}
+                variant="outline"
+              >
+                <ToggleGroupItem value="terminal" aria-label="Show terminal" className="h-7 gap-1.5 px-2.5 text-xs">
+                  <TerminalSquare className="size-3.5" aria-hidden="true" />
+                  Terminal
+                </ToggleGroupItem>
+                <ToggleGroupItem value="diff" aria-label="Show diff" className="h-7 gap-1.5 px-2.5 text-xs">
+                  <FileDiff className="size-3.5" aria-hidden="true" />
+                  Diff
+                  {diffFileCount > 0 && (
+                    <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 justify-center px-1 text-[10px]">
+                      {diffFileCount}
+                    </Badge>
+                  )}
+                </ToggleGroupItem>
+              </ToggleGroup>
+
+              {(diffTotals.additions > 0 || diffTotals.deletions > 0) && (
+                <span
+                  className="flex shrink-0 items-center gap-2 font-mono text-xs font-semibold tabular-nums"
+                  aria-label={`${diffTotals.additions} additions, ${diffTotals.deletions} deletions`}
+                >
+                  <span className="text-status-success">+{diffTotals.additions}</span>
+                  <span className="text-destructive">-{diffTotals.deletions}</span>
+                </span>
+              )}
+            </div>
 
             {stageTab === "diff" && (
               <Button
