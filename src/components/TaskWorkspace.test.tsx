@@ -78,6 +78,7 @@ function renderTaskWorkspace(input?: {
   attention?: TaskAttention;
   reviewLoop?: ReviewLoop | null;
   reviewRuns?: ReviewRun[];
+  liveReviewOutput?: string;
   githubStatus?: GithubStatus;
   pullRequest?: PullRequestInfo | null;
   onStopSession?: (sessionId: string) => void;
@@ -96,6 +97,7 @@ function renderTaskWorkspace(input?: {
       agentProfiles={agentProfiles}
       reviewLoop={input?.reviewLoop ?? null}
       reviewRuns={input?.reviewRuns ?? []}
+      liveReviewOutput={input?.liveReviewOutput}
       githubStatus={input?.githubStatus}
       pullRequest={input?.pullRequest}
       onClose={vi.fn()}
@@ -233,6 +235,63 @@ describe("TaskWorkspace", () => {
     expect(onStartReview).toHaveBeenCalledWith(inReviewTask, 2);
 
     expect(screen.getByRole("tab", { name: /create pr/i })).toBeDisabled();
+  });
+
+  it("opens the read-only reviewer terminal from the stage toggle", () => {
+    renderTaskWorkspace({ task: { ...task, status: "review" } });
+
+    fireEvent.click(screen.getByLabelText("Show reviewer terminal"));
+
+    expect(screen.getByTestId("review-terminal")).toBeInTheDocument();
+    expect(screen.getByText(/no review output yet/i)).toBeInTheDocument();
+  });
+
+  it("auto-switches to the reviewer terminal while a review is running", () => {
+    renderTaskWorkspace({
+      task: { ...task, status: "review" },
+      reviewLoop: {
+        taskId: task.id,
+        reviewerProfileId: 2,
+        status: "reviewing",
+        lastError: null,
+        createdAt: "2026-05-15T00:00:00.000Z",
+        updatedAt: "2026-05-15T00:00:00.000Z",
+      },
+    });
+
+    expect(screen.getByTestId("review-terminal")).toBeInTheDocument();
+    expect(screen.getByText(/waiting for the reviewer/i)).toBeInTheDocument();
+  });
+
+  it("opens the reviewer terminal from the review card for a finished run", () => {
+    renderTaskWorkspace({
+      task: { ...task, status: "review" },
+      reviewLoop: {
+        taskId: task.id,
+        reviewerProfileId: 2,
+        status: "passed",
+        lastError: null,
+        createdAt: "2026-05-15T00:00:00.000Z",
+        updatedAt: "2026-05-15T00:00:00.000Z",
+      },
+      reviewRuns: [
+        {
+          id: 1,
+          taskId: task.id,
+          reviewerProfileId: 2,
+          verdict: "pass",
+          prompt: "Review this",
+          output: "Inspected the worktree. NECTUS_NO_BLOCKERS",
+          error: null,
+          createdAt: "2026-05-15T00:00:00.000Z",
+        },
+      ],
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /open reviewer terminal/i }));
+
+    expect(screen.getByTestId("review-terminal")).toBeInTheDocument();
+    expect(screen.queryByText(/no review output yet/i)).not.toBeInTheDocument();
   });
 
   it("moves the task to done from the current workflow step", () => {

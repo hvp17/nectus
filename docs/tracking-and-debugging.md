@@ -172,6 +172,7 @@ Backend-to-frontend events:
 | `session_idle` | Task id, session id, Codex turn id, optional message. | `native/src/sessions/codex.rs` |
 | `session_needs_input` | Task id, session id, reason, optional prompt. | `native/src/sessions/codex.rs` |
 | `review_loop_updated` | Review-loop state and optional review run. | `native/src/sessions/review_loop.rs` |
+| `review_output` | Task id, a chunk of the task reviewer's live stdout, and the chunk's byte offset (a `0` offset starts a new run). Streamed only by the task review loop, not by PR reviews. | `native/src/sessions/review_loop.rs` |
 | `pr_review_updated` | Updated external PR review (status, verdict, metadata, Markdown output), plus an optional `latest_run` carrying the consensus round output that triggered the update. | `native/src/sessions/pr_review.rs`, `native/src/sessions/pr_consensus.rs` |
 
 Frontend event listeners:
@@ -185,7 +186,9 @@ Frontend event listeners:
   notifications. It also records `session_activity` into a per-task `liveLines`
   map (cleared on `session_exited`) that drives the live "what it's doing" line on
   task cards and Mission Control rows.
-- `src/hooks/useTaskReviewLoop.ts` listens for `review_loop_updated`.
+- `src/hooks/useTaskReviewLoop.ts` listens for `review_loop_updated` and
+  `review_output`, accumulating the live reviewer stdout for the selected task into
+  the read-only Review pane (`src/components/ReviewTerminalPane.tsx`).
 - `src/hooks/usePrReviews.ts` listens for `pr_review_updated` and notifies when a
   review becomes ready or errors.
 

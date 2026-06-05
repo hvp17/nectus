@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -14,6 +14,7 @@ import {
   Play,
   RotateCcw,
   RotateCw,
+  ScanEye,
   Square,
   TerminalSquare,
   XCircle,
@@ -43,6 +44,7 @@ import {
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import { TaskDiffView } from "./TaskDiffView";
+import { ReviewTerminalPane } from "./ReviewTerminalPane";
 import { truncateFinishedAttentionPreview } from "./attentionPreview";
 import { useTaskDiff } from "../hooks/useTaskDiff";
 import { TerminalPane } from "../TerminalPane";
@@ -71,6 +73,8 @@ export interface TaskWorkspaceProps {
   agentProfiles: AgentProfile[];
   reviewLoop?: ReviewLoop | null;
   reviewRuns: ReviewRun[];
+  /** Live stdout of the task's reviewer, streamed for the read-only Review pane. */
+  liveReviewOutput?: string;
   githubStatus?: GithubStatus;
   pullRequest?: PullRequestInfo | null;
   pullRequestLoading?: boolean;
@@ -108,6 +112,7 @@ export function TaskWorkspace({
   agentProfiles,
   reviewLoop,
   reviewRuns,
+  liveReviewOutput = "",
   githubStatus,
   pullRequest,
   pullRequestLoading = false,
@@ -143,15 +148,29 @@ export function TaskWorkspace({
 
   const diff = useTaskDiff(task?.id);
   const { refresh: refreshDiff } = diff;
-  const [stageTab, setStageTab] = useState<"terminal" | "diff">("terminal");
+  const [stageTab, setStageTab] = useState<"terminal" | "diff" | "review">("terminal");
   // Load (or reload) the diff whenever the Diff tab is shown or the task changes.
   useEffect(() => {
     if (stageTab === "diff") void refreshDiff();
   }, [stageTab, refreshDiff]);
 
+  // Surface the live reviewer the moment a review starts, so "checking progress"
+  // is one rising-edge switch away; the user can toggle back at any time.
+  const reviewIsRunning = reviewLoop?.status === "reviewing";
+  const wasReviewRunning = useRef(false);
+  useEffect(() => {
+    if (reviewIsRunning && !wasReviewRunning.current) setStageTab("review");
+    wasReviewRunning.current = reviewIsRunning;
+  }, [reviewIsRunning]);
+
   if (!task) return null;
 
   const latestReviewRun = reviewRuns.at(-1);
+  // The Review pane shows the live stream while reviewing; once a run finishes it
+  // keeps that text (the live buffer equals the final output) and falls back to
+  // the last recorded run when there is no live buffer (e.g. a reopened task).
+  const reviewOutput =
+    liveReviewOutput || (reviewLoop?.status === "reviewing" ? "" : latestReviewRun?.error ?? latestReviewRun?.output ?? "");
   const diffFileCount = diff.summary?.files.length ?? 0;
   // Aggregate line-change totals so the stage header can summarize the diff size
   // next to the Diff toggle (binary files contribute 0 and are simply skipped).
@@ -399,7 +418,7 @@ export function TaskWorkspace({
               <ToggleGroup
                 type="single"
                 value={stageTab}
-                onValueChange={(value) => value && setStageTab(value as "terminal" | "diff")}
+                onValueChange={(value) => value && setStageTab(value as "terminal" | "diff" | "review")}
                 variant="outline"
               >
                 <ToggleGroupItem value="terminal" aria-label="Show terminal" className="h-7 gap-1.5 px-2.5 text-xs">
@@ -414,6 +433,11 @@ export function TaskWorkspace({
                       {diffFileCount}
                     </Badge>
                   )}
+                </ToggleGroupItem>
+                <ToggleGroupItem value="review" aria-label="Show reviewer terminal" className="h-7 gap-1.5 px-2.5 text-xs">
+                  <ScanEye className="size-3.5" aria-hidden="true" />
+                  Review
+                  {reviewInProgress && <span className="dot live-dot bg-primary" aria-hidden="true" />}
                 </ToggleGroupItem>
               </ToggleGroup>
 
@@ -453,6 +477,8 @@ export function TaskWorkspace({
                 files={diff.files}
                 onSelectFile={diff.loadFile}
               />
+            ) : stageTab === "review" ? (
+              <ReviewTerminalPane output={reviewOutput} active={reviewInProgress} />
             ) : task.activeSessionId ? (
               <TerminalPane sessionId={task.activeSessionId} onSessionExit={onSessionExit} onSessionInput={onSessionInput} />
             ) : (
@@ -579,11 +605,26 @@ export function TaskWorkspace({
             <section className="flex flex-col gap-2.5 border-b px-4 py-3.5" aria-label="Task review">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-muted-foreground">Review</p>
-                {reviewLoop && (
-                  <Badge variant={REVIEW_LOOP_BADGE_VARIANTS[reviewLoop.status]} className="rounded-md">
-                    {REVIEW_LOOP_STATUS_SHORT_LABELS[reviewLoop.status]}
-                  </Badge>
-                )}
+                <div className="flex items-center gap-1.5">
+                  {(reviewInProgress || reviewOutput) && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[11px]"
+                      aria-label="Open reviewer terminal"
+                      onClick={() => setStageTab("review")}
+                    >
+                      <ScanEye data-icon="inline-start" />
+                      {reviewInProgress ? "Watch live" : "View output"}
+                    </Button>
+                  )}
+                  {reviewLoop && (
+                    <Badge variant={REVIEW_LOOP_BADGE_VARIANTS[reviewLoop.status]} className="rounded-md">
+                      {REVIEW_LOOP_STATUS_SHORT_LABELS[reviewLoop.status]}
+                    </Badge>
+                  )}
+                </div>
               </div>
 
               {latestReviewRun && (

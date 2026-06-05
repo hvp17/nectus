@@ -2,9 +2,10 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
-import { Terminal, type ITheme } from "@xterm/xterm";
+import { Terminal } from "@xterm/xterm";
 import { useEffect, useRef } from "react";
 import { api } from "./api";
+import { readTerminalTheme } from "./lib/terminalTheme";
 import { isTauriRuntime } from "./sessionNotifications";
 import type { SessionExitedEvent, SessionOutputEvent } from "./types";
 
@@ -37,29 +38,6 @@ function escapeShellPath(path: string) {
   return Array.from(path)
     .map((char) => (SHELL_PATH_SAFE_CHAR.test(char) ? char : `\\${char}`))
     .join("");
-}
-
-// xterm needs concrete color strings, so resolve the theme's CSS tokens to rgb()
-// via a hidden probe and let the terminal track the active light/dark palette.
-function readTerminalTheme(): ITheme {
-  const probe = document.createElement("span");
-  probe.style.position = "absolute";
-  probe.style.opacity = "0";
-  probe.style.pointerEvents = "none";
-  document.body.appendChild(probe);
-  const resolve = (token: string) => {
-    probe.style.color = `var(${token})`;
-    return getComputedStyle(probe).color;
-  };
-  const theme: ITheme = {
-    background: resolve("--background"),
-    foreground: resolve("--foreground"),
-    cursor: resolve("--ring"),
-    cursorAccent: resolve("--background"),
-    selectionBackground: resolve("--accent"),
-  };
-  probe.remove();
-  return theme;
 }
 
 // Prefer xterm's GPU (WebGL2) renderer over the default DOM renderer. The DOM
