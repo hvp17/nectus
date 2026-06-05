@@ -113,8 +113,8 @@
   content: ""; position: absolute; left: -12px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: var(--primary);
 }
 .nx-rail-badge {
-  position: absolute; top: 4px; right: 3px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 999px;
-  background: var(--status-warning); color: #1a1205; font-size: 9px; font-weight: 800; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--sidebar);
+  position: absolute; top: 5px; right: 5px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 999px;
+  background: var(--status-warning); color: #fff; font-size: 9px; font-weight: 800; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--sidebar);
 }
 .nx-rail-sp { flex: 1; }
 
@@ -249,12 +249,10 @@
 .nx-card-line {
   font-family: var(--font-mono);
   font-size: 11px;
-  line-height: 1.35;
   color: var(--muted-foreground);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 .nx-card[data-state="needs_you"] .nx-card-line { color: color-mix(in oklch, var(--status-warning) 55%, var(--foreground)); }
 .nx-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted-foreground); }
@@ -351,6 +349,8 @@ textarea.nx-in { height: auto; padding: 9px 11px; line-height: 1.5; resize: vert
 .nx-seg { display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--muted); }
 .nx-seg button { height: 28px; padding: 0 13px; border: none; background: transparent; border-radius: 6px; font-family: var(--font-sans); font-size: 12.5px; font-weight: 600; color: var(--muted-foreground); cursor: pointer; transition: background .12s, color .12s; }
 .nx-seg button[data-on="true"] { background: var(--card); color: var(--foreground); box-shadow: var(--shadow-xs); }
+/* Toolbar segmented track reads against the tinted toolbar, so its track is card-colored. */
+.nx-jira-toolbar .nx-seg { background: var(--card); }
 
 /* ============================ Settings ============================ */
 .nx-set { display: grid; grid-template-columns: 212px minmax(0, 1fr); min-height: 0; height: 100%; }
@@ -515,7 +515,7 @@ textarea.nx-in { height: auto; padding: 9px 11px; line-height: 1.5; resize: vert
 .nx-vlabel[data-v="blockers"] { color: color-mix(in oklch, var(--destructive) 62%, var(--foreground)); }
 .nx-vlabel[data-v="inconclusive"] { color: var(--muted-foreground); }
 .nx-matrix-cell.empty { color: var(--muted-foreground); opacity: .4; }
-.nx-cons-out { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--background); padding: 11px 13px; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; color: var(--foreground); white-space: pre-wrap; word-break: break-word; }
+.nx-cons-out { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--background); padding: 11px 13px; font-family: var(--font-mono); font-size: 11.5px; line-height: 1.6; color: var(--foreground); white-space: pre-wrap; word-break: break-word; }
 .nx-cons-h3 { margin: 0; font-size: 11px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted-foreground); }
 
 /* ============================ JIRA ============================ */
@@ -568,7 +568,9 @@ textarea.nx-in { height: auto; padding: 9px 11px; line-height: 1.5; resize: vert
   color: var(--primary);
 }
 .nx-jlink .nx-jl-st { flex: none; font-size: 9.5px; color: var(--muted-foreground); }
-.nx-jira-create { margin-top: 9px; display: flex; align-items: center; justify-content: center; gap: 5px; height: 28px; border: 1px dashed var(--border); border-radius: 6px; font-size: 11.5px; font-weight: 600; color: var(--muted-foreground); cursor: pointer; width: 100%; background: transparent; }
+.nx-jira-create { margin-top: 9px; display: none; align-items: center; justify-content: center; gap: 5px; height: 28px; border: 1px dashed var(--border); border-radius: 6px; font-size: 11.5px; font-weight: 600; color: var(--muted-foreground); cursor: pointer; width: 100%; background: transparent; }
+.nx-jira-card:hover .nx-jira-create,
+.nx-jira-card:focus-within .nx-jira-create { display: flex; }
 .nx-jira-create:hover { border-color: var(--primary); color: var(--primary); }
 .nx-jira-create svg { width: 13px; height: 13px; }
 .nx-jira-empty { margin: auto; color: var(--muted-foreground); font-size: 13px; text-align: center; padding: 40px; }
@@ -578,7 +580,7 @@ textarea.nx-in { height: auto; padding: 9px 11px; line-height: 1.5; resize: vert
 [data-slot="badge"][data-variant="warning"] { background: color-mix(in srgb, var(--status-warning) 18%, transparent); color: color-mix(in oklch, var(--status-warning) 55%, black); }
 .dark [data-slot="badge"][data-variant="warning"] { color: color-mix(in oklch, var(--status-warning) 82%, white); }
 [data-slot="badge"][data-variant="info"] { background: color-mix(in srgb, var(--foreground) 4%, transparent); color: var(--status-info); border-color: var(--border); }
-[data-slot="badge"] .nx-badge-dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; flex: none; }
+[data-slot="badge"] .nx-badge-dot { width: 7px; height: 7px; border-radius: 999px; background: currentColor; flex: none; }
 
 /* ---------- shared live pulse ---------- */
 @keyframes nx-pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }

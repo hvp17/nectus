@@ -37,7 +37,7 @@ export function ProfileEditor({ profile, isDefault, busy, onChange, onSave }: Pr
     <Card size="sm" className="profile-editor shadow-none" data-agent-kind={profile.agentKind}>
       <CardHeader className="profile-editor-header p-0">
         <div className="profile-identity">
-          <AgentLogo agentKind={profile.agentKind} size="lg" className="profile-kind-mark" />
+          <AgentLogo agentKind={profile.agentKind} size="md" className="profile-kind-mark" />
           <div className="profile-title-fields">
             <Input
               aria-label="Profile name"
@@ -65,10 +65,6 @@ export function ProfileEditor({ profile, isDefault, busy, onChange, onSave }: Pr
             <Badge variant="outline" className="profile-status-badge">
               <AgentLogo agentKind={profile.agentKind} size="sm" />
               {agentKindLabels[profile.agentKind]}
-            </Badge>
-            <Badge variant="outline" className="profile-status-badge">
-              <Cpu size={11} />
-              {modelLabel}
             </Badge>
           </div>
           <Select value={profile.agentKind} onValueChange={(value) => onChange({ agentKind: value as AgentKind })}>
@@ -176,7 +172,7 @@ export function ProfileEditor({ profile, isDefault, busy, onChange, onSave }: Pr
               value={profile.argsText}
               onChange={(event) => onChange({ argsText: event.target.value })}
               placeholder="One CLI argument per line"
-              className="min-h-[56px] resize-y font-mono"
+              className="min-h-[76px] resize-y font-mono"
             />
           </Field>
           <Field>
@@ -189,7 +185,7 @@ export function ProfileEditor({ profile, isDefault, busy, onChange, onSave }: Pr
               value={profile.envText}
               onChange={(event) => onChange({ envText: event.target.value })}
               placeholder="KEY=value"
-              className="min-h-[56px] resize-y font-mono"
+              className="min-h-[76px] resize-y font-mono"
             />
           </Field>
         </FieldGroup>

@@ -132,23 +132,15 @@ export function JiraWorkItemPanel({
         )}
 
         <Field>
-          <FieldLabel htmlFor="jira-assignee" className="flex items-center gap-2">
-            Assignee
-            {item.assignee ? (
-              <span className="inline-flex items-center gap-1.5 font-normal text-muted-foreground">
-                <JiraAvatar name={item.assignee} className="size-4 text-[8px]" />
-                {item.assignee}
-              </span>
-            ) : (
-              <span className="font-normal text-muted-foreground">· Unassigned</span>
-            )}
-          </FieldLabel>
-          <div className="flex gap-2">
+          <FieldLabel htmlFor="jira-assignee">Assignee</FieldLabel>
+          <div className="flex items-center gap-2">
+            <JiraAvatar name={item.assignee} className="shrink-0" />
             <Input
               id="jira-assignee"
               placeholder="user@example.com"
               value={assignee}
               onChange={(event) => setAssignee(event.target.value)}
+              className="flex-1"
             />
             <Button
               type="button"

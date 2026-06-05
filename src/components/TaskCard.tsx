@@ -147,7 +147,7 @@ export function TaskCard({
               {task.jiraIssueKey}
             </span>
           )}
-          <AgentLogo agentKind={agentKind} size="sm" />
+          <AgentLogo agentKind={agentKind} size="xs" />
           {task.hasWorktree && (
             <span className={task.isDirty ? "dirty-indicator" : undefined}>{task.isDirty ? "dirty" : "clean"}</span>
           )}

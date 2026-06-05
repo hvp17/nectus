@@ -190,7 +190,7 @@ describe("TaskWorkspace", () => {
   });
 
   it("shows single-review controls without rounds", () => {
-    renderTaskWorkspace();
+    renderTaskWorkspace({ task: { ...task, status: "review" } });
 
     expect(screen.getByRole("button", { name: /review with claude review/i })).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /reviewer/i })).not.toBeInTheDocument();
@@ -201,40 +201,54 @@ describe("TaskWorkspace", () => {
 
   it("starts an immediate review from the workflow stepper", () => {
     const onStartReview = vi.fn();
+    const reviewTask: TaskSummary = { ...task, status: "review" };
 
-    renderTaskWorkspace({ onStartReview });
+    renderTaskWorkspace({ task: reviewTask, onStartReview });
 
     screen.getByRole("button", { name: /review with claude review/i }).click();
 
-    expect(onStartReview).toHaveBeenCalledWith(task, 2);
+    expect(onStartReview).toHaveBeenCalledWith(reviewTask, 2);
   });
 
   it("changes the reviewer from the review action dropdown", async () => {
     const onStartReview = vi.fn();
+    const reviewTask: TaskSummary = { ...task, status: "review" };
 
-    renderTaskWorkspace({ onStartReview });
+    renderTaskWorkspace({ task: reviewTask, onStartReview });
 
     fireEvent.keyDown(screen.getByRole("button", { name: /change reviewer/i }), { key: "Enter" });
     fireEvent.click(await screen.findByRole("menuitem", { name: /gemini/i }));
     screen.getByRole("button", { name: /review with gemini/i }).click();
 
-    expect(onStartReview).toHaveBeenCalledWith(task, 3);
+    expect(onStartReview).toHaveBeenCalledWith(reviewTask, 3);
   });
 
   it("runs task workflow actions from the sidebar stepper", () => {
     const onStartReview = vi.fn();
-    const onUpdateStatus = vi.fn();
     const inReviewTask: TaskSummary = { ...task, status: "review" };
 
-    renderTaskWorkspace({ task: inReviewTask, onStartReview, onUpdateStatus });
+    renderTaskWorkspace({ task: inReviewTask, onStartReview });
 
     screen.getByRole("button", { name: /review with claude review/i }).click();
     expect(onStartReview).toHaveBeenCalledWith(inReviewTask, 2);
 
     expect(screen.getByRole("tab", { name: /create pr/i })).toBeDisabled();
+  });
 
-    screen.getByRole("tab", { name: /move to done/i }).click();
-    expect(onUpdateStatus).toHaveBeenCalledWith(inReviewTask, "done");
+  it("moves the task to done from the current workflow step", () => {
+    const onUpdateStatus = vi.fn();
+    // A linked PR advances the ribbon so "Move to done" is the current step and
+    // surfaces its inline action.
+    const readyTask: TaskSummary = {
+      ...task,
+      status: "review",
+      prUrl: "https://github.com/hvp17/nectus/pull/9",
+    };
+
+    renderTaskWorkspace({ task: readyTask, onUpdateStatus });
+
+    screen.getByRole("button", { name: /move to done/i }).click();
+    expect(onUpdateStatus).toHaveBeenCalledWith(readyTask, "done");
   });
 
   it("triggers PR creation from the workflow step when an agent session is active", () => {
@@ -245,13 +259,25 @@ describe("TaskWorkspace", () => {
       activeSessionId: "session-123",
     };
 
-    renderTaskWorkspace({ task: runningTask, onCreatePullRequest });
+    renderTaskWorkspace({
+      task: runningTask,
+      onCreatePullRequest,
+      // A passed review makes "Create PR" the current step, surfacing its action.
+      reviewLoop: {
+        taskId: task.id,
+        reviewerProfileId: 2,
+        status: "passed",
+        lastError: null,
+        createdAt: "2026-05-15T00:00:00.000Z",
+        updatedAt: "2026-05-15T00:01:00.000Z",
+      },
+    });
 
-    const createPrStep = screen.getByRole("tab", { name: /create pr/i });
-    expect(createPrStep).not.toBeDisabled();
     expect(screen.getByText(/ask the running agent to open a pull request/i)).toBeInTheDocument();
 
-    createPrStep.click();
+    const createPrButton = screen.getByRole("button", { name: /create pull request/i });
+    expect(createPrButton).not.toBeDisabled();
+    createPrButton.click();
 
     expect(onCreatePullRequest).toHaveBeenCalledWith(runningTask);
   });

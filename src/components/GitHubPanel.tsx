@@ -177,24 +177,18 @@ export function GitHubPanel({
 
         {pullRequest && pullRequest.checks.total > 0 && (
           <div className="flex items-center gap-3.5 px-3 pb-2.5" aria-label="Pull request checks">
-            {pullRequest.checks.passed > 0 && (
-              <span data-check="passed" className="inline-flex items-center gap-1 text-[11.5px] font-bold tabular-nums text-status-success">
-                <CheckCircle2 size={13} />
-                {pullRequest.checks.passed}
-              </span>
-            )}
-            {pullRequest.checks.failed > 0 && (
-              <span data-check="failed" className="inline-flex items-center gap-1 text-[11.5px] font-bold tabular-nums text-destructive">
-                <XCircle size={13} />
-                {pullRequest.checks.failed}
-              </span>
-            )}
-            {pullRequest.checks.pending > 0 && (
-              <span data-check="pending" className="inline-flex items-center gap-1 text-[11.5px] font-bold tabular-nums text-muted-foreground">
-                <Clock size={13} />
-                {pullRequest.checks.pending}
-              </span>
-            )}
+            <span data-check="passed" className="inline-flex items-center gap-1 text-[11.5px] font-bold tabular-nums text-status-success">
+              <CheckCircle2 size={13} />
+              {pullRequest.checks.passed}
+            </span>
+            <span data-check="failed" className="inline-flex items-center gap-1 text-[11.5px] font-bold tabular-nums text-destructive">
+              <XCircle size={13} />
+              {pullRequest.checks.failed}
+            </span>
+            <span data-check="pending" className="inline-flex items-center gap-1 text-[11.5px] font-bold tabular-nums text-muted-foreground">
+              <Clock size={13} />
+              {pullRequest.checks.pending}
+            </span>
           </div>
         )}
 
