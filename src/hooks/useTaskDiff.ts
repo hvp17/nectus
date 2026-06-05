@@ -1,5 +1,5 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 import { isTauriRuntime } from "../sessionNotifications";
 import type { SessionIdleEvent, TaskDiffSummary } from "../types";
@@ -22,9 +22,12 @@ export interface TaskDiff {
 }
 
 /**
- * Owns the task diff data: loads the changed-file summary, lazy-loads per-file
- * patches, and re-fetches the summary when the task's agent finishes a turn
- * (`session_idle`) so the diff stays current while the agent works. The summary is
+ * Owns the task diff data: loads the changed-file summary as soon as a task is
+ * selected (so the stage-header badge — file count and ±line totals — is populated
+ * without opening the Diff tab first), lazy-loads per-file patches, and re-fetches
+ * the summary when the task's agent finishes a turn (`session_idle`) so the diff
+ * stays current while the agent works. Loading on selection plus refreshing on each
+ * turn boundary keeps the badge live without any timer-based polling. The summary is
  * reset when the task changes so a stale diff never lingers across tasks.
  */
 export function useTaskDiff(taskId: number | undefined): TaskDiff {
@@ -32,13 +35,6 @@ export function useTaskDiff(taskId: number | undefined): TaskDiff {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<Record<string, FileDiffState>>({});
-
-  // Mirror the summary in a ref so the idle listener can decide whether the diff
-  // has been opened (and is worth refreshing) without re-subscribing on every load.
-  const summaryRef = useRef<TaskDiffSummary | null>(null);
-  useEffect(() => {
-    summaryRef.current = summary;
-  }, [summary]);
 
   const refresh = useCallback(async () => {
     if (taskId == null) return;
@@ -69,20 +65,24 @@ export function useTaskDiff(taskId: number | undefined): TaskDiff {
     [taskId],
   );
 
-  // Clear state when switching tasks so the next task starts from a clean slate.
+  // Clear stale state when switching tasks, then load the new task's summary so the
+  // badge appears immediately without the user opening the Diff tab first.
   useEffect(() => {
     setSummary(null);
     setFiles({});
     setError(null);
-  }, [taskId]);
+    if (taskId == null) return;
+    void refresh();
+  }, [taskId, refresh]);
 
-  // A finished turn likely changed the diff; refresh only once it has been opened.
+  // A finished turn likely changed the diff; refresh to keep the badge current while
+  // the agent works, whether or not the Diff tab has been opened.
   useEffect(() => {
     if (!isTauriRuntime() || taskId == null) return;
     let unlisten: UnlistenFn | undefined;
     let disposed = false;
     void listen<SessionIdleEvent>("session_idle", (event) => {
-      if (event.payload.taskId === taskId && summaryRef.current) void refresh();
+      if (event.payload.taskId === taskId) void refresh();
     }).then((fn) => {
       if (disposed) fn();
       else unlisten = fn;

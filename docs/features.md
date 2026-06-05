@@ -177,8 +177,9 @@ Emitted events:
 ## Task Diff
 
 The task workspace stage has a `Terminal | Diff | Review` segmented control, so you
-can see what an agent changed without leaving the app. The Diff tab carries a
-changed-file count badge and a refresh control; the Review tab is covered in
+can see what an agent changed without leaving the app. The stage header carries a
+changed-file count badge and `+a −d` line totals next to the toggle (visible on all
+tabs), the Diff tab adds a manual refresh control, and the Review tab is covered in
 [AI Review](#ai-review).
 
 Current behavior:
@@ -194,9 +195,12 @@ Current behavior:
   auto-selected; patch bodies are lazy-loaded per file so a large refactor diff
   stays cheap. Untracked files appear as new files; binary files show
   "Binary file" instead of a patch.
-- The summary loads when the Diff tab is shown and on its refresh control, and it
-  re-loads automatically when the task's agent finishes a turn (`session_idle`), so
-  the diff stays current while the agent works.
+- The summary loads as soon as a task is selected, so the count/line-total badge is
+  populated without opening the Diff tab first. It also reloads on the Diff tab's
+  refresh control and automatically when the task's agent finishes a turn
+  (`session_idle`), so the badge stays current while the agent works. Refresh is
+  event-driven (selection + turn boundary), not timer-based polling; each refresh is
+  a cheap local `git diff` with no network/GitHub call.
 - Rename detection is disabled, so a rename shows as a delete + add pair.
 
 Key files:
@@ -204,7 +208,7 @@ Key files:
 - Stage toggle + diff mounting: `src/components/TaskWorkspace.tsx`
 - Diff view (file list + unified patch, line colorization): `src/components/TaskDiffView.tsx`
 - Diff styling: `src/styles/diff.css`
-- Diff data hook (summary load, lazy per-file patches, idle refresh): `src/hooks/useTaskDiff.ts`
+- Diff data hook (summary load on selection, lazy per-file patches, idle refresh): `src/hooks/useTaskDiff.ts`
 - Frontend API: `src/api.ts`
 - Backend commands: `task_diff_summary`, `task_diff_file`
 - Git diff helpers (base resolution, numstat/name-status parsing, untracked patches): `native/src/git_ops.rs`

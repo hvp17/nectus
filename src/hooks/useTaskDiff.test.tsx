@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
+import { deferred } from "../test/testUtils";
 import { useTaskDiff } from "./useTaskDiff";
 import type { TaskDiffSummary } from "../types";
 
@@ -28,6 +29,11 @@ const summary: TaskDiffSummary = {
   files: [{ path: "src/a.ts", change: "modified", additions: 2, deletions: 1, binary: false }],
 };
 
+const summary2: TaskDiffSummary = {
+  baseLabel: "origin/main",
+  files: [{ path: "src/b.ts", change: "added", additions: 5, deletions: 0, binary: false }],
+};
+
 beforeEach(() => {
   eventTestState.handlers.clear();
   eventTestState.listen.mockClear();
@@ -36,19 +42,28 @@ beforeEach(() => {
 });
 
 describe("useTaskDiff", () => {
-  it("loads the changed-file summary on refresh", async () => {
+  it("loads the changed-file summary as soon as a task is selected", async () => {
     mockedApi.taskDiffSummary.mockResolvedValue(summary);
     const { result } = renderHook(() => useTaskDiff(1));
+    await waitFor(() => expect(result.current.summary).toEqual(summary));
+    expect(mockedApi.taskDiffSummary).toHaveBeenCalledWith(1);
+  });
+
+  it("reloads the summary on manual refresh", async () => {
+    mockedApi.taskDiffSummary.mockResolvedValue(summary);
+    const { result } = renderHook(() => useTaskDiff(1));
+    await waitFor(() => expect(mockedApi.taskDiffSummary).toHaveBeenCalledTimes(1));
     await act(async () => {
       await result.current.refresh();
     });
-    expect(mockedApi.taskDiffSummary).toHaveBeenCalledWith(1);
-    expect(result.current.summary).toEqual(summary);
+    expect(mockedApi.taskDiffSummary).toHaveBeenCalledTimes(2);
   });
 
   it("lazy-loads and caches a file patch", async () => {
+    mockedApi.taskDiffSummary.mockResolvedValue(summary);
     mockedApi.taskDiffFile.mockResolvedValue("@@ -1 +1 @@\n+x");
     const { result } = renderHook(() => useTaskDiff(1));
+    await waitFor(() => expect(mockedApi.taskDiffSummary).toHaveBeenCalled());
     await act(async () => {
       await result.current.loadFile("src/a.ts");
     });
@@ -56,13 +71,10 @@ describe("useTaskDiff", () => {
     expect(result.current.files["src/a.ts"]).toMatchObject({ patch: "@@ -1 +1 @@\n+x", loading: false });
   });
 
-  it("refreshes when the task's session goes idle after the diff was opened", async () => {
+  it("refreshes when the task's session goes idle, even before the diff is opened", async () => {
     mockedApi.taskDiffSummary.mockResolvedValue(summary);
-    const { result } = renderHook(() => useTaskDiff(7));
-    await act(async () => {
-      await result.current.refresh();
-    });
-    expect(mockedApi.taskDiffSummary).toHaveBeenCalledTimes(1);
+    renderHook(() => useTaskDiff(7));
+    await waitFor(() => expect(mockedApi.taskDiffSummary).toHaveBeenCalledTimes(1));
 
     const handler = eventTestState.handlers.get("session_idle");
     expect(handler).toBeTruthy();
@@ -74,10 +86,8 @@ describe("useTaskDiff", () => {
 
   it("ignores idle events for other tasks", async () => {
     mockedApi.taskDiffSummary.mockResolvedValue(summary);
-    const { result } = renderHook(() => useTaskDiff(7));
-    await act(async () => {
-      await result.current.refresh();
-    });
+    renderHook(() => useTaskDiff(7));
+    await waitFor(() => expect(mockedApi.taskDiffSummary).toHaveBeenCalledTimes(1));
     const handler = eventTestState.handlers.get("session_idle");
     await act(async () => {
       handler?.({ payload: { sessionId: "s", taskId: 99 } });
@@ -85,16 +95,23 @@ describe("useTaskDiff", () => {
     expect(mockedApi.taskDiffSummary).toHaveBeenCalledTimes(1);
   });
 
-  it("clears the summary when the task changes", async () => {
-    mockedApi.taskDiffSummary.mockResolvedValue(summary);
+  it("clears the stale summary and reloads when the task changes", async () => {
+    const second = deferred<TaskDiffSummary>();
+    mockedApi.taskDiffSummary.mockImplementation((id: number) =>
+      id === 2 ? second.promise : Promise.resolve(summary),
+    );
     const { result, rerender } = renderHook(({ id }) => useTaskDiff(id), {
       initialProps: { id: 1 },
     });
-    await act(async () => {
-      await result.current.refresh();
-    });
-    expect(result.current.summary).toEqual(summary);
+    await waitFor(() => expect(result.current.summary).toEqual(summary));
+
     rerender({ id: 2 });
+    // The previous task's diff must not linger while the new task's summary loads.
     expect(result.current.summary).toBeNull();
+
+    await act(async () => {
+      second.resolve(summary2);
+    });
+    await waitFor(() => expect(result.current.summary).toEqual(summary2));
   });
 });
