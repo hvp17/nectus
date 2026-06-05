@@ -14,6 +14,7 @@ import {
 import { useCreateTaskForm } from "./useCreateTaskForm";
 import { useSessionCommands } from "./useSessionCommands";
 import { useSessionEvents } from "./useSessionEvents";
+import type { TaskToast } from "../taskNotification";
 import { useSessionAttentionControls } from "./useSessionAttentionControls";
 import { useGithub } from "./useGithub";
 import { useJira } from "./useJira";
@@ -52,6 +53,7 @@ export function useApp() {
     isBrowserPreview ? seedLiveLines : {},
   );
   const [message, setMessage] = useState<string | null>(null);
+  const [taskToast, setTaskToast] = useState<TaskToast | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deletingTaskIds, setDeletingTaskIds] = useState<ReadonlySet<number>>(() => new Set());
@@ -189,7 +191,7 @@ export function useApp() {
     }
   }, [applyReviewLoopToTask, selectedReviewLoop]);
 
-  useSessionEvents({ tasksRef, setTasks, setMessage, setTaskAttention, setLiveLines });
+  useSessionEvents({ tasksRef, setTasks, setMessage, setTaskToast, setTaskAttention, setLiveLines });
 
   const sessionCommands = useSessionCommands({
     agentProfiles,
@@ -502,6 +504,8 @@ export function useApp() {
     counts,
     message,
     setMessage,
+    taskToast,
+    setTaskToast,
     busy,
     deletingTaskIds,
     loading,
