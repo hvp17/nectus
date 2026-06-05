@@ -176,9 +176,10 @@ Emitted events:
 
 ## Task Diff
 
-The task workspace stage has a `Terminal | Diff` segmented control, so you can see
-what an agent changed without leaving the app. The Diff tab carries a changed-file
-count badge and a refresh control.
+The task workspace stage has a `Terminal | Diff | Review` segmented control, so you
+can see what an agent changed without leaving the app. The Diff tab carries a
+changed-file count badge and a refresh control; the Review tab is covered in
+[AI Review](#ai-review).
 
 Current behavior:
 
@@ -282,6 +283,15 @@ Current behavior:
   adjacent dropdown to switch reviewer profiles before starting the pass.
 - The review action switches the selected task UI to `reviewing` while the reviewer
   command runs, and the task workflow stepper shows the in-progress state.
+- The workspace stage has a read-only **Review** tab that streams the reviewer's
+  live stdout (`review_output` chunks emitted by `native/src/sessions/review_loop.rs`)
+  into an `xterm.js` pane, so you can watch the reviewer inspect the worktree in
+  real time. Starting a review auto-selects this tab; the facts-rail review card's
+  `Watch live` / `View output` button opens it too. The tab is read-only — there is
+  no input, session, or snapshot — and between runs it shows the last recorded
+  reviewer output. Reviewer stdout is streamed over a pipe (not a PTY), so a
+  reviewer that fully buffers its stdout may not appear until it flushes; `codex
+  exec` streams incrementally.
 - The task workflow stepper enables `Create PR` for worktree tasks once the
   GitHub CLI is connected, or whenever a worker session is running. For worktree
   tasks with `gh` connected it opens the pull request directly and stores the URL
@@ -318,7 +328,8 @@ Current behavior:
 
 Key files:
 
-- UI controls and latest run summary: `src/components/TaskWorkspace.tsx`
+- UI controls, stage `Review` tab, and latest run summary: `src/components/TaskWorkspace.tsx`
+- Read-only live reviewer terminal: `src/components/ReviewTerminalPane.tsx`
 - Agent-driven `Create PR` prompt: `src/hooks/useApp.ts`
 - Board review status label: `src/components/TaskCard.tsx`
 - Frontend review-loop loading and event subscription: `src/hooks/useTaskReviewLoop.ts`

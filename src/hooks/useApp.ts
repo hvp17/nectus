@@ -179,7 +179,13 @@ export function useApp() {
     );
   }, []);
 
-  const { selectedReviewLoop, setSelectedReviewLoop, selectedReviewRuns, setSelectedReviewRuns } = useTaskReviewLoop({
+  const {
+    selectedReviewLoop,
+    setSelectedReviewLoop,
+    selectedReviewRuns,
+    setSelectedReviewRuns,
+    liveReviewOutput,
+  } = useTaskReviewLoop({
     selectedTaskId,
     onMessage: setMessage,
     onReviewLoopUpdated: applyReviewLoopToTask,
@@ -498,6 +504,7 @@ export function useApp() {
     selectedTask,
     selectedReviewLoop,
     selectedReviewRuns,
+    liveReviewOutput,
     taskAttention,
     liveLines,
     selectedTaskAttention: selectedTask ? getTaskAttention(taskAttention, selectedTask.id) : undefined,

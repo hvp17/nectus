@@ -48,6 +48,7 @@ function App() {
     selectedTask,
     selectedReviewLoop,
     selectedReviewRuns,
+    liveReviewOutput,
     taskAttention,
     liveLines,
     selectedTaskAttention,
@@ -309,6 +310,7 @@ function App() {
                 agentProfiles={agentProfiles}
                 reviewLoop={selectedReviewLoop}
                 reviewRuns={selectedReviewRuns}
+                liveReviewOutput={liveReviewOutput}
                 githubStatus={githubStatus}
                 pullRequest={selectedPullRequest}
                 pullRequestLoading={pullRequestLoading}

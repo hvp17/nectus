@@ -251,6 +251,7 @@ Events emitted by Rust:
 - `session_idle`
 - `session_needs_input`
 - `review_loop_updated`
+- `review_output`
 - `pr_review_updated`
 
 ## Spawning External CLIs (macOS GUI PATH)
@@ -302,7 +303,7 @@ Important frontend files:
 - `src/hooks/useSessionCommands.ts`: start/resume/stop/resize/input session command bindings
 - `src/hooks/useGithub.ts`: `gh` connection status and pull request create/detect/status orchestration
 - `src/hooks/useJira.ts`: `acli` connection status, board items, auto-derived columns, and optimistic transition
-- `src/hooks/useTaskReviewLoop.ts`: selected-task review-loop loading and event handling
+- `src/hooks/useTaskReviewLoop.ts`: selected-task review-loop loading and event handling, including the live reviewer output stream (`review_output`) for the read-only Review pane
 - `src/hooks/useTaskDiff.ts`: task diff data — summary load, lazy per-file patches, and `session_idle` refresh
 - `src/hooks/useTaskCardPointerDrag.ts`: task-card pointer drag and ghost lifecycle
 - `src/hooks/useTaskDeletion.ts`: task deletion workflow and deletion toasts
@@ -311,8 +312,9 @@ Important frontend files:
 - `src/api.ts`: typed Tauri command wrapper
 - `src/types.ts`: frontend data contracts matching Rust serde output
 - `src/components/`: icon rail, Mission Control, board, task workspace (workflow ribbon + facts rail), settings, GitHub panel, and the inline composer/side-panel UI (no modals/dialogs for create-task or JIRA work items)
-- `src/components/TaskWorkspace.tsx`: selected-task workspace; the stage has a `Terminal | Diff` toggle, with the diff getting the full stage when active
+- `src/components/TaskWorkspace.tsx`: selected-task workspace; the stage has a `Terminal | Diff | Review` toggle, with the diff or the read-only reviewer terminal getting the full stage when active. A starting review auto-selects the Review tab; the facts-rail review card has a `Watch live`/`View output` button that opens it too
 - `src/components/TaskDiffView.tsx`: task diff view — changed-file list plus the lazy-loaded, line-colorized unified patch pane
+- `src/components/ReviewTerminalPane.tsx`: read-only xterm.js pane that renders a task reviewer's live stdout (and its last recorded output between runs); no input, session, or snapshot
 - `src/components/GitHubPanel.tsx`: task-inspector GitHub panel for connection state and pull request actions
 - `src/components/JiraBoardPage.tsx`: global JIRA board view — JQL config, auto-derived columns, drag-to-transition
 - `src/components/JiraWorkItemDialog.tsx`: `JiraWorkItemPanel` — the de-modaled work-item side panel docked beside the board (transition/assign/comment + an agent-select "Create task & start" launch row)

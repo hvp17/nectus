@@ -97,7 +97,9 @@ fn review_in_worktree(
         .set_pr_review_worktree(review_id, Some(&worktree_path.to_string_lossy()))?;
 
     let prompt = build_pr_review_prompt(pr_number, meta);
-    run_reviewer_command(reviewer, worktree_path, &prompt)
+    // PR reviews surface their output through the Reviews view, not the live
+    // task workspace, so they keep the captured-output path (no live stream).
+    run_reviewer_command(reviewer, worktree_path, &prompt, None)
 }
 
 fn emit_pr_review_update(app: &AppHandle, db: &Arc<Mutex<Database>>, review_id: i64) {

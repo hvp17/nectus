@@ -2,12 +2,12 @@ use super::command::resolve_agent_command;
 use super::RunningSession;
 use crate::db::Database;
 use crate::models::{
-    AgentKind, AgentProfile, ReviewLoopStatus, ReviewLoopUpdatedEvent, ReviewRunInput,
-    ReviewVerdict, TaskSummary,
+    AgentKind, AgentProfile, ReviewLoopStatus, ReviewLoopUpdatedEvent, ReviewOutputEvent,
+    ReviewRunInput, ReviewVerdict, TaskSummary,
 };
 use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
@@ -72,7 +72,13 @@ fn run_review_round(
 
     let prompt = build_review_prompt(&task);
     tracing::info!(task_id, reviewer = %reviewer.name, "starting review");
-    let reviewer_output = match run_reviewer_command(&reviewer, cwd, &prompt) {
+    // Stream the reviewer's stdout to the workspace so the user can watch the
+    // review progress live (read-only); the full output is still captured below.
+    let sink = ReviewOutputSink {
+        app: app.clone(),
+        task_id,
+    };
+    let reviewer_output = match run_reviewer_command(&reviewer, cwd, &prompt, Some(&sink)) {
         Ok(output) => output,
         Err(error) => {
             let run = db.lock().record_review_run(ReviewRunInput {
@@ -130,10 +136,18 @@ fn emit_review_loop_update(
     );
 }
 
+/// Where to forward a reviewer's live stdout. Holds an `AppHandle` so the read
+/// loop can emit `review_output` chunks keyed by `task_id` as they arrive.
+pub(super) struct ReviewOutputSink {
+    pub app: AppHandle,
+    pub task_id: i64,
+}
+
 pub(super) fn run_reviewer_command(
     reviewer: &AgentProfile,
     cwd: &Path,
     prompt: &str,
+    stream: Option<&ReviewOutputSink>,
 ) -> Result<String, String> {
     let executable = resolve_agent_command(&reviewer.command)?;
     let plan = build_reviewer_args(reviewer, prompt);
@@ -167,16 +181,59 @@ pub(super) fn run_reviewer_command(
             }
         }
     }
-    let output = child
-        .wait_with_output()
+
+    // Drain stderr on its own thread so a chatty reviewer can't deadlock by
+    // filling the stderr pipe while we block reading stdout.
+    let stderr_handle = child.stderr.take().map(|mut stderr| {
+        std::thread::spawn(move || {
+            let mut buffer = Vec::new();
+            let _ = stderr.read_to_end(&mut buffer);
+            buffer
+        })
+    });
+
+    // Read stdout incrementally: emit each chunk for the live view while
+    // accumulating the raw bytes so the recorded output is decoded cleanly once.
+    let mut stdout_bytes = Vec::new();
+    if let Some(mut stdout) = child.stdout.take() {
+        let mut buffer = [0_u8; 8192];
+        loop {
+            match stdout.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(count) => {
+                    let chunk = &buffer[..count];
+                    if let Some(sink) = stream {
+                        let _ = sink.app.emit(
+                            "review_output",
+                            ReviewOutputEvent {
+                                task_id: sink.task_id,
+                                data: String::from_utf8_lossy(chunk).to_string(),
+                                start_offset: stdout_bytes.len() as u64,
+                            },
+                        );
+                    }
+                    stdout_bytes.extend_from_slice(chunk);
+                }
+                Err(error) => {
+                    return Err(format!("Failed to read reviewer output: {error}"));
+                }
+            }
+        }
+    }
+
+    let status = child
+        .wait()
         .map_err(|error| format!("Failed to read reviewer output: {error}"))?;
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    if !output.status.success() {
+    let stderr = stderr_handle
+        .and_then(|handle| handle.join().ok())
+        .map(|bytes| String::from_utf8_lossy(&bytes).trim().to_string())
+        .unwrap_or_default();
+    let stdout = String::from_utf8_lossy(&stdout_bytes).to_string();
+    if !status.success() {
         return Err(if stderr.is_empty() {
-            format!("Reviewer exited with {}", output.status)
+            format!("Reviewer exited with {status}")
         } else {
-            format!("Reviewer exited with {}: {stderr}", output.status)
+            format!("Reviewer exited with {status}: {stderr}")
         });
     }
     Ok(stdout)
