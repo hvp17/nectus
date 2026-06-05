@@ -147,6 +147,11 @@ Current behavior:
   feedback live in the persistent right inspector rail.
 - Terminal output is streamed through the `session_output` Tauri event.
 - Recent terminal output is buffered in memory for snapshot restore.
+- A running task's card and Mission Control row show a live "what it's doing"
+  line between the title and branch: the latest readable line of the agent's
+  terminal output (ANSI-stripped, throttled, de-duplicated) carried by the
+  `session_activity` event. It falls back to "Working…" before the first line
+  and clears when the session exits.
 - Closing the app stops owned sessions and clears active session ids.
 
 Key files:
@@ -163,6 +168,7 @@ Key files:
 Emitted events:
 
 - `session_output`
+- `session_activity`
 - `session_exited`
 - `session_idle`
 - `session_needs_input`

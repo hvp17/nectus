@@ -281,3 +281,10 @@ export interface SessionNeedsInputEvent {
   reason: string;
   prompt?: string | null;
 }
+
+/** The agent's latest human-readable activity line for a running session. */
+export interface SessionActivityEvent {
+  sessionId: string;
+  taskId: number;
+  line: string;
+}

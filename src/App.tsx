@@ -49,6 +49,7 @@ function App() {
     selectedReviewLoop,
     selectedReviewRuns,
     taskAttention,
+    liveLines,
     selectedTaskAttention,
     counts,
     message,
@@ -339,6 +340,7 @@ function App() {
                 repos={repos}
                 tasks={tasks}
                 taskAttention={taskAttention}
+                liveLines={liveLines}
                 loading={loading}
                 onOpenTask={openTask}
                 onOpenPr={openExternalUrl}
@@ -352,6 +354,7 @@ function App() {
                 visibleTasks={visibleTasks}
                 selectedTaskId={selectedTaskId}
                 taskAttention={taskAttention}
+                liveLines={liveLines}
                 onSelectTask={openTask}
                 onRefresh={refresh}
                 onCreateTask={openCreateTaskModal}

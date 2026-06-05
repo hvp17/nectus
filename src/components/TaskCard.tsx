@@ -12,6 +12,8 @@ import type { AgentKind, TaskSummary } from "../types";
 interface TaskCardProps {
   task: TaskSummary;
   attention?: TaskAttention;
+  /** Latest live activity line for a running session, shown under the title. */
+  liveLine?: string;
   isSelected: boolean;
   busy: boolean;
   isDeleting?: boolean;
@@ -27,6 +29,7 @@ interface TaskCardProps {
 export function TaskCard({
   task,
   attention,
+  liveLine,
   isSelected,
   busy,
   isDeleting = false,
@@ -120,6 +123,12 @@ export function TaskCard({
           {attention.kind === "needs_input"
             ? `“${attentionDetail ?? formatAttentionReason(attention.reason)}”`
             : displayedAttentionDetail ?? "Agent finished"}
+        </div>
+      )}
+
+      {!attention && state === "running" && (
+        <div className="nx-card-line" data-live="true" title={liveLine || undefined}>
+          {liveLine ?? "Working…"}
         </div>
       )}
 
