@@ -341,6 +341,30 @@ Relevant code:
 - `src/hooks/useSessionCommands.ts`
 - `native/src/sessions/mod.rs`
 
+### Terminal Shows Ghosted Text Or Tofu Boxes
+
+`src/TerminalPane.tsx` renders with xterm's GPU (WebGL2) renderer via
+`@xterm/addon-webgl`, loaded by `loadWebglRenderer` right after
+`terminal.open(...)`. The WebGL renderer is required for correct output from
+agents like Claude Code that repaint a status line with rapid cursor-addressed
+redraws: xterm's default DOM renderer leaves stale cells behind (ghosting and
+overlapping spinner lines) and mismeasures some glyphs into `■` tofu boxes.
+
+Check:
+
+- The console does not log `Terminal: WebGL2 renderer unavailable, using the DOM
+  renderer`. That warning means `WebglAddon` failed to load (no WebGL2 context),
+  so xterm silently fell back to the DOM renderer and the artifacts above can
+  return. On runtime context loss the addon disposes itself (`onContextLoss`) and
+  also reverts to the DOM renderer.
+- History replay still matches the recorded generation width before the pane
+  fit, so cursor-addressed redraws land on the right rows (see
+  `loadSnapshotDelta`/`syncTerminalToPane`).
+
+Relevant code:
+
+- `src/TerminalPane.tsx` (`loadWebglRenderer`)
+
 ### Session Resume Is Disabled
 
 Resume is only supported for task agent kinds `codex` and `claude`.
