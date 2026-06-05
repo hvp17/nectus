@@ -255,6 +255,21 @@
   text-overflow: ellipsis;
 }
 .nx-card[data-state="needs_you"] .nx-card-line { color: color-mix(in oklch, var(--status-warning) 55%, var(--foreground)); }
+/* Live activity tail: a leading pulse dot marks it as the running stream. */
+.nx-card-line[data-live="true"] { color: color-mix(in oklch, var(--primary) 32%, var(--muted-foreground)); }
+.nx-card-line[data-live="true"]::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: var(--primary);
+  vertical-align: middle;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .nx-card-line[data-live="true"]::before { animation: nx-pulse-dot 1.4s ease-in-out infinite; }
+}
 .nx-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted-foreground); }
 .nx-card-branch { display: flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--muted-foreground); min-width: 0; overflow: hidden; }
 .nx-card-branch svg { width: 11px; height: 11px; flex: none; opacity: .7; }

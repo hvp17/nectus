@@ -87,17 +87,21 @@ export function buildAgentRows(
   tasks: TaskSummary[],
   taskAttention: TaskAttention[],
   repoNames: Map<number, string>,
+  liveLines: Record<number, string> = {},
   now = Date.now(),
 ): AgentRow[] {
   return tasks
     .map((task) => {
       const attention = getTaskAttention(taskAttention, task.id);
       const state = deriveAgentState(task, attention);
+      // A running session's live activity line, when we have one, beats the
+      // static "Session running" / label fallback.
+      const liveLine = state === "running" ? liveLines[task.id]?.trim() : undefined;
       return {
         task,
         state,
         attention,
-        line: deriveAgentLine(task, state, attention),
+        line: liveLine || deriveAgentLine(task, state, attention),
         elapsed: elapsedSince(task.updatedAt, now),
         repoName: repoNames.get(task.repoId) ?? "project",
       };

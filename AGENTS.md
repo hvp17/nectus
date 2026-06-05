@@ -246,6 +246,7 @@ Events emitted by Rust:
 
 - `session_output`
 - `session_meta`
+- `session_activity`
 - `session_exited`
 - `session_idle`
 - `session_needs_input`
@@ -297,7 +298,7 @@ Important frontend files:
 - `src/components/MissionControl.tsx`: cross-project, attention-first triage home (the default view), grouped needs_you → running → review → done → idle
 - `src/lib/agentState.ts`: maps a task + attention to its cross-project state, latest line, and elapsed time (shared by Mission Control and the board)
 - `src/hooks/useApp.ts`: app state, project/task/settings orchestration
-- `src/hooks/useSessionEvents.ts`: subscribes to Rust session events (`session_output`, `session_meta`, `session_exited`, `session_idle`, `session_needs_input`)
+- `src/hooks/useSessionEvents.ts`: subscribes to Rust session events (`session_activity`, `session_exited`, `session_idle`, `session_needs_input`); keeps the per-task `liveLines` map (latest activity line) and the task attention list
 - `src/hooks/useSessionCommands.ts`: start/resume/stop/resize/input session command bindings
 - `src/hooks/useGithub.ts`: `gh` connection status and pull request create/detect/status orchestration
 - `src/hooks/useJira.ts`: `acli` connection status, board items, auto-derived columns, and optimistic transition

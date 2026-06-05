@@ -54,6 +54,7 @@ interface WorkspaceProps {
   visibleTasks: TaskSummary[];
   selectedTaskId?: number;
   taskAttention: TaskAttention[];
+  liveLines: Record<number, string>;
   onSelectTask: (id: number) => void;
   onRefresh: () => void;
   onCreateTask: () => void;
@@ -69,6 +70,7 @@ export function Workspace({
   visibleTasks,
   selectedTaskId,
   taskAttention,
+  liveLines,
   onSelectTask,
   onRefresh,
   onCreateTask,
@@ -201,6 +203,7 @@ export function Workspace({
                         key={task.id}
                         task={task}
                         attention={getTaskAttention(taskAttention, task.id)}
+                        liveLine={liveLines[task.id]}
                         isSelected={selectedTaskId === task.id}
                         busy={busy}
                         isDeleting={deletingTaskIds.has(task.id)}
