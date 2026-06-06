@@ -74,6 +74,70 @@ fn seeds_default_agent_profiles() {
 }
 
 #[test]
+fn migrates_legacy_worktree_pattern_to_nectus_home() {
+    let db = Database::open_in_memory().unwrap();
+    let home = std::env::var("HOME").expect("HOME is set in the test environment");
+
+    // Simulate a database created before the `~/.nectus` default: the global
+    // pattern is still the legacy sibling layout and a repo's stored root was
+    // resolved from it.
+    db.conn
+        .execute(
+            "UPDATE app_settings SET default_worktree_root_pattern = '../{repoName}-worktrees' WHERE id = 1",
+            [],
+        )
+        .unwrap();
+    db.conn
+        .execute(
+            "INSERT INTO repos (name, path, default_worktree_root, created_at) VALUES ('demo', '/tmp/demo', '/tmp/demo-worktrees', '2020-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+
+    db.migrate_legacy_worktree_pattern().unwrap();
+
+    let settings = db.get_app_settings().unwrap();
+    assert_eq!(
+        settings.default_worktree_root_pattern,
+        "~/.nectus/worktrees/{repoName}"
+    );
+
+    let repo = db.repo_by_path("/tmp/demo").unwrap().unwrap();
+    assert_eq!(
+        repo.default_worktree_root,
+        format!("{home}/.nectus/worktrees/demo")
+    );
+}
+
+#[test]
+fn leaves_custom_worktree_pattern_untouched() {
+    let db = Database::open_in_memory().unwrap();
+
+    db.conn
+        .execute(
+            "UPDATE app_settings SET default_worktree_root_pattern = '../custom/{repoName}' WHERE id = 1",
+            [],
+        )
+        .unwrap();
+    db.conn
+        .execute(
+            "INSERT INTO repos (name, path, default_worktree_root, created_at) VALUES ('demo', '/tmp/demo', '/tmp/sentinel-root', '2020-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+
+    db.migrate_legacy_worktree_pattern().unwrap();
+
+    let settings = db.get_app_settings().unwrap();
+    assert_eq!(
+        settings.default_worktree_root_pattern,
+        "../custom/{repoName}"
+    );
+    let repo = db.repo_by_path("/tmp/demo").unwrap().unwrap();
+    assert_eq!(repo.default_worktree_root, "/tmp/sentinel-root");
+}
+
+#[test]
 fn review_tables_store_singular_review_data() {
     let db = Database::open_in_memory().unwrap();
 
@@ -111,7 +175,7 @@ fn seeds_and_updates_global_app_settings() {
     );
     assert_eq!(
         settings.default_worktree_root_pattern,
-        "../{repoName}-worktrees"
+        "~/.nectus/worktrees/{repoName}"
     );
     assert_eq!(settings.default_branch_prefix, None);
     assert_eq!(settings.theme, ThemeMode::System);

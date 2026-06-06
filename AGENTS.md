@@ -338,7 +338,7 @@ Preserve these V1 decisions unless the user asks to change them:
 
 - Operations dashboard is the primary UI.
 - Projects are existing local git repos.
-- Worktrees default to a sibling folder: `../<repo-name>-worktrees/<branch-name>`.
+- Worktrees default to a per-project folder under a hidden home directory: `~/.nectus/worktrees/<repo-name>/<branch-name>`. The pattern is configurable in Settings and must include `{repoName}`; a leading `~` expands to `$HOME`.
 - Tasks can be direct-edit or worktree-backed; worktree is optional.
 - Tasks and PR URLs are stored locally.
 - GitHub integration runs through the local `gh` CLI; the app stores no GitHub tokens and runs no OAuth flow.

@@ -45,16 +45,42 @@ pub fn validate_repo_path(path: &Path) -> Result<(), String> {
 }
 
 pub fn default_worktree_root_with_pattern(repo_path: &Path, pattern: &str) -> PathBuf {
+    resolve_worktree_root(
+        repo_path,
+        pattern,
+        std::env::var_os("HOME").map(PathBuf::from).as_deref(),
+    )
+}
+
+/// Resolve a worktree-root pattern against a repo path, expanding a leading `~`
+/// to `home`. Split out from [`default_worktree_root_with_pattern`] so the home
+/// directory can be injected in tests. A pattern starting with `~`/`~/` anchors
+/// at the home directory; an absolute pattern is taken as-is; anything else is
+/// resolved relative to the repo path (the historical behavior).
+fn resolve_worktree_root(repo_path: &Path, pattern: &str, home: Option<&Path>) -> PathBuf {
     let repo_name = repo_path
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("repo");
     let value = pattern.replace("{repoName}", repo_name);
-    let path = PathBuf::from(value);
+    let path = expand_home(&value, home);
     if path.is_absolute() {
         normalize_path(path)
     } else {
         normalize_path(repo_path.join(path))
+    }
+}
+
+/// Expand a leading `~` (bare or `~/…`) to the given home directory. Without a
+/// home, or for any other input, the value is returned verbatim.
+fn expand_home(value: &str, home: Option<&Path>) -> PathBuf {
+    match home {
+        Some(home) if value == "~" => home.to_path_buf(),
+        Some(home) => match value.strip_prefix("~/") {
+            Some(rest) => home.join(rest),
+            None => PathBuf::from(value),
+        },
+        None => PathBuf::from(value),
     }
 }
 
@@ -560,6 +586,50 @@ mod tests {
             default_worktree_root_with_pattern(Path::new("/tmp/nectus"), "../worktrees/{repoName}");
 
         assert_eq!(root, PathBuf::from("/tmp/worktrees/nectus"));
+    }
+
+    #[test]
+    fn expands_leading_tilde_to_home() {
+        let root = resolve_worktree_root(
+            Path::new("/tmp/nectus"),
+            "~/.nectus/worktrees/{repoName}",
+            Some(Path::new("/Users/alice")),
+        );
+
+        assert_eq!(
+            root,
+            PathBuf::from("/Users/alice/.nectus/worktrees/nectus")
+        );
+    }
+
+    #[test]
+    fn expands_bare_tilde_to_home() {
+        let root = resolve_worktree_root(Path::new("/tmp/nectus"), "~", Some(Path::new("/home/bob")));
+
+        assert_eq!(root, PathBuf::from("/home/bob"));
+    }
+
+    #[test]
+    fn leaves_non_tilde_patterns_repo_relative() {
+        // A pattern without a leading `~` must keep resolving against the repo
+        // path exactly as before, even when a home directory is available.
+        let root = resolve_worktree_root(
+            Path::new("/tmp/nectus"),
+            "../{repoName}-worktrees",
+            Some(Path::new("/Users/alice")),
+        );
+
+        assert_eq!(root, PathBuf::from("/tmp/nectus-worktrees"));
+    }
+
+    #[test]
+    fn falls_back_to_repo_relative_when_home_missing() {
+        // Without a resolvable home, a `~` pattern degrades to the prior
+        // repo-relative behavior rather than panicking.
+        let root =
+            resolve_worktree_root(Path::new("/tmp/nectus"), "~/work/{repoName}", None);
+
+        assert_eq!(root, PathBuf::from("/tmp/nectus/~/work/nectus"));
     }
 
     #[test]

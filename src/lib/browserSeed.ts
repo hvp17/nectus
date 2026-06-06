@@ -145,7 +145,7 @@ export const seedLiveLines: Record<number, string> = {
 
 export const seedSettings: AppSettings = {
   defaultAgentProfileId: 1,
-  defaultWorktreeRootPattern: "../{repoName}-worktrees",
+  defaultWorktreeRootPattern: "~/.nectus/worktrees/{repoName}",
   defaultBranchPrefix: "feat/",
   jiraBoardJql: null,
   jiraSiteUrl: "acme.atlassian.net",

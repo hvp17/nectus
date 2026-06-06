@@ -224,7 +224,7 @@ export function defineAppTaskCreationTests() {
     mockProject();
     mockedApi.getAppSettings.mockResolvedValue({
       defaultAgentProfileId: 1,
-      defaultWorktreeRootPattern: "../{repoName}-worktrees",
+      defaultWorktreeRootPattern: "~/.nectus/worktrees/{repoName}",
       defaultBranchPrefix: "feat/",
       jiraBoardJql: null,
       jiraSiteUrl: null,
@@ -269,7 +269,7 @@ export function defineAppTaskCreationTests() {
     mockProject();
     mockedApi.getAppSettings.mockResolvedValue({
       defaultAgentProfileId: 1,
-      defaultWorktreeRootPattern: "../{repoName}-worktrees",
+      defaultWorktreeRootPattern: "~/.nectus/worktrees/{repoName}",
       defaultBranchPrefix: "feat/",
       jiraBoardJql: null,
       jiraSiteUrl: null,

@@ -5,7 +5,7 @@ import type { AppSettings } from "../types";
 
 const systemSettings: AppSettings = {
   defaultAgentProfileId: 1,
-  defaultWorktreeRootPattern: "../{repoName}-worktrees",
+  defaultWorktreeRootPattern: "~/.nectus/worktrees/{repoName}",
   defaultBranchPrefix: null,
   jiraBoardJql: null,
   jiraSiteUrl: null,

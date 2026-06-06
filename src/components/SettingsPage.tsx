@@ -246,7 +246,7 @@ export function SettingsPage({
                       defaultWorktreeRootPattern: event.target.value,
                     }))
                   }
-                  placeholder="../{repoName}-worktrees"
+                  placeholder="~/.nectus/worktrees/{repoName}"
                   aria-invalid={worktreePatternInvalid}
                   className="font-mono"
                 />
