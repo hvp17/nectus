@@ -1,7 +1,6 @@
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
-import { isTauriRuntime } from "../sessionNotifications";
+import { useTauriEvent } from "./useTauriEvent";
 import type { SessionIdleEvent, TaskDiffSummary } from "../types";
 
 /** Lazy-loaded patch state for a single file in the diff. */
@@ -77,21 +76,13 @@ export function useTaskDiff(taskId: number | undefined): TaskDiff {
 
   // A finished turn likely changed the diff; refresh to keep the badge current while
   // the agent works, whether or not the Diff tab has been opened.
-  useEffect(() => {
-    if (!isTauriRuntime() || taskId == null) return;
-    let unlisten: UnlistenFn | undefined;
-    let disposed = false;
-    void listen<SessionIdleEvent>("session_idle", (event) => {
-      if (event.payload.taskId === taskId) void refresh();
-    }).then((fn) => {
-      if (disposed) fn();
-      else unlisten = fn;
-    });
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
-  }, [taskId, refresh]);
+  useTauriEvent<SessionIdleEvent>(
+    "session_idle",
+    (payload) => {
+      if (payload.taskId === taskId) void refresh();
+    },
+    { enabled: taskId != null },
+  );
 
   return { summary, loading, error, files, refresh, loadFile };
 }

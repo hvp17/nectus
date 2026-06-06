@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { Check, GitPullRequest, LoaderCircle } from "lucide-react";
 import { Button } from "./ui/button";
 import { AgentLogo } from "./AgentBrand";
@@ -64,6 +64,15 @@ export function ReviewsPage({
     return initial ? [initial] : [];
   });
   const [rounds, setRounds] = useState(DEFAULT_ROUNDS);
+
+  // The lazy initializer captures `[]` when profiles haven't loaded at mount;
+  // seed the default once it becomes available, but only while the selection is
+  // still empty so a user pick is never clobbered.
+  useEffect(() => {
+    const initial = defaultReviewerProfileId ?? agentProfiles[0]?.id;
+    if (initial === undefined) return;
+    setSelectedReviewerIds((current) => (current.length === 0 ? [initial] : current));
+  }, [defaultReviewerProfileId, agentProfiles]);
 
   // Two or more reviewers turns the review into a multi-model consensus run.
   const consensus = selectedReviewerIds.length >= 2;

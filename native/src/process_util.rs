@@ -1,7 +1,29 @@
 use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::process::Output;
+use std::process::{Command, Output};
+
+/// Run a single-binary third-party CLI (`gh`, `acli`): resolve it against PATH +
+/// the common install dirs, run it in `current_dir`, and map a missing binary to
+/// `not_installed_message`. No `augmented_path` — these spawn no nested `node`.
+pub(crate) fn run_cli(
+    command: &str,
+    current_dir: Option<&Path>,
+    not_installed_message: &str,
+    args: &[&str],
+) -> Result<Output, String> {
+    let mut cmd = Command::new(resolve_executable(command));
+    if let Some(dir) = current_dir {
+        cmd.current_dir(dir);
+    }
+    cmd.args(args).output().map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            not_installed_message.to_string()
+        } else {
+            format!("Failed to run {command}: {error}")
+        }
+    })
+}
 
 /// Build an error message from a failed command's stderr, falling back to a
 /// fixed message when stderr is empty.

@@ -12,12 +12,6 @@ pub enum ThemeMode {
     Dark,
 }
 
-impl ThemeMode {
-    pub fn as_str(&self) -> &'static str {
-        self.into()
-    }
-}
-
 #[derive(
     Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Display, EnumString, IntoStaticStr,
 )]
@@ -26,12 +20,6 @@ impl ThemeMode {
 pub enum DensityMode {
     Comfortable,
     Compact,
-}
-
-impl DensityMode {
-    pub fn as_str(&self) -> &'static str {
-        self.into()
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

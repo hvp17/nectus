@@ -19,6 +19,7 @@ import { Skeleton } from "./ui/skeleton";
 import { BoardBody } from "./JiraBoardBody";
 import { JiraWorkItemPanel } from "./JiraWorkItemDialog";
 import { JiraCreateWorkItemPanel } from "./JiraCreateWorkItemPanel";
+import { isCliConnected } from "../lib/connection";
 import type { JiraColumn } from "../hooks/useJira";
 import type {
   AgentProfile,
@@ -119,7 +120,7 @@ export function JiraBoardPage({
   onPickAgent,
   onOpenUrl,
 }: JiraBoardPageProps) {
-  const ready = Boolean(status?.installed && status?.authenticated);
+  const ready = isCliConnected(status);
   const itemsByKey = new Map(columns.flatMap((column) => column.items).map((item) => [item.key, item]));
   const statusOptions = columns.map((column) => column.statusName);
   // Always include the currently-selected statuses so they stay uncheckable even

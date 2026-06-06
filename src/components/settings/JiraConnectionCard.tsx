@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, KanbanSquare, XCircle } from "lucide-react";
-import { Badge } from "../ui/badge";
+import { KanbanSquare } from "lucide-react";
+import { ConnectionBadge } from "./ConnectionBadge";
 import { Button } from "../ui/button";
 import { Field, FieldDescription, FieldError, FieldLabel } from "../ui/field";
 import { Input } from "../ui/input";
+import { useGuardedAction } from "../../hooks/useGuardedAction";
 import type { JiraRestStatus } from "../../types";
 
 interface JiraConnectionCardProps {
@@ -42,31 +43,25 @@ export function JiraConnectionCard({
     setEmail((current) => current || status?.email || "");
   }, [status?.site, status?.email, detectedSite]);
 
-  const save = async () => {
-    setError(null);
-    setSaving(true);
-    try {
-      await onSave(site.trim(), email.trim(), token);
-      setToken("");
-    } catch (caught) {
-      setError(String(caught));
-    } finally {
-      setSaving(false);
-    }
-  };
+  const run = useGuardedAction(setError, setSaving);
 
-  const disconnect = async () => {
-    setError(null);
-    setSaving(true);
-    try {
-      await onDisconnect();
-      setToken("");
-    } catch (caught) {
-      setError(String(caught));
-    } finally {
-      setSaving(false);
-    }
-  };
+  const save = () =>
+    run(
+      async () => {
+        await onSave(site.trim(), email.trim(), token);
+        setToken("");
+      },
+      { busy: true },
+    );
+
+  const disconnect = () =>
+    run(
+      async () => {
+        await onDisconnect();
+        setToken("");
+      },
+      { busy: true },
+    );
 
   const disabled = busy || saving;
   const canSave = Boolean(site.trim() && email.trim() && token) && !disabled;
@@ -85,18 +80,11 @@ export function JiraConnectionCard({
           </small>
         </span>
         <span className="nx-strip-right">
-          <Badge
-            variant={connected ? "success" : "outline"}
-            className="gap-1.5"
-            aria-label={`JIRA REST ${connected ? "Connected" : "Not connected"}`}
-          >
-            {connected ? (
-              <CheckCircle2 size={13} className="text-status-success" />
-            ) : (
-              <XCircle size={13} className="text-muted-foreground" />
-            )}
-            {connected ? "Connected" : "Not connected"}
-          </Badge>
+          <ConnectionBadge
+            connected={connected}
+            label={connected ? "Connected" : "Not connected"}
+            ariaPrefix="JIRA REST"
+          />
         </span>
       </div>
 

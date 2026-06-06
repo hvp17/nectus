@@ -11,7 +11,9 @@ import {
 } from "./ui/dropdown-menu";
 import { TaskWorkspaceFactsRail } from "./taskWorkspace/TaskWorkspaceFactsRail";
 import { TaskWorkspaceStage, type WorkflowStep } from "./taskWorkspace/TaskWorkspaceStage";
-import { truncateFinishedAttentionPreview } from "./attentionPreview";
+import { deriveAttentionPreview } from "./attentionPreview";
+import { isReviewLoopActive } from "../statusLabels";
+import { isCliConnected } from "../lib/connection";
 import { useTaskDiff } from "../hooks/useTaskDiff";
 import { type TaskAttention } from "../sessionAttention";
 import {
@@ -104,10 +106,13 @@ export function TaskWorkspace({
   const diff = useTaskDiff(task?.id);
   const { refresh: refreshDiff } = diff;
   const [stageTab, setStageTab] = useState<"terminal" | "diff" | "review">("terminal");
-  // Load (or reload) the diff whenever the Diff tab is shown or the task changes.
+  // Reload the diff when the user opens the Diff tab. Task-switch reloads are
+  // owned by useTaskDiff itself, so depend on stageTab only — otherwise the
+  // refreshDiff identity change on task switch fires a second, racing fetch.
   useEffect(() => {
     if (stageTab === "diff") void refreshDiff();
-  }, [stageTab, refreshDiff]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageTab]);
 
   // Surface the live reviewer the moment a review starts, so "checking progress"
   // is one rising-edge switch away; the user can toggle back at any time.
@@ -138,20 +143,19 @@ export function TaskWorkspace({
     { additions: 0, deletions: 0 },
   );
   const selectedReviewerProfile = reviewerProfiles.find((profile) => profile.id === reviewerProfileId);
-  const reviewActive = Boolean(reviewLoop && !["passed", "feedback_sent", "error", "stopped"].includes(reviewLoop.status));
+  const reviewActive = Boolean(reviewLoop && isReviewLoopActive(reviewLoop.status));
   const reviewInProgress = reviewLoop?.status === "reviewing";
   const canResumeSession = task.agentKind === "codex" || task.agentKind === "claude";
   const sessionAgentLabel = task.lastSessionAgent ?? task.agentName ?? "None";
   const sessionId = task.activeSessionId ?? task.lastSessionId;
-  const attentionDetail = attention?.prompt ?? attention?.message;
-  const displayedAttentionDetail =
-    attention?.kind === "idle" && attentionDetail ? truncateFinishedAttentionPreview(attentionDetail) : attentionDetail;
-  const isAttentionDetailTruncated = Boolean(
-    attentionDetail && displayedAttentionDetail && displayedAttentionDetail !== attentionDetail,
-  );
+  const {
+    detail: attentionDetail,
+    displayed: displayedAttentionDetail,
+    truncated: isAttentionDetailTruncated,
+  } = deriveAttentionPreview(attention);
   const startReviewDisabled = !selectedReviewerProfile || reviewerProfiles.length === 0 || reviewInProgress;
   const reviewReadyForNextStep = reviewLoop?.status === "passed";
-  const githubReady = Boolean(githubStatus?.installed && githubStatus?.authenticated);
+  const githubReady = isCliConnected(githubStatus);
   const canCreateViaGithub = Boolean(githubReady && task.hasWorktree && !task.prUrl);
   const canCreatePullRequest = Boolean(!task.prUrl && (canCreateViaGithub || task.activeSessionId));
   const createPullRequestDescription = task.prUrl

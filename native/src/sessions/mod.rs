@@ -23,6 +23,7 @@ mod codex_tests;
 mod command;
 mod pr_consensus;
 mod pr_review;
+mod pr_verdict;
 mod pr_worktree;
 mod review_loop;
 mod reviewer;
@@ -184,7 +185,7 @@ pub struct SessionManager {
 
 struct RunningSession {
     session: Session,
-    agent_command: String,
+    agent_kind: AgentKind,
     cwd: PathBuf,
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
@@ -360,7 +361,7 @@ impl SessionManager {
             session.id.clone(),
             RunningSession {
                 session: session.clone(),
-                agent_command: agent.agent_kind.as_str().to_string(),
+                agent_kind: agent.agent_kind,
                 cwd: cwd_path.clone(),
                 master: pair.master,
                 writer,
@@ -403,7 +404,7 @@ impl SessionManager {
             let sessions = self.sessions.clone();
             let task_id = task.id;
             let session_id = session_id.clone();
-            let agent_command = agent.agent_kind.as_str().to_string();
+            let agent_kind = agent.agent_kind;
             let cwd = cwd_path;
             let started_at = started_at.clone();
             move || {
@@ -473,7 +474,7 @@ impl SessionManager {
                     // EOF means the child has exited; wait() reaps the zombie and
                     // yields the real status so we can report a true exit code.
                     let exit_code = running.child.wait().ok().map(|status| status.exit_code() as i32);
-                    if agent_command == AgentKind::Codex.as_str() {
+                    if agent_kind == AgentKind::Codex {
                         if let Some(metadata) = latest_codex_session_metadata(&cwd, &started_at) {
                             let _ = db
                                 .lock()
@@ -486,7 +487,7 @@ impl SessionManager {
                                     )
                                 });
                         }
-                    } else if agent_command == AgentKind::Claude.as_str() {
+                    } else if agent_kind == AgentKind::Claude {
                         cleanup_event_sink(&session_id);
                     }
                     let _ = db
@@ -545,7 +546,7 @@ impl SessionManager {
         let stopped_at = Utc::now().to_rfc3339();
         running.session.state = SessionState::Stopped;
         running.session.stopped_at = Some(stopped_at);
-        if running.agent_command == AgentKind::Codex.as_str() {
+        if running.agent_kind == AgentKind::Codex {
             if let Some(metadata) =
                 latest_codex_session_metadata(&running.cwd, &running.session.started_at)
             {
@@ -557,7 +558,7 @@ impl SessionManager {
                 running.session.resumable_session_id = Some(metadata.id);
                 running.session.resumable_session_label = metadata.label;
             }
-        } else if running.agent_command == AgentKind::Claude.as_str() {
+        } else if running.agent_kind == AgentKind::Claude {
             cleanup_event_sink(&session_id);
         }
         db.lock()

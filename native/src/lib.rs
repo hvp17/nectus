@@ -31,6 +31,21 @@ fn app_result<T>(result: Result<T, String>) -> AppResult<T> {
     result.map_err(Into::into)
 }
 
+/// Run blocking work (DB/git/CLI) off the async runtime and flatten the result:
+/// maps a `JoinError` to `context` and the inner `Err(String)` to `AppError`.
+/// Collapses the `spawn_blocking(...).await.map_err(...)?.map_err(Into::into)`
+/// tail repeated across the command layer.
+async fn blocking<T, F>(context: &'static str, f: F) -> AppResult<T>
+where
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+    T: Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(f)
+        .await
+        .map_err(|error| AppError::from(format!("{context}: {error}")))?
+        .map_err(Into::into)
+}
+
 #[derive(Debug)]
 struct TaskSessionContext {
     task: TaskSummary,
@@ -177,10 +192,10 @@ async fn delete_task(
 ) -> AppResult<()> {
     let db = state.db.clone();
     let force = force.unwrap_or(false);
-    tauri::async_runtime::spawn_blocking(move || db.lock().delete_task(task_id, force))
-        .await
-        .map_err(|error| AppError::from(format!("Failed to finish task deletion: {error}")))?
-        .map_err(Into::into)
+    blocking("Failed to finish task deletion", move || {
+        db.lock().delete_task(task_id, force)
+    })
+    .await
 }
 
 /// Report whether `gh` is installed, authenticated, and which account is active.
@@ -361,10 +376,7 @@ async fn jira_status() -> AppResult<JiraStatus> {
 /// List the JIRA projects visible to the user, for the board's project picker.
 #[tauri::command]
 async fn jira_list_projects() -> AppResult<Vec<JiraProject>> {
-    tauri::async_runtime::spawn_blocking(jira::list_projects)
-        .await
-        .map_err(|error| AppError::from(format!("Failed to list JIRA projects: {error}")))?
-        .map_err(Into::into)
+    blocking("Failed to list JIRA projects", jira::list_projects).await
 }
 
 /// Load the JIRA board. The JQL is built from the structured board config (project
@@ -386,19 +398,13 @@ async fn jira_search_board(state: State<'_, AppState>) -> AppResult<Vec<JiraWork
             &settings.jira_filter_statuses,
         )
     };
-    tauri::async_runtime::spawn_blocking(move || jira::search(&jql, 200))
-        .await
-        .map_err(|error| AppError::from(format!("Failed to load JIRA board: {error}")))?
-        .map_err(Into::into)
+    blocking("Failed to load JIRA board", move || jira::search(&jql, 200)).await
 }
 
 /// Fetch a single work item (e.g. to backfill a story description on attach).
 #[tauri::command]
 async fn jira_get_work_item(key: String) -> AppResult<JiraWorkItem> {
-    tauri::async_runtime::spawn_blocking(move || jira::view(&key))
-        .await
-        .map_err(|error| AppError::from(format!("Failed to load work item: {error}")))?
-        .map_err(Into::into)
+    blocking("Failed to load work item", move || jira::view(&key)).await
 }
 
 /// Transition a work item. When a REST token is connected, resolve the target
@@ -416,14 +422,7 @@ async fn jira_transition_work_item(
     if let Ok((site, email, token)) = rest_credentials(&state) {
         let (k, s) = (key.clone(), status.clone());
         let rest_result = tauri::async_runtime::spawn_blocking(move || {
-            let transitions = jira_rest::list_transitions(&site, &email, &token, &k)?;
-            let target = transitions
-                .iter()
-                .find(|t| t.to_status_name.eq_ignore_ascii_case(&s))
-                .ok_or_else(|| {
-                    format!("No legal transition to \"{s}\" from the current status")
-                })?;
-            jira_rest::perform_transition(&site, &email, &token, &k, &target.id)
+            jira_rest::transition_to_status(&site, &email, &token, &k, &s)
         })
         .await;
         // Fold a task panic (JoinError) into the same fall-through as an inner
@@ -442,26 +441,26 @@ async fn jira_transition_work_item(
             }
         }
     }
-    tauri::async_runtime::spawn_blocking(move || jira::transition(&key, &status))
-        .await
-        .map_err(|error| AppError::from(format!("Failed to transition work item: {error}")))?
-        .map_err(Into::into)
+    blocking("Failed to transition work item", move || {
+        jira::transition(&key, &status)
+    })
+    .await
 }
 
 #[tauri::command]
 async fn jira_assign_work_item(key: String, assignee: String) -> AppResult<()> {
-    tauri::async_runtime::spawn_blocking(move || jira::assign(&key, &assignee))
-        .await
-        .map_err(|error| AppError::from(format!("Failed to assign work item: {error}")))?
-        .map_err(Into::into)
+    blocking("Failed to assign work item", move || {
+        jira::assign(&key, &assignee)
+    })
+    .await
 }
 
 #[tauri::command]
 async fn jira_comment_work_item(key: String, body: String) -> AppResult<()> {
-    tauri::async_runtime::spawn_blocking(move || jira::comment(&key, &body))
-        .await
-        .map_err(|error| AppError::from(format!("Failed to comment on work item: {error}")))?
-        .map_err(Into::into)
+    blocking("Failed to comment on work item", move || {
+        jira::comment(&key, &body)
+    })
+    .await
 }
 
 /// Create a JIRA work item from the board's structured form, returning the new

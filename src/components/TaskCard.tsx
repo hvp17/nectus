@@ -2,7 +2,7 @@ import { AlertTriangle, Bot, CheckCircle2, GitBranch } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { AgentLogo } from "./AgentBrand";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
-import { truncateFinishedAttentionPreview } from "./attentionPreview";
+import { deriveAttentionPreview } from "./attentionPreview";
 import { useTaskCardPointerDrag } from "../hooks/useTaskCardPointerDrag";
 import { formatAttentionReason, type TaskAttention } from "../sessionAttention";
 import { deriveAgentState } from "../lib/agentState";
@@ -51,12 +51,11 @@ export function TaskCard({
   });
   const state = deriveAgentState(task, attention);
   const agentKind: AgentKind = task.agentKind ?? "custom";
-  const attentionDetail = attention?.prompt ?? attention?.message;
-  const displayedAttentionDetail =
-    attention?.kind === "idle" && attentionDetail ? truncateFinishedAttentionPreview(attentionDetail) : attentionDetail;
-  const isAttentionDetailTruncated = Boolean(
-    attentionDetail && displayedAttentionDetail && displayedAttentionDetail !== attentionDetail,
-  );
+  const {
+    detail: attentionDetail,
+    displayed: displayedAttentionDetail,
+    truncated: isAttentionDetailTruncated,
+  } = deriveAttentionPreview(attention);
   const reviewStatus = task.reviewLoopStatus ?? undefined;
   const reviewStatusLabel = reviewStatus ? REVIEW_LOOP_STATUS_LABELS[reviewStatus] : undefined;
 

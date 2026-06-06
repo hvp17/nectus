@@ -391,18 +391,22 @@ pub struct DiffBase {
 }
 
 /// Resolve the base to diff a worktree branch against, using only local refs (no
-/// network): the merge-base of `HEAD` and the repository's default branch
-/// (`origin/HEAD`). Returns `None` when no base can be determined — for example a
-/// repo without a remote-tracking default — and callers then diff against `HEAD`.
+/// network): the merge-base of `HEAD` and the default remote's default branch
+/// (`<remote>/HEAD`). The remote is derived (preferring `origin`) rather than
+/// hardcoded, so fork/upstream or custom-named remotes resolve too. Returns
+/// `None` when no base can be determined — e.g. no remote, or `<remote>/HEAD`
+/// unset (no `git remote set-head`) — and callers then diff against `HEAD`.
 pub fn resolve_diff_base(path: &Path) -> Option<DiffBase> {
+    let remote = default_remote(path).ok()?;
+    let symbolic = format!("{remote}/HEAD");
     let default = git_output(
         path,
-        &["rev-parse", "--abbrev-ref", "origin/HEAD"],
+        &["rev-parse", "--abbrev-ref", &symbolic],
         "Failed to resolve default branch",
     )
     .ok()?;
     let label = String::from_utf8_lossy(&default.stdout).trim().to_string();
-    if label.is_empty() || label == "origin/HEAD" {
+    if label.is_empty() || label == symbolic {
         return None;
     }
 

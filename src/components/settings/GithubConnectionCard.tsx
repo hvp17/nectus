@@ -1,6 +1,7 @@
-import { CheckCircle2, Github, XCircle } from "lucide-react";
-import { Badge } from "../ui/badge";
+import { Github } from "lucide-react";
 import { Skeleton } from "../ui/skeleton";
+import { ConnectionBadge } from "./ConnectionBadge";
+import { isCliConnected } from "../../lib/connection";
 import type { GithubStatus } from "../../types";
 
 export function GithubConnectionCard({ status }: { status?: GithubStatus }) {
@@ -21,7 +22,7 @@ export function GithubConnectionCard({ status }: { status?: GithubStatus }) {
     );
   }
 
-  const connected = Boolean(status.installed && status.authenticated);
+  const connected = isCliConnected(status);
   const detail = !status.installed
     ? "Install the gh CLI to open pull requests from Nectus."
     : !status.authenticated
@@ -39,14 +40,7 @@ export function GithubConnectionCard({ status }: { status?: GithubStatus }) {
         <small>{detail}</small>
       </span>
       <span className="nx-strip-right">
-        <Badge variant={connected ? "success" : "outline"} className="gap-1.5" aria-label={`GitHub ${badgeLabel}`}>
-          {connected ? (
-            <CheckCircle2 size={13} className="text-status-success" />
-          ) : (
-            <XCircle size={13} className="text-muted-foreground" />
-          )}
-          {badgeLabel}
-        </Badge>
+        <ConnectionBadge connected={connected} label={badgeLabel} ariaPrefix="GitHub" />
       </span>
     </div>
   );

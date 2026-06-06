@@ -154,14 +154,22 @@ impl Database {
         // `pr_reviews.verdict` was added after the table shipped; backfill it on
         // databases created before then. `CREATE TABLE IF NOT EXISTS` never adds
         // columns to an existing table, so this ALTER is the only path for them.
-        self.ensure_column("pr_reviews", "verdict", "TEXT")?;
+        self.add_column_if_missing("pr_reviews", "verdict", "TEXT")?;
         self.run_migrations()
     }
 
     /// Add `column` to `table` if it is missing, so older databases pick up
     /// columns introduced after their schema was first created. Idempotent:
     /// a fresh database created with the column already present skips the ALTER.
-    fn ensure_column(&self, table: &str, column: &str, definition: &str) -> Result<(), String> {
+    /// Add `column` to `table` if it's not already present. Propagates PRAGMA
+    /// read errors rather than swallowing them, so a malformed schema read fails
+    /// loudly instead of silently skipping a needed migration.
+    fn add_column_if_missing(
+        &self,
+        table: &str,
+        column: &str,
+        definition: &str,
+    ) -> Result<(), String> {
         let mut stmt = self
             .conn
             .prepare(&format!("PRAGMA table_info({table})"))
@@ -256,26 +264,6 @@ impl Database {
             )
             .map_err(|error| format!("Failed to migrate worktree pattern: {error}"))?;
         self.refresh_repo_worktree_roots(DEFAULT_WORKTREE_PATTERN)
-    }
-
-    fn add_column_if_missing(&self, table: &str, column: &str, decl: &str) -> Result<(), String> {
-        let exists = self
-            .conn
-            .prepare(&format!("PRAGMA table_info({table})"))
-            .and_then(|mut stmt| {
-                stmt.query_map([], |row| row.get::<_, String>(1))
-                    .map(|rows| rows.filter_map(Result::ok).any(|name| name == column))
-            })
-            .map_err(|error| format!("Failed to inspect {table}: {error}"))?;
-        if !exists {
-            self.conn
-                .execute(
-                    &format!("ALTER TABLE {table} ADD COLUMN {column} {decl}"),
-                    [],
-                )
-                .map_err(|error| format!("Failed to add {table}.{column}: {error}"))?;
-        }
-        Ok(())
     }
 
     pub(super) fn seed_agent_profiles(&self) -> Result<(), String> {

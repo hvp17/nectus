@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { useAsyncEffect } from "./useAsyncEffect";
+import { isCliConnected } from "../lib/connection";
 import type { GithubStatus, PullRequestInfo, TaskSummary } from "../types";
 
 interface UseGithubInput {
@@ -29,7 +30,7 @@ export function useGithub({ selectedTask, setMessage, applyTask }: UseGithubInpu
     }
   }, []);
 
-  const ghReady = Boolean(githubStatus?.installed && githubStatus?.authenticated);
+  const ghReady = isCliConnected(githubStatus);
 
   // Monotonic request token so out-of-order responses (from rapid task switches
   // or overlapping refreshes) can never apply stale PR data to the current task.
