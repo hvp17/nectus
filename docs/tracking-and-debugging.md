@@ -44,9 +44,9 @@ The frontend keeps transient UI state in React:
 
 - Selected project and selected task.
 - Task attention markers.
-- Sidebar Tasks section derived from the local task list, with active-session
-  rows driven by `tasks.activeSessionId` and task attention markers.
-- Create-task modal drafts.
+- Mission Control and board rows derived from the local task list, with
+  active-session rows driven by `tasks.activeSessionId` and task attention markers.
+- Create-task composer drafts.
 - Settings/profile edit drafts.
 - Review-loop detail state loaded for the selected task.
 - Review status is included in task summaries so the board can label cards
@@ -62,17 +62,19 @@ Focused state hooks:
 - `src/hooks/useSessionEvents.ts`: session attention events and notifications.
 - `src/hooks/useSessionAttentionControls.ts`: session controls that clear stale
   attention before start, resume, stop, and input flows.
-- `src/components/Sidebar.tsx`: shadcn/sidebar shell, Projects section, and
-  Settings footer action.
-- `src/components/TaskQuickAccessPanel.tsx`: shadcn/sidebar Tasks section,
-  including total task count, add-task, active-session open, and stop actions.
+- `src/components/IconRail.tsx`: 58px icon-rail navigation; the Mission Control
+  icon carries the cross-project needs-input badge.
+- `src/components/ProjectPanel.tsx`: contextual project list with task counts and
+  a needs-input dot, shown beside the board.
+- `src/components/MissionControl.tsx`: cross-project, attention-first task triage
+  (the default view).
 - `src/hooks/useTaskDeletion.ts`: task deletion workflow and deletion toasts.
 - `src/components/TaskDeleteDialog.tsx`: shared delete confirmation used by
   task cards and the selected-task inspector.
 - `src/hooks/useTaskReviewLoop.ts`: selected-task review-loop data and
   `review_loop_updated` events, including board-summary updates for any task.
 - `src/components/TaskCard.tsx`: board card review-loop status label.
-- `src/hooks/useCreateTaskForm.ts`: create-task modal drafts.
+- `src/hooks/useCreateTaskForm.ts`: create-task composer drafts.
 
 ### Codex JSONL
 
@@ -131,6 +133,10 @@ Current commands:
 | `delete_task` | Delete a task and remove its worktree when applicable. |
 | `task_diff_summary` | List the files a task changed: a worktree task's branch vs the locally-resolved base (`origin/HEAD` merge-base, committed + uncommitted), or a direct-edit task's working tree vs `HEAD`. Returns the base label plus per-file change kind and `+/-` counts. |
 | `task_diff_file` | Return the unified patch for one file in a task's diff (lazy-loaded per file; untracked files diff against `/dev/null`). |
+| `github_status` | Report whether `gh` is installed, authenticated, and the active account. |
+| `create_github_pull_request` | Push the worktree branch and open a PR with `gh pr create`; capture and store the PR URL on the task. |
+| `github_pull_request_status` | Fetch live PR state, CI check rollup, and review decision via `gh pr view --json`. |
+| `detect_github_pull_request` | Check whether a worktree task's branch already has a PR (`gh pr view`) and backfill its URL. |
 | `jira_status` | Report whether `acli` is installed, authenticated, and the active site. |
 | `jira_list_projects` | List visible JIRA projects for the board's project picker (`acli jira project list --json`). |
 | `jira_search_board` | Load board work items; the JQL is built from the structured board config (project + filter flags), so no JQL is typed. |
@@ -169,8 +175,8 @@ Backend-to-frontend events:
 | `session_output` | PTY output chunk and stream offset. | `native/src/sessions/mod.rs` |
 | `session_activity` | Task id, session id, and the agent's latest human-readable activity line (ANSI-stripped tail of PTY output, throttled and de-duplicated). | `native/src/sessions/mod.rs` |
 | `session_exited` | Session id and optional exit code. | `native/src/sessions/mod.rs`, `native/src/lib.rs` |
-| `session_idle` | Task id, session id, Codex turn id, optional message. | `native/src/sessions/codex.rs` |
-| `session_needs_input` | Task id, session id, reason, optional prompt. | `native/src/sessions/codex.rs` |
+| `session_idle` | Task id, session id, turn id, optional message. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL) and `claude.rs` (hooks) |
+| `session_needs_input` | Task id, session id, reason, optional prompt. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL) and `claude.rs` (hooks) |
 | `review_loop_updated` | Review-loop state and optional review run. | `native/src/sessions/review_loop.rs` |
 | `review_output` | Task id, a chunk of the task reviewer's live stdout, and the chunk's byte offset (a `0` offset starts a new run). Streamed only by the task review loop, not by PR reviews. | `native/src/sessions/review_loop.rs` |
 | `pr_review_updated` | Updated external PR review (status, verdict, metadata, Markdown output), plus an optional `latest_run` carrying the consensus round output that triggered the update. | `native/src/sessions/pr_review.rs`, `native/src/sessions/pr_consensus.rs` |
