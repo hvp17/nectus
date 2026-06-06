@@ -76,61 +76,6 @@
   padding: 12px;
 }
 
-.terminal-launcher {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  justify-content: center;
-  gap: 18px;
-  min-width: 0;
-  min-height: 0;
-  padding: 28px;
-  color: var(--foreground);
-  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
-}
-
-.terminal-launcher-copy {
-  min-width: 0;
-}
-
-.terminal-launcher-kicker,
-.terminal-launcher-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.terminal-launcher-kicker {
-  color: var(--muted-foreground);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.terminal-launcher-title {
-  margin: 8px 0 0;
-  color: var(--foreground);
-  font-size: 22px;
-  font-weight: 800;
-}
-
-.terminal-launcher-detail {
-  max-width: 48ch;
-  margin: 8px 0 0;
-  overflow: hidden;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.terminal-launcher-actions {
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
 .task-inspector-sidebar {
   display: flex;
   flex-direction: column;
@@ -405,11 +350,5 @@
   .task-workspace-badges {
     margin-left: 0;
     width: 100%;
-  }
-
-  .terminal-launcher {
-    align-items: flex-start;
-    flex-direction: column;
-    justify-content: center;
   }
 }
