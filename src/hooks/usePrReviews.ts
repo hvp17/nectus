@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { upsertById, upsertNewestById } from "../lib/listState";
 import { useAsyncEffect } from "./useAsyncEffect";
-import { isTauriRuntime, notifySessionEvent } from "../sessionNotifications";
+import { useTauriEvent } from "./useTauriEvent";
+import { notifySessionEvent } from "../sessionNotifications";
 import type { PrReview, PrReviewRun, PrReviewUpdatedEvent } from "../types";
 
 interface UsePrReviewsArgs {
@@ -63,18 +63,14 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
     [selectedPrReviewId, onMessage],
   );
 
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
-
-    let disposed = false;
-    let unlisten: UnlistenFn | undefined;
-    listen<PrReviewUpdatedEvent>("pr_review_updated", (event) => {
-      if (disposed) return;
-      const review = event.payload.prReview;
+  useTauriEvent<PrReviewUpdatedEvent>(
+    "pr_review_updated",
+    (payload) => {
+      const review = payload.prReview;
       const previousStatus = prReviewsRef.current.find((item) => item.id === review.id)?.status;
       setReviews((current) => upsertNewestById(current, review));
 
-      const latestRun = event.payload.latestRun;
+      const latestRun = payload.latestRun;
       if (latestRun) {
         setRunsByReview((current) => ({
           ...current,
@@ -91,20 +87,9 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
         onMessage(`PR review failed: ${detail}`);
         void notifySessionEvent("PR review failed", detail);
       }
-    })
-      .then((callback) => {
-        if (disposed) callback();
-        else unlisten = callback;
-      })
-      .catch((error) => {
-        if (!disposed) onMessage(String(error));
-      });
-
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
-  }, [onMessage, setReviews]);
+    },
+    { onError: (error) => onMessage(String(error)) },
+  );
 
   const createPrReview = useCallback(
     async (prUrl: string, reviewerProfileIds: number[], maxRounds?: number) => {

@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { api } from "../api";
 import { useAsyncEffect } from "./useAsyncEffect";
-import { isTauriRuntime } from "../sessionNotifications";
+import { useTauriEvent } from "./useTauriEvent";
 import type { ReviewLoop, ReviewLoopUpdatedEvent, ReviewOutputEvent, ReviewRun } from "../types";
 
 interface UseTaskReviewLoopArgs {
@@ -60,68 +59,33 @@ export function useTaskReviewLoop({ selectedTaskId, onMessage, onReviewLoopUpdat
     [publishMessage, selectedTaskId],
   );
 
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
-
-    let disposed = false;
-    let unlisten: UnlistenFn | undefined;
-    listen<ReviewLoopUpdatedEvent>("review_loop_updated", (event) => {
-      if (disposed) return;
-      onReviewLoopUpdated?.(event.payload.reviewLoop);
-      if (selectedTaskIdRef.current !== event.payload.taskId) return;
-      setSelectedReviewLoop(event.payload.reviewLoop);
+  useTauriEvent<ReviewLoopUpdatedEvent>(
+    "review_loop_updated",
+    (payload) => {
+      onReviewLoopUpdated?.(payload.reviewLoop);
+      if (selectedTaskIdRef.current !== payload.taskId) return;
+      setSelectedReviewLoop(payload.reviewLoop);
       // A run is starting: clear the live pane before its first chunk arrives.
-      if (event.payload.reviewLoop.status === "reviewing") setLiveReviewOutput("");
-      if (event.payload.reviewRun) {
-        setSelectedReviewRuns((current) => [...current, event.payload.reviewRun!]);
+      if (payload.reviewLoop.status === "reviewing") setLiveReviewOutput("");
+      if (payload.reviewRun) {
+        setSelectedReviewRuns((current) => [...current, payload.reviewRun!]);
       }
-    })
-      .then((callback) => {
-        if (disposed) {
-          callback();
-        } else {
-          unlisten = callback;
-        }
-      })
-      .catch((error) => {
-        if (!disposed) publishMessage(String(error));
-      });
-
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
-  }, [onReviewLoopUpdated, publishMessage]);
+    },
+    { onError: (error) => publishMessage(String(error)) },
+  );
 
   // Stream the selected task's reviewer stdout into the live buffer. A chunk at
   // offset 0 starts a fresh run, so it replaces the buffer rather than appending.
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
-
-    let disposed = false;
-    let unlisten: UnlistenFn | undefined;
-    listen<ReviewOutputEvent>("review_output", (event) => {
-      if (disposed || selectedTaskIdRef.current !== event.payload.taskId) return;
+  useTauriEvent<ReviewOutputEvent>(
+    "review_output",
+    (payload) => {
+      if (selectedTaskIdRef.current !== payload.taskId) return;
       setLiveReviewOutput((current) =>
-        event.payload.startOffset === 0 ? event.payload.data : current + event.payload.data,
+        payload.startOffset === 0 ? payload.data : current + payload.data,
       );
-    })
-      .then((callback) => {
-        if (disposed) {
-          callback();
-        } else {
-          unlisten = callback;
-        }
-      })
-      .catch((error) => {
-        if (!disposed) publishMessage(String(error));
-      });
-
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
-  }, [publishMessage]);
+    },
+    { onError: (error) => publishMessage(String(error)) },
+  );
 
   return {
     selectedReviewLoop,

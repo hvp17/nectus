@@ -4,6 +4,7 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Field, FieldDescription, FieldError, FieldLabel } from "../ui/field";
 import { Input } from "../ui/input";
+import { useGuardedAction } from "../../hooks/useGuardedAction";
 import type { JiraRestStatus } from "../../types";
 
 interface JiraConnectionCardProps {
@@ -42,31 +43,25 @@ export function JiraConnectionCard({
     setEmail((current) => current || status?.email || "");
   }, [status?.site, status?.email, detectedSite]);
 
-  const save = async () => {
-    setError(null);
-    setSaving(true);
-    try {
-      await onSave(site.trim(), email.trim(), token);
-      setToken("");
-    } catch (caught) {
-      setError(String(caught));
-    } finally {
-      setSaving(false);
-    }
-  };
+  const run = useGuardedAction(setError, setSaving);
 
-  const disconnect = async () => {
-    setError(null);
-    setSaving(true);
-    try {
-      await onDisconnect();
-      setToken("");
-    } catch (caught) {
-      setError(String(caught));
-    } finally {
-      setSaving(false);
-    }
-  };
+  const save = () =>
+    run(
+      async () => {
+        await onSave(site.trim(), email.trim(), token);
+        setToken("");
+      },
+      { busy: true },
+    );
+
+  const disconnect = () =>
+    run(
+      async () => {
+        await onDisconnect();
+        setToken("");
+      },
+      { busy: true },
+    );
 
   const disabled = busy || saving;
   const canSave = Boolean(site.trim() && email.trim() && token) && !disabled;

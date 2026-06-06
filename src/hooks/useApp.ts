@@ -399,24 +399,18 @@ export function useApp() {
     [githubReady, createGithubPullRequest, setMessage, setTaskAttention],
   );
 
-  const addProject = async () => {
-    setMessage(null);
-
-    try {
-      const selected = await api.pickRepositoryFolder();
-      if (selected) {
-        setBusy(true);
+  const addProject = () =>
+    run(
+      async () => {
+        const selected = await api.pickRepositoryFolder();
+        if (!selected) return;
         const repo = await api.addRepo(selected);
         setSelectedRepoId(repo.id);
         await refresh(repo.id);
         setMessage(`Added ${repo.name}`);
-      }
-    } catch (error) {
-      setMessage(String(error));
-    } finally {
-      setBusy(false);
-    }
-  };
+      },
+      { busy: true },
+    );
 
   const createTask = async () => {
     const repoId = newTaskRepoId ?? selectedRepoId;
