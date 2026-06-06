@@ -48,4 +48,22 @@ describe("JiraConnectionCard", () => {
 
     await waitFor(() => expect(onDisconnect).toHaveBeenCalledTimes(1));
   });
+
+  it("surfaces a disconnect failure inline instead of swallowing it", async () => {
+    const onDisconnect = vi.fn(async () => {
+      throw new Error("Keychain locked");
+    });
+    renderWithTooltipProvider(
+      <JiraConnectionCard
+        status={connected}
+        busy={false}
+        onSave={vi.fn(async () => connected)}
+        onDisconnect={onDisconnect}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+
+    expect(await screen.findByText(/Keychain locked/)).toBeInTheDocument();
+  });
 });

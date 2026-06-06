@@ -101,8 +101,20 @@ fn auth_header(email: &str, token: &str) -> String {
     )
 }
 
+/// Reduce a site to a bare host before building a URL. The token card asks for a
+/// bare host, but a `jira_site_url` set elsewhere (e.g. an earlier board config)
+/// can carry an `https://` scheme and/or a trailing slash; left as-is that would
+/// yield a malformed `https://https://host/...` REST URL.
+fn normalize_site(site: &str) -> String {
+    site.trim()
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .trim_end_matches('/')
+        .to_string()
+}
+
 fn base(site: &str) -> String {
-    format!("https://{site}/rest/api/3")
+    format!("https://{}/rest/api/3", normalize_site(site))
 }
 
 fn get(site: &str, email: &str, token: &str, path: &str) -> Result<String, String> {
@@ -203,5 +215,14 @@ mod tests {
     fn builds_basic_auth_header() {
         // base64("a@b.com:tok") = "YUBiLmNvbTp0b2s="
         assert_eq!(auth_header("a@b.com", "tok"), "Basic YUBiLmNvbTp0b2s=");
+    }
+
+    #[test]
+    fn base_url_normalizes_scheme_and_trailing_slash() {
+        let want = "https://team.atlassian.net/rest/api/3";
+        assert_eq!(base("team.atlassian.net"), want);
+        assert_eq!(base("https://team.atlassian.net"), want);
+        assert_eq!(base("http://team.atlassian.net/"), want);
+        assert_eq!(base("  team.atlassian.net/  "), want);
     }
 }

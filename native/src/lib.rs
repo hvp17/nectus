@@ -515,18 +515,20 @@ async fn set_jira_api_token(
     })
 }
 
-/// Disconnect the REST token: delete it from the Keychain and clear the stored email.
+/// Disconnect the REST token: delete it from the Keychain, then clear the stored
+/// email. The Keychain delete runs first so a delete failure aborts before the
+/// email is cleared — leaving a consistent "still connected" state rather than an
+/// orphaned token with no email.
 #[tauri::command]
 fn clear_jira_api_token(state: State<'_, AppState>) -> AppResult<()> {
     let site = {
         let db = state.db.lock();
-        let settings = db.get_app_settings()?;
-        db.clear_jira_rest_email()?;
-        settings.jira_site_url
+        db.get_app_settings()?.jira_site_url
     };
     if let Some(site) = site.filter(|s| !s.trim().is_empty()) {
         jira_secret::delete_token(&site).map_err(AppError::from)?;
     }
+    state.db.lock().clear_jira_rest_email()?;
     Ok(())
 }
 

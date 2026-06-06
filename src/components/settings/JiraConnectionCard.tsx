@@ -61,6 +61,8 @@ export function JiraConnectionCard({
     try {
       await onDisconnect();
       setToken("");
+    } catch (caught) {
+      setError(String(caught));
     } finally {
       setSaving(false);
     }
