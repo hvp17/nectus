@@ -2,7 +2,7 @@ import type { AgentKind, AgentProfile, AppSettings, AppSettingsInput } from "../
 
 export const fallbackSettings: AppSettings = {
   defaultAgentProfileId: null,
-  defaultWorktreeRootPattern: "../{repoName}-worktrees",
+  defaultWorktreeRootPattern: "~/.nectus/worktrees/{repoName}",
   defaultBranchPrefix: null,
   jiraBoardJql: null,
   jiraSiteUrl: null,

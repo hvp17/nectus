@@ -229,6 +229,14 @@ board config — `jira_board_project`, `jira_filter_my_issues`, `jira_filter_unr
 introduced by `run_migrations` in `native/src/db/schema.rs`, which `ALTER TABLE`s any
 missing column on every open so existing databases upgrade in place.
 
+`run_migrations` also runs `migrate_legacy_worktree_pattern`: a one-time data
+migration that moves databases still on the legacy worktree default
+(`../{repoName}-worktrees`) onto the current `~/.nectus/worktrees/{repoName}`
+default and recomputes every repo's stored `default_worktree_root` from it (the
+same `refresh_repo_worktree_roots` path a Settings change uses). It is
+self-guarding — once rewritten the pattern no longer matches the legacy value,
+and a customized pattern is left untouched.
+
 ## Debug Logging
 
 Rust tracing uses the `RUST_LOG` environment variable. Default filter:

@@ -61,7 +61,7 @@ Worktree-backed tasks:
 - Accept a branch name or generate a `task-...` branch when the field is blank.
 - Show the generated branch suggestion as the branch field placeholder, with the
   configured branch prefix applied.
-- Create a sibling worktree path from the project worktree root pattern.
+- Create the worktree path from the project worktree root pattern (default `~/.nectus/worktrees/<repo-name>/<branch-name>`).
 - Run the agent in that worktree path.
 - Remove the git worktree when the task is deleted.
 - Can be deleted from the board card or the selected-task inspector.
@@ -516,8 +516,11 @@ Settings are persisted locally and include:
 - Theme
 - Density
 
-The worktree root pattern must include `{repoName}`. Existing project rows are
-refreshed when the pattern changes.
+The worktree root pattern defaults to `~/.nectus/worktrees/{repoName}` and must
+include `{repoName}`; a leading `~` expands to `$HOME`. Existing project rows are
+refreshed when the pattern changes. Databases created before this default shipped
+are migrated from the legacy sibling layout (`../{repoName}-worktrees`) to the
+`~/.nectus` default on open, unless the pattern was customized.
 When Theme is set to System, the UI follows OS color-scheme changes while the
 app is running.
 

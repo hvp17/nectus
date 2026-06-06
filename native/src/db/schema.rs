@@ -1,8 +1,17 @@
 use super::{now, Database};
 use crate::git_ops;
 use crate::models::{AgentKind, DensityMode, ThemeMode};
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 use std::path::PathBuf;
+
+/// Default worktree-root pattern for new installs: each project gets its own
+/// folder under a single hidden home directory, mirroring `~/.claude` / `~/.codex`.
+/// The leading `~` is expanded to `$HOME` by [`git_ops::default_worktree_root_with_pattern`].
+pub(super) const DEFAULT_WORKTREE_PATTERN: &str = "~/.nectus/worktrees/{repoName}";
+
+/// The pre-`~/.nectus` default. Databases still carrying it are migrated to
+/// [`DEFAULT_WORKTREE_PATTERN`] on open; a customized pattern is left untouched.
+const LEGACY_WORKTREE_PATTERN: &str = "../{repoName}-worktrees";
 
 impl Database {
     pub(super) fn create_schema(&self) -> Result<(), String> {
@@ -210,7 +219,37 @@ impl Database {
             "INTEGER NOT NULL DEFAULT 0",
         )?;
         self.add_column_if_missing("pr_reviews", "converged", "INTEGER")?;
+        self.migrate_legacy_worktree_pattern()?;
         Ok(())
+    }
+
+    /// One-time data migration: move databases still on the legacy sibling
+    /// worktree default (`../{repoName}-worktrees`) onto the `~/.nectus` default
+    /// and recompute every repo's stored root from it, exactly as a Settings
+    /// change would. Self-guarding and idempotent — once rewritten the pattern
+    /// no longer matches the legacy value, and a customized pattern is skipped.
+    /// On a fresh database the settings row does not exist yet (it is seeded
+    /// after migrations run), so this is a no-op there.
+    pub(super) fn migrate_legacy_worktree_pattern(&self) -> Result<(), String> {
+        let current: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT default_worktree_root_pattern FROM app_settings WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| format!("Failed to read worktree pattern: {error}"))?;
+        if current.as_deref() != Some(LEGACY_WORKTREE_PATTERN) {
+            return Ok(());
+        }
+        self.conn
+            .execute(
+                "UPDATE app_settings SET default_worktree_root_pattern = ?1 WHERE id = 1",
+                params![DEFAULT_WORKTREE_PATTERN],
+            )
+            .map_err(|error| format!("Failed to migrate worktree pattern: {error}"))?;
+        self.refresh_repo_worktree_roots(DEFAULT_WORKTREE_PATTERN)
     }
 
     fn add_column_if_missing(&self, table: &str, column: &str, decl: &str) -> Result<(), String> {
@@ -277,7 +316,7 @@ impl Database {
                 ",
                 params![
                     default_agent_profile_id,
-                    "../{repoName}-worktrees",
+                    DEFAULT_WORKTREE_PATTERN,
                     ThemeMode::System.as_str(),
                     DensityMode::Comfortable.as_str(),
                     now

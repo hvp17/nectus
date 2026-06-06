@@ -291,7 +291,7 @@ export const api = {
     if (!isTauri) {
       return {
         defaultAgentProfileId: browserFallbackProfiles[0]?.id ?? null,
-        defaultWorktreeRootPattern: "../{repoName}-worktrees",
+        defaultWorktreeRootPattern: "~/.nectus/worktrees/{repoName}",
         defaultBranchPrefix: null,
         jiraBoardJql: null,
         jiraSiteUrl: null,

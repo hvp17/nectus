@@ -81,7 +81,7 @@ describe("App", () => {
     mockedApi.listTasks.mockResolvedValue([]);
     mockedApi.getAppSettings.mockResolvedValue({
       defaultAgentProfileId: 1,
-      defaultWorktreeRootPattern: "../{repoName}-worktrees",
+      defaultWorktreeRootPattern: "~/.nectus/worktrees/{repoName}",
       defaultBranchPrefix: null,
       jiraBoardJql: null,
       jiraSiteUrl: null,
