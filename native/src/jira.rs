@@ -172,6 +172,11 @@ struct RawAssignee {
     name: Option<String>,
     #[serde(rename = "emailAddress")]
     email: Option<String>,
+    // On GDPR-strict Cloud, displayName/name/email can all be absent while
+    // accountId is present; use it as a last resort so the assignee never renders
+    // blank.
+    #[serde(rename = "accountId")]
+    account_id: Option<String>,
 }
 
 fn map_category(raw: Option<&RawStatusCategory>) -> JiraStatusCategory {
@@ -216,6 +221,7 @@ fn work_item_from_raw(raw: RawWorkItem) -> Option<JiraWorkItem> {
                 .clone()
                 .or_else(|| a.name.clone())
                 .or_else(|| a.email.clone())
+                .or_else(|| a.account_id.clone())
         });
     let description = fields.as_ref().and_then(|f| f.description.clone());
     Some(JiraWorkItem {
