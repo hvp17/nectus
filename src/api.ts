@@ -33,6 +33,7 @@ import type {
   JiraStatusDef,
   JiraTransition,
   JiraWorkItem,
+  MergeMethod,
   PrReview,
   PrReviewRun,
   PullRequestInfo,
@@ -210,12 +211,25 @@ export const api = {
         reviewDecision: null,
         checks: { total: 0, passed: 0, failed: 0, pending: 0 },
         checksState: "none",
+        checkRuns: [],
       };
     return invoke("github_pull_request_status", { taskId });
   },
   async detectGithubPullRequest(taskId: number): Promise<TaskSummary | null> {
     if (!isTauri) return null;
     return invoke("detect_github_pull_request", { taskId });
+  },
+  // Merge the task's PR with the chosen strategy; returns the refreshed status.
+  async mergeGithubPullRequest(taskId: number, method: MergeMethod): Promise<PullRequestInfo> {
+    return invoke("merge_github_pull_request", { taskId, method });
+  },
+  // Mark the task's PR ready for review (or convert back to draft).
+  async setGithubPullRequestReady(taskId: number, ready: boolean): Promise<PullRequestInfo> {
+    return invoke("set_github_pull_request_ready", { taskId, ready });
+  },
+  // Close the task's PR without merging it; returns the refreshed status.
+  async closeGithubPullRequest(taskId: number): Promise<PullRequestInfo> {
+    return invoke("close_github_pull_request", { taskId });
   },
   async jiraStatus(): Promise<JiraStatus> {
     if (isBrowserPreview) return seedJiraStatus;
@@ -323,6 +337,10 @@ export const api = {
   },
   async deletePrReview(reviewId: number): Promise<void> {
     return invoke("delete_pr_review", { reviewId });
+  },
+  // Post a finished review back to its pull request as a comment.
+  async postPrReviewComment(reviewId: number): Promise<void> {
+    return invoke("post_pr_review_comment", { reviewId });
   },
   async listAgentProfiles(): Promise<AgentProfile[]> {
     if (isBrowserPreview) return seedProfiles;

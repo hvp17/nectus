@@ -2,13 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { useAsyncEffect } from "./useAsyncEffect";
 import { isCliConnected } from "../lib/connection";
-import type { GithubStatus, PullRequestInfo, TaskSummary } from "../types";
+import type { GithubStatus, MergeMethod, PullRequestInfo, TaskSummary } from "../types";
 
 interface UseGithubInput {
   selectedTask: TaskSummary | undefined;
   setMessage: (message: string | null) => void;
   applyTask: (task: TaskSummary) => void;
 }
+
+/** Poll cadence for a non-terminal PR's status (checks/review move on their own). */
+const AUTO_REFRESH_MS = 30_000;
 
 /**
  * Owns GitHub connection state and the live pull request status for the selected
@@ -20,6 +23,9 @@ export function useGithub({ selectedTask, setMessage, applyTask }: UseGithubInpu
   const [pullRequest, setPullRequest] = useState<PullRequestInfo | null>(null);
   const [pullRequestLoading, setPullRequestLoading] = useState(false);
   const [creatingPullRequest, setCreatingPullRequest] = useState(false);
+  // Shared busy flag for the merge / mark-ready / close actions, so their buttons
+  // disable while a `gh` action is in flight.
+  const [pullRequestBusy, setPullRequestBusy] = useState(false);
 
   useAsyncEffect(async (alive) => {
     try {
@@ -78,12 +84,87 @@ export function useGithub({ selectedTask, setMessage, applyTask }: UseGithubInpu
     [ghReady, selectedTaskId, selectedHasWorktree, selectedPrUrl, applyTask],
   );
 
+  // Auto-refresh an open PR so long-running GitHub Actions move to green without a
+  // manual click: poll on a light interval and whenever the window regains focus.
+  // Only runs while gh is connected and the loaded PR is non-terminal, so a merged/
+  // closed PR (and tests / browser preview, where gh is not connected) stay quiet.
+  const prTerminal = pullRequest?.state === "merged" || pullRequest?.state === "closed";
+  const autoRefresh = ghReady && !!selectedTaskId && !!selectedPrUrl && !!pullRequest && !prTerminal;
+  useEffect(() => {
+    if (!autoRefresh || !selectedTaskId) return;
+    const refresh = () => {
+      if (document.visibilityState === "hidden") return;
+      void loadPullRequest(selectedTaskId);
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", onVisible);
+    const interval = window.setInterval(refresh, AUTO_REFRESH_MS);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.clearInterval(interval);
+    };
+  }, [autoRefresh, selectedTaskId, loadPullRequest]);
+
   const refreshPullRequest = useCallback(
     (task: TaskSummary) => {
       if (!task.prUrl) return;
       void loadPullRequest(task.id);
     },
     [loadPullRequest],
+  );
+
+  // Run a gh PR action (merge / ready / close), apply the refreshed status it
+  // returns, and surface success/failure as a message. The monotonic token guards
+  // against a task switch mid-action overwriting the now-selected task's PR.
+  const runPullRequestAction = useCallback(
+    async (action: () => Promise<PullRequestInfo>, successMessage: string) => {
+      setMessage(null);
+      setPullRequestBusy(true);
+      const requestId = (requestRef.current += 1);
+      try {
+        const info = await action();
+        if (requestRef.current === requestId) {
+          setPullRequest(info);
+          setMessage(successMessage);
+        }
+      } catch (error) {
+        setMessage(String(error));
+      } finally {
+        setPullRequestBusy(false);
+      }
+    },
+    [setMessage],
+  );
+
+  const mergePullRequest = useCallback(
+    (task: TaskSummary, method: MergeMethod) =>
+      runPullRequestAction(
+        () => api.mergeGithubPullRequest(task.id, method),
+        `Merged pull request for ${task.title}`,
+      ),
+    [runPullRequestAction],
+  );
+
+  const setPullRequestReady = useCallback(
+    (task: TaskSummary) =>
+      runPullRequestAction(
+        () => api.setGithubPullRequestReady(task.id, true),
+        `Marked pull request ready for ${task.title}`,
+      ),
+    [runPullRequestAction],
+  );
+
+  const closePullRequest = useCallback(
+    (task: TaskSummary) =>
+      runPullRequestAction(
+        () => api.closeGithubPullRequest(task.id),
+        `Closed pull request for ${task.title}`,
+      ),
+    [runPullRequestAction],
   );
 
   const createPullRequest = useCallback(
@@ -115,7 +196,11 @@ export function useGithub({ selectedTask, setMessage, applyTask }: UseGithubInpu
     pullRequest,
     pullRequestLoading,
     creatingPullRequest,
+    pullRequestBusy,
     refreshPullRequest,
     createPullRequest,
+    mergePullRequest,
+    setPullRequestReady,
+    closePullRequest,
   };
 }

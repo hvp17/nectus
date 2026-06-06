@@ -1,22 +1,17 @@
 import { useState } from "react";
-import {
-  CheckCircle2,
-  Clock,
-  ExternalLink,
-  Github,
-  GitPullRequest,
-  LoaderCircle,
-  RefreshCw,
-  XCircle,
-} from "lucide-react";
+import { ExternalLink, Github, GitPullRequest, LoaderCircle, RefreshCw, XCircle } from "lucide-react";
 import { openExternal } from "../lib/openExternal";
+import { isCliConnected } from "../lib/connection";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
 import { Toggle } from "./ui/toggle";
+import { PullRequestActions } from "./github/PullRequestActions";
+import { PullRequestChecks } from "./github/PullRequestChecks";
 import type {
   GithubStatus,
+  MergeMethod,
   PullRequestInfo,
   PullRequestReviewDecision,
   PullRequestState,
@@ -29,8 +24,13 @@ export interface GitHubPanelProps {
   pullRequest?: PullRequestInfo | null;
   pullRequestLoading?: boolean;
   creatingPullRequest?: boolean;
+  /** True while a merge / mark-ready / close action is in flight. */
+  pullRequestBusy?: boolean;
   onCreatePullRequest: (task: TaskSummary, options: { draft: boolean }) => void;
   onRefreshPullRequest: (task: TaskSummary) => void;
+  onMergePullRequest: (task: TaskSummary, method: MergeMethod) => void;
+  onSetPullRequestReady: (task: TaskSummary) => void;
+  onClosePullRequest: (task: TaskSummary) => void;
 }
 
 const reviewDecisionLabels: Record<PullRequestReviewDecision, string> = {
@@ -56,10 +56,15 @@ export function GitHubPanel({
   pullRequest,
   pullRequestLoading = false,
   creatingPullRequest = false,
+  pullRequestBusy = false,
   onCreatePullRequest,
   onRefreshPullRequest,
+  onMergePullRequest,
+  onSetPullRequestReady,
+  onClosePullRequest,
 }: GitHubPanelProps) {
   const [draft, setDraft] = useState(false);
+  const ghConnected = isCliConnected(githubStatus);
 
   return (
     <section aria-label="GitHub" className="flex flex-col gap-2.5">
@@ -175,27 +180,27 @@ export function GitHubPanel({
           )}
         </div>
 
-        {pullRequest && pullRequest.checks.total > 0 && (
-          <div className="flex items-center gap-3.5 px-3 pb-2.5" aria-label="Pull request checks">
-            <span data-check="passed" className="inline-flex items-center gap-1 text-[11.5px] font-bold tabular-nums text-status-success">
-              <CheckCircle2 size={13} />
-              {pullRequest.checks.passed}
-            </span>
-            <span data-check="failed" className="inline-flex items-center gap-1 text-[11.5px] font-bold tabular-nums text-destructive">
-              <XCircle size={13} />
-              {pullRequest.checks.failed}
-            </span>
-            <span data-check="pending" className="inline-flex items-center gap-1 text-[11.5px] font-bold tabular-nums text-muted-foreground">
-              <Clock size={13} />
-              {pullRequest.checks.pending}
-            </span>
-          </div>
+        {pullRequest && (
+          <PullRequestChecks checks={pullRequest.checks} checkRuns={pullRequest.checkRuns} />
         )}
 
         {pullRequestLoading && !pullRequest && (
           <div className="flex flex-col gap-1.5 px-3 pb-2.5" aria-label="Loading pull request status">
             <Skeleton className="h-4 w-2/3" />
             <Skeleton className="h-4 w-1/2" />
+          </div>
+        )}
+
+        {ghConnected && pullRequest && pullRequest.state === "open" && (
+          <div className="px-3 pb-2.5">
+            <PullRequestActions
+              task={task}
+              pullRequest={pullRequest}
+              busy={pullRequestBusy}
+              onMerge={onMergePullRequest}
+              onSetReady={onSetPullRequestReady}
+              onClose={onClosePullRequest}
+            />
           </div>
         )}
 

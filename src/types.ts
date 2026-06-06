@@ -9,8 +9,12 @@ export type PrReviewStatus = "queued" | "reviewing" | "ready" | "error";
 export type PrReviewVerdict = "passed" | "blockers" | "inconclusive";
 export type PrReviewMode = "single" | "consensus";
 export type GithubCheckState = "passing" | "failing" | "pending" | "none";
+/** Per-check outcome in the drill-down (no `none`, unlike the rollup state). */
+export type GithubCheckRunState = "pass" | "fail" | "pending";
 export type PullRequestState = "open" | "merged" | "closed" | "unknown";
 export type PullRequestReviewDecision = "approved" | "changes_requested" | "review_required";
+/** A `gh pr merge` strategy. */
+export type MergeMethod = "squash" | "merge" | "rebase";
 
 export interface Repo {
   id: number;
@@ -100,6 +104,16 @@ export interface GithubCheckSummary {
   pending: number;
 }
 
+/** One CI check / GitHub Actions run in the per-check drill-down. */
+export interface GithubCheckRun {
+  name: string;
+  /** GitHub Actions workflow name, when the check belongs to one. */
+  workflow?: string | null;
+  state: GithubCheckRunState;
+  /** Link to the run's details page (Actions run or status target). */
+  url?: string | null;
+}
+
 export interface PullRequestInfo {
   number: number;
   url: string;
@@ -109,6 +123,8 @@ export interface PullRequestInfo {
   reviewDecision?: PullRequestReviewDecision | null;
   checks: GithubCheckSummary;
   checksState: GithubCheckState;
+  /** Per-check detail (GitHub Actions + commit statuses) for the drill-down. */
+  checkRuns: GithubCheckRun[];
 }
 
 export type JiraStatusCategory = "to_do" | "in_progress" | "done" | "unknown";

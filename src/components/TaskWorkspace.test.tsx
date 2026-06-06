@@ -108,6 +108,9 @@ function renderTaskWorkspace(input?: {
       onStartReview={input?.onStartReview ?? vi.fn()}
       onCreatePullRequest={input?.onCreatePullRequest ?? vi.fn()}
       onRefreshPullRequest={input?.onRefreshPullRequest ?? vi.fn()}
+      onMergePullRequest={vi.fn()}
+      onSetPullRequestReady={vi.fn()}
+      onClosePullRequest={vi.fn()}
       onUpdateStatus={input?.onUpdateStatus ?? vi.fn()}
       onDeleteTask={input?.onDeleteTask ?? vi.fn()}
       onSetJiraLink={vi.fn()}

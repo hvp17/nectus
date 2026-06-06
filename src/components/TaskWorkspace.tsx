@@ -19,6 +19,7 @@ import { type TaskAttention } from "../sessionAttention";
 import {
   AgentProfile,
   GithubStatus,
+  MergeMethod,
   PullRequestInfo,
   ReviewLoop,
   ReviewRun,
@@ -38,6 +39,7 @@ export interface TaskWorkspaceProps {
   pullRequest?: PullRequestInfo | null;
   pullRequestLoading?: boolean;
   creatingPullRequest?: boolean;
+  pullRequestBusy?: boolean;
   /** Label for the back affordance, e.g. "Mission Control" or the project name. */
   backLabel?: string;
   /** Project/repo name shown in the identity line ("{repo} · session {id}"). */
@@ -49,6 +51,9 @@ export interface TaskWorkspaceProps {
   onStartReview: (task: TaskSummary, reviewerProfileId: number) => void;
   onCreatePullRequest: (task: TaskSummary, options?: { draft?: boolean }) => void;
   onRefreshPullRequest: (task: TaskSummary) => void;
+  onMergePullRequest: (task: TaskSummary, method: MergeMethod) => void;
+  onSetPullRequestReady: (task: TaskSummary) => void;
+  onClosePullRequest: (task: TaskSummary) => void;
   onUpdateStatus: (task: TaskSummary, status: TaskStatus) => void;
   onDeleteTask: (task: TaskSummary) => void;
   onSetJiraLink: (
@@ -74,6 +79,7 @@ export function TaskWorkspace({
   pullRequest,
   pullRequestLoading = false,
   creatingPullRequest = false,
+  pullRequestBusy = false,
   backLabel = "Task board",
   repoName,
   onClose,
@@ -83,6 +89,9 @@ export function TaskWorkspace({
   onStartReview,
   onCreatePullRequest,
   onRefreshPullRequest,
+  onMergePullRequest,
+  onSetPullRequestReady,
+  onClosePullRequest,
   onUpdateStatus,
   onDeleteTask,
   onSetJiraLink,
@@ -334,6 +343,7 @@ export function TaskWorkspace({
         pullRequest={pullRequest}
         pullRequestLoading={pullRequestLoading}
         creatingPullRequest={creatingPullRequest}
+        pullRequestBusy={pullRequestBusy}
         reviewLoop={reviewLoop}
         latestReviewRun={latestReviewRun}
         reviewInProgress={reviewInProgress}
@@ -345,6 +355,9 @@ export function TaskWorkspace({
         onUpdateStatus={onUpdateStatus}
         onCreatePullRequest={onCreatePullRequest}
         onRefreshPullRequest={onRefreshPullRequest}
+        onMergePullRequest={onMergePullRequest}
+        onSetPullRequestReady={onSetPullRequestReady}
+        onClosePullRequest={onClosePullRequest}
         onSetJiraLink={onSetJiraLink}
         onDeleteTask={onDeleteTask}
         onWatchReview={() => setStageTab("review")}

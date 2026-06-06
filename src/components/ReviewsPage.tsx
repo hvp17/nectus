@@ -22,6 +22,7 @@ interface ReviewsPageProps {
   onCreateReview: (prUrl: string, reviewerProfileIds: number[], rounds?: number) => void;
   onRerunReview: (reviewId: number) => void;
   onDeleteReview: (reviewId: number) => void;
+  onPostReview: (reviewId: number) => Promise<unknown>;
   onBack: () => void;
 }
 
@@ -57,6 +58,7 @@ export function ReviewsPage({
   onCreateReview,
   onRerunReview,
   onDeleteReview,
+  onPostReview,
 }: ReviewsPageProps) {
   const [prUrl, setPrUrl] = useState("");
   const [selectedReviewerIds, setSelectedReviewerIds] = useState<number[]>(() => {
@@ -229,6 +231,7 @@ export function ReviewsPage({
             agentProfiles={agentProfiles}
             onRerun={onRerunReview}
             onDelete={onDeleteReview}
+            onPost={onPostReview}
           />
         ) : (
           <section className="nx-rev-detail" aria-label="PR review">

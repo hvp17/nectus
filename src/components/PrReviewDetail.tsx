@@ -8,6 +8,7 @@ import {
   LoaderCircle,
   Minus,
   RefreshCw,
+  Send,
   Trash2,
   X,
 } from "lucide-react";
@@ -26,6 +27,8 @@ interface PrReviewDetailProps {
   agentProfiles: AgentProfile[];
   onRerun: (reviewId: number) => void;
   onDelete: (reviewId: number) => void;
+  /** Post the finished review back to its pull request as a comment. */
+  onPost: (reviewId: number) => Promise<unknown>;
 }
 
 interface RoundColumn {
@@ -51,9 +54,11 @@ function groupRunsByRound(runs: PrReviewRun[]): RoundColumn[] {
   return [...byRound.entries()].sort(([a], [b]) => a - b).map(([round, verdicts]) => ({ round, verdicts }));
 }
 
-export function PrReviewDetail({ review, runs, agentProfiles, onRerun, onDelete }: PrReviewDetailProps) {
+export function PrReviewDetail({ review, runs, agentProfiles, onRerun, onDelete, onPost }: PrReviewDetailProps) {
   const [copied, setCopied] = useState(false);
+  const [posting, setPosting] = useState(false);
   const isConsensus = review.mode === "consensus";
+  const canShare = review.status === "ready" && !!review.reviewOutput;
   const agentKindFor = (profileId: number): AgentKind =>
     agentProfiles.find((profile) => profile.id === profileId)?.agentKind ?? "custom";
 
@@ -74,6 +79,15 @@ export function PrReviewDetail({ review, runs, agentProfiles, onRerun, onDelete 
       toast.error("Couldn't copy review", {
         description: "Copying to the clipboard failed.",
       });
+    }
+  };
+
+  const postToPr = async () => {
+    setPosting(true);
+    try {
+      await onPost(review.id);
+    } finally {
+      setPosting(false);
     }
   };
 
@@ -130,12 +144,23 @@ export function PrReviewDetail({ review, runs, agentProfiles, onRerun, onDelete 
           <Button
             type="button"
             size="sm"
-            disabled={review.status !== "ready" || !review.reviewOutput}
+            variant="outline"
+            disabled={!canShare}
             onClick={copyReview}
             aria-label="Copy review"
           >
             {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
             {copied ? "Copied" : isConsensus ? "Copy consensus" : "Copy review"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!canShare || posting}
+            onClick={postToPr}
+            aria-label="Post review to pull request"
+          >
+            {posting ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <Send data-icon="inline-start" />}
+            {posting ? "Posting…" : "Post to PR"}
           </Button>
           <Button
             type="button"

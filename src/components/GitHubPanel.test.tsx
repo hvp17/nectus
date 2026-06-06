@@ -1,8 +1,8 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { openExternal } from "../lib/openExternal";
 import { renderWithTooltipProvider } from "../test/testUtils";
-import type { GithubStatus, PullRequestInfo, TaskSummary } from "../types";
+import type { GithubStatus, MergeMethod, PullRequestInfo, TaskSummary } from "../types";
 import { GitHubPanel } from "./GitHubPanel";
 
 vi.mock("../lib/openExternal", () => ({ openExternal: vi.fn() }));
@@ -47,6 +47,9 @@ function render(input?: {
   creatingPullRequest?: boolean;
   onCreatePullRequest?: (task: TaskSummary, options: { draft: boolean }) => void;
   onRefreshPullRequest?: (task: TaskSummary) => void;
+  onMergePullRequest?: (task: TaskSummary, method: MergeMethod) => void;
+  onSetPullRequestReady?: (task: TaskSummary) => void;
+  onClosePullRequest?: (task: TaskSummary) => void;
 }) {
   return renderWithTooltipProvider(
     <GitHubPanel
@@ -57,6 +60,9 @@ function render(input?: {
       creatingPullRequest={input?.creatingPullRequest}
       onCreatePullRequest={input?.onCreatePullRequest ?? vi.fn()}
       onRefreshPullRequest={input?.onRefreshPullRequest ?? vi.fn()}
+      onMergePullRequest={input?.onMergePullRequest ?? vi.fn()}
+      onSetPullRequestReady={input?.onSetPullRequestReady ?? vi.fn()}
+      onClosePullRequest={input?.onClosePullRequest ?? vi.fn()}
     />,
   );
 }
@@ -114,6 +120,7 @@ describe("GitHubPanel", () => {
       reviewDecision: "review_required",
       checks: { total: 3, passed: 1, failed: 1, pending: 1 },
       checksState: "failing",
+      checkRuns: [],
     };
 
     render({ task: linkedTask, pullRequest, onRefreshPullRequest });
@@ -140,5 +147,72 @@ describe("GitHubPanel", () => {
     screen.getByRole("link", { name: /open pull request/i }).click();
 
     expect(mockedOpenExternal).toHaveBeenCalledWith(prUrl);
+  });
+
+  const prUrl = "https://github.com/hvp17/nectus/pull/9";
+  const linkedTask: TaskSummary = { ...baseTask, prUrl };
+  const openPr: PullRequestInfo = {
+    number: 9,
+    url: prUrl,
+    title: "Add GitHub integration",
+    state: "open",
+    isDraft: false,
+    reviewDecision: "approved",
+    checks: { total: 2, passed: 1, failed: 1, pending: 0 },
+    checksState: "failing",
+    checkRuns: [
+      { name: "build", workflow: "CI", state: "pass", url: "https://github.com/hvp17/nectus/actions/runs/1" },
+      { name: "lint", workflow: "Quality", state: "fail", url: "https://github.com/hvp17/nectus/actions/runs/2" },
+    ],
+  };
+
+  it("marks a draft pull request ready for review", () => {
+    const onSetPullRequestReady = vi.fn();
+    const draftPr: PullRequestInfo = { ...openPr, isDraft: true, checkRuns: [] };
+
+    render({ task: linkedTask, pullRequest: draftPr, onSetPullRequestReady });
+
+    screen.getByRole("button", { name: /mark pull request ready/i }).click();
+
+    expect(onSetPullRequestReady).toHaveBeenCalledWith(linkedTask);
+  });
+
+  it("merges an open pull request after confirming, with the chosen method", async () => {
+    const onMergePullRequest = vi.fn();
+
+    render({ task: linkedTask, pullRequest: openPr, onMergePullRequest });
+
+    fireEvent.click(screen.getByRole("button", { name: /merge pull request/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    // Default is squash; switch to rebase before confirming.
+    fireEvent.click(within(dialog).getByText("Rebase"));
+    fireEvent.click(within(dialog).getByRole("button", { name: /^merge$/i }));
+
+    expect(onMergePullRequest).toHaveBeenCalledWith(linkedTask, "rebase");
+  });
+
+  it("hides the ship actions when gh is not connected", () => {
+    render({
+      task: linkedTask,
+      pullRequest: openPr,
+      githubStatus: { installed: true, authenticated: false, account: null },
+    });
+
+    expect(screen.queryByRole("button", { name: /merge pull request/i })).not.toBeInTheDocument();
+    // The linked PR card (and its Open link) still render without gh.
+    expect(screen.getByRole("link", { name: /open pull request/i })).toBeInTheDocument();
+  });
+
+  it("expands the checks drill-down to show each GitHub Actions run and its link", () => {
+    render({ task: linkedTask, pullRequest: openPr });
+
+    fireEvent.click(screen.getByRole("button", { name: /show check details/i }));
+
+    expect(screen.getByText("build")).toBeInTheDocument();
+    expect(screen.getByText("lint")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /open build check/i })).toHaveAttribute(
+      "href",
+      "https://github.com/hvp17/nectus/actions/runs/1",
+    );
   });
 });
