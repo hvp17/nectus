@@ -26,6 +26,7 @@ const finished: TaskToast = {
   title: "Claude finished",
   body: "Wire up auth",
   kind: "success",
+  agentKind: "claude",
 };
 
 describe("useTaskNotificationToast", () => {
@@ -34,6 +35,13 @@ describe("useTaskNotificationToast", () => {
 
     const body = await screen.findByText("Wire up auth");
     expect(body.closest("[data-sonner-toast]")).toBeInTheDocument();
+  });
+
+  it("shows the provider logo as the toast icon", async () => {
+    render(<Harness notification={finished} onOpenTask={vi.fn()} onShown={vi.fn()} />);
+
+    const logo = await screen.findByRole("img", { name: /claude logo/i });
+    expect(logo.closest("[data-sonner-toast]")).toBeInTheDocument();
   });
 
   it("opens the linked task when the action is clicked", async () => {

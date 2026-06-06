@@ -22,6 +22,6 @@ describe("notifySessionEvent", () => {
   it("truncates long session notification bodies before sending", async () => {
     await notifySessionEvent("Codex finished", "A".repeat(300));
 
-    expect(mockedApi.sendSystemNotification).toHaveBeenCalledWith("Codex finished", `${"A".repeat(177)}...`);
+    expect(mockedApi.sendSystemNotification).toHaveBeenCalledWith("Codex finished", `${"A".repeat(179)}…`);
   });
 });

@@ -258,7 +258,7 @@ describe("api", () => {
     expect(mockedRequestPermission).not.toHaveBeenCalled();
     expect(mockedSendNotification).toHaveBeenCalledWith({
       title: "Codex finished",
-      body: `${"A".repeat(177)}...`,
+      body: `${"A".repeat(179)}…`,
     });
   });
 });
