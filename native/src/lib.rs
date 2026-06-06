@@ -11,10 +11,10 @@ mod sessions;
 use crate::db::Database;
 use crate::models::{
     AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings, AppSettingsInput,
-    GithubStatus, JiraProject, JiraRestStatus, JiraStatus, JiraStatusDef, JiraTransition,
-    JiraWorkItem, MergeMethod, PrReview, PrReviewMode, PrReviewRun, PullRequestInfo, Repo,
-    ReviewLoop, ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskDiffSummary,
-    TaskStatus, TaskSummary, Workspace,
+    GithubCheckState, GithubCheckSummary, GithubStatus, JiraProject, JiraRestStatus, JiraStatus,
+    JiraStatusDef, JiraTransition, JiraWorkItem, MergeMethod, PrReview, PrReviewMode, PrReviewRun,
+    PrReviewStatus, PullRequestInfo, PullRequestState, Repo, ReviewLoop, ReviewRun, Session,
+    SessionExitedEvent, SessionOutputSnapshot, TaskDiffSummary, TaskStatus, TaskSummary, Workspace,
 };
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
@@ -365,6 +365,56 @@ fn task_worktree(db: &Database, task_id: i64) -> Result<String, String> {
         .ok_or_else(|| "Task has no worktree branch".to_string())
 }
 
+/// Minimal `PullRequestInfo` for a task whose PR just changed state, used as a
+/// fallback when the post-action status re-fetch fails — so a `gh` action that
+/// already succeeded (merge/ready/close) is never reported to the user as a failure.
+/// Carries the task's stored PR url/number and title; checks are left empty and the
+/// next status refresh (manual or auto) fills them in.
+fn pr_state_fallback(
+    db: &Database,
+    task_id: i64,
+    state: PullRequestState,
+    is_draft: bool,
+) -> Result<PullRequestInfo, String> {
+    let task = db
+        .task_by_id(task_id)?
+        .ok_or_else(|| "Task not found".to_string())?;
+    let url = task.pr_url.unwrap_or_default();
+    let number = github::parse_pull_request_url(&url)
+        .map(|parsed| parsed.number)
+        .unwrap_or_default();
+    Ok(PullRequestInfo {
+        number,
+        url,
+        title: task.title,
+        state,
+        is_draft,
+        review_decision: None,
+        checks: GithubCheckSummary::default(),
+        checks_state: GithubCheckState::None,
+        check_runs: Vec::new(),
+    })
+}
+
+/// Refresh a task's PR status after a successful mutating action, off the DB lock.
+/// If the re-fetch fails, fall back to a synthesized state so the successful action
+/// still reports success (the failure is logged, not surfaced).
+fn pr_status_after_action(
+    db: &Arc<Mutex<Database>>,
+    task_id: i64,
+    worktree: &str,
+    state: PullRequestState,
+    is_draft: bool,
+) -> Result<PullRequestInfo, String> {
+    match github::pull_request_status(Path::new(worktree)) {
+        Ok(info) => Ok(info),
+        Err(error) => {
+            tracing::warn!(?error, task_id, "PR action succeeded but status refresh failed");
+            pr_state_fallback(&db.lock(), task_id, state, is_draft)
+        }
+    }
+}
+
 /// Merge the task's worktree-branch pull request with the chosen strategy and
 /// return the refreshed status. Branch protection is enforced by GitHub, so a
 /// disallowed merge surfaces `gh`'s error.
@@ -377,7 +427,8 @@ async fn merge_github_pull_request(
     let db = state.db.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<PullRequestInfo, String> {
         let worktree = task_worktree(&db.lock(), task_id)?;
-        github::merge_pull_request(Path::new(&worktree), method)
+        github::merge_pull_request(Path::new(&worktree), method)?;
+        pr_status_after_action(&db, task_id, &worktree, PullRequestState::Merged, false)
     })
     .await
     .map_err(|error| AppError::from(format!("Failed to merge pull request: {error}")))?
@@ -394,7 +445,8 @@ async fn set_github_pull_request_ready(
     let db = state.db.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<PullRequestInfo, String> {
         let worktree = task_worktree(&db.lock(), task_id)?;
-        github::set_pull_request_ready(Path::new(&worktree), ready)
+        github::set_pull_request_ready(Path::new(&worktree), ready)?;
+        pr_status_after_action(&db, task_id, &worktree, PullRequestState::Open, !ready)
     })
     .await
     .map_err(|error| AppError::from(format!("Failed to update pull request: {error}")))?
@@ -410,7 +462,8 @@ async fn close_github_pull_request(
     let db = state.db.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<PullRequestInfo, String> {
         let worktree = task_worktree(&db.lock(), task_id)?;
-        github::close_pull_request(Path::new(&worktree))
+        github::close_pull_request(Path::new(&worktree))?;
+        pr_status_after_action(&db, task_id, &worktree, PullRequestState::Closed, false)
     })
     .await
     .map_err(|error| AppError::from(format!("Failed to close pull request: {error}")))?
@@ -429,6 +482,11 @@ async fn post_pr_review_comment(review_id: i64, state: State<'_, AppState>) -> A
             let review = db
                 .pr_review_by_id(review_id)?
                 .ok_or_else(|| "PR review not found".to_string())?;
+            // Enforce the precondition in the backend, not just the UI: a direct
+            // invoke must not post a queued/reviewing/errored review.
+            if review.status != PrReviewStatus::Ready {
+                return Err("This review is not ready to post yet".to_string());
+            }
             let output = review
                 .review_output
                 .filter(|text| !text.trim().is_empty())

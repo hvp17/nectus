@@ -90,14 +90,18 @@ impl From<CheckOutcome> for GithubCheckRunState {
 fn check_runs(rollup: &[RawCheck]) -> Vec<GithubCheckRun> {
     rollup
         .iter()
-        .map(|check| {
+        .enumerate()
+        .map(|(index, check)| {
+            // GitHub checks are effectively always named (CheckRun.name /
+            // StatusContext.context); the fallback is defensive. Number it so
+            // multiple unnamed checks stay distinguishable in the drill-down.
             let name = check
                 .name
                 .as_deref()
                 .or(check.context.as_deref())
                 .filter(|value| !value.is_empty())
-                .unwrap_or("Check")
-                .to_string();
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("Check #{}", index + 1));
             let url = check
                 .details_url
                 .as_deref()
@@ -246,6 +250,12 @@ pub fn parse_pull_request_url(url: &str) -> Result<ParsedPrUrl, String> {
         .take_while(char::is_ascii_digit)
         .collect();
     let number: i64 = digits.parse().map_err(|_| invalid())?;
+    // GitHub PR/issue numbers start at 1, so reject `/pull/0` (and any non-positive
+    // parse) up front rather than letting a `gh pr <n>` call fail with a cryptic
+    // message later.
+    if number <= 0 {
+        return Err(invalid());
+    }
 
     Ok(ParsedPrUrl {
         owner: owner.to_string(),
@@ -424,30 +434,24 @@ fn is_no_pull_request_error(stderr: &str) -> bool {
         .contains("pull requests found for branch")
 }
 
-/// Merge the pull request for the worktree's branch using `method`, then return
-/// the refreshed status. We deliberately do **not** pass `--delete-branch`: the
-/// branch is checked out in this worktree, so letting `gh` delete it would fail or
-/// strand the worktree — task deletion removes the worktree later. GitHub branch
-/// protection remains the source of truth, so a merge that isn't allowed (failing
-/// required checks, missing approval) surfaces `gh`'s own error.
-pub fn merge_pull_request(
-    worktree: &Path,
-    method: MergeMethod,
-) -> Result<PullRequestInfo, String> {
+/// Merge the pull request for the worktree's branch using `method`. We deliberately
+/// do **not** pass `--delete-branch`: the branch is checked out in this worktree, so
+/// letting `gh` delete it would fail or strand the worktree — task deletion removes
+/// the worktree later. GitHub branch protection remains the source of truth, so a
+/// merge that isn't allowed (failing required checks, missing approval) surfaces
+/// `gh`'s own error. The caller refreshes status separately so a flaky status fetch
+/// can't mask a merge that already succeeded.
+pub fn merge_pull_request(worktree: &Path, method: MergeMethod) -> Result<(), String> {
     let output = run_gh(Some(worktree), &["pr", "merge", method.flag()])?;
     if !output.status.success() {
         return Err(command_error(&output, "gh pr merge failed"));
     }
-    pull_request_status(worktree)
+    Ok(())
 }
 
 /// Mark the worktree branch's pull request ready for review (`gh pr ready`), or
 /// convert it back to a draft when `ready` is false (`gh pr ready --undo`).
-/// Returns the refreshed status.
-pub fn set_pull_request_ready(
-    worktree: &Path,
-    ready: bool,
-) -> Result<PullRequestInfo, String> {
+pub fn set_pull_request_ready(worktree: &Path, ready: bool) -> Result<(), String> {
     let mut args = vec!["pr", "ready"];
     if !ready {
         args.push("--undo");
@@ -456,17 +460,17 @@ pub fn set_pull_request_ready(
     if !output.status.success() {
         return Err(command_error(&output, "gh pr ready failed"));
     }
-    pull_request_status(worktree)
+    Ok(())
 }
 
 /// Close the pull request for the worktree's branch without merging it
-/// (`gh pr close`). Returns the refreshed status.
-pub fn close_pull_request(worktree: &Path) -> Result<PullRequestInfo, String> {
+/// (`gh pr close`).
+pub fn close_pull_request(worktree: &Path) -> Result<(), String> {
     let output = run_gh(Some(worktree), &["pr", "close"])?;
     if !output.status.success() {
         return Err(command_error(&output, "gh pr close failed"));
     }
-    pull_request_status(worktree)
+    Ok(())
 }
 
 /// Post `body` as a comment on pull request `number`, run in the resolved repo so
@@ -531,6 +535,7 @@ mod tests {
             "https://github.com/a/b/issues/3",
             "https://gitlab.com/a/b/pull/3",
             "https://github.com/a/b/pull/notanumber",
+            "https://github.com/a/b/pull/0",
             "not a url",
         ] {
             assert!(
@@ -799,17 +804,22 @@ mod tests {
     }
 
     #[test]
-    fn check_run_falls_back_to_generic_name_when_unnamed() {
+    fn unnamed_checks_get_unique_numbered_fallback_names() {
         let json = r#"{
             "number": 21, "url": "u", "title": "t", "state": "OPEN", "isDraft": false,
             "reviewDecision": "",
-            "statusCheckRollup": [ {"status":"COMPLETED","conclusion":"SUCCESS"} ]
+            "statusCheckRollup": [
+                {"status":"COMPLETED","conclusion":"SUCCESS"},
+                {"status":"COMPLETED","conclusion":"FAILURE"}
+            ]
         }"#;
 
         let pr = parse_pull_request(json).unwrap();
 
-        assert_eq!(pr.check_runs.len(), 1);
-        assert_eq!(pr.check_runs[0].name, "Check");
+        assert_eq!(pr.check_runs.len(), 2);
+        // The defensive fallback numbers unnamed checks so they stay distinct.
+        assert_eq!(pr.check_runs[0].name, "Check #1");
+        assert_eq!(pr.check_runs[1].name, "Check #2");
         assert_eq!(pr.check_runs[0].url, None);
     }
 

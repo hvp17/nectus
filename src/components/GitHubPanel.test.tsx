@@ -191,6 +191,18 @@ describe("GitHubPanel", () => {
     expect(onMergePullRequest).toHaveBeenCalledWith(linkedTask, "rebase");
   });
 
+  it("closes an open pull request after confirming", async () => {
+    const onClosePullRequest = vi.fn();
+
+    render({ task: linkedTask, pullRequest: openPr, onClosePullRequest });
+
+    fireEvent.click(screen.getByRole("button", { name: /close pull request/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /close pr/i }));
+
+    expect(onClosePullRequest).toHaveBeenCalledWith(linkedTask);
+  });
+
   it("hides the ship actions when gh is not connected", () => {
     render({
       task: linkedTask,

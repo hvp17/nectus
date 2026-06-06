@@ -127,10 +127,12 @@ export function useGithub({ selectedTask, setMessage, applyTask }: UseGithubInpu
       const requestId = (requestRef.current += 1);
       try {
         const info = await action();
-        if (requestRef.current === requestId) {
-          setPullRequest(info);
-          setMessage(successMessage);
-        }
+        // Only the PR data is task-scoped: guard it so a task switch mid-action
+        // can't apply this result to the now-selected task. The message and the
+        // busy flag are global — gating `setPullRequestBusy` in `finally` would
+        // strand it `true` after a switch — so they apply unconditionally.
+        if (requestRef.current === requestId) setPullRequest(info);
+        setMessage(successMessage);
       } catch (error) {
         setMessage(String(error));
       } finally {
