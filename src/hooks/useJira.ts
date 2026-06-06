@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { api } from "../api";
 import { useAsyncEffect } from "./useAsyncEffect";
+import { isCliConnected } from "../lib/connection";
 import type {
   JiraProject,
   JiraRestStatus,
@@ -111,7 +112,7 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
     }
   }, []);
 
-  const ready = Boolean(jiraStatus?.installed && jiraStatus?.authenticated);
+  const ready = isCliConnected(jiraStatus);
   const restConnected = Boolean(restStatus?.connected);
 
   // Optional REST-token status: load it once the view is active and acli is

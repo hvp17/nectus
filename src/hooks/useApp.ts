@@ -3,6 +3,7 @@ import { api } from "../api";
 import { toSettingsInput } from "../components/settings/profileDrafts";
 import { replaceById, upsertById } from "../lib/listState";
 import { jiraBrowseUrl, syncSelectedWorkItem } from "../lib/jira";
+import { isReviewLoopActive } from "../statusLabels";
 import { isBrowserPreview, seedAttention, seedLiveLines } from "../lib/browserSeed";
 import { useGuardedAction } from "./useGuardedAction";
 import {
@@ -487,7 +488,7 @@ export function useApp() {
   const startReview = (task: TaskSummary, reviewerProfileId: number) =>
     run(async () => {
       let reviewLoop = selectedReviewLoop;
-      if (!reviewLoop || ["passed", "feedback_sent", "error", "stopped"].includes(reviewLoop.status)) {
+      if (!reviewLoop || !isReviewLoopActive(reviewLoop.status)) {
         reviewLoop = await api.startPairLoop(task.id, reviewerProfileId);
       }
       const runningLoop = await api.runPairReview(task.id);

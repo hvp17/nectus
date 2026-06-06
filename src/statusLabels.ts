@@ -38,6 +38,19 @@ export const REVIEW_LOOP_BADGE_VARIANTS: Record<ReviewLoopStatus, BadgeVariant> 
   stopped: "outline",
 };
 
+/** Review-loop statuses that mean the loop has finished (no longer running). */
+export const REVIEW_TERMINAL_STATUSES: ReviewLoopStatus[] = [
+  "passed",
+  "feedback_sent",
+  "error",
+  "stopped",
+];
+
+/** True while a review loop is still in flight (running or reviewing). */
+export function isReviewLoopActive(status: ReviewLoopStatus): boolean {
+  return !REVIEW_TERMINAL_STATUSES.includes(status);
+}
+
 export const REVIEW_VERDICT_LABELS: Record<ReviewVerdict, string> = {
   pass: "Pass",
   needs_changes: "Needs changes",

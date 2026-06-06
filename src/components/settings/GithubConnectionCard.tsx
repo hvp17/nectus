@@ -1,6 +1,7 @@
 import { CheckCircle2, Github, XCircle } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { Skeleton } from "../ui/skeleton";
+import { isCliConnected } from "../../lib/connection";
 import type { GithubStatus } from "../../types";
 
 export function GithubConnectionCard({ status }: { status?: GithubStatus }) {
@@ -21,7 +22,7 @@ export function GithubConnectionCard({ status }: { status?: GithubStatus }) {
     );
   }
 
-  const connected = Boolean(status.installed && status.authenticated);
+  const connected = isCliConnected(status);
   const detail = !status.installed
     ? "Install the gh CLI to open pull requests from Nectus."
     : !status.authenticated

@@ -11,7 +11,9 @@ import {
 } from "./ui/dropdown-menu";
 import { TaskWorkspaceFactsRail } from "./taskWorkspace/TaskWorkspaceFactsRail";
 import { TaskWorkspaceStage, type WorkflowStep } from "./taskWorkspace/TaskWorkspaceStage";
-import { truncateFinishedAttentionPreview } from "./attentionPreview";
+import { deriveAttentionPreview } from "./attentionPreview";
+import { isReviewLoopActive } from "../statusLabels";
+import { isCliConnected } from "../lib/connection";
 import { useTaskDiff } from "../hooks/useTaskDiff";
 import { type TaskAttention } from "../sessionAttention";
 import {
@@ -138,20 +140,19 @@ export function TaskWorkspace({
     { additions: 0, deletions: 0 },
   );
   const selectedReviewerProfile = reviewerProfiles.find((profile) => profile.id === reviewerProfileId);
-  const reviewActive = Boolean(reviewLoop && !["passed", "feedback_sent", "error", "stopped"].includes(reviewLoop.status));
+  const reviewActive = Boolean(reviewLoop && isReviewLoopActive(reviewLoop.status));
   const reviewInProgress = reviewLoop?.status === "reviewing";
   const canResumeSession = task.agentKind === "codex" || task.agentKind === "claude";
   const sessionAgentLabel = task.lastSessionAgent ?? task.agentName ?? "None";
   const sessionId = task.activeSessionId ?? task.lastSessionId;
-  const attentionDetail = attention?.prompt ?? attention?.message;
-  const displayedAttentionDetail =
-    attention?.kind === "idle" && attentionDetail ? truncateFinishedAttentionPreview(attentionDetail) : attentionDetail;
-  const isAttentionDetailTruncated = Boolean(
-    attentionDetail && displayedAttentionDetail && displayedAttentionDetail !== attentionDetail,
-  );
+  const {
+    detail: attentionDetail,
+    displayed: displayedAttentionDetail,
+    truncated: isAttentionDetailTruncated,
+  } = deriveAttentionPreview(attention);
   const startReviewDisabled = !selectedReviewerProfile || reviewerProfiles.length === 0 || reviewInProgress;
   const reviewReadyForNextStep = reviewLoop?.status === "passed";
-  const githubReady = Boolean(githubStatus?.installed && githubStatus?.authenticated);
+  const githubReady = isCliConnected(githubStatus);
   const canCreateViaGithub = Boolean(githubReady && task.hasWorktree && !task.prUrl);
   const canCreatePullRequest = Boolean(!task.prUrl && (canCreateViaGithub || task.activeSessionId));
   const createPullRequestDescription = task.prUrl
