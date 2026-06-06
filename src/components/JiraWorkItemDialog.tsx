@@ -77,21 +77,26 @@ export function JiraWorkItemPanel({
         if (alive) setRestOptions(transitions.map((transition) => transition.toStatusName));
       })
       .catch(() => {
-        if (alive) setRestOptions([]);
+        // Leave restOptions null on failure so the dropdown degrades to the
+        // board-derived options below, rather than stranding the user on just the
+        // current status. `null` also covers the brief loading window.
+        if (alive) setRestOptions(null);
       });
     return () => {
       alive = false;
     };
   }, [restConnected, item.key, onListTransitions]);
 
-  // Connected: the issue's legal transitions plus its current status (so the Select
-  // always shows a value). Disconnected: the board-derived options, ensuring the
-  // current status is selectable even when no other item shares it.
-  const options = restConnected
-    ? Array.from(new Set([item.statusName, ...(restOptions ?? [])]))
-    : statusOptions.includes(item.statusName)
-      ? statusOptions
-      : [item.statusName, ...statusOptions];
+  // Use the issue's legal REST transitions only once they have loaded successfully
+  // (an empty array is a valid "no legal moves" result, so it still uses the REST
+  // path). While loading or after a REST failure (`restOptions === null`), fall back
+  // to the board-derived options — the same set shown when no token is connected.
+  const options =
+    restConnected && restOptions !== null
+      ? Array.from(new Set([item.statusName, ...restOptions]))
+      : statusOptions.includes(item.statusName)
+        ? statusOptions
+        : [item.statusName, ...statusOptions];
 
   const launchAgentId = selectedAgentProfileId ?? agentProfiles[0]?.id;
   const launchAgent = agentProfiles.find((profile) => profile.id === launchAgentId);

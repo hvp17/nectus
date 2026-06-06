@@ -61,4 +61,18 @@ describe("JiraWorkItemPanel status dropdown", () => {
     fireEvent.click(screen.getByRole("combobox", { name: /status/i }));
     expect(screen.getByRole("option", { name: "Blocked" })).toBeInTheDocument();
   });
+
+  it("degrades to board-derived options when the REST lookup fails", async () => {
+    // Connected, but the transitions call fails (e.g. revoked/stale token). The
+    // dropdown must fall back to the board-derived options, not strand the user on
+    // only the current status.
+    const onListTransitions = vi.fn(async () => {
+      throw new Error("401 Unauthorized");
+    });
+    renderPanel({ restConnected: true, statusOptions: ["To Do", "Blocked"], onListTransitions });
+
+    expect(onListTransitions).toHaveBeenCalledWith("SCRUM-3");
+    fireEvent.click(screen.getByRole("combobox", { name: /status/i }));
+    expect(await screen.findByRole("option", { name: "Blocked" })).toBeInTheDocument();
+  });
 });

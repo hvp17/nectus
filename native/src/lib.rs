@@ -365,8 +365,11 @@ async fn jira_get_work_item(key: String) -> AppResult<JiraWorkItem> {
 }
 
 /// Transition a work item. When a REST token is connected, resolve the target
-/// status name to a legal transition id and POST it; otherwise fall back to acli.
-/// JIRA workflow rejections surface as errors and the UI reverts the card.
+/// status name to a legal transition id and POST it. The integration is additive:
+/// if the REST attempt fails for any reason (revoked/stale token, network error, or
+/// no legal transition found), it degrades to the acli path rather than blocking the
+/// move — acli uses its own auth and is itself optimistic. JIRA workflow rejections
+/// then surface as errors and the UI reverts the card.
 #[tauri::command]
 async fn jira_transition_work_item(
     state: State<'_, AppState>,
@@ -375,7 +378,7 @@ async fn jira_transition_work_item(
 ) -> AppResult<()> {
     if let Ok((site, email, token)) = rest_credentials(&state) {
         let (k, s) = (key.clone(), status.clone());
-        return tauri::async_runtime::spawn_blocking(move || {
+        let rest_result = tauri::async_runtime::spawn_blocking(move || {
             let transitions = jira_rest::list_transitions(&site, &email, &token, &k)?;
             let target = transitions
                 .iter()
@@ -386,8 +389,15 @@ async fn jira_transition_work_item(
             jira_rest::perform_transition(&site, &email, &token, &k, &target.id)
         })
         .await
-        .map_err(|error| AppError::from(format!("Failed to transition work item: {error}")))?
-        .map_err(Into::into);
+        .map_err(|error| AppError::from(format!("Failed to transition work item: {error}")))?;
+        match rest_result {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                // Degrade to acli (additive requirement): a revoked token or REST
+                // outage must not block a transition acli can still perform.
+                tracing::warn!("JIRA REST transition failed, falling back to acli: {error}");
+            }
+        }
     }
     tauri::async_runtime::spawn_blocking(move || jira::transition(&key, &status))
         .await
