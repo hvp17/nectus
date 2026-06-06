@@ -96,20 +96,16 @@ mod tests {
 
     #[test]
     fn category_from_token_classifies() {
-        assert_eq!(JiraStatusCategory::from_token("done"), JiraStatusCategory::Done);
-        assert_eq!(
-            JiraStatusCategory::from_token("In Progress"),
-            JiraStatusCategory::InProgress
-        );
-        assert_eq!(
-            JiraStatusCategory::from_token("indeterminate"),
-            JiraStatusCategory::InProgress
-        );
-        assert_eq!(JiraStatusCategory::from_token("To Do"), JiraStatusCategory::ToDo);
-        assert_eq!(JiraStatusCategory::from_token("new"), JiraStatusCategory::ToDo);
-        assert_eq!(
-            JiraStatusCategory::from_token("Backlog"),
-            JiraStatusCategory::Unknown
-        );
+        let cases = [
+            ("done", JiraStatusCategory::Done),
+            ("In Progress", JiraStatusCategory::InProgress),
+            ("indeterminate", JiraStatusCategory::InProgress),
+            ("To Do", JiraStatusCategory::ToDo),
+            ("new", JiraStatusCategory::ToDo),
+            ("Backlog", JiraStatusCategory::Unknown),
+        ];
+        for (token, expected) in cases {
+            assert_eq!(JiraStatusCategory::from_token(token), expected, "token: {token}");
+        }
     }
 }
