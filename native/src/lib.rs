@@ -12,9 +12,9 @@ use crate::db::Database;
 use crate::models::{
     AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings, AppSettingsInput,
     GithubStatus, JiraProject, JiraRestStatus, JiraStatus, JiraStatusDef, JiraTransition,
-    JiraWorkItem, PrReview, PrReviewMode, PrReviewRun, PullRequestInfo, Repo, ReviewLoop, ReviewRun,
-    Session, SessionExitedEvent, SessionOutputSnapshot, TaskDiffSummary, TaskStatus, TaskSummary,
-    Workspace,
+    JiraWorkItem, MergeMethod, PrReview, PrReviewMode, PrReviewRun, PullRequestInfo, Repo,
+    ReviewLoop, ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskDiffSummary,
+    TaskStatus, TaskSummary, Workspace,
 };
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
@@ -352,6 +352,100 @@ async fn detect_github_pull_request(
     })
     .await
     .map_err(|error| AppError::from(format!("Failed to detect pull request: {error}")))?
+    .map_err(Into::into)
+}
+
+/// Resolve a task's worktree path for the gh PR actions (merge / ready / close),
+/// erroring when the task is not worktree-backed — the precondition all three share.
+fn task_worktree(db: &Database, task_id: i64) -> Result<String, String> {
+    let task = db
+        .task_by_id(task_id)?
+        .ok_or_else(|| "Task not found".to_string())?;
+    task.worktree_path
+        .ok_or_else(|| "Task has no worktree branch".to_string())
+}
+
+/// Merge the task's worktree-branch pull request with the chosen strategy and
+/// return the refreshed status. Branch protection is enforced by GitHub, so a
+/// disallowed merge surfaces `gh`'s error.
+#[tauri::command]
+async fn merge_github_pull_request(
+    task_id: i64,
+    method: MergeMethod,
+    state: State<'_, AppState>,
+) -> AppResult<PullRequestInfo> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<PullRequestInfo, String> {
+        let worktree = task_worktree(&db.lock(), task_id)?;
+        github::merge_pull_request(Path::new(&worktree), method)
+    })
+    .await
+    .map_err(|error| AppError::from(format!("Failed to merge pull request: {error}")))?
+    .map_err(Into::into)
+}
+
+/// Mark the task's pull request ready for review (or convert it back to draft).
+#[tauri::command]
+async fn set_github_pull_request_ready(
+    task_id: i64,
+    ready: bool,
+    state: State<'_, AppState>,
+) -> AppResult<PullRequestInfo> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<PullRequestInfo, String> {
+        let worktree = task_worktree(&db.lock(), task_id)?;
+        github::set_pull_request_ready(Path::new(&worktree), ready)
+    })
+    .await
+    .map_err(|error| AppError::from(format!("Failed to update pull request: {error}")))?
+    .map_err(Into::into)
+}
+
+/// Close the task's pull request without merging it, returning the refreshed status.
+#[tauri::command]
+async fn close_github_pull_request(
+    task_id: i64,
+    state: State<'_, AppState>,
+) -> AppResult<PullRequestInfo> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<PullRequestInfo, String> {
+        let worktree = task_worktree(&db.lock(), task_id)?;
+        github::close_pull_request(Path::new(&worktree))
+    })
+    .await
+    .map_err(|error| AppError::from(format!("Failed to close pull request: {error}")))?
+    .map_err(Into::into)
+}
+
+/// Post a finished PR review back to its pull request as a comment. The review
+/// must be `ready` with output; the body carries a short automated-attribution
+/// header so it is not mistaken for a human review.
+#[tauri::command]
+async fn post_pr_review_comment(review_id: i64, state: State<'_, AppState>) -> AppResult<()> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        let (repo_path, pr_number, body) = {
+            let db = db.lock();
+            let review = db
+                .pr_review_by_id(review_id)?
+                .ok_or_else(|| "PR review not found".to_string())?;
+            let output = review
+                .review_output
+                .filter(|text| !text.trim().is_empty())
+                .ok_or_else(|| "This review has no output to post yet".to_string())?;
+            let repo = db
+                .repo_by_id(review.repo_id)?
+                .ok_or_else(|| "Repository not found".to_string())?;
+            let body = format!(
+                "🤖 Automated review via Nectus ({reviewer})\n\n{output}",
+                reviewer = review.reviewer_name.as_deref().unwrap_or("AI reviewer"),
+            );
+            (repo.path, review.pr_number, body)
+        };
+        github::comment_on_pull_request(Path::new(&repo_path), pr_number, &body)
+    })
+    .await
+    .map_err(|error| AppError::from(format!("Failed to post review comment: {error}")))?
     .map_err(Into::into)
 }
 
@@ -1078,6 +1172,10 @@ pub fn run() {
             create_github_pull_request,
             github_pull_request_status,
             detect_github_pull_request,
+            merge_github_pull_request,
+            set_github_pull_request_ready,
+            close_github_pull_request,
+            post_pr_review_comment,
             jira_status,
             jira_list_projects,
             jira_search_board,

@@ -191,7 +191,7 @@ Important backend files:
 - `native/src/lib.rs`: Tauri command registration, command bodies, and app setup
 - `native/src/db/`: SQLite access split by domain into `impl Database` blocks — `mod.rs` (connection open/pragmas, repos, the `now`/`generated_branch_name` helpers), `tasks.rs` (single- and cross-repo task CRUD; `create_cross_repo_task` fans out a worktree per repo as siblings under a shared parent, with per-repo state in the `task_repos` child table — `tasks.*` stays the primary repo), `settings.rs`, `sessions.rs`, plus `agent_profiles.rs`, `review_loops.rs`, `pr_reviews.rs`, `workspaces.rs` (durable repo groups: CRUD with transactional `workspace_repos` membership); `schema.rs` (create/migrate), `rows.rs` (row mapping), and `tests.rs` (persistence tests)
 - `native/src/git_ops/`: git repo/worktree validation and operations — `mod.rs` (the `git_output`/`git_output_allowing_codes` helpers, repo/branch validation, worktree-root pattern, remote resolution, worktree create/remove/branch lifecycle, `is_dirty`) and `diff.rs` (the cohesive task-diff sub-domain: `resolve_diff_base`, `diff_summary`, `diff_file`, re-exported from `mod.rs`)
-- `native/src/github.rs`: `gh` CLI integration — connection status plus pull request create/detect/status parsing (no OAuth, no stored tokens)
+- `native/src/github.rs`: `gh` CLI integration — connection status, pull request create/detect/status parsing (incl. the per-check GitHub Actions/CI drill-down parsed from one `gh pr view` `statusCheckRollup`), the ship actions (`merge_pull_request` squash/merge/rebase — no `--delete-branch`, `set_pull_request_ready`, `close_pull_request`), and `comment_on_pull_request` for posting a review back (no OAuth, no stored tokens)
 - `native/src/jira.rs`: `acli` (Atlassian CLI) integration — connection status, project list, work-item search/view/create/transition/assign/comment with tolerant JSON parsing, the structured-config JQL builder (`build_board_jql`, incl. the `status in (...)` filter clause, so the UI never types JQL), and the create argument builder + new-key parser (`build_create_args`, `parse_created_key`); no OAuth, no stored tokens
 - `native/src/jira_rest.rs`: **optional** JIRA Cloud REST layer (`ureq`, Basic auth) for what `acli` cannot do — fixture-tested parsers `parse_transitions` / `parse_project_statuses`, plus `verify` (`/myself`), `list_transitions`, `project_statuses`, `perform_transition`. Additive to `acli`, gated on a user API token; powers the legal-transition dropdown, the board status filter, and all status columns (incl. empty)
 - `native/src/jira_secret.rs`: macOS Keychain store for the optional JIRA API token (`keyring`; service = the app identifier, account = `jira-api-token:{site}`). The token never touches SQLite — only the non-secret site/email persist in `app_settings`
@@ -221,6 +221,10 @@ Tauri commands exposed to the frontend include:
 - `create_github_pull_request`
 - `github_pull_request_status`
 - `detect_github_pull_request`
+- `merge_github_pull_request`
+- `set_github_pull_request_ready`
+- `close_github_pull_request`
+- `post_pr_review_comment`
 - `jira_status`
 - `jira_list_projects`
 - `jira_search_board`
@@ -317,7 +321,7 @@ Important frontend files:
 - `src/hooks/useApp.ts`: app state, project/task/settings/workspace orchestration (owns the active-workspace repo-scope filter applied to Mission Control + the rail, and workspace CRUD)
 - `src/hooks/useSessionEvents.ts`: subscribes to Rust session events (`session_activity`, `session_exited`, `session_idle`, `session_needs_input`); keeps the per-task `liveLines` map (latest activity line) and the task attention list
 - `src/hooks/useSessionCommands.ts`: start/resume/stop/resize/input session command bindings
-- `src/hooks/useGithub.ts`: `gh` connection status and pull request create/detect/status orchestration
+- `src/hooks/useGithub.ts`: `gh` connection status and pull request create/detect/status orchestration, the ship actions (merge/mark-ready/close, returning the refreshed status), and the open-PR auto-refresh (interval + window focus, off for terminal PRs)
 - `src/hooks/useJira.ts`: `acli` connection status, board items, columns, and optimistic transition. Also owns the optional REST layer: `restStatus`/`restConnected`, the project status set (`projectStatuses`), `setApiToken`/`clearApiToken`, and the connected `deriveColumns` variant (full status skeleton incl. empty columns, narrowed by the status filter)
 - `src/hooks/useTaskReviewLoop.ts`: selected-task review-loop loading and event handling, including the live reviewer output stream (`review_output`) for the read-only Review pane
 - `src/hooks/useTaskDiff.ts`: task diff data — summary load, lazy per-file patches, and `session_idle` refresh
@@ -332,7 +336,7 @@ Important frontend files:
 - `src/components/taskWorkspace/`: the workspace's presentation pieces — `TaskWorkspaceStage` (header, workflow ribbon, stage body), `TaskWorkspaceFactsRail` (inspector: metadata, GitHub/JIRA panels, review card, brief, delete), and the leaf helpers `ActionBar`, `TaskStatusBadges`, `TaskTerminalLauncher`
 - `src/components/TaskDiffView.tsx`: task diff view — changed-file list plus the lazy-loaded, line-colorized unified patch pane
 - `src/components/ReviewTerminalPane.tsx`: read-only xterm.js pane that renders a task reviewer's live stdout (and its last recorded output between runs); no input, session, or snapshot
-- `src/components/GitHubPanel.tsx`: task-inspector GitHub panel for connection state and pull request actions
+- `src/components/GitHubPanel.tsx`: task-inspector GitHub panel for connection state and pull request actions; composes `src/components/github/PullRequestActions.tsx` (merge with a squash/merge/rebase confirm dialog, mark-ready, close) and `src/components/github/PullRequestChecks.tsx` (the expandable per-workflow GitHub Actions / CI check drill-down with run links)
 - `src/components/JiraBoardPage.tsx`: global JIRA board view — JQL config, auto-derived columns, drag-to-transition; composes `JiraBoardBody` (column grid + empty/loading states) and `JiraCard` (draggable story card + its linked Nectus tasks)
 - `src/components/JiraWorkItemDialog.tsx`: `JiraWorkItemPanel` — the de-modaled work-item side panel docked beside the board (transition/assign/comment + an agent-select "Create task & start" launch row). When a REST token is connected, the status dropdown shows the issue's legal transitions (fetched on open); otherwise it falls back to the board-derived options
 - `src/components/JiraCreateWorkItemPanel.tsx`: `JiraCreateWorkItemPanel` — the inline "New work item" create form docked in the board's right-hand slot (project/type/summary/description/assignee/labels → `acli jira workitem create`); shares the slot with the view panel

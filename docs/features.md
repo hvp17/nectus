@@ -520,17 +520,27 @@ Emitted event:
 
 GitHub integration runs through the `gh` CLI, so Nectus stores no tokens. The app
 reports connection status, opens pull requests directly for worktree tasks
-(capturing the URL onto the task), and shows live PR state and CI checks. Full
-behavior lives in [GitHub Integration](github-integration.md).
+(capturing the URL onto the task), and shows live PR state and CI checks. A
+worktree task's PR can then be **shipped from the inspector** — merge
+(squash/merge/rebase, behind a confirm), mark a draft ready, or close — and its
+**GitHub Actions / CI checks expand to a per-workflow list** with links straight to
+each run. PR status **auto-refreshes** while the PR is open (interval + window
+focus) so checks turn green on their own. A finished AI PR review can be **posted
+back to the pull request** as a comment. Full behavior lives in
+[GitHub Integration](github-integration.md).
 
 Key files:
 
-- Task inspector panel: `src/components/GitHubPanel.tsx`
+- Task inspector panel: `src/components/GitHubPanel.tsx` (+ ship actions
+  `src/components/github/PullRequestActions.tsx`, CI drill-down
+  `src/components/github/PullRequestChecks.tsx`)
 - Settings connection card: `src/components/SettingsPage.tsx`
-- Connection and PR-status state: `src/hooks/useGithub.ts`
+- Connection, PR status, ship actions, and auto-refresh: `src/hooks/useGithub.ts`
 - gh shell-out and parsing: `native/src/github.rs`
 - Backend commands: `github_status`, `create_github_pull_request`,
-  `github_pull_request_status`
+  `github_pull_request_status`, `detect_github_pull_request`,
+  `merge_github_pull_request`, `set_github_pull_request_ready`,
+  `close_github_pull_request`, `post_pr_review_comment`
 
 ## JIRA
 

@@ -101,7 +101,11 @@ function App() {
     selectedPullRequest,
     pullRequestLoading,
     creatingPullRequest,
+    pullRequestBusy,
     refreshPullRequest,
+    mergePullRequest,
+    setPullRequestReady,
+    closePullRequest,
     jiraStatus,
     jiraRestStatus,
     jiraRestConnected,
@@ -146,6 +150,7 @@ function App() {
     createPrReview,
     rerunPrReview,
     deletePrReview,
+    postReviewComment,
   } = useApp();
 
   useAppTheme(settings);
@@ -387,6 +392,7 @@ function App() {
               onCreateReview={createPrReview}
               onRerunReview={rerunPrReview}
               onDeleteReview={deletePrReview}
+              onPostReview={postReviewComment}
               onBack={() => setCurrentView("mission")}
             />
           ) : taskOpen && selectedTask ? (
@@ -407,6 +413,7 @@ function App() {
                 pullRequest={selectedPullRequest}
                 pullRequestLoading={pullRequestLoading}
                 creatingPullRequest={creatingPullRequest}
+                pullRequestBusy={pullRequestBusy}
                 backLabel={currentView === "mission" ? "Mission Control" : selectedRepo?.name ?? "Board"}
                 repoName={repos.find((repo) => repo.id === selectedTask.repoId)?.name}
                 onClose={() => {
@@ -418,6 +425,9 @@ function App() {
                 onStartReview={startReview}
                 onCreatePullRequest={createPullRequest}
                 onRefreshPullRequest={refreshPullRequest}
+                onMergePullRequest={mergePullRequest}
+                onSetPullRequestReady={setPullRequestReady}
+                onClosePullRequest={closePullRequest}
                 onUpdateStatus={updateStatus}
                 onDeleteTask={requestDeleteTask}
                 onSetJiraLink={setTaskJiraLink}

@@ -125,6 +125,23 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
     [onMessage, setReviews],
   );
 
+  // Post a finished review back to its pull request as a comment. Returns whether
+  // it succeeded so the caller can drive a transient "posting" affordance.
+  const postReviewComment = useCallback(
+    async (reviewId: number): Promise<boolean> => {
+      try {
+        await api.postPrReviewComment(reviewId);
+        const review = prReviewsRef.current.find((item) => item.id === reviewId);
+        onMessage(`Posted review to ${review ? reviewLabel(review) : "the pull request"}`);
+        return true;
+      } catch (error) {
+        onMessage(String(error));
+        return false;
+      }
+    },
+    [onMessage],
+  );
+
   const deletePrReview = useCallback(
     async (reviewId: number) => {
       try {
@@ -166,5 +183,6 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
     createPrReview,
     rerunPrReview,
     deletePrReview,
+    postReviewComment,
   };
 }

@@ -14,6 +14,7 @@ import {
 } from "../../statusLabels";
 import {
   GithubStatus,
+  MergeMethod,
   PullRequestInfo,
   ReviewLoop,
   ReviewRun,
@@ -32,6 +33,7 @@ export interface TaskWorkspaceFactsRailProps {
   pullRequest?: PullRequestInfo | null;
   pullRequestLoading?: boolean;
   creatingPullRequest?: boolean;
+  pullRequestBusy?: boolean;
   reviewLoop?: ReviewLoop | null;
   latestReviewRun?: ReviewRun;
   reviewInProgress: boolean;
@@ -44,6 +46,9 @@ export interface TaskWorkspaceFactsRailProps {
   onUpdateStatus: (task: TaskSummary, status: TaskStatus) => void;
   onCreatePullRequest: (task: TaskSummary, options?: { draft?: boolean }) => void;
   onRefreshPullRequest: (task: TaskSummary) => void;
+  onMergePullRequest: (task: TaskSummary, method: MergeMethod) => void;
+  onSetPullRequestReady: (task: TaskSummary) => void;
+  onClosePullRequest: (task: TaskSummary) => void;
   onSetJiraLink: (
     taskId: number,
     link: { key: string; summary: string; url: string | null } | null,
@@ -64,6 +69,7 @@ export function TaskWorkspaceFactsRail({
   pullRequest,
   pullRequestLoading = false,
   creatingPullRequest = false,
+  pullRequestBusy = false,
   reviewLoop,
   latestReviewRun,
   reviewInProgress,
@@ -75,6 +81,9 @@ export function TaskWorkspaceFactsRail({
   onUpdateStatus,
   onCreatePullRequest,
   onRefreshPullRequest,
+  onMergePullRequest,
+  onSetPullRequestReady,
+  onClosePullRequest,
   onSetJiraLink,
   onDeleteTask,
   onWatchReview,
@@ -200,8 +209,12 @@ export function TaskWorkspaceFactsRail({
             pullRequest={pullRequest}
             pullRequestLoading={pullRequestLoading}
             creatingPullRequest={creatingPullRequest}
+            pullRequestBusy={pullRequestBusy}
             onCreatePullRequest={onCreatePullRequest}
             onRefreshPullRequest={onRefreshPullRequest}
+            onMergePullRequest={onMergePullRequest}
+            onSetPullRequestReady={onSetPullRequestReady}
+            onClosePullRequest={onClosePullRequest}
           />
         </div>
 

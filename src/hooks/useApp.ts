@@ -283,8 +283,12 @@ export function useApp() {
     pullRequest: selectedPullRequest,
     pullRequestLoading,
     creatingPullRequest,
+    pullRequestBusy,
     refreshPullRequest,
     createPullRequest: createGithubPullRequest,
+    mergePullRequest,
+    setPullRequestReady,
+    closePullRequest,
   } = useGithub({ selectedTask, setMessage, applyTask });
 
   const jiraBoard = useJiraBoardView({
@@ -558,6 +562,7 @@ export function useApp() {
     createPrReview,
     rerunPrReview,
     deletePrReview,
+    postReviewComment,
   } = usePrReviews({ onMessage: setMessage });
 
   const saveAppSettings = (input: AppSettingsInput) =>
@@ -697,7 +702,11 @@ export function useApp() {
     selectedPullRequest,
     pullRequestLoading,
     creatingPullRequest,
+    pullRequestBusy,
     refreshPullRequest,
+    mergePullRequest,
+    setPullRequestReady,
+    closePullRequest,
     jiraStatus: jira.jiraStatus,
     jiraRestStatus: jira.restStatus,
     jiraRestConnected: jira.restConnected,
@@ -737,5 +746,6 @@ export function useApp() {
     createPrReview,
     rerunPrReview,
     deletePrReview,
+    postReviewComment,
   };
 }

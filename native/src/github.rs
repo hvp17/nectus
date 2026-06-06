@@ -1,6 +1,6 @@
 use crate::models::{
-    GithubCheckState, GithubCheckSummary, GithubStatus, PullRequestInfo, PullRequestReviewDecision,
-    PullRequestState,
+    GithubCheckRun, GithubCheckRunState, GithubCheckState, GithubCheckSummary, GithubStatus,
+    MergeMethod, PullRequestInfo, PullRequestReviewDecision, PullRequestState,
 };
 use crate::process_util::{command_error, run_cli};
 use serde::Deserialize;
@@ -8,14 +8,23 @@ use std::path::Path;
 use std::process::{Command, Output};
 
 /// Raw shape of a single `statusCheckRollup` entry from `gh pr view --json`.
-/// Entries are either a `CheckRun` (`status` + `conclusion`) or a
-/// `StatusContext` (`state`); we keep every relevant field optional and classify
-/// per entry.
+/// Entries are either a `CheckRun` (`status` + `conclusion`, named by `name` and
+/// `workflowName`, linked by `detailsUrl`) or a `StatusContext` (`state`, named by
+/// `context`, linked by `targetUrl`); we keep every relevant field optional and
+/// classify per entry.
 #[derive(Debug, Deserialize)]
 struct RawCheck {
+    name: Option<String>,
     status: Option<String>,
     conclusion: Option<String>,
     state: Option<String>,
+    context: Option<String>,
+    #[serde(rename = "workflowName")]
+    workflow_name: Option<String>,
+    #[serde(rename = "detailsUrl")]
+    details_url: Option<String>,
+    #[serde(rename = "targetUrl")]
+    target_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -63,6 +72,50 @@ fn classify_check(check: &RawCheck) -> CheckOutcome {
         };
     }
     CheckOutcome::Pending
+}
+
+impl From<CheckOutcome> for GithubCheckRunState {
+    fn from(outcome: CheckOutcome) -> Self {
+        match outcome {
+            CheckOutcome::Pass => GithubCheckRunState::Pass,
+            CheckOutcome::Fail => GithubCheckRunState::Fail,
+            CheckOutcome::Pending => GithubCheckRunState::Pending,
+        }
+    }
+}
+
+/// Build the per-check drill-down list (GitHub Actions runs + commit statuses).
+/// A `CheckRun` is named by `name` and grouped by `workflowName`; a
+/// `StatusContext` is named by `context`. The link is `detailsUrl`/`targetUrl`.
+fn check_runs(rollup: &[RawCheck]) -> Vec<GithubCheckRun> {
+    rollup
+        .iter()
+        .map(|check| {
+            let name = check
+                .name
+                .as_deref()
+                .or(check.context.as_deref())
+                .filter(|value| !value.is_empty())
+                .unwrap_or("Check")
+                .to_string();
+            let url = check
+                .details_url
+                .as_deref()
+                .or(check.target_url.as_deref())
+                .filter(|value| !value.is_empty())
+                .map(str::to_string);
+            GithubCheckRun {
+                name,
+                workflow: check
+                    .workflow_name
+                    .as_deref()
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string),
+                state: classify_check(check).into(),
+                url,
+            }
+        })
+        .collect()
 }
 
 fn summarize_checks(rollup: &[RawCheck]) -> (GithubCheckSummary, GithubCheckState) {
@@ -119,6 +172,7 @@ pub fn parse_pull_request(json: &str) -> Result<PullRequestInfo, String> {
         review_decision: map_review_decision(raw.review_decision.as_deref()),
         checks,
         checks_state,
+        check_runs: check_runs(&raw.status_check_rollup),
     })
 }
 
@@ -368,6 +422,63 @@ fn is_no_pull_request_error(stderr: &str) -> bool {
     stderr
         .to_lowercase()
         .contains("pull requests found for branch")
+}
+
+/// Merge the pull request for the worktree's branch using `method`, then return
+/// the refreshed status. We deliberately do **not** pass `--delete-branch`: the
+/// branch is checked out in this worktree, so letting `gh` delete it would fail or
+/// strand the worktree — task deletion removes the worktree later. GitHub branch
+/// protection remains the source of truth, so a merge that isn't allowed (failing
+/// required checks, missing approval) surfaces `gh`'s own error.
+pub fn merge_pull_request(
+    worktree: &Path,
+    method: MergeMethod,
+) -> Result<PullRequestInfo, String> {
+    let output = run_gh(Some(worktree), &["pr", "merge", method.flag()])?;
+    if !output.status.success() {
+        return Err(command_error(&output, "gh pr merge failed"));
+    }
+    pull_request_status(worktree)
+}
+
+/// Mark the worktree branch's pull request ready for review (`gh pr ready`), or
+/// convert it back to a draft when `ready` is false (`gh pr ready --undo`).
+/// Returns the refreshed status.
+pub fn set_pull_request_ready(
+    worktree: &Path,
+    ready: bool,
+) -> Result<PullRequestInfo, String> {
+    let mut args = vec!["pr", "ready"];
+    if !ready {
+        args.push("--undo");
+    }
+    let output = run_gh(Some(worktree), &args)?;
+    if !output.status.success() {
+        return Err(command_error(&output, "gh pr ready failed"));
+    }
+    pull_request_status(worktree)
+}
+
+/// Close the pull request for the worktree's branch without merging it
+/// (`gh pr close`). Returns the refreshed status.
+pub fn close_pull_request(worktree: &Path) -> Result<PullRequestInfo, String> {
+    let output = run_gh(Some(worktree), &["pr", "close"])?;
+    if !output.status.success() {
+        return Err(command_error(&output, "gh pr close failed"));
+    }
+    pull_request_status(worktree)
+}
+
+/// Post `body` as a comment on pull request `number`, run in the resolved repo so
+/// `gh` targets the right PR. Multi-line Markdown passes safely as a single
+/// argument (no shell is involved). Used to land an AI PR review on the actual PR.
+pub fn comment_on_pull_request(repo_path: &Path, number: i64, body: &str) -> Result<(), String> {
+    let number = number.to_string();
+    let output = run_gh(Some(repo_path), &["pr", "comment", &number, "--body", body])?;
+    if !output.status.success() {
+        return Err(command_error(&output, "gh pr comment failed"));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -643,5 +754,69 @@ mod tests {
             pr.review_decision,
             Some(PullRequestReviewDecision::ChangesRequested)
         );
+    }
+
+    #[test]
+    fn builds_per_check_drill_down_with_names_workflow_and_links() {
+        let json = r#"{
+            "number": 20,
+            "url": "https://github.com/a/b/pull/20",
+            "title": "Has actions",
+            "state": "OPEN",
+            "isDraft": false,
+            "reviewDecision": "",
+            "statusCheckRollup": [
+                {"__typename":"CheckRun","name":"build","workflowName":"CI","status":"COMPLETED","conclusion":"SUCCESS","detailsUrl":"https://github.com/a/b/actions/runs/1"},
+                {"__typename":"CheckRun","name":"test","workflowName":"CI","status":"IN_PROGRESS","conclusion":null,"detailsUrl":"https://github.com/a/b/actions/runs/2"},
+                {"__typename":"StatusContext","context":"ci/circleci","state":"FAILURE","targetUrl":"https://circleci.com/x"}
+            ]
+        }"#;
+
+        let pr = parse_pull_request(json).unwrap();
+
+        // Summary counts are unchanged; the drill-down is parallel to them.
+        assert_eq!(pr.checks.total, 3);
+        assert_eq!(pr.check_runs.len(), 3);
+
+        let build = &pr.check_runs[0];
+        assert_eq!(build.name, "build");
+        assert_eq!(build.workflow.as_deref(), Some("CI"));
+        assert_eq!(build.state, GithubCheckRunState::Pass);
+        assert_eq!(
+            build.url.as_deref(),
+            Some("https://github.com/a/b/actions/runs/1")
+        );
+
+        // An in-progress GitHub Actions run is pending, not failing.
+        assert_eq!(pr.check_runs[1].state, GithubCheckRunState::Pending);
+
+        // A classic commit status is named by its context and linked by targetUrl.
+        let status = &pr.check_runs[2];
+        assert_eq!(status.name, "ci/circleci");
+        assert_eq!(status.workflow, None);
+        assert_eq!(status.state, GithubCheckRunState::Fail);
+        assert_eq!(status.url.as_deref(), Some("https://circleci.com/x"));
+    }
+
+    #[test]
+    fn check_run_falls_back_to_generic_name_when_unnamed() {
+        let json = r#"{
+            "number": 21, "url": "u", "title": "t", "state": "OPEN", "isDraft": false,
+            "reviewDecision": "",
+            "statusCheckRollup": [ {"status":"COMPLETED","conclusion":"SUCCESS"} ]
+        }"#;
+
+        let pr = parse_pull_request(json).unwrap();
+
+        assert_eq!(pr.check_runs.len(), 1);
+        assert_eq!(pr.check_runs[0].name, "Check");
+        assert_eq!(pr.check_runs[0].url, None);
+    }
+
+    #[test]
+    fn merge_method_maps_to_gh_flag() {
+        assert_eq!(MergeMethod::Squash.flag(), "--squash");
+        assert_eq!(MergeMethod::Merge.flag(), "--merge");
+        assert_eq!(MergeMethod::Rebase.flag(), "--rebase");
     }
 }

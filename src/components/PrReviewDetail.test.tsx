@@ -91,6 +91,7 @@ it("renders the consensus banner, reviewers × rounds matrix, and synthesized re
       agentProfiles={agentProfiles}
       onRerun={vi.fn()}
       onDelete={vi.fn()}
+      onPost={vi.fn()}
     />,
   );
 
@@ -122,9 +123,53 @@ it("falls back to a verdict-only view for a single review", () => {
   };
 
   render(
-    <PrReviewDetail review={single} runs={[]} agentProfiles={agentProfiles} onRerun={vi.fn()} onDelete={vi.fn()} />,
+    <PrReviewDetail
+      review={single}
+      runs={[]}
+      agentProfiles={agentProfiles}
+      onRerun={vi.fn()}
+      onDelete={vi.fn()}
+      onPost={vi.fn()}
+    />,
   );
 
+  expect(screen.getByRole("button", { name: /post review to pull request/i })).toBeEnabled();
   expect(screen.queryByText(/round 1/i)).not.toBeInTheDocument();
   expect(screen.getByText(/Looks good\./)).toBeInTheDocument();
+});
+
+it("posts a finished review back to the pull request", () => {
+  const onPost = vi.fn().mockResolvedValue(undefined);
+
+  render(
+    <PrReviewDetail
+      review={consensusReview}
+      runs={runs}
+      agentProfiles={agentProfiles}
+      onRerun={vi.fn()}
+      onDelete={vi.fn()}
+      onPost={onPost}
+    />,
+  );
+
+  screen.getByRole("button", { name: /post review to pull request/i }).click();
+
+  expect(onPost).toHaveBeenCalledWith(consensusReview.id);
+});
+
+it("disables sharing while a review is still in progress", () => {
+  const queued: PrReview = { ...consensusReview, status: "reviewing", reviewOutput: null };
+
+  render(
+    <PrReviewDetail
+      review={queued}
+      runs={[]}
+      agentProfiles={agentProfiles}
+      onRerun={vi.fn()}
+      onDelete={vi.fn()}
+      onPost={vi.fn()}
+    />,
+  );
+
+  expect(screen.getByRole("button", { name: /post review to pull request/i })).toBeDisabled();
 });

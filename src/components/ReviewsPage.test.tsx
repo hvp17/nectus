@@ -66,6 +66,7 @@ function renderPage(overrides: Partial<Parameters<typeof ReviewsPage>[0]> = {}) 
     onCreateReview: vi.fn(),
     onRerunReview: vi.fn(),
     onDeleteReview: vi.fn(),
+    onPostReview: vi.fn(),
     onBack: vi.fn(),
     ...overrides,
   };

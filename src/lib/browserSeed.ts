@@ -300,6 +300,12 @@ export function seedPullRequest(taskId: number): PullRequestInfo {
     reviewDecision: "review_required",
     checks: { total: 9, passed: 8, failed: 0, pending: 1 },
     checksState: "pending",
+    checkRuns: [
+      { name: "build", workflow: "CI", state: "pass", url: "https://github.com/hvp17/design-system/actions/runs/1" },
+      { name: "unit-tests", workflow: "CI", state: "pass", url: "https://github.com/hvp17/design-system/actions/runs/2" },
+      { name: "e2e", workflow: "CI", state: "pending", url: "https://github.com/hvp17/design-system/actions/runs/3" },
+      { name: "lint", workflow: "Quality", state: "pass", url: "https://github.com/hvp17/design-system/actions/runs/4" },
+    ],
   };
 }
 

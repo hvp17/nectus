@@ -47,9 +47,39 @@ authentication, Nectus stores no tokens and runs no OAuth flow — it shells out
   (Approved / Changes requested / Review required).
 - Checks awaiting a manual gate (`ACTION_REQUIRED`) or needing a re-run (`STALE`)
   are shown as pending rather than failing.
+- **GitHub Actions / CI drill-down.** The same `statusCheckRollup` fetch also carries
+  each check's name, workflow, conclusion, and details URL, so the checks row expands
+  to a per-check list: each GitHub Actions run / commit status shows as
+  `workflow / name` with a pass/fail/pending icon and a link to its run page (failing
+  or running checks open straight to the logs). No extra `gh` call — the per-check
+  list and the summary counts come from one `gh pr view`.
+- **Auto-refresh.** While the panel shows a non-terminal PR (open / draft) and `gh`
+  is connected, status re-fetches on a light interval and when the window regains
+  focus, so long-running Actions move to green without a manual click. It stops once
+  the PR is merged or closed.
 - `Open` links to the PR in the browser; `Refresh` re-fetches status. Status is
   best-effort: if the branch has no PR or `gh` errors, the stored PR link still
   shows.
+
+## Ship a pull request
+
+Once a worktree task's PR is open and `gh` is connected, the GitHub panel can finish
+the PR from inside Nectus (the actions all `gh`-shell-out in the task worktree, where
+`gh` resolves the PR from the branch — the same resolution the status fetch uses):
+
+- **Merge** — a confirm dialog picks the strategy (`gh pr merge --squash` /
+  `--merge` / `--rebase`, squash default) and surfaces the current review/checks state
+  as context. GitHub branch protection is the real gate, so a merge that isn't
+  permitted (failing required checks, missing approval) surfaces `gh`'s own error.
+  The merge deliberately does **not** pass `--delete-branch`: the branch is checked
+  out in the task worktree, so deleting it would fight the worktree — task deletion
+  removes the worktree later.
+- **Mark ready** — a draft PR is promoted with `gh pr ready` (the backend also
+  supports the inverse, `gh pr ready --undo`).
+- **Close** — `gh pr close` abandons the PR without merging, behind its own confirm.
+
+Each action re-fetches and returns the refreshed `PullRequestInfo`, so the card flips
+to Merged / Ready / Closed in place.
 
 ## Review an external pull request
 
@@ -94,6 +124,16 @@ The reviewer toggles on the PR Reviews form choose how many models review:
   stored so the detail view can show the rounds; the consensus run emits
   `pr_review_updated` as each round output lands.
 
+### Post the review back to the PR
+
+A finished review (single or consensus) can be posted to the actual pull request
+with the **Post to PR** button on the review detail. It runs
+`gh pr comment <n> --body <review>` in the resolved local repository, with a short
+automated-attribution header prepended so it is not mistaken for a human review. It
+is deliberately a **comment**, not `gh pr review --approve/--request-changes` — Nectus
+never authors a formal approval on the user's behalf. Posting is re-runnable (e.g.
+after a re-review) and is not persisted as "posted"; success surfaces a message.
+
 ## Requirements
 
 - The GitHub CLI (`gh`) must be installed and authenticated (`gh auth login`).
@@ -104,14 +144,20 @@ The reviewer toggles on the PR Reviews form choose how many models review:
 
 ## Key files
 
-- Task inspector panel: `src/components/GitHubPanel.tsx`
+- Task inspector panel: `src/components/GitHubPanel.tsx`, composing the ship actions
+  (`src/components/github/PullRequestActions.tsx`) and the CI check drill-down
+  (`src/components/github/PullRequestChecks.tsx`)
 - Settings connection card: `src/components/SettingsPage.tsx`
-- Connection and PR-status state: `src/hooks/useGithub.ts`
+- Connection, PR-status, ship actions, and auto-refresh: `src/hooks/useGithub.ts`
 - Create-PR orchestration (gh path plus agent fallback): `src/hooks/useApp.ts`
+- Post-review-to-PR action: `src/components/PrReviewDetail.tsx` + `src/hooks/usePrReviews.ts`
 - Frontend API: `src/api.ts`
-- gh shell-out and output parsing: `native/src/github.rs`
+- gh shell-out and output parsing (incl. per-check parsing, merge/ready/close,
+  `comment_on_pull_request`): `native/src/github.rs`
 - Backend commands: `github_status`, `create_github_pull_request`,
-  `github_pull_request_status`, `detect_github_pull_request` (registered in
+  `github_pull_request_status`, `detect_github_pull_request`,
+  `merge_github_pull_request`, `set_github_pull_request_ready`,
+  `close_github_pull_request`, `post_pr_review_comment` (registered in
   `native/src/lib.rs`)
 - PR URL persistence: `pr_url` column on the `tasks` table, via
   `update_task_metadata`
