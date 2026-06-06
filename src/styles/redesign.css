@@ -213,7 +213,7 @@
 
 /* ---------- Board: columns (B1) ---------- */
 .nx-board { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.nx-cols { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.nx-cols { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); gap: 12px; }
 .nx-col { background: var(--muted); border-radius: var(--radius-xl); padding: 10px; display: flex; flex-direction: column; gap: 9px; min-height: 0; overflow: hidden; }
 .nx-col-head { display: flex; align-items: center; gap: 8px; padding: 3px 3px 1px; flex: none; }
 .nx-col-head .nx-dot { width: 7px; height: 7px; border-radius: 999px; }
@@ -232,7 +232,7 @@
 }
 
 .nx-card {
-  position: relative; background: var(--card); border-radius: var(--radius-lg); padding: 12px 12px 12px 14px; display: flex; flex-direction: column; gap: 9px;
+  position: relative; flex: none; background: var(--card); border-radius: var(--radius-lg); padding: 12px 12px 12px 14px; display: flex; flex-direction: column; gap: 9px;
   box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 9%, transparent), var(--shadow-xs); cursor: grab; overflow: hidden; transition: box-shadow .15s, transform .12s; text-align: left; width: 100%; border: none;
 }
 .nx-card:hover { box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 45%, transparent), var(--shadow-sm); transform: translateY(-1px); }
