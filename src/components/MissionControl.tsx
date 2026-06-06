@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { AgentLogo } from "./AgentBrand";
 import {
+  ACTIVE_AGENT_STATES,
   AGENT_STATE_META,
   AGENT_STATE_ORDER,
   buildAgentRows,
@@ -30,8 +31,8 @@ interface MissionControlProps {
 
 // Groups shown in the triage inbox, most-urgent first.
 const GROUPS: AgentState[] = AGENT_STATE_ORDER;
-// Summary pills mirror the four active states.
-const SUMMARY: AgentState[] = ["needs_you", "running", "review", "done"];
+// Summary pills mirror the in-flight states plus the terminal "done".
+const SUMMARY: AgentState[] = [...ACTIVE_AGENT_STATES, "done"];
 
 export function MissionControl({
   repos,

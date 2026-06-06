@@ -9,6 +9,13 @@ The app shell is a slim icon rail plus a contextual panel, not a full sidebar.
 - The icon rail (always visible, 58px) holds Mission Control, Board, JIRA, PR
   Reviews, and Settings. The Mission Control icon carries a badge with the
   cross-project needs-input count.
+- A **Running agents** rail trigger (sits with the primary nav group) opens a
+  quick-access popover from anywhere. It lists every in-flight agent across all
+  projects — **Needs you → Running → Review** (terminal Done/Idle are excluded) —
+  with the agent's latest line, elapsed time, and a click-to-focus on each row.
+  Its badge counts the in-flight agents (primary-hued, distinct from the Mission
+  needs badge). The list reuses the same agent-state model and `nx-` row
+  vocabulary as Mission Control.
 - Mission Control is the default home: a cross-project, attention-first triage
   inbox. Every task across every project is grouped by who needs you —
   **Needs you → Running → Review → Done → Idle** — and each row carries the
@@ -23,6 +30,8 @@ The app shell is a slim icon rail plus a contextual panel, not a full sidebar.
 Key files:
 
 - Icon rail: `src/components/IconRail.tsx`
+- Running-agents quick-access flyout: `src/components/RunningAgentsFlyout.tsx`
+  (Popover primitive: `src/components/ui/popover.tsx`)
 - Contextual project panel: `src/components/ProjectPanel.tsx`
 - Mission Control triage: `src/components/MissionControl.tsx`
 - Cross-project agent-state model (state, latest line, elapsed):
