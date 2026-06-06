@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAgentRows } from "./agentState";
+import { buildAgentRows, deriveAgentState } from "./agentState";
 import type { TaskSummary } from "../types";
 
 function task(overrides: Partial<TaskSummary>): TaskSummary {
@@ -29,6 +29,20 @@ function task(overrides: Partial<TaskSummary>): TaskSummary {
 }
 
 const repoNames = new Map([[1, "web-app"]]);
+
+describe("deriveAgentState review-loop statuses", () => {
+  // Every review-loop status must map to the "review" state so the Mission
+  // Control rail colour agrees with the TaskCard review badge — an errored or
+  // stopped review must not silently fall through to "idle".
+  const reviewStatuses = ["running", "reviewing", "passed", "feedback_sent", "error", "stopped"] as const;
+
+  for (const status of reviewStatuses) {
+    it(`treats a "${status}" review loop as review`, () => {
+      const t = task({ status: "in_progress", activeSessionId: null, reviewLoopStatus: status });
+      expect(deriveAgentState(t)).toBe("review");
+    });
+  }
+});
 
 describe("buildAgentRows live line", () => {
   it("uses the live activity line for a running task", () => {

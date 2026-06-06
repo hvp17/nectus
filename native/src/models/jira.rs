@@ -48,12 +48,19 @@ impl JiraStatusCategory {
     /// a raw status name, into our coarse buckets. Mirrors the token logic that was
     /// inline in `jira::map_category`, shared so the acli and REST paths agree.
     pub fn from_token(token: &str) -> Self {
-        let token = token.to_ascii_lowercase();
-        if token.contains("done") {
+        // Match whole words, not substrings, so e.g. "Abandoned" doesn't match
+        // "done". Splitting on non-alphanumerics also handles "To Do" → ["to","do"].
+        let lowered = token.to_ascii_lowercase();
+        let words: Vec<&str> = lowered
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|word| !word.is_empty())
+            .collect();
+        let has = |word: &str| words.contains(&word);
+        if has("done") {
             JiraStatusCategory::Done
-        } else if token.contains("progress") || token.contains("indeterminate") {
+        } else if has("progress") || has("indeterminate") {
             JiraStatusCategory::InProgress
-        } else if token.contains("new") || token.contains("to do") || token.contains("todo") {
+        } else if has("new") || has("todo") || (has("to") && has("do")) {
             JiraStatusCategory::ToDo
         } else {
             JiraStatusCategory::Unknown
@@ -103,6 +110,8 @@ mod tests {
             ("To Do", JiraStatusCategory::ToDo),
             ("new", JiraStatusCategory::ToDo),
             ("Backlog", JiraStatusCategory::Unknown),
+            // "Abandoned" must not match the "done" substring → Unknown, not Done.
+            ("Abandoned", JiraStatusCategory::Unknown),
         ];
         for (token, expected) in cases {
             assert_eq!(JiraStatusCategory::from_token(token), expected, "token: {token}");

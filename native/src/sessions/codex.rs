@@ -1,4 +1,4 @@
-use super::{emit_session_signal, RunningSession, SessionSignal};
+use super::{watch_event_log, RunningSession, SessionSignal};
 use crate::db::Database;
 use parking_lot::Mutex;
 use serde::Deserialize;
@@ -16,6 +16,8 @@ const CODEX_METADATA_FAST_POLL_ATTEMPTS: usize = 120;
 const CODEX_METADATA_FAST_POLL_INTERVAL: Duration = Duration::from_millis(500);
 const CODEX_METADATA_IDLE_POLL_INTERVAL: Duration = Duration::from_secs(5);
 const CODEX_PROMPT_PREVIEW_LIMIT: usize = 500;
+/// How often the rollout log is polled for new turn/idle events.
+const CODEX_LOG_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Clone)]
 pub(super) struct CodexSessionMetadata {
@@ -304,44 +306,41 @@ pub(super) fn spawn_codex_event_watcher(
             "watching Codex session log"
         );
 
-        let mut processed_lines = 0_usize;
-        loop {
-            if !sessions.lock().contains_key(&session_id) {
-                return;
-            }
-            let Ok(contents) = fs::read_to_string(&metadata.path) else {
-                tracing::trace!(
-                    session_id = %session_id,
-                    path = %metadata.path.display(),
-                    "Codex session log is not readable yet"
-                );
-                std::thread::sleep(Duration::from_millis(500));
-                continue;
-            };
-            for line in contents.lines().skip(processed_lines) {
-                let signal = match codex_session_event_from_line(line, started_at) {
-                    Some(CodexSessionEvent::Idle { turn_id, message }) => {
-                        SessionSignal::Idle { turn_id, message }
-                    }
-                    Some(CodexSessionEvent::NeedsInput {
-                        turn_id,
-                        reason,
-                        prompt,
-                    }) => SessionSignal::NeedsInput {
-                        turn_id,
-                        reason,
-                        prompt,
-                    },
-                    Some(CodexSessionEvent::Started { .. })
-                    | Some(CodexSessionEvent::Aborted { .. })
-                    | None => continue,
-                };
-                emit_session_signal(&app, &db, &sessions, task_id, &session_id, &cwd, signal);
-            }
-            processed_lines = contents.lines().count();
-            std::thread::sleep(Duration::from_millis(500));
-        }
+        watch_event_log(
+            &app,
+            &db,
+            &sessions,
+            task_id,
+            &session_id,
+            &cwd,
+            &metadata.path,
+            CODEX_LOG_POLL_INTERVAL,
+            |line| codex_signal_from_line(line, started_at),
+        );
     });
+}
+
+/// Translate a Codex rollout line into a [`SessionSignal`], dropping the
+/// turn-lifecycle events (started/aborted) that don't map to one.
+fn codex_signal_from_line(
+    line: &str,
+    started_at: chrono::DateTime<chrono::FixedOffset>,
+) -> Option<SessionSignal> {
+    match codex_session_event_from_line(line, started_at)? {
+        CodexSessionEvent::Idle { turn_id, message } => {
+            Some(SessionSignal::Idle { turn_id, message })
+        }
+        CodexSessionEvent::NeedsInput {
+            turn_id,
+            reason,
+            prompt,
+        } => Some(SessionSignal::NeedsInput {
+            turn_id,
+            reason,
+            prompt,
+        }),
+        CodexSessionEvent::Started { .. } | CodexSessionEvent::Aborted { .. } => None,
+    }
 }
 
 pub(super) fn codex_metadata_discovery_delay(attempt: usize) -> Duration {

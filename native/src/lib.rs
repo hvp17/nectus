@@ -82,8 +82,13 @@ fn update_app_settings(
     app_result(state.db.lock().update_app_settings(settings))
 }
 
+// The parameter list is the Tauri IPC contract: each field maps 1:1 to the
+// `api.ts` `create_task` invoke payload (and is asserted by the frontend tests).
+// Folding them into a struct would only nest the same fields under a key, so the
+// flat signature is kept deliberately.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
-fn create_task(
+async fn create_task(
     repo_id: i64,
     title: String,
     prompt: Option<String>,
@@ -95,30 +100,57 @@ fn create_task(
     jira_issue_url: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<TaskSummary> {
-    let db = state.db.lock();
-    let task = db.create_task_record(
-        repo_id,
-        title,
-        prompt,
-        agent_profile_id,
-        has_worktree.unwrap_or(false),
-        branch_name,
-    )?;
-    // Attaching to a story only links locally — it never writes back to JIRA.
-    if jira_issue_key.is_some() {
-        return app_result(db.set_task_jira_link(
-            task.id,
-            jira_issue_key,
-            jira_issue_summary,
-            jira_issue_url,
-        ));
-    }
-    Ok(task)
+    let db = state.db.clone();
+    // Worktree creation (`git worktree add`, even a `git fetch`) runs here, so
+    // do it on a blocking thread rather than under the async runtime, mirroring
+    // delete_task and keeping the symmetric create/delete paths consistent.
+    tauri::async_runtime::spawn_blocking(move || -> Result<TaskSummary, String> {
+        let db = db.lock();
+        let task = db.create_task_record(
+            repo_id,
+            title,
+            prompt,
+            agent_profile_id,
+            has_worktree.unwrap_or(false),
+            branch_name,
+        )?;
+        // Attaching to a story only links locally — it never writes back to JIRA.
+        if jira_issue_key.is_some() {
+            return db.set_task_jira_link(
+                task.id,
+                jira_issue_key,
+                jira_issue_summary,
+                jira_issue_url,
+            );
+        }
+        Ok(task)
+    })
+    .await
+    .map_err(|error| AppError::from(format!("Failed to create task: {error}")))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
-fn list_tasks(repo_id: Option<i64>, state: State<'_, AppState>) -> AppResult<Vec<TaskSummary>> {
-    app_result(state.db.lock().list_tasks(repo_id))
+async fn list_tasks(
+    repo_id: Option<i64>,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<TaskSummary>> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<TaskSummary>, String> {
+        let mut tasks = db.lock().list_tasks(repo_id)?;
+        // Compute worktree dirtiness off the DB lock: one `git status` per
+        // worktree-backed task, which under the global mutex would otherwise
+        // serialize every concurrent command behind the whole board load.
+        for task in tasks.iter_mut() {
+            if let Some(path) = task.worktree_path.as_deref() {
+                task.is_dirty = git_ops::is_dirty(Path::new(path));
+            }
+        }
+        Ok(tasks)
+    })
+    .await
+    .map_err(|error| AppError::from(format!("Failed to list tasks: {error}")))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -138,9 +170,14 @@ fn update_task_metadata(
 }
 
 #[tauri::command]
-async fn delete_task(task_id: i64, state: State<'_, AppState>) -> AppResult<()> {
+async fn delete_task(
+    task_id: i64,
+    force: Option<bool>,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
     let db = state.db.clone();
-    tauri::async_runtime::spawn_blocking(move || db.lock().delete_task(task_id))
+    let force = force.unwrap_or(false);
+    tauri::async_runtime::spawn_blocking(move || db.lock().delete_task(task_id, force))
         .await
         .map_err(|error| AppError::from(format!("Failed to finish task deletion: {error}")))?
         .map_err(Into::into)
@@ -388,9 +425,15 @@ async fn jira_transition_work_item(
                 })?;
             jira_rest::perform_transition(&site, &email, &token, &k, &target.id)
         })
-        .await
-        .map_err(|error| AppError::from(format!("Failed to transition work item: {error}")))?;
-        match rest_result {
+        .await;
+        // Fold a task panic (JoinError) into the same fall-through as an inner
+        // Err: any REST failure mode must degrade to acli, never short-circuit
+        // to the caller (which `?` on the JoinError would have done).
+        let rest_outcome = match rest_result {
+            Ok(inner) => inner,
+            Err(join_error) => Err(format!("REST transition task failed: {join_error}")),
+        };
+        match rest_outcome {
             Ok(()) => return Ok(()),
             Err(error) => {
                 // Degrade to acli (additive requirement): a revoked token or REST
@@ -709,17 +752,37 @@ fn rerun_pr_review(
 }
 
 #[tauri::command]
-fn delete_pr_review(review_id: i64, state: State<'_, AppState>) -> AppResult<()> {
-    let db = state.db.lock();
-    if let Some(review) = db.pr_review_by_id(review_id)? {
-        if let (Some(worktree), Some(repo)) = (
-            review.worktree_path.as_deref(),
-            db.repo_by_id(review.repo_id)?,
-        ) {
-            let _ = git_ops::remove_worktree(Path::new(&repo.path), Path::new(worktree));
+async fn delete_pr_review(review_id: i64, state: State<'_, AppState>) -> AppResult<()> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        // Resolve the worktree/repo paths under a short lock, then remove the
+        // worktree (a `git worktree remove` subprocess) off the lock so it can't
+        // block other DB commands.
+        let cleanup = {
+            let db = db.lock();
+            match db.pr_review_by_id(review_id)? {
+                Some(review) => match (review.worktree_path, db.repo_by_id(review.repo_id)?) {
+                    (Some(worktree), Some(repo)) => Some((repo.path, worktree)),
+                    _ => None,
+                },
+                None => None,
+            }
+        };
+        if let Some((repo_path, worktree)) = cleanup {
+            // The PR-review worktree is an app-owned ephemeral checkout of the PR
+            // head, not user work, so it is always safe to force-remove. Warn on
+            // failure rather than silently orphaning it.
+            if let Err(error) =
+                git_ops::remove_worktree(Path::new(&repo_path), Path::new(&worktree), true)
+            {
+                tracing::warn!(?error, review_id, "failed to remove PR review worktree on delete");
+            }
         }
-    }
-    app_result(db.delete_pr_review(review_id))
+        db.lock().delete_pr_review(review_id)
+    })
+    .await
+    .map_err(|error| AppError::from(format!("Failed to delete PR review: {error}")))?
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -929,7 +992,7 @@ pub fn run() {
                 if let Some(state) = window.try_state::<AppState>() {
                     state
                         .sessions
-                        .stop_all(&window.app_handle(), state.db.clone());
+                        .stop_all(window.app_handle(), state.db.clone());
                 }
             }
         })

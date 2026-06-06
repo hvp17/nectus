@@ -23,6 +23,7 @@ mod codex_tests;
 mod command;
 mod pr_consensus;
 mod pr_review;
+mod pr_worktree;
 mod review_loop;
 mod reviewer;
 mod terminal_io;
@@ -116,6 +117,64 @@ fn emit_session_signal(
                     tracing::warn!(?error, session_id = %session_id, "failed to emit session_needs_input")
                 });
         }
+    }
+}
+
+/// Split appended log contents into newline-terminated lines, skipping the first
+/// `processed` already-handled lines. Returns the fresh lines (with their line
+/// terminator trimmed) and the count of complete lines seen so far.
+///
+/// A trailing fragment without a `\n` is a line caught mid-write: it is excluded
+/// from both the returned lines and the count, so once its terminator arrives it
+/// is processed exactly once. Counting it (as `str::lines().count()` did) would
+/// skip the completed line and silently drop that turn's idle/needs-input event.
+fn newly_complete_lines(contents: &str, processed: usize) -> (Vec<&str>, usize) {
+    let complete: Vec<&str> = contents
+        .split_inclusive('\n')
+        .filter(|segment| segment.ends_with('\n'))
+        .map(|segment| segment.trim_end_matches('\n').trim_end_matches('\r'))
+        .collect();
+    let total = complete.len();
+    let fresh = complete.into_iter().skip(processed).collect();
+    (fresh, total)
+}
+
+/// Tail an append-only event log, translating each newly completed line into a
+/// [`SessionSignal`] via `parse_line` and emitting it. Polls every
+/// `poll_interval` and exits once the session is no longer running. Shared by the
+/// Codex and Claude watchers so the line-tailing (and its partial-line guard via
+/// [`newly_complete_lines`]) lives in one place.
+#[allow(clippy::too_many_arguments)]
+fn watch_event_log<F>(
+    app: &AppHandle,
+    db: &Arc<Mutex<Database>>,
+    sessions: &Arc<Mutex<HashMap<String, RunningSession>>>,
+    task_id: i64,
+    session_id: &str,
+    cwd: &Path,
+    log_path: &Path,
+    poll_interval: Duration,
+    parse_line: F,
+) where
+    F: Fn(&str) -> Option<SessionSignal>,
+{
+    let mut processed_lines = 0_usize;
+    loop {
+        if !sessions.lock().contains_key(session_id) {
+            return;
+        }
+        let Ok(contents) = std::fs::read_to_string(log_path) else {
+            std::thread::sleep(poll_interval);
+            continue;
+        };
+        let (fresh, total) = newly_complete_lines(&contents, processed_lines);
+        for line in fresh {
+            if let Some(signal) = parse_line(line) {
+                emit_session_signal(app, db, sessions, task_id, session_id, cwd, signal);
+            }
+        }
+        processed_lines = total;
+        std::thread::sleep(poll_interval);
     }
 }
 
@@ -226,14 +285,28 @@ impl SessionManager {
             .spawn_command(command)
             .map_err(|error| format!("Failed to start {}: {error}", agent.name))?;
         let pid = child.process_id();
-        let mut writer = pair
-            .master
-            .take_writer()
-            .map_err(|error| format!("Failed to open PTY writer: {error}"))?;
-        let mut reader = pair
-            .master
-            .try_clone_reader()
-            .map_err(|error| format!("Failed to create PTY reader: {error}"))?;
+
+        // portable-pty's Child is NOT killed on drop, so every fallible step
+        // after the spawn must reap the child on failure — otherwise an error
+        // here leaks a live, untracked agent process that outlives the app.
+        let reap = |child: &mut Box<dyn Child + Send + Sync>| {
+            let _ = child.kill();
+            let _ = child.wait();
+        };
+        let mut writer = match pair.master.take_writer() {
+            Ok(writer) => writer,
+            Err(error) => {
+                reap(&mut child);
+                return Err(format!("Failed to open PTY writer: {error}"));
+            }
+        };
+        let mut reader = match pair.master.try_clone_reader() {
+            Ok(reader) => reader,
+            Err(error) => {
+                reap(&mut child);
+                return Err(format!("Failed to create PTY reader: {error}"));
+            }
+        };
 
         if !resume {
             if let Some(prompt) = task
@@ -243,7 +316,7 @@ impl SessionManager {
                 .filter(|value| !value.is_empty())
             {
                 if let Err(error) = write_agent_submission(writer.as_mut(), prompt) {
-                    let _ = child.kill();
+                    reap(&mut child);
                     return Err(format!("Failed to send initial prompt: {error}"));
                 }
             }
@@ -263,13 +336,16 @@ impl SessionManager {
         let session_id = session.id.clone();
         let started_at = session.started_at.clone();
 
-        db.lock().start_session_record(
+        if let Err(error) = db.lock().start_session_record(
             task.id,
             &session_id,
             &agent.command,
             cwd,
             task.last_session_label.as_deref(),
-        )?;
+        ) {
+            reap(&mut child);
+            return Err(error);
+        }
 
         tracing::info!(
             session_id = %session_id,
@@ -388,7 +464,15 @@ impl SessionManager {
                         }
                     }
                 }
-                if sessions.lock().remove(&session_id).is_some() {
+                // Remove from the map first (releasing the lock) so the blocking
+                // wait() below never holds the global sessions mutex. Whichever of
+                // this thread / stop() wins the remove owns reaping the child, so
+                // there is no double wait or double session_exited.
+                let removed = sessions.lock().remove(&session_id);
+                if let Some(mut running) = removed {
+                    // EOF means the child has exited; wait() reaps the zombie and
+                    // yields the real status so we can report a true exit code.
+                    let exit_code = running.child.wait().ok().map(|status| status.exit_code() as i32);
                     if agent_command == AgentKind::Codex.as_str() {
                         if let Some(metadata) = latest_codex_session_metadata(&cwd, &started_at) {
                             let _ = db
@@ -416,7 +500,7 @@ impl SessionManager {
                             "session_exited",
                             SessionExitedEvent {
                                 session_id,
-                                exit_code: None,
+                                exit_code,
                             },
                         )
                         .inspect_err(|error| {
@@ -451,6 +535,8 @@ impl SessionManager {
             .remove(&session_id)
             .ok_or_else(|| "Session is not running".to_string())?;
         let _ = running.child.kill();
+        // Reap the just-killed child so it doesn't linger as a zombie until app exit.
+        let _ = running.child.wait();
         tracing::info!(
             session_id = %session_id,
             task_id = running.session.task_id,
@@ -597,6 +683,132 @@ impl SessionManager {
     }
 }
 
+/// Longest activity line we forward to the UI; the card truncates further with
+/// an ellipsis, this just bounds the payload.
+const ACTIVITY_LINE_MAX: usize = 200;
+
+/// Derive the agent's latest human-readable activity line from raw PTY output.
+///
+/// Agents render full-screen TUIs, so the raw tail is mostly ANSI escapes,
+/// carriage-return repaints, spinners, and box-drawing chrome. This strips the
+/// escape sequences, treats `\r` and `\n` as line breaks (so an in-place repaint
+/// keeps only its final text), and returns the last line that still carries a
+/// readable token — skipping spinner/box-only frames. Returns `None` when no
+/// meaningful line is present yet.
+fn latest_activity_line(buffer: &str) -> Option<String> {
+    buffer
+        .split(['\n', '\r'])
+        .rev()
+        .map(|segment| strip_ansi(segment).trim().to_string())
+        .find(|line| line.chars().any(char::is_alphanumeric))
+        .map(|line| line.chars().take(ACTIVITY_LINE_MAX).collect())
+}
+
+/// Remove ANSI escape sequences (CSI and OSC) and stray control bytes from a
+/// single line of terminal output. Callers split on `\n`/`\r` first, so neither
+/// appears here.
+fn strip_ansi(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match ch {
+            '\u{1b}' => match chars.peek() {
+                // CSI `ESC [ … final`: drop through a final byte in 0x40..=0x7E.
+                Some('[') => {
+                    chars.next();
+                    while let Some(&c) = chars.peek() {
+                        chars.next();
+                        if ('\u{40}'..='\u{7e}').contains(&c) {
+                            break;
+                        }
+                    }
+                }
+                // OSC `ESC ] … BEL` or `… ESC \`: drop through the terminator.
+                Some(']') => {
+                    chars.next();
+                    while let Some(c) = chars.next() {
+                        if c == '\u{07}' {
+                            break;
+                        }
+                        if c == '\u{1b}' {
+                            if chars.peek() == Some(&'\\') {
+                                chars.next();
+                            }
+                            break;
+                        }
+                    }
+                }
+                // Other two-byte escapes: drop ESC and its single intro byte.
+                Some(_) => {
+                    chars.next();
+                }
+                None => {}
+            },
+            // Keep tabs (trimmed/collapsed downstream); drop other control bytes.
+            c if c.is_control() && c != '\t' => {}
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// Compute the activity line to emit for a session after new output, applying
+/// de-duplication and throttling, and record what was emitted on the session.
+fn next_activity_line(running: &mut RunningSession) -> Option<String> {
+    let now = Instant::now();
+    let candidate = latest_activity_line(&running.output_buffer);
+    let line = activity_to_emit(
+        candidate,
+        running.last_activity_line.as_deref(),
+        running.last_activity_at,
+        now,
+    )?;
+    running.last_activity_line = Some(line.clone());
+    running.last_activity_at = Some(now);
+    Some(line)
+}
+
+/// Pure throttle/de-dup decision: forward `candidate` only when it is present,
+/// differs from the last forwarded line, and the throttle window has elapsed.
+fn activity_to_emit(
+    candidate: Option<String>,
+    last_line: Option<&str>,
+    last_at: Option<Instant>,
+    now: Instant,
+) -> Option<String> {
+    let line = candidate?;
+    if last_line == Some(line.as_str()) {
+        return None;
+    }
+    if let Some(at) = last_at {
+        if now.duration_since(at) < ACTIVITY_THROTTLE {
+            return None;
+        }
+    }
+    Some(line)
+}
+
+fn append_output_buffer(running: &mut RunningSession, data: &str) -> u64 {
+    let start_offset = running.output_end_offset;
+    running.output_buffer.push_str(data);
+    running.output_end_offset += data.len() as u64;
+
+    if running.output_buffer.len() > OUTPUT_BUFFER_LIMIT {
+        running.output_truncated = true;
+        let excess = running.output_buffer.len() - OUTPUT_BUFFER_LIMIT;
+        let drain_to = running
+            .output_buffer
+            .char_indices()
+            .map(|(index, _)| index)
+            .find(|index| *index >= excess)
+            .unwrap_or(running.output_buffer.len());
+        running.output_buffer.drain(..drain_to);
+        running.output_start_offset += drain_to as u64;
+    }
+
+    start_offset
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -725,130 +937,32 @@ mod tests {
         let now = Instant::now();
         assert_eq!(activity_to_emit(None, Some("Older line"), None, now), None);
     }
-}
 
-/// Longest activity line we forward to the UI; the card truncates further with
-/// an ellipsis, this just bounds the payload.
-const ACTIVITY_LINE_MAX: usize = 200;
+    #[test]
+    fn newly_complete_lines_defers_a_partial_trailing_line() {
+        // First poll: two complete lines plus a fragment caught mid-write.
+        let (fresh, processed) = newly_complete_lines("a\nb\npar", 0);
+        assert_eq!(fresh, vec!["a", "b"]);
+        assert_eq!(processed, 2);
 
-/// Derive the agent's latest human-readable activity line from raw PTY output.
-///
-/// Agents render full-screen TUIs, so the raw tail is mostly ANSI escapes,
-/// carriage-return repaints, spinners, and box-drawing chrome. This strips the
-/// escape sequences, treats `\r` and `\n` as line breaks (so an in-place repaint
-/// keeps only its final text), and returns the last line that still carries a
-/// readable token — skipping spinner/box-only frames. Returns `None` when no
-/// meaningful line is present yet.
-fn latest_activity_line(buffer: &str) -> Option<String> {
-    buffer
-        .split(['\n', '\r'])
-        .rev()
-        .map(|segment| strip_ansi(segment).trim().to_string())
-        .find(|line| line.chars().any(char::is_alphanumeric))
-        .map(|line| line.chars().take(ACTIVITY_LINE_MAX).collect())
-}
-
-/// Remove ANSI escape sequences (CSI and OSC) and stray control bytes from a
-/// single line of terminal output. Callers split on `\n`/`\r` first, so neither
-/// appears here.
-fn strip_ansi(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    let mut chars = input.chars().peekable();
-    while let Some(ch) = chars.next() {
-        match ch {
-            '\u{1b}' => match chars.peek() {
-                // CSI `ESC [ … final`: drop through a final byte in 0x40..=0x7E.
-                Some('[') => {
-                    chars.next();
-                    while let Some(&c) = chars.peek() {
-                        chars.next();
-                        if ('\u{40}'..='\u{7e}').contains(&c) {
-                            break;
-                        }
-                    }
-                }
-                // OSC `ESC ] … BEL` or `… ESC \`: drop through the terminator.
-                Some(']') => {
-                    chars.next();
-                    while let Some(c) = chars.next() {
-                        if c == '\u{07}' {
-                            break;
-                        }
-                        if c == '\u{1b}' {
-                            if chars.peek() == Some(&'\\') {
-                                chars.next();
-                            }
-                            break;
-                        }
-                    }
-                }
-                // Other two-byte escapes: drop ESC and its single intro byte.
-                Some(_) => {
-                    chars.next();
-                }
-                None => {}
-            },
-            // Keep tabs (trimmed/collapsed downstream); drop other control bytes.
-            c if c.is_control() && c != '\t' => {}
-            c => out.push(c),
-        }
-    }
-    out
-}
-
-/// Compute the activity line to emit for a session after new output, applying
-/// de-duplication and throttling, and record what was emitted on the session.
-fn next_activity_line(running: &mut RunningSession) -> Option<String> {
-    let now = Instant::now();
-    let candidate = latest_activity_line(&running.output_buffer);
-    let line = activity_to_emit(
-        candidate,
-        running.last_activity_line.as_deref(),
-        running.last_activity_at,
-        now,
-    )?;
-    running.last_activity_line = Some(line.clone());
-    running.last_activity_at = Some(now);
-    Some(line)
-}
-
-/// Pure throttle/de-dup decision: forward `candidate` only when it is present,
-/// differs from the last forwarded line, and the throttle window has elapsed.
-fn activity_to_emit(
-    candidate: Option<String>,
-    last_line: Option<&str>,
-    last_at: Option<Instant>,
-    now: Instant,
-) -> Option<String> {
-    let line = candidate?;
-    if last_line == Some(line.as_str()) {
-        return None;
-    }
-    if let Some(at) = last_at {
-        if now.duration_since(at) < ACTIVITY_THROTTLE {
-            return None;
-        }
-    }
-    Some(line)
-}
-
-fn append_output_buffer(running: &mut RunningSession, data: &str) -> u64 {
-    let start_offset = running.output_end_offset;
-    running.output_buffer.push_str(data);
-    running.output_end_offset += data.len() as u64;
-
-    if running.output_buffer.len() > OUTPUT_BUFFER_LIMIT {
-        running.output_truncated = true;
-        let excess = running.output_buffer.len() - OUTPUT_BUFFER_LIMIT;
-        let drain_to = running
-            .output_buffer
-            .char_indices()
-            .map(|(index, _)| index)
-            .find(|index| *index >= excess)
-            .unwrap_or(running.output_buffer.len());
-        running.output_buffer.drain(..drain_to);
-        running.output_start_offset += drain_to as u64;
+        // Next poll: the fragment now has its newline; it must be emitted exactly
+        // once (the old lines().count() approach skipped it entirely).
+        let (fresh, processed) = newly_complete_lines("a\nb\npartial\n", processed);
+        assert_eq!(fresh, vec!["partial"]);
+        assert_eq!(processed, 3);
     }
 
-    start_offset
+    #[test]
+    fn newly_complete_lines_trims_crlf_and_skips_processed() {
+        let (fresh, processed) = newly_complete_lines("x\r\ny\r\n", 1);
+        assert_eq!(fresh, vec!["y"]);
+        assert_eq!(processed, 2);
+    }
+
+    #[test]
+    fn newly_complete_lines_ignores_a_lone_partial_line() {
+        let (fresh, processed) = newly_complete_lines("still writing", 0);
+        assert!(fresh.is_empty());
+        assert_eq!(processed, 0);
+    }
 }

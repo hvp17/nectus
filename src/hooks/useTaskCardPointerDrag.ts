@@ -31,6 +31,10 @@ export function useTaskCardPointerDrag({
     let startY = 0;
     let pointerId: number | undefined;
     let dragging = false;
+    // True while a drag is in flight and has not yet been ended (dropped or
+    // cancelled). Lets the effect cleanup release the board's drag state if the
+    // card unmounts or `busy` flips mid-drag, instead of leaving it stuck.
+    let dragActive = false;
     let ghost: HTMLElement | null = null;
     let ghostOffsetX = 0;
     let ghostOffsetY = 0;
@@ -97,6 +101,7 @@ export function useTaskCardPointerDrag({
 
       if (!dragging) {
         dragging = true;
+        dragActive = true;
         createGhost(clientX, clientY);
         onDragStart(taskId);
       }
@@ -109,6 +114,7 @@ export function useTaskCardPointerDrag({
     const onPointerUp = (event: PointerEvent) => {
       if (event.pointerId !== pointerId) return;
       stopTracking();
+      dragActive = false;
 
       if (dragging) {
         const { clientX, clientY } = getClientPosition(event);
@@ -126,6 +132,7 @@ export function useTaskCardPointerDrag({
       if (event.pointerId !== pointerId) return;
       stopTracking();
       removeGhost();
+      dragActive = false;
       onDragEnd();
     };
 
@@ -147,6 +154,9 @@ export function useTaskCardPointerDrag({
       element.removeEventListener("pointerdown", onPointerDown);
       stopTracking();
       removeGhost();
+      // If the card unmounts or `busy` flips mid-drag, no pointerup/cancel will
+      // fire — release the board's drag/highlight state so it doesn't stick.
+      if (dragActive) onDragEnd();
     };
   }, [busy, onDragEnd, onDragStart, onPointerDragEnd, onPointerDragMove, taskId]);
 

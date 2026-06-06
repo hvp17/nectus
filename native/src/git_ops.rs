@@ -5,6 +5,18 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn git_output(repo_path: &Path, args: &[&str], failure_message: &str) -> Result<Output, String> {
+    git_output_allowing_codes(repo_path, args, &[], failure_message)
+}
+
+/// Like [`git_output`] but also treats the listed non-zero exit codes as success.
+/// `git diff --no-index` exits 1 ("differences found"), expected when diffing an
+/// untracked file against `/dev/null`.
+fn git_output_allowing_codes(
+    repo_path: &Path,
+    args: &[&str],
+    allowed_codes: &[i32],
+    failure_message: &str,
+) -> Result<Output, String> {
     let output = Command::new("git")
         .arg("-C")
         .arg(repo_path)
@@ -12,7 +24,12 @@ fn git_output(repo_path: &Path, args: &[&str], failure_message: &str) -> Result<
         .output()
         .map_err(|error| format!("{failure_message}: {error}"))?;
 
-    if output.status.success() {
+    if output.status.success()
+        || output
+            .status
+            .code()
+            .is_some_and(|code| allowed_codes.contains(&code))
+    {
         Ok(output)
     } else {
         Err(command_error(&output, failure_message))
@@ -27,21 +44,14 @@ pub fn validate_repo_path(path: &Path) -> Result<(), String> {
         return Err("Repository path must be a directory".into());
     }
 
-    let output = Command::new("git")
-        .args([
-            "-C",
-            &path.to_string_lossy(),
-            "rev-parse",
-            "--show-toplevel",
-        ])
-        .output()
-        .map_err(|error| format!("Failed to run git: {error}"))?;
-
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err("Path is not inside a git repository".into())
-    }
+    // Route through git_output so the repo path is passed as an OsStr (no lossy
+    // conversion) and `-C` is used consistently.
+    git_output(
+        path,
+        &["rev-parse", "--show-toplevel"],
+        "Path is not inside a git repository",
+    )
+    .map(|_| ())
 }
 
 pub fn default_worktree_root_with_pattern(repo_path: &Path, pattern: &str) -> PathBuf {
@@ -307,17 +317,34 @@ pub fn create_worktree_at_ref(
     }
 }
 
-pub fn remove_worktree(repo_path: &Path, worktree_path: &Path) -> Result<(), String> {
+/// Stable error returned when a non-forced [`remove_worktree`] would discard a
+/// worktree that still has uncommitted work. App-controlled (not git's localized
+/// text) so the UI can recognise it and offer an explicit confirmation.
+pub const WORKTREE_HAS_CHANGES: &str =
+    "This task's worktree has uncommitted changes that deleting it would discard.";
+
+/// Remove a worktree and prune its (now-empty) parent folder. With `force`,
+/// `git worktree remove --force` discards modified/untracked files; without it,
+/// a worktree carrying uncommitted work is preserved and [`WORKTREE_HAS_CHANGES`]
+/// is returned so the caller can confirm before destroying user work.
+pub fn remove_worktree(repo_path: &Path, worktree_path: &Path, force: bool) -> Result<(), String> {
     if !worktree_path.exists() {
         return Ok(());
     }
+    if !force && is_dirty(worktree_path) {
+        return Err(WORKTREE_HAS_CHANGES.to_string());
+    }
 
-    let output = Command::new("git")
+    let mut command = Command::new("git");
+    command
         .arg("-C")
         .arg(repo_path)
         .arg("worktree")
-        .arg("remove")
-        .arg("--force")
+        .arg("remove");
+    if force {
+        command.arg("--force");
+    }
+    let output = command
         .arg(worktree_path)
         .output()
         .map_err(|error| format!("Failed to run git worktree remove: {error}"))?;
@@ -333,6 +360,26 @@ pub fn remove_worktree(repo_path: &Path, worktree_path: &Path) -> Result<(), Str
     } else {
         Err(command_error(&output, "git worktree remove failed"))
     }
+}
+
+/// Delete a local branch, tolerating one that no longer exists. Used to clean up
+/// the ephemeral `nectus-pr-review-*` branches a PR-review worktree checks out, so
+/// they don't accumulate after every review.
+pub fn delete_branch(repo_path: &Path, branch_name: &str) -> Result<(), String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo_path)
+        .args(["branch", "-D", branch_name])
+        .output()
+        .map_err(|error| format!("Failed to run git branch -D: {error}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    // A missing branch is fine — the caller just wants it gone.
+    if String::from_utf8_lossy(&output.stderr).contains("not found") {
+        return Ok(());
+    }
+    Err(command_error(&output, "git branch -D failed"))
 }
 
 /// The base a worktree task is diffed against: a display label (e.g. `origin/main`)
@@ -426,7 +473,7 @@ pub fn diff_summary(path: &Path, base: Option<&str>) -> Result<Vec<DiffFileEntry
 /// against `base` (or `HEAD`); untracked files are diffed against `/dev/null` with
 /// `--no-index`, whose exit code 1 ("differences found") is expected here.
 pub fn diff_file(path: &Path, base: Option<&str>, file: &str) -> Result<String, String> {
-    if is_untracked(path, file) {
+    if is_untracked(path, file)? {
         return untracked_patch(path, file);
     }
     let base_ref = base.unwrap_or("HEAD");
@@ -511,43 +558,35 @@ fn count_added_lines(path: &Path) -> (u32, bool) {
     ((newlines + trailing) as u32, false)
 }
 
-fn is_untracked(path: &Path, file: &str) -> bool {
-    let Ok(output) = Command::new("git")
-        .arg("-C")
-        .arg(path)
-        .args(["ls-files", "--others", "--exclude-standard", "--", file])
-        .output()
-    else {
-        return false;
-    };
-    output.status.success() && !output.stdout.is_empty()
+/// Whether `file` is untracked (and not ignored) in the repo at `path`. Returns
+/// an error instead of silently reporting `false` so [`diff_file`] surfaces a git
+/// failure rather than routing the file down the tracked path and showing an
+/// empty patch.
+fn is_untracked(path: &Path, file: &str) -> Result<bool, String> {
+    let output = git_output(
+        path,
+        &["ls-files", "--others", "--exclude-standard", "--", file],
+        "Failed to check whether file is tracked",
+    )?;
+    Ok(!output.stdout.is_empty())
 }
 
 fn untracked_patch(path: &Path, file: &str) -> Result<String, String> {
     // `git diff --no-index` exits 1 when the inputs differ, which is always the
-    // case here (one side is /dev/null). Treat exit codes 0 and 1 as success.
-    let output = Command::new("git")
-        .current_dir(path)
-        .args(["diff", "--no-index", "--", "/dev/null", file])
-        .output()
-        .map_err(|error| format!("Failed to compute new-file diff: {error}"))?;
-    match output.status.code() {
-        Some(0) | Some(1) => Ok(String::from_utf8_lossy(&output.stdout).into_owned()),
-        _ => Err(command_error(&output, "git diff --no-index failed")),
-    }
+    // case here (one side is /dev/null). Treat exit code 1 as success.
+    let output = git_output_allowing_codes(
+        path,
+        &["diff", "--no-index", "--", "/dev/null", file],
+        &[1],
+        "git diff --no-index failed",
+    )?;
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
 pub fn is_dirty(path: &Path) -> bool {
-    let Ok(output) = Command::new("git")
-        .arg("-C")
-        .arg(path)
-        .args(["status", "--porcelain"])
-        .output()
-    else {
-        return false;
-    };
-
-    output.status.success() && !output.stdout.is_empty()
+    git_output(path, &["status", "--porcelain"], "Failed to check worktree status")
+        .map(|output| !output.stdout.is_empty())
+        .unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -707,6 +746,76 @@ mod tests {
             fs::read_to_string(worktree_path.join("value.txt")).unwrap(),
             "remote-latest\n"
         );
+    }
+
+    fn commit_repo_with_worktree(dir: &Path, worktree_name: &str) -> PathBuf {
+        init_repo(dir);
+        fs::write(dir.join("a.txt"), "one\n").unwrap();
+        run_git(dir, &["add", "a.txt"]);
+        run_git(dir, &["commit", "-m", "base"]);
+        let worktree = dir.join(worktree_name);
+        run_git(
+            dir,
+            &["worktree", "add", "-b", "feature", worktree.to_str().unwrap()],
+        );
+        worktree
+    }
+
+    #[test]
+    fn removes_a_clean_worktree_without_force() {
+        let dir = tempdir().unwrap();
+        let worktree = commit_repo_with_worktree(dir.path(), "wt-clean");
+        assert!(worktree.exists());
+
+        remove_worktree(dir.path(), &worktree, false).unwrap();
+
+        assert!(!worktree.exists());
+    }
+
+    #[test]
+    fn refuses_to_remove_a_dirty_worktree_without_force() {
+        let dir = tempdir().unwrap();
+        let worktree = commit_repo_with_worktree(dir.path(), "wt-dirty");
+        fs::write(worktree.join("uncommitted.txt"), "wip\n").unwrap();
+
+        let error = remove_worktree(dir.path(), &worktree, false).unwrap_err();
+
+        assert_eq!(error, WORKTREE_HAS_CHANGES);
+        assert!(worktree.exists(), "a dirty worktree must be preserved");
+    }
+
+    #[test]
+    fn force_removes_a_dirty_worktree() {
+        let dir = tempdir().unwrap();
+        let worktree = commit_repo_with_worktree(dir.path(), "wt-dirty");
+        fs::write(worktree.join("uncommitted.txt"), "wip\n").unwrap();
+
+        remove_worktree(dir.path(), &worktree, true).unwrap();
+
+        assert!(!worktree.exists());
+    }
+
+    #[test]
+    fn deletes_a_local_branch_and_tolerates_missing() {
+        let dir = tempdir().unwrap();
+        let repo = dir.path();
+        init_repo(repo);
+        fs::write(repo.join("a.txt"), "one\n").unwrap();
+        run_git(repo, &["add", "a.txt"]);
+        run_git(repo, &["commit", "-m", "base"]);
+        run_git(repo, &["branch", "ephemeral"]);
+
+        delete_branch(repo, "ephemeral").unwrap();
+        let listed = Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(["branch", "--list", "ephemeral"])
+            .output()
+            .unwrap();
+        assert!(String::from_utf8_lossy(&listed.stdout).trim().is_empty());
+
+        // Deleting an already-absent branch is a no-op, not an error.
+        delete_branch(repo, "ephemeral").unwrap();
     }
 
     #[test]

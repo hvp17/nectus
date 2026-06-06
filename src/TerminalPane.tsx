@@ -7,6 +7,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import { useEffect, useRef } from "react";
 import { api } from "./api";
+import { openExternal } from "./lib/openExternal";
 import { readTerminalTheme } from "./lib/terminalTheme";
 import { isTauriRuntime } from "./sessionNotifications";
 import type { SessionExitedEvent, SessionOutputEvent } from "./types";
@@ -39,8 +40,17 @@ function formatDroppedPaths(paths: string[]) {
 }
 
 function escapeShellPath(path: string) {
-  if (SHELL_PATH_SAFE.test(path)) return path;
-  return Array.from(path)
+  // Drop control characters first (newline/CR/NUL/tab, DEL): backslash-escaping
+  // them would still emit the real byte into the agent's readline — a newline
+  // would submit a half-typed prompt.
+  const sanitized = Array.from(path)
+    .filter((char) => {
+      const code = char.codePointAt(0) ?? 0;
+      return code >= 0x20 && code !== 0x7f;
+    })
+    .join("");
+  if (SHELL_PATH_SAFE.test(sanitized)) return sanitized;
+  return Array.from(sanitized)
     .map((char) => (SHELL_PATH_SAFE_CHAR.test(char) ? char : `\\${char}`))
     .join("");
 }
@@ -254,7 +264,7 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
     terminal.loadAddon(
       new WebLinksAddon((event, uri) => {
         event.preventDefault();
-        void api.openExternalUrl(uri);
+        openExternal(uri);
       }),
     );
     terminal.open(container);

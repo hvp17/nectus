@@ -15,10 +15,10 @@ import { JiraIssueTypeIcon } from "./jiraVisuals";
 import type { JiraProject, JiraWorkItem } from "../types";
 
 /**
- * Work item types offered by the create form. `acli` cannot enumerate a project's
- * configured types, so this mirrors the backend `DEFAULT_WORK_ITEM_TYPES`; an
- * invalid type for a project surfaces as an `acli` error (the optimistic pattern
- * used across the JIRA integration).
+ * Work item types offered by the create form, and the canonical default set for
+ * the JIRA integration. `acli` cannot enumerate a project's configured types, so
+ * this is the common default list; an invalid type for a project surfaces as an
+ * `acli` error (the optimistic pattern used across the JIRA integration).
  */
 export const JIRA_WORK_ITEM_TYPES = ["Task", "Bug", "Story", "Epic"] as const;
 

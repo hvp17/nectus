@@ -195,7 +195,11 @@ Current behavior:
 - Keeps discovering the matching rollout while the Nectus task session is active.
   Discovery polls every 500 ms for the first 120 attempts, then every 5 seconds
   until Codex writes metadata or the task session stops.
-- Reads appended lines from that file.
+- Reads newly appended, **newline-terminated** lines from that file. A trailing
+  fragment without a `\n` (a line caught mid-write) is not parsed or counted until
+  its terminator arrives, so the completing event is never skipped. This tailing
+  is shared with the Claude hook-sink watcher via `watch_event_log`
+  (`native/src/sessions/mod.rs`).
 - Parses the rollout envelope plus the `session_meta`, `event_msg`, and
   selected `response_item` payloads with tolerant Rust types. Unknown rollout
   entries and unknown event names are ignored.

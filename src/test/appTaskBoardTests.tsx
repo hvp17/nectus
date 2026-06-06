@@ -66,7 +66,7 @@ export function defineAppTaskBoardTests() {
     expect(screen.getByText("Removing task and worktree in the background.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /new task/i })).toBeEnabled();
     expect(deleteButton).toBeDisabled();
-    expect(mockedApi.deleteTask).toHaveBeenCalledWith(31);
+    expect(mockedApi.deleteTask).toHaveBeenCalledWith(31, false);
 
     await act(async () => {
       deletion.resolve();
@@ -77,6 +77,37 @@ export function defineAppTaskBoardTests() {
       expect(screen.getByText("Deleted Remove old worktree")).toBeInTheDocument();
     });
     expect(screen.queryByRole("button", { name: /remove old worktree/i })).not.toBeInTheDocument();
+  });
+
+  it("warns about and force-deletes a worktree with uncommitted changes", async () => {
+    const deletion = deferred<void>();
+
+    mockedApi.listRepos.mockResolvedValue([appRepo]);
+    mockedApi.listTasks.mockResolvedValue([
+      appTask({
+        id: 33,
+        title: "Discard dirty worktree",
+        hasWorktree: true,
+        branchName: "dirty-flow",
+        worktreePath: "/tmp/nectus-desktop-worktrees/dirty-flow",
+        isDirty: true,
+      }),
+    ]);
+    mockedApi.deleteTask.mockReturnValue(deletion.promise);
+
+    render(<App />);
+
+    const taskCard = await findBoardCard(/discard dirty worktree/i);
+    fireEvent.click(within(taskCard).getByRole("button"));
+    expect(await screen.findByText(/uncommitted changes/i)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: /^delete task$/i }));
+
+    expect(mockedApi.deleteTask).toHaveBeenCalledWith(33, true);
+
+    await act(async () => {
+      deletion.resolve();
+      await deletion.promise;
+    });
   });
 
   it("deletes the selected task from the task inspector sidebar", async () => {
@@ -105,7 +136,7 @@ export function defineAppTaskBoardTests() {
     });
     expect(await screen.findByText("Deleting Delete from sidebar")).toBeInTheDocument();
     expect(screen.getByText("Removing task in the background.")).toBeInTheDocument();
-    expect(mockedApi.deleteTask).toHaveBeenCalledWith(32);
+    expect(mockedApi.deleteTask).toHaveBeenCalledWith(32, false);
 
     await act(async () => {
       deletion.resolve();

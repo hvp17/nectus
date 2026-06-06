@@ -87,4 +87,42 @@ describe("useTaskCardPointerDrag", () => {
     expect(onDragStart).not.toHaveBeenCalled();
     expect(document.body).not.toHaveClass("task-drag-selection-lock");
   });
+
+  it("ends the drag if the card unmounts mid-drag", () => {
+    const onDragEnd = vi.fn();
+    const { unmount } = render(<DragHarness onDragEnd={onDragEnd} />);
+
+    const card = screen.getByRole("button", { name: /drag task/i });
+    dispatchPointerEvent(card, "pointerdown", { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    dispatchPointerEvent(window, "pointermove", { pointerId: 1, clientX: 30, clientY: 10 });
+    // No pointerup — the card disappears while the drag is still active.
+    unmount();
+
+    expect(onDragEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it("ends the drag when busy flips true mid-drag", () => {
+    const onDragEnd = vi.fn();
+    const { rerender } = render(<DragHarness busy={false} onDragEnd={onDragEnd} />);
+
+    const card = screen.getByRole("button", { name: /drag task/i });
+    dispatchPointerEvent(card, "pointerdown", { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    dispatchPointerEvent(window, "pointermove", { pointerId: 1, clientX: 30, clientY: 10 });
+    rerender(<DragHarness busy onDragEnd={onDragEnd} />);
+
+    expect(onDragEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not double-end a drag that completed with a drop", () => {
+    const onDragEnd = vi.fn();
+    const { unmount } = render(<DragHarness onDragEnd={onDragEnd} />);
+
+    const card = screen.getByRole("button", { name: /drag task/i });
+    dispatchPointerEvent(card, "pointerdown", { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    dispatchPointerEvent(window, "pointermove", { pointerId: 1, clientX: 30, clientY: 10 });
+    dispatchPointerEvent(window, "pointerup", { pointerId: 1, clientX: 30, clientY: 10 });
+    unmount();
+
+    expect(onDragEnd).not.toHaveBeenCalled();
+  });
 });

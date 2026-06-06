@@ -1,7 +1,8 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useSessionEvents } from "./useSessionEvents";
-import type { TaskSummary } from "../types";
+import { upsertTaskAttention, type TaskAttention } from "../sessionAttention";
+import type { SessionNeedsInputEvent, TaskSummary } from "../types";
 
 // Capture the handlers `useSessionEvents` registers so tests can fire events
 // without a Tauri backend. `vi.hoisted` keeps the shared state available to the
@@ -40,12 +41,18 @@ const baseTask: TaskSummary = {
   updatedAt: "2026-05-15T00:00:00.000Z",
 };
 
-function setup(initialTasks: TaskSummary[]) {
+function setup(initialTasks: TaskSummary[], initialAttention: TaskAttention[] = []) {
   const tasksRef = { current: initialTasks };
   let liveLines: Record<number, string> = {};
   const setLiveLines = vi.fn(
     (update: React.SetStateAction<Record<number, string>>) => {
       liveLines = typeof update === "function" ? update(liveLines) : update;
+    },
+  );
+  let taskAttention: TaskAttention[] = initialAttention;
+  const setTaskAttention = vi.fn(
+    (update: React.SetStateAction<TaskAttention[]>) => {
+      taskAttention = typeof update === "function" ? update(taskAttention) : update;
     },
   );
   renderHook(() =>
@@ -57,11 +64,11 @@ function setup(initialTasks: TaskSummary[]) {
       }),
       setMessage: vi.fn(),
       setTaskToast: vi.fn(),
-      setTaskAttention: vi.fn(),
+      setTaskAttention,
       setLiveLines,
     }),
   );
-  return { getLiveLines: () => liveLines };
+  return { getLiveLines: () => liveLines, getTaskAttention: () => taskAttention };
 }
 
 describe("useSessionEvents live activity", () => {
@@ -104,5 +111,25 @@ describe("useSessionEvents live activity", () => {
     });
 
     expect(getLiveLines()).toEqual({});
+  });
+
+  it("clears the task's attention when its background session exits", async () => {
+    const needsInput: SessionNeedsInputEvent = {
+      sessionId: "s-1",
+      taskId: 7,
+      turnId: null,
+      reason: "permission",
+      prompt: "Approve?",
+    };
+    const initialAttention = upsertTaskAttention([], baseTask, needsInput);
+    const { getTaskAttention } = setup([baseTask], initialAttention);
+    await waitFor(() => expect(listeners.has("session_exited")).toBe(true));
+    expect(getTaskAttention()).toHaveLength(1);
+
+    act(() => {
+      listeners.get("session_exited")?.({ payload: { sessionId: "s-1" } });
+    });
+
+    expect(getTaskAttention()).toEqual([]);
   });
 });

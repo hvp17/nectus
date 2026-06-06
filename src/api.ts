@@ -132,8 +132,10 @@ export const api = {
     };
     return invoke<TaskSummary>("update_task_metadata", payload);
   },
-  async deleteTask(taskId: number): Promise<void> {
-    return invoke("delete_task", { taskId });
+  // `force` discards a worktree that still has uncommitted changes; the backend
+  // refuses (preserving user work) when it is false.
+  async deleteTask(taskId: number, force = false): Promise<void> {
+    return invoke("delete_task", { taskId, force });
   },
   async taskDiffSummary(taskId: number): Promise<TaskDiffSummary> {
     if (isBrowserPreview) return seedTaskDiffSummary(taskId);
@@ -165,6 +167,17 @@ export const api = {
   },
   async githubPullRequestStatus(taskId: number): Promise<PullRequestInfo> {
     if (isBrowserPreview) return seedPullRequest(taskId);
+    if (!isTauri)
+      return {
+        number: 0,
+        url: "",
+        title: "",
+        state: "unknown",
+        isDraft: false,
+        reviewDecision: null,
+        checks: { total: 0, passed: 0, failed: 0, pending: 0 },
+        checksState: "none",
+      };
     return invoke("github_pull_request_status", { taskId });
   },
   async detectGithubPullRequest(taskId: number): Promise<TaskSummary | null> {

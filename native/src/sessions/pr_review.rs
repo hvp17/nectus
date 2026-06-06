@@ -1,10 +1,10 @@
+use super::pr_worktree::with_pr_worktree;
 use super::reviewer::run_reviewer_command;
 use crate::db::Database;
 use crate::github::{self, PrMeta};
-use crate::git_ops;
 use crate::models::{PrReviewStatus, PrReviewUpdatedEvent, PrReviewVerdict};
 use parking_lot::Mutex;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
@@ -52,54 +52,27 @@ fn run_pr_review(app: &AppHandle, db: &Arc<Mutex<Database>>, review_id: i64) -> 
     )?;
     emit_pr_review_update(app, db, review_id);
 
-    let branch_name = format!("nectus-pr-review-{pr_number}");
-    let worktree_path = PathBuf::from(&default_worktree_root).join(&branch_name);
-    // Clear any worktree left by a previous run before re-adding.
-    let _ = git_ops::remove_worktree(&repo_path, &worktree_path);
-
-    let output = review_in_worktree(
+    // The shared scaffold owns the ephemeral worktree lifecycle (unique naming,
+    // pre-clean, fetch+create, persist path, guaranteed teardown incl. branch).
+    let raw_output = with_pr_worktree(
         db,
         review_id,
         &repo_path,
-        &worktree_path,
-        &branch_name,
+        &default_worktree_root,
         pr_number,
-        &reviewer,
-        &meta,
-    );
+        |worktree_path| {
+            let prompt = build_pr_review_prompt(pr_number, &meta);
+            // PR reviews surface their output through the Reviews view, not the
+            // live task workspace, so they keep the captured-output path.
+            run_reviewer_command(&reviewer, worktree_path, &prompt, None)
+        },
+    )?;
 
-    // Always tear the worktree down, whether or not the review succeeded.
-    let _ = git_ops::remove_worktree(&repo_path, &worktree_path);
-    let _ = db.lock().set_pr_review_worktree(review_id, None);
-
-    let raw_output = output?;
     let (verdict, review_output) = parse_pr_review_output(&raw_output);
     db.lock()
         .set_pr_review_result(review_id, &review_output, verdict)?;
     emit_pr_review_update(app, db, review_id);
     Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-fn review_in_worktree(
-    db: &Arc<Mutex<Database>>,
-    review_id: i64,
-    repo_path: &Path,
-    worktree_path: &Path,
-    branch_name: &str,
-    pr_number: i64,
-    reviewer: &crate::models::AgentProfile,
-    meta: &PrMeta,
-) -> Result<String, String> {
-    git_ops::fetch_pull_request_ref(repo_path, pr_number, branch_name)?;
-    git_ops::create_worktree_at_ref(repo_path, worktree_path, branch_name)?;
-    db.lock()
-        .set_pr_review_worktree(review_id, Some(&worktree_path.to_string_lossy()))?;
-
-    let prompt = build_pr_review_prompt(pr_number, meta);
-    // PR reviews surface their output through the Reviews view, not the live
-    // task workspace, so they keep the captured-output path (no live stream).
-    run_reviewer_command(reviewer, worktree_path, &prompt, None)
 }
 
 fn emit_pr_review_update(app: &AppHandle, db: &Arc<Mutex<Database>>, review_id: i64) {

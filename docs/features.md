@@ -63,7 +63,10 @@ Worktree-backed tasks:
   configured branch prefix applied.
 - Create the worktree path from the project worktree root pattern (default `~/.nectus/worktrees/<repo-name>/<branch-name>`).
 - Run the agent in that worktree path.
-- Remove the git worktree when the task is deleted.
+- Remove the git worktree when the task is deleted. A worktree with uncommitted
+  changes is not silently discarded: the delete dialog warns that the changes
+  will be lost and only then force-removes it; a clean worktree is removed
+  normally.
 - Can be deleted from the board card or the selected-task inspector.
 
 Task status values are:

@@ -1,7 +1,7 @@
 use super::pr_review::{build_pr_review_prompt, parse_pr_review_output, PR_VERDICT_MARKER};
+use super::pr_worktree::with_pr_worktree;
 use super::reviewer::run_reviewer_command;
 use crate::db::Database;
-use crate::git_ops;
 use crate::github::{self, PrMeta};
 use crate::models::{
     AgentProfile, PrReviewRun, PrReviewRunInput, PrReviewStatus, PrReviewUpdatedEvent,
@@ -92,30 +92,28 @@ fn run_consensus_pr_review(
     )?;
     emit_consensus_update(app, db, review_id, None);
 
-    let branch_name = format!("nectus-pr-review-{pr_number}");
-    let worktree_path = PathBuf::from(&default_worktree_root).join(&branch_name);
-    // Clear any worktree left by a previous run before re-adding.
-    let _ = git_ops::remove_worktree(&repo_path, &worktree_path);
-
     // All reviewers (every round) and the synthesizer share one read-only
-    // worktree of the PR head.
-    let outcome = run_rounds_and_synthesize(
-        app,
+    // worktree of the PR head; the shared scaffold owns its lifecycle.
+    let outcome = with_pr_worktree(
         db,
         review_id,
         &repo_path,
-        &worktree_path,
-        &branch_name,
+        &default_worktree_root,
         pr_number,
-        &reviewers,
-        &synthesizer,
-        max_rounds,
-        &meta,
+        |worktree_path| {
+            run_rounds_and_synthesize(
+                app,
+                db,
+                review_id,
+                worktree_path,
+                pr_number,
+                &reviewers,
+                &synthesizer,
+                max_rounds,
+                &meta,
+            )
+        },
     );
-
-    // Always tear the worktree down, whether or not the review succeeded.
-    let _ = git_ops::remove_worktree(&repo_path, &worktree_path);
-    let _ = db.lock().set_pr_review_worktree(review_id, None);
 
     let (converged, verdict, review_output) = outcome?;
     db.lock()
@@ -129,20 +127,13 @@ fn run_rounds_and_synthesize(
     app: &AppHandle,
     db: &Arc<Mutex<Database>>,
     review_id: i64,
-    repo_path: &Path,
     worktree_path: &Path,
-    branch_name: &str,
     pr_number: i64,
     reviewers: &[AgentProfile],
     synthesizer: &AgentProfile,
     max_rounds: i64,
     meta: &PrMeta,
 ) -> Result<(bool, PrReviewVerdict, String), String> {
-    git_ops::fetch_pull_request_ref(repo_path, pr_number, branch_name)?;
-    git_ops::create_worktree_at_ref(repo_path, worktree_path, branch_name)?;
-    db.lock()
-        .set_pr_review_worktree(review_id, Some(&worktree_path.to_string_lossy()))?;
-
     let mut last_round: Vec<ReviewerOutcome> = Vec::new();
     let mut converged = false;
     let mut agreed_verdict = PrReviewVerdict::Inconclusive;

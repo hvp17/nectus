@@ -152,6 +152,13 @@ impl Database {
                 .ok_or_else(|| "Reviewer profile not found".to_string())?;
         }
 
+        // Insert the parent review and all reviewer rows atomically, so a failure
+        // mid-loop (e.g. a duplicate tripping the reviewer PK) can't leave an
+        // under-populated consensus review with an incomplete reviewer set.
+        let tx = self
+            .conn
+            .unchecked_transaction()
+            .map_err(|error| format!("Failed to create consensus PR review: {error}"))?;
         let now = now();
         self.conn
             .execute(
@@ -182,6 +189,8 @@ impl Database {
                 )
                 .map_err(|error| format!("Failed to add consensus reviewer: {error}"))?;
         }
+        tx.commit()
+            .map_err(|error| format!("Failed to create consensus PR review: {error}"))?;
 
         self.pr_review_by_id(review_id)?
             .ok_or_else(|| "PR review was saved but could not be loaded".to_string())

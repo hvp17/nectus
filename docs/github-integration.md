@@ -66,7 +66,13 @@ The PR Reviews section reviews a pull request opened by someone else (see
 - The PR head is checked out into an ephemeral worktree with
   `git fetch --force origin pull/<n>/head:<branch>` followed by `git worktree add`;
   this works for fork PRs because GitHub exposes `refs/pull/<n>/head` on the base
-  repository's remote. The worktree is always removed after the review.
+  repository's remote. The branch/worktree are named
+  `nectus-pr-review-<n>-<review_id>` (unique per review) so concurrent reviews of
+  the same PR — a single plus a consensus review, or two reviews of one PR — never
+  collide on the path or share a branch. The worktree **and** the ephemeral branch
+  are always removed after the review, so reviewed PRs leave no branch trail. This
+  lifecycle (naming, pre-clean, fetch+create, teardown) is owned by the shared
+  `native/src/sessions/pr_worktree.rs` scaffold used by both review runtimes.
 
 ### Single vs consensus reviews
 

@@ -33,6 +33,11 @@ impl Database {
 
         let conn =
             Connection::open(path).map_err(|error| format!("Failed to open database: {error}"))?;
+        // `foreign_keys` is per-connection (not persisted), so enforce it here at
+        // open — not only in the schema batch — so the ON DELETE CASCADE/SET NULL
+        // constraints always hold for this connection.
+        conn.pragma_update(None, "foreign_keys", true)
+            .map_err(|error| format!("Failed to enable foreign keys: {error}"))?;
         let db = Self { conn };
         db.create_schema()?;
         db.seed_agent_profiles()?;
@@ -42,9 +47,10 @@ impl Database {
 
     #[cfg(test)]
     pub fn open_in_memory() -> Result<Self, String> {
-        let db = Self {
-            conn: Connection::open_in_memory().map_err(|error| error.to_string())?,
-        };
+        let conn = Connection::open_in_memory().map_err(|error| error.to_string())?;
+        conn.pragma_update(None, "foreign_keys", true)
+            .map_err(|error| format!("Failed to enable foreign keys: {error}"))?;
+        let db = Self { conn };
         db.create_schema()?;
         db.seed_agent_profiles()?;
         db.seed_app_settings()?;
@@ -258,41 +264,56 @@ impl Database {
                 &worktree_path,
                 &branch_name,
             )?;
-            (
-                Some(branch_name),
-                Some(worktree_path.to_string_lossy().to_string()),
-            )
+            (Some(branch_name), Some(worktree_path))
         } else {
             (None, None)
         };
 
         let now = now();
-        self.conn
-            .execute(
-                "
+        let worktree_path_value = worktree_path
+            .as_ref()
+            .map(|path| path.to_string_lossy().to_string());
+        let insert = self.conn.execute(
+            "
                 INSERT INTO tasks
                   (repo_id, title, prompt, status, pr_url, agent_profile_id, active_session_id, last_session_id, last_session_agent, last_session_cwd, last_session_label, has_worktree, branch_name, worktree_path, created_at, updated_at)
                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15)
                 ",
-                params![
-                    repo_id,
-                    title,
-                    prompt,
-                    TaskStatus::Planned.as_str(),
-                    None::<String>,
-                    agent_profile_id,
-                    None::<String>,
-                    None::<String>,
-                    None::<String>,
-                    None::<String>,
-                    None::<String>,
-                    has_worktree,
-                    branch_name,
-                    worktree_path,
-                    now
-                ],
-            )
-            .map_err(|error| format!("Failed to save task: {error}"))?;
+            params![
+                repo_id,
+                title,
+                prompt,
+                TaskStatus::Planned.as_str(),
+                None::<String>,
+                agent_profile_id,
+                None::<String>,
+                None::<String>,
+                None::<String>,
+                None::<String>,
+                None::<String>,
+                has_worktree,
+                branch_name,
+                worktree_path_value,
+                now
+            ],
+        );
+
+        if let Err(error) = insert {
+            // The worktree is created on disk before this INSERT, so a failure
+            // here (e.g. a re-used branch tripping the unique index) would leave
+            // an untracked worktree that delete_task can't see and that blocks
+            // every retry with "Worktree path already exists". Compensate by
+            // removing it — it is a freshly created, app-owned worktree, so the
+            // force removal discards no user work.
+            if let Some(path) = &worktree_path {
+                let _ = git_ops::remove_worktree(
+                    PathBuf::from(&repo.path).as_path(),
+                    path,
+                    true,
+                );
+            }
+            return Err(format!("Failed to save task: {error}"));
+        }
 
         self.task_by_id(self.conn.last_insert_rowid())?
             .ok_or_else(|| "Task was saved but could not be loaded".into())
@@ -311,6 +332,10 @@ impl Database {
             LEFT JOIN review_loops rl ON rl.task_id = t.id
         ";
 
+        // A pure DB read: worktree dirtiness (a `git status` subprocess per task)
+        // is intentionally NOT computed here. It is filled in off the DB lock at
+        // the command layer (`list_tasks`) so a board load doesn't serialize N
+        // git subprocesses inside the global mutex.
         if let Some(repo_id) = repo_id {
             let mut stmt = self
                 .conn
@@ -318,20 +343,18 @@ impl Database {
                     "{sql} WHERE t.repo_id = ?1 ORDER BY t.updated_at DESC"
                 ))
                 .map_err(|error| error.to_string())?;
-            let result = self.task_rows(
-                stmt.query_map(params![repo_id], task_from_row)
-                    .map_err(|error| error.to_string())?,
-            );
+            let result = rows(stmt
+                .query_map(params![repo_id], task_from_row)
+                .map_err(|error| error.to_string())?);
             result
         } else {
             let mut stmt = self
                 .conn
                 .prepare(&format!("{sql} ORDER BY t.updated_at DESC"))
                 .map_err(|error| error.to_string())?;
-            let result = self.task_rows(
-                stmt.query_map([], task_from_row)
-                    .map_err(|error| error.to_string())?,
-            );
+            let result = rows(stmt
+                .query_map([], task_from_row)
+                .map_err(|error| error.to_string())?);
             result
         }
     }
@@ -364,22 +387,6 @@ impl Database {
                 .is_some_and(|path| git_ops::is_dirty(PathBuf::from(path).as_path()));
             task
         }))
-    }
-
-    fn task_rows<I>(&self, mapped: I) -> Result<Vec<TaskSummary>, String>
-    where
-        I: Iterator<Item = rusqlite::Result<TaskSummary>>,
-    {
-        mapped
-            .map(|row| {
-                let mut task = row.map_err(|error| error.to_string())?;
-                task.is_dirty = task
-                    .worktree_path
-                    .as_ref()
-                    .is_some_and(|path| git_ops::is_dirty(PathBuf::from(path).as_path()));
-                Ok(task)
-            })
-            .collect()
     }
 
     pub fn update_task_metadata(
@@ -437,7 +444,11 @@ impl Database {
             .ok_or_else(|| "Task not found after update".into())
     }
 
-    pub fn delete_task(&self, task_id: i64) -> Result<(), String> {
+    /// Delete a task and, for worktree-backed tasks, remove its worktree. With
+    /// `force`, a worktree carrying uncommitted work is discarded; without it,
+    /// such a worktree is preserved and an error is returned so the caller can
+    /// confirm before destroying user work (see [`git_ops::remove_worktree`]).
+    pub fn delete_task(&self, task_id: i64, force: bool) -> Result<(), String> {
         let existing = self
             .task_by_id(task_id)?
             .ok_or_else(|| "Task not found".to_string())?;
@@ -452,6 +463,7 @@ impl Database {
             git_ops::remove_worktree(
                 PathBuf::from(&repo.path).as_path(),
                 Path::new(&worktree_path),
+                force,
             )?;
         }
 
