@@ -257,10 +257,14 @@ function App() {
               settings={settings}
               agentProfiles={agentProfiles}
               githubStatus={githubStatus}
+              jiraRestStatus={jiraRestStatus}
+              jiraDetectedSite={jiraStatus?.site}
               busy={busy}
               onBack={() => setCurrentView("mission")}
               onSaveSettings={saveAppSettings}
               onSaveAgentProfile={saveAgentProfile}
+              onSaveJiraToken={setJiraApiToken}
+              onDisconnectJira={clearJiraApiToken}
             />
           ) : currentView === "jira" ? (
             <JiraBoardPage

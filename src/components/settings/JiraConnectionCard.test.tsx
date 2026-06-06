@@ -1,0 +1,51 @@
+import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { renderWithTooltipProvider } from "../../test/testUtils";
+import type { JiraRestStatus } from "../../types";
+import { JiraConnectionCard } from "./JiraConnectionCard";
+
+const connected: JiraRestStatus = {
+  connected: true,
+  site: "team.atlassian.net",
+  email: "me@example.com",
+  error: null,
+};
+
+describe("JiraConnectionCard", () => {
+  it("saves the entered site, email, and token", async () => {
+    const onSave = vi.fn(async () => connected);
+    renderWithTooltipProvider(
+      <JiraConnectionCard
+        detectedSite="team.atlassian.net"
+        busy={false}
+        onSave={onSave}
+        onDisconnect={vi.fn(async () => {})}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "me@example.com" } });
+    fireEvent.change(screen.getByLabelText("API token"), { target: { value: "secret-token" } });
+    fireEvent.click(screen.getByRole("button", { name: "Test & connect" }));
+
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith("team.atlassian.net", "me@example.com", "secret-token"),
+    );
+  });
+
+  it("disconnects when connected", async () => {
+    const onDisconnect = vi.fn(async () => {});
+    renderWithTooltipProvider(
+      <JiraConnectionCard
+        status={connected}
+        busy={false}
+        onSave={vi.fn(async () => connected)}
+        onDisconnect={onDisconnect}
+      />,
+    );
+
+    expect(screen.getByLabelText("JIRA REST Connected")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+
+    await waitFor(() => expect(onDisconnect).toHaveBeenCalledTimes(1));
+  });
+});
