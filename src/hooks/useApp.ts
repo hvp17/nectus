@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { api } from "../api";
-import { toSettingsInput } from "../components/settings/profileDrafts";
 import { replaceById, upsertById } from "../lib/listState";
-import { jiraBrowseUrl, syncSelectedWorkItem } from "../lib/jira";
+import { jiraBrowseUrl } from "../lib/jira";
 import { isReviewLoopActive } from "../statusLabels";
 import { isBrowserPreview, seedAttention, seedLiveLines } from "../lib/browserSeed";
 import { useGuardedAction } from "./useGuardedAction";
@@ -18,7 +17,7 @@ import { useSessionEvents } from "./useSessionEvents";
 import type { TaskToast } from "../taskNotification";
 import { useSessionAttentionControls } from "./useSessionAttentionControls";
 import { useGithub } from "./useGithub";
-import { useJira } from "./useJira";
+import { useJiraBoardView } from "./useJiraBoardView";
 import { useTaskDeletion } from "./useTaskDeletion";
 import { useTaskReviewLoop } from "./useTaskReviewLoop";
 import { usePrReviews } from "./usePrReviews";
@@ -43,8 +42,6 @@ export function useApp() {
   const [currentView, setCurrentView] = useState<"mission" | "board" | "settings" | "reviews" | "jira">(
     "mission",
   );
-  const [selectedJiraItem, setSelectedJiraItem] = useState<JiraWorkItem | null>(null);
-  const [createJiraItemOpen, setCreateJiraItemOpen] = useState(false);
   const [selectedRepoId, setSelectedRepoId] = useState<number | undefined>();
   const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>();
   const [selectedAgentProfileId, setSelectedAgentProfileId] = useState<number | undefined>();
@@ -230,62 +227,13 @@ export function useApp() {
     createPullRequest: createGithubPullRequest,
   } = useGithub({ selectedTask, setMessage, applyTask });
 
-  const jira = useJira({
+  const jiraBoard = useJiraBoardView({
     active: currentView === "jira",
-    configured: Boolean(settings?.jiraBoardProject),
-    project: settings?.jiraBoardProject ?? null,
-    statusFilter: settings?.jiraFilterStatuses ?? [],
+    settings,
+    setSettings,
     setMessage,
   });
-
-  // Keep the docked work-item panel in lockstep with the board: a panel-driven
-  // transition/assign mutates `jira.items` and refreshes, so re-read the
-  // selected item from the fresh results (a just-created item not yet on the
-  // board is preserved).
-  useEffect(() => {
-    setSelectedJiraItem((current) => syncSelectedWorkItem(current, jira.items));
-  }, [jira.items]);
-
-  const setJiraBoardConfig = (partial: {
-    project?: string | null;
-    myIssues?: boolean;
-    unresolved?: boolean;
-    currentSprint?: boolean;
-    statuses?: string[];
-  }) =>
-    run(async () => {
-      if (!settings) return;
-      const updated = await api.updateAppSettings({
-        ...toSettingsInput(settings),
-        jiraBoardProject:
-          partial.project !== undefined ? partial.project : settings.jiraBoardProject ?? null,
-        jiraFilterMyIssues: partial.myIssues ?? settings.jiraFilterMyIssues,
-        jiraFilterUnresolved: partial.unresolved ?? settings.jiraFilterUnresolved,
-        jiraFilterCurrentSprint: partial.currentSprint ?? settings.jiraFilterCurrentSprint,
-        jiraFilterStatuses: partial.statuses ?? settings.jiraFilterStatuses,
-      });
-      setSettings(updated);
-      await jira.refresh();
-    });
-
-  // Connecting/disconnecting a token writes jira_site_url / jira_rest_email
-  // server-side. Re-read settings so the local copy stays fresh — otherwise a later
-  // settings or board-config save would re-send the stale jira_site_url and clobber
-  // the REST account, orphaning the Keychain token. Errors propagate so the
-  // connection card can surface them inline.
-  const saveJiraToken = useCallback(
-    async (site: string, email: string, token: string) => {
-      const status = await jira.setApiToken(site, email, token);
-      setSettings(await api.getAppSettings());
-      return status;
-    },
-    [jira],
-  );
-
-  const disconnectJira = useCallback(async () => {
-    await jira.clearApiToken();
-    setSettings(await api.getAppSettings());
-  }, [jira]);
+  const { jira, setSelectedItem: setSelectedJiraItem } = jiraBoard;
 
   const createTaskFromStory = useCallback(
     async (item: JiraWorkItem) => {
@@ -314,47 +262,13 @@ export function useApp() {
       repos,
       selectedRepoId,
       jira.jiraStatus?.site,
+      setSelectedJiraItem,
       setNewTaskTitle,
       setNewTaskPrompt,
       setPendingJiraLink,
       setNewTaskRepoId,
       setCreateTaskOpen,
     ],
-  );
-
-  // Open an existing work item in the board side panel; the create panel and the
-  // view panel share that dock slot, so opening one closes the other.
-  const openJiraItem = useCallback((item: JiraWorkItem) => {
-    setCreateJiraItemOpen(false);
-    setSelectedJiraItem(item);
-  }, []);
-
-  const openCreateJiraItem = useCallback(() => {
-    setSelectedJiraItem(null);
-    setCreateJiraItemOpen(true);
-  }, []);
-
-  const closeCreateJiraItem = useCallback(() => setCreateJiraItemOpen(false), []);
-
-  // Create a JIRA work item, then (on success) swap the create panel for the new
-  // item's view panel — where "Create task & start" can spin up an agent on it.
-  const createJiraWorkItem = useCallback(
-    async (input: {
-      project: string;
-      issueType: string;
-      summary: string;
-      description?: string;
-      assignee?: string;
-      labels?: string;
-    }) => {
-      const item = await jira.create(input);
-      if (item) {
-        setCreateJiraItemOpen(false);
-        setSelectedJiraItem(item);
-      }
-      return item;
-    },
-    [jira],
   );
 
   const setTaskJiraLink = (
@@ -622,16 +536,16 @@ export function useApp() {
     transitionJira: jira.transition,
     assignJira: jira.assign,
     commentJira: jira.comment,
-    setJiraApiToken: saveJiraToken,
-    clearJiraApiToken: disconnectJira,
-    setJiraBoardConfig,
-    selectedJiraItem,
+    setJiraApiToken: jiraBoard.saveToken,
+    clearJiraApiToken: jiraBoard.disconnect,
+    setJiraBoardConfig: jiraBoard.setBoardConfig,
+    selectedJiraItem: jiraBoard.selectedItem,
     setSelectedJiraItem,
-    openJiraItem,
-    createJiraItemOpen,
-    openCreateJiraItem,
-    closeCreateJiraItem,
-    createJiraWorkItem,
+    openJiraItem: jiraBoard.openItem,
+    createJiraItemOpen: jiraBoard.createOpen,
+    openCreateJiraItem: jiraBoard.openCreate,
+    closeCreateJiraItem: jiraBoard.closeCreate,
+    createJiraWorkItem: jiraBoard.createWorkItem,
     startPairLoop,
     startReview,
     stopPairLoop,
