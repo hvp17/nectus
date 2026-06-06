@@ -106,10 +106,13 @@ export function TaskWorkspace({
   const diff = useTaskDiff(task?.id);
   const { refresh: refreshDiff } = diff;
   const [stageTab, setStageTab] = useState<"terminal" | "diff" | "review">("terminal");
-  // Load (or reload) the diff whenever the Diff tab is shown or the task changes.
+  // Reload the diff when the user opens the Diff tab. Task-switch reloads are
+  // owned by useTaskDiff itself, so depend on stageTab only — otherwise the
+  // refreshDiff identity change on task switch fires a second, racing fetch.
   useEffect(() => {
     if (stageTab === "diff") void refreshDiff();
-  }, [stageTab, refreshDiff]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageTab]);
 
   // Surface the live reviewer the moment a review starts, so "checking progress"
   // is one rising-edge switch away; the user can toggle back at any time.
