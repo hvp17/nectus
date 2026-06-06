@@ -19,6 +19,10 @@ vi.mock("@tauri-apps/api/event", () => ({
 vi.mock("../api", () => ({
   api: {
     listRepos: vi.fn(),
+    listWorkspaces: vi.fn(),
+    createWorkspace: vi.fn(),
+    updateWorkspace: vi.fn(),
+    deleteWorkspace: vi.fn(),
     listAgentProfiles: vi.fn(),
     listTasks: vi.fn(),
     getAppSettings: vi.fn(),
@@ -139,6 +143,7 @@ describe("useApp", () => {
       updatedAt: "2026-05-14T00:00:00.000Z",
     });
     mockedApi.listTasks.mockResolvedValue([activeTask]);
+    mockedApi.listWorkspaces.mockResolvedValue([]);
     mockedApi.getTaskReviewLoop.mockResolvedValue(null);
     mockedApi.listTaskReviewRuns.mockResolvedValue([]);
     mockedApi.startPairLoop.mockResolvedValue({

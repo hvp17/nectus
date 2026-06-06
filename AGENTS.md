@@ -189,7 +189,7 @@ Important backend files:
 
 - `native/src/main.rs`: binary entry point that calls `nectus_desktop_lib::run`
 - `native/src/lib.rs`: Tauri command registration, command bodies, and app setup
-- `native/src/db/`: SQLite access split by domain into `impl Database` blocks — `mod.rs` (connection open/pragmas, repos, the `now`/`generated_branch_name` helpers), `tasks.rs`, `settings.rs`, `sessions.rs`, plus `agent_profiles.rs`, `review_loops.rs`, `pr_reviews.rs`; `schema.rs` (create/migrate), `rows.rs` (row mapping), and `tests.rs` (persistence tests)
+- `native/src/db/`: SQLite access split by domain into `impl Database` blocks — `mod.rs` (connection open/pragmas, repos, the `now`/`generated_branch_name` helpers), `tasks.rs`, `settings.rs`, `sessions.rs`, plus `agent_profiles.rs`, `review_loops.rs`, `pr_reviews.rs`, `workspaces.rs` (durable repo groups: CRUD with transactional `workspace_repos` membership); `schema.rs` (create/migrate), `rows.rs` (row mapping), and `tests.rs` (persistence tests)
 - `native/src/git_ops/`: git repo/worktree validation and operations — `mod.rs` (the `git_output`/`git_output_allowing_codes` helpers, repo/branch validation, worktree-root pattern, remote resolution, worktree create/remove/branch lifecycle, `is_dirty`) and `diff.rs` (the cohesive task-diff sub-domain: `resolve_diff_base`, `diff_summary`, `diff_file`, re-exported from `mod.rs`)
 - `native/src/github.rs`: `gh` CLI integration — connection status plus pull request create/detect/status parsing (no OAuth, no stored tokens)
 - `native/src/jira.rs`: `acli` (Atlassian CLI) integration — connection status, project list, work-item search/view/create/transition/assign/comment with tolerant JSON parsing, the structured-config JQL builder (`build_board_jql`, incl. the `status in (...)` filter clause, so the UI never types JQL), and the create argument builder + new-key parser (`build_create_args`, `parse_created_key`); no OAuth, no stored tokens
@@ -198,7 +198,7 @@ Important backend files:
 - `native/src/process_util.rs`: shared command helpers — binary resolution (`resolve_executable`), child `PATH` augmentation (`augmented_path`), the install-dir source of truth (`third_party_bin_dirs`), and `command_error` stderr formatting. See [Spawning External CLIs](#spawning-external-clis-macos-gui-path).
 - `native/src/sessions/`: PTY lifecycle, terminal event emission, Codex JSONL watching, Claude Code hook event bridge (`claude.rs`), agent command setup, and the task review-loop / external PR-review runtimes (`review_loop.rs`, `pr_review.rs`, `pr_consensus.rs`). The append-only event-log tail loop shared by the Codex and Claude watchers (newline-terminated only, via `watch_event_log` in `mod.rs`) keeps line-tailing in one place. The headless reviewer-CLI launcher shared by all three reviewing surfaces lives in `reviewer.rs`; the PTY submission helper in `terminal_io.rs`. The single + consensus PR runtimes share one ephemeral-worktree scaffold (`pr_worktree.rs`: unique per-review branch/path + guaranteed teardown) and one verdict contract (`pr_verdict.rs`: the `NECTUS_PR_VERDICT:` marker + parser)
 - `native/src/sessions/agents/`: provider-specific Codex, Claude, and Gemini command arguments and fallback locations
-- `native/src/models/`: shared serializable data types, split by domain (`error`, `task`, `review`, `agent`, `github`, `jira`, `settings`, `session`) and re-exported flat from `mod.rs`, so every `crate::models::Foo` path still resolves
+- `native/src/models/`: shared serializable data types, split by domain (`error`, `task`, `review`, `agent`, `github`, `jira`, `settings`, `session`, `workspace`) and re-exported flat from `mod.rs`, so every `crate::models::Foo` path still resolves
 
 Tauri commands exposed to the frontend include:
 
@@ -210,6 +210,10 @@ Tauri commands exposed to the frontend include:
 - `list_tasks`
 - `update_task_metadata`
 - `delete_task`
+- `list_workspaces`
+- `create_workspace`
+- `update_workspace`
+- `delete_workspace`
 - `task_diff_summary`
 - `task_diff_file`
 - `github_status`
@@ -303,10 +307,12 @@ Important frontend files:
 
 - `src/App.tsx`: icon-rail shell, view routing (`mission` | `board` | `jira` | `reviews` | `settings`), and top-level composition
 - `src/components/IconRail.tsx`: 58px primary navigation rail; Mission Control icon carries the cross-project needs-input badge
-- `src/components/ProjectPanel.tsx`: contextual project list (counts + needs-input dot) shown beside the board
+- `src/components/ProjectPanel.tsx`: contextual project list (counts + needs-input dot) shown beside the board; hosts the workspace switcher and is scoped to the active workspace's repos
+- `src/components/WorkspaceSwitcher.tsx`: the active-workspace repo-scope selector (a `ToggleGroup` pill row + Manage button), reused in the Mission Control header and the project rail
+- `src/components/WorkspaceManager.tsx`: de-modaled inline composer to create/rename/re-scope/delete workspaces with a per-repo checklist
 - `src/components/MissionControl.tsx`: cross-project, attention-first triage home (the default view), grouped needs_you → running → review → done → idle
 - `src/lib/agentState.ts`: maps a task + attention to its cross-project state, latest line, and elapsed time (shared by Mission Control and the board)
-- `src/hooks/useApp.ts`: app state, project/task/settings orchestration
+- `src/hooks/useApp.ts`: app state, project/task/settings/workspace orchestration (owns the active-workspace repo-scope filter applied to Mission Control + the rail, and workspace CRUD)
 - `src/hooks/useSessionEvents.ts`: subscribes to Rust session events (`session_activity`, `session_exited`, `session_idle`, `session_needs_input`); keeps the per-task `liveLines` map (latest activity line) and the task attention list
 - `src/hooks/useSessionCommands.ts`: start/resume/stop/resize/input session command bindings
 - `src/hooks/useGithub.ts`: `gh` connection status and pull request create/detect/status orchestration

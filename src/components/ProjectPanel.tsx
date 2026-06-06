@@ -1,6 +1,7 @@
 import { FolderGit2, Plus } from "lucide-react";
 import { getTaskAttention, type TaskAttention } from "../sessionAttention";
-import type { Repo, TaskSummary } from "../types";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
+import type { Repo, TaskSummary, Workspace } from "../types";
 
 interface ProjectPanelProps {
   repos: Repo[];
@@ -9,6 +10,10 @@ interface ProjectPanelProps {
   selectedRepoId?: number;
   onSelectRepo: (id: number) => void;
   onAddProject: () => void;
+  workspaces: Workspace[];
+  activeWorkspaceId?: number;
+  onSelectWorkspace: (id: number | undefined) => void;
+  onManageWorkspaces: () => void;
   busy: boolean;
   loading: boolean;
 }
@@ -20,6 +25,10 @@ export function ProjectPanel({
   selectedRepoId,
   onSelectRepo,
   onAddProject,
+  workspaces,
+  activeWorkspaceId,
+  onSelectWorkspace,
+  onManageWorkspaces,
   busy,
   loading,
 }: ProjectPanelProps) {
@@ -27,6 +36,14 @@ export function ProjectPanel({
     <aside className="nx-panel" aria-label="Projects">
       <div className="nx-panel-head">Nectus</div>
       <div className="nx-panel-scroll">
+        <div className="nx-panel-ws">
+          <WorkspaceSwitcher
+            workspaces={workspaces}
+            activeWorkspaceId={activeWorkspaceId}
+            onSelect={onSelectWorkspace}
+            onManage={onManageWorkspaces}
+          />
+        </div>
         <div className="nx-panel-sect">
           <div className="nx-panel-kick">
             <span>Projects</span>

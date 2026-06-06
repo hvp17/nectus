@@ -45,6 +45,37 @@ folder with git before saving it.
 Adding the same project path again updates the existing row instead of creating
 a duplicate.
 
+## Workspaces
+
+A workspace is a durable, named group of repos (VSCode-workspace style) for when
+you work across several projects at once. The active workspace acts as a
+**repo-scope filter**: Mission Control and the board's project rail narrow to just
+that workspace's repos. "All repos" (the default) clears the filter, so nothing
+changes for users who don't define a workspace. A repo can belong to more than
+one workspace.
+
+- The workspace switcher (a pill group plus a Manage button) appears in the
+  Mission Control header and the board's project rail; both drive one shared
+  active selection.
+- The workspace manager is a de-modaled inline composer (matching New Task) to
+  create, rename, re-scope, and delete workspaces with a per-repo checklist.
+- Selection is in-memory (not persisted across launches); the workspaces and
+  their membership are persisted.
+
+Key files:
+
+- Switcher: `src/components/WorkspaceSwitcher.tsx`
+- Manager: `src/components/WorkspaceManager.tsx`
+- State, scope filter, and CRUD: `src/hooks/useApp.ts`
+- Backend commands: `list_workspaces`, `create_workspace`, `update_workspace`,
+  `delete_workspace`
+- Persistence: `workspaces` + `workspace_repos` tables (`native/src/db/schema.rs`,
+  `native/src/db/workspaces.rs`)
+
+This is Increment A of multi-repo workspaces. Increment B (a single task spanning
+several repos, one agent across their worktrees) builds on this grouping; see
+`docs/superpowers/specs/2026-06-06-multi-repo-workspaces-design.md`.
+
 ## Tasks
 
 Task is the primary work item. A task can be direct-edit or worktree-backed.

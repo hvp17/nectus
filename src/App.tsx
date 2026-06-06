@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -8,6 +8,7 @@ import { MissionControl } from "./components/MissionControl";
 import { Workspace } from "./components/Workspace";
 import { TaskWorkspace } from "./components/TaskWorkspace";
 import { CreateTaskComposer } from "./components/CreateTaskModal";
+import { WorkspaceManager } from "./components/WorkspaceManager";
 import { SettingsPage } from "./components/SettingsPage";
 import { ReviewsPage } from "./components/ReviewsPage";
 import { JiraBoardPage } from "./components/JiraBoardPage";
@@ -39,6 +40,14 @@ function getToastContent(message: string) {
 function App() {
   const {
     repos,
+    workspaces,
+    activeWorkspaceId,
+    setActiveWorkspaceId,
+    scopedRepos,
+    missionTasks,
+    createWorkspace,
+    updateWorkspace,
+    deleteWorkspace,
     tasks,
     visibleTasks,
     selectedRepoId,
@@ -137,6 +146,9 @@ function App() {
 
   useAppTheme(settings);
 
+  // The workspace manager overlays the routed view, like the New Task composer.
+  const [managingWorkspaces, setManagingWorkspaces] = useState(false);
+
   useEffect(() => {
     if (!message) return;
 
@@ -159,6 +171,14 @@ function App() {
     setCreateTaskOpen(true);
   };
 
+  // Open the workspace manager, dismissing the New Task composer / open task that
+  // would otherwise overlay it.
+  const openManageWorkspaces = () => {
+    if (createTaskOpen) closeCreateTaskModal();
+    setSelectedTaskId(undefined);
+    setManagingWorkspaces(true);
+  };
+
   // Focus a task into the workspace from anywhere (Mission Control, board, JIRA
   // card, or an attention toast). Dismissing the composer matters because it
   // overlays the viewport and would otherwise hide the task we just opened.
@@ -170,6 +190,7 @@ function App() {
       if (!task) return;
       const plan = planTaskFocus(currentView, task, createTaskOpen);
       if (plan.dismissComposer) closeCreateTaskModal();
+      setManagingWorkspaces(false);
       if (plan.repoId !== undefined) setSelectedRepoId(plan.repoId);
       setSelectedTaskId(taskId);
       setCurrentView(plan.view);
@@ -183,9 +204,10 @@ function App() {
 
   // Top-level rail navigation. Board needs a selected project to show its kanban.
   const navigate = (view: RailView) => {
-    // The composer (and task workspace) overlay the routed view, so leaving via
-    // the rail must dismiss them.
+    // The composer, workspace manager, and task workspace overlay the routed
+    // view, so leaving via the rail must dismiss them.
     if (createTaskOpen) closeCreateTaskModal();
+    setManagingWorkspaces(false);
     setSelectedTaskId(undefined);
     if (view === "board" && selectedRepoId === undefined && repos[0]) {
       setSelectedRepoId(repos[0].id);
@@ -197,7 +219,7 @@ function App() {
   const taskOpen = Boolean(selectedTask) && (currentView === "mission" || currentView === "board");
   // The New Task composer is a focused inline view reached from "New Task".
   const composing = createTaskOpen;
-  const showProjectPanel = currentView === "board" && !taskOpen && !composing;
+  const showProjectPanel = currentView === "board" && !taskOpen && !composing && !managingWorkspaces;
   const railActive: RailView = currentView;
   const frame = showProjectPanel ? "railp" : "rail";
 
@@ -211,7 +233,7 @@ function App() {
 
         {showProjectPanel && (
           <ProjectPanel
-            repos={repos}
+            repos={scopedRepos}
             tasks={tasks}
             taskAttention={taskAttention}
             selectedRepoId={selectedRepoId}
@@ -221,6 +243,10 @@ function App() {
               setSelectedTaskId(undefined);
             }}
             onAddProject={addProject}
+            workspaces={workspaces}
+            activeWorkspaceId={activeWorkspaceId}
+            onSelectWorkspace={setActiveWorkspaceId}
+            onManageWorkspaces={openManageWorkspaces}
             busy={busy}
             loading={loading}
           />
@@ -251,6 +277,16 @@ function App() {
               newTaskRepoId={newTaskRepoId}
               setNewTaskRepoId={setNewTaskRepoId}
               linkedJiraKey={pendingJiraLink?.key ?? null}
+            />
+          ) : managingWorkspaces ? (
+            <WorkspaceManager
+              workspaces={workspaces}
+              repos={repos}
+              busy={busy}
+              onClose={() => setManagingWorkspaces(false)}
+              onCreate={createWorkspace}
+              onUpdate={updateWorkspace}
+              onDelete={deleteWorkspace}
             />
           ) : currentView === "settings" ? (
             <SettingsPage
@@ -367,10 +403,14 @@ function App() {
             <div className="nx-viewport-fill" data-testid="mission-control">
               <MissionControl
                 repos={repos}
-                tasks={tasks}
+                tasks={missionTasks}
                 taskAttention={taskAttention}
                 liveLines={liveLines}
                 loading={loading}
+                workspaces={workspaces}
+                activeWorkspaceId={activeWorkspaceId}
+                onSelectWorkspace={setActiveWorkspaceId}
+                onManageWorkspaces={openManageWorkspaces}
                 onOpenTask={openTask}
                 onOpenPr={openExternal}
                 onRefresh={() => refresh()}

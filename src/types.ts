@@ -20,6 +20,15 @@ export interface Repo {
   createdAt: string;
 }
 
+/** A durable, named group of repos (VSCode-workspace style). `repoIds` is ordered. */
+export interface Workspace {
+  id: number;
+  name: string;
+  repoIds: number[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TaskSummary {
   id: number;
   repoId: number;

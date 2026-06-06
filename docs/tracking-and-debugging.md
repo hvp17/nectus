@@ -16,6 +16,8 @@ Core tables:
 | Table | Purpose |
 | --- | --- |
 | `repos` | Saved project repositories and each project's default worktree root. |
+| `workspaces` | Durable, named groups of repos (VSCode-workspace style). |
+| `workspace_repos` | Workspace membership: `(workspace_id, repo_id, position)`. Many-to-many, so a repo can belong to several workspaces; cascade-deletes with either side. |
 | `agent_profiles` | CLI agent configuration, including command, model, args, and env. |
 | `app_settings` | Default agent, worktree pattern, branch prefix, theme, density, and the JIRA board config (selected project + filter flags + `jira_filter_statuses`; the JQL is built from these). Also the non-secret JIRA REST account email (`jira_rest_email`); the REST API token itself lives in the macOS Keychain, never here. |
 | `tasks` | Primary work item, status, prompt, optional worktree, active session, saved session, and optional JIRA story link. |
@@ -33,6 +35,8 @@ Persistence APIs:
 
 - `native/src/db/mod.rs`: database setup plus project, settings, task, and
   session-state records.
+- `native/src/db/workspaces.rs`: workspace CRUD with transactional membership
+  (`workspace_repos`) replacement.
 - `native/src/db/agent_profiles.rs`: agent profile queries and upserts.
 - `native/src/db/review_loops.rs`: review-loop and review-run records.
 - `native/src/db/pr_reviews.rs`: PR-review records and `owner/repo` → project
@@ -131,6 +135,10 @@ Current commands:
 | `list_tasks` | Load task summaries and dirty-state checks. |
 | `update_task_metadata` | Update title, status, or PR URL. |
 | `delete_task` | Delete a task and remove its worktree when applicable. Takes a `force` flag: without it a worktree with uncommitted changes is preserved and an error is returned; with it (after the delete dialog's warning) the worktree is force-removed. |
+| `list_workspaces` | Load workspaces, each with its ordered member `repoIds`. |
+| `create_workspace` | Create a named workspace from `name` + `repoIds` (membership written transactionally; duplicate ids dropped). |
+| `update_workspace` | Rename a workspace and replace its membership/order. |
+| `delete_workspace` | Delete a workspace (membership cascade-deletes). |
 | `task_diff_summary` | List the files a task changed: a worktree task's branch vs the locally-resolved base (`origin/HEAD` merge-base, committed + uncommitted), or a direct-edit task's working tree vs `HEAD`. Returns the base label plus per-file change kind and `+/-` counts. |
 | `task_diff_file` | Return the unified patch for one file in a task's diff (lazy-loaded per file; untracked files diff against `/dev/null`). |
 | `github_status` | Report whether `gh` is installed, authenticated, and the active account. |

@@ -126,6 +126,13 @@
 .nx-panel-head { padding: 14px 14px 8px; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
 .nx-panel-scroll { flex: 1; min-height: 0; overflow-y: auto; }
 .nx-panel-sect { padding: 6px 8px; }
+/* Workspace switcher inside the narrow project rail: let the pill row scroll
+   horizontally rather than overflow when several workspaces are defined. */
+.nx-panel-ws { padding: 8px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.nx-panel-ws .nx-ws-switcher { flex-wrap: wrap; }
+/* Workspace switcher: the pill group plus its Manage button, used in the Mission
+   Control header and the project rail. */
+.nx-ws-switcher { display: flex; align-items: center; gap: 8px; }
 .nx-panel-kick {
   font-size: 10px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted-foreground);
   padding: 8px 8px 4px; display: flex; justify-content: space-between; align-items: center;

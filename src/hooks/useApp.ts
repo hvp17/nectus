@@ -30,12 +30,15 @@ import type {
   ReviewLoop,
   TaskStatus,
   TaskSummary,
+  Workspace,
 } from "../types";
 
 const CREATE_PULL_REQUEST_PROMPT = `Create a pull request for this task. Use the current project/worktree branch. Before opening the PR, verify the work as appropriate for this repo, commit relevant changes with a Conventional Commit if needed, push the branch, create the PR against the remote default branch, and report the PR URL here.`;
 
 export function useApp() {
   const [repos, setRepos] = useState<Repo[]>([]);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<number | undefined>();
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [settings, setSettings] = useState<AppSettings | undefined>();
@@ -85,12 +88,17 @@ export function useApp() {
 
   const selectedRepoIdRef = useRef<number | undefined>(undefined);
   const selectedAgentProfileIdRef = useRef<number | undefined>(undefined);
+  const activeWorkspaceIdRef = useRef<number | undefined>(undefined);
   const tasksRef = useRef<TaskSummary[]>([]);
   const deletingTaskIdsRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     selectedRepoIdRef.current = selectedRepoId;
   }, [selectedRepoId]);
+
+  useEffect(() => {
+    activeWorkspaceIdRef.current = activeWorkspaceId;
+  }, [activeWorkspaceId]);
 
   useEffect(() => {
     selectedAgentProfileIdRef.current = selectedAgentProfileId;
@@ -112,9 +120,41 @@ export function useApp() {
   }, []);
 
   const selectedRepo = useMemo(() => repos.find((repo) => repo.id === selectedRepoId), [repos, selectedRepoId]);
+
+  // The active workspace acts as a repo-scope filter (Increment A). When none is
+  // active, behavior is unchanged (all repos). `undefined` means "All repos".
+  const activeWorkspace = useMemo(
+    () => workspaces.find((workspace) => workspace.id === activeWorkspaceId),
+    [workspaces, activeWorkspaceId],
+  );
+  const workspaceRepoIds = useMemo(
+    () => (activeWorkspace ? new Set(activeWorkspace.repoIds) : undefined),
+    [activeWorkspace],
+  );
+  // The repo list the rail/board shows, narrowed to the active workspace.
+  const scopedRepos = useMemo(
+    () => (workspaceRepoIds ? repos.filter((repo) => workspaceRepoIds.has(repo.id)) : repos),
+    [repos, workspaceRepoIds],
+  );
+  // Cross-project (Mission Control) tasks, narrowed to the active workspace.
+  const missionTasks = useMemo(
+    () => (workspaceRepoIds ? tasks.filter((task) => workspaceRepoIds.has(task.repoId)) : tasks),
+    [tasks, workspaceRepoIds],
+  );
+
+  // Keep the board's selected repo inside the active workspace, so switching
+  // workspace can't leave a now-out-of-scope project selected.
+  useEffect(() => {
+    if (!workspaceRepoIds || (selectedRepoId && workspaceRepoIds.has(selectedRepoId))) return;
+    const nextRepoId = scopedRepos[0]?.id;
+    selectedRepoIdRef.current = nextRepoId;
+    setSelectedRepoId(nextRepoId);
+  }, [workspaceRepoIds, selectedRepoId, scopedRepos]);
+
   const visibleTasks = useMemo(() => {
-    return selectedRepoId ? tasks.filter((task) => task.repoId === selectedRepoId) : tasks;
-  }, [tasks, selectedRepoId]);
+    const scoped = workspaceRepoIds ? tasks.filter((task) => workspaceRepoIds.has(task.repoId)) : tasks;
+    return selectedRepoId ? scoped.filter((task) => task.repoId === selectedRepoId) : scoped;
+  }, [tasks, selectedRepoId, workspaceRepoIds]);
   const selectedTask = useMemo(() => tasks.find((task) => task.id === selectedTaskId), [tasks, selectedTaskId]);
 
   const counts = useMemo(() => {
@@ -131,14 +171,26 @@ export function useApp() {
   const refresh = useCallback(async (preferredRepoId?: number) => {
     setLoading(true);
     try {
-      const [repoResult, profileResult, settingsResult] = await Promise.all([
+      const [repoResult, workspaceResult, profileResult, settingsResult] = await Promise.all([
         api.listRepos(),
+        api.listWorkspaces(),
         api.listAgentProfiles(),
         api.getAppSettings(),
       ]);
       setRepos(repoResult);
+      setWorkspaces(workspaceResult);
       setAgentProfiles(profileResult);
       setSettings(settingsResult);
+
+      // Drop the active-workspace filter if that workspace was deleted elsewhere,
+      // so the rail/Mission Control don't filter against a phantom id.
+      if (
+        activeWorkspaceIdRef.current &&
+        !workspaceResult.some((workspace) => workspace.id === activeWorkspaceIdRef.current)
+      ) {
+        activeWorkspaceIdRef.current = undefined;
+        setActiveWorkspaceId(undefined);
+      }
 
       const nextAgentProfileId =
         selectedAgentProfileIdRef.current ?? settingsResult.defaultAgentProfileId ?? profileResult[0]?.id;
@@ -464,8 +516,55 @@ export function useApp() {
       { busy: true, rethrow: true },
     );
 
+  const createWorkspace = (name: string, repoIds: number[]) =>
+    run(
+      async () => {
+        const workspace = await api.createWorkspace(name, repoIds);
+        await refresh(selectedRepoIdRef.current);
+        setActiveWorkspaceId(workspace.id);
+        activeWorkspaceIdRef.current = workspace.id;
+        setMessage(`Workspace: Created ${workspace.name}`);
+        return workspace;
+      },
+      { busy: true, rethrow: true },
+    );
+
+  const updateWorkspace = (id: number, name: string, repoIds: number[]) =>
+    run(
+      async () => {
+        const workspace = await api.updateWorkspace(id, name, repoIds);
+        await refresh(selectedRepoIdRef.current);
+        setMessage(`Workspace: Saved ${workspace.name}`);
+        return workspace;
+      },
+      { busy: true, rethrow: true },
+    );
+
+  const deleteWorkspace = (id: number) =>
+    run(
+      async () => {
+        await api.deleteWorkspace(id);
+        if (activeWorkspaceIdRef.current === id) {
+          activeWorkspaceIdRef.current = undefined;
+          setActiveWorkspaceId(undefined);
+        }
+        await refresh(selectedRepoIdRef.current);
+        setMessage("Workspace: Deleted");
+      },
+      { busy: true, rethrow: true },
+    );
+
   return {
     repos,
+    workspaces,
+    activeWorkspaceId,
+    setActiveWorkspaceId,
+    activeWorkspace,
+    scopedRepos,
+    missionTasks,
+    createWorkspace,
+    updateWorkspace,
+    deleteWorkspace,
     tasks,
     agentProfiles,
     settings,
