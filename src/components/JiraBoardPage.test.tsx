@@ -62,7 +62,7 @@ function renderBoard(tasks: TaskSummary[], onOpenTask = vi.fn()) {
       projects={[{ key: "SCRUM", name: "Scrum" }]}
       tasks={tasks}
       project="SCRUM"
-      filters={{ myIssues: false, unresolved: true, currentSprint: false }}
+      filters={{ myIssues: false, unresolved: true, currentSprint: false, statuses: [] }}
       columns={columns}
       loading={false}
       onChangeConfig={vi.fn()}
@@ -97,7 +97,7 @@ function renderCreatable(
       projects={[{ key: "SCRUM", name: "Scrum" }]}
       tasks={[]}
       project={overrides.project === undefined ? "SCRUM" : overrides.project}
-      filters={{ myIssues: false, unresolved: true, currentSprint: false }}
+      filters={{ myIssues: false, unresolved: true, currentSprint: false, statuses: [] }}
       columns={columns}
       loading={false}
       onChangeConfig={vi.fn()}
@@ -191,5 +191,34 @@ describe("JiraBoardPage create work item", () => {
     renderCreatable({ createOpen: true });
 
     expect(screen.getByRole("button", { name: /create work item/i })).toBeDisabled();
+  });
+});
+
+describe("JiraBoardPage status filter", () => {
+  it("offers the filterable statuses and persists a toggled selection", async () => {
+    const onChangeConfig = vi.fn();
+    renderWithTooltipProvider(
+      <JiraBoardPage
+        status={status}
+        projects={[{ key: "SCRUM", name: "Scrum" }]}
+        tasks={[]}
+        project="SCRUM"
+        filters={{ myIssues: false, unresolved: true, currentSprint: false, statuses: [] }}
+        columns={columns}
+        loading={false}
+        onChangeConfig={onChangeConfig}
+        onRefresh={vi.fn()}
+        onTransition={vi.fn()}
+        onOpenItem={vi.fn()}
+        onOpenTask={vi.fn()}
+        onCreateTask={vi.fn()}
+        filterableStatuses={["To Do", "Done"]}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByRole("button", { name: "Filter by status" }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("menuitemcheckbox", { name: "Done" }));
+
+    expect(onChangeConfig).toHaveBeenCalledWith({ statuses: ["Done"] });
   });
 });

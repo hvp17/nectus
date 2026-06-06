@@ -242,6 +242,7 @@ export function useApp() {
     myIssues?: boolean;
     unresolved?: boolean;
     currentSprint?: boolean;
+    statuses?: string[];
   }) =>
     run(async () => {
       if (!settings) return;
@@ -252,6 +253,7 @@ export function useApp() {
         jiraFilterMyIssues: partial.myIssues ?? settings.jiraFilterMyIssues,
         jiraFilterUnresolved: partial.unresolved ?? settings.jiraFilterUnresolved,
         jiraFilterCurrentSprint: partial.currentSprint ?? settings.jiraFilterCurrentSprint,
+        jiraFilterStatuses: partial.statuses ?? settings.jiraFilterStatuses,
       });
       setSettings(updated);
       await jira.refresh();
@@ -588,13 +590,18 @@ export function useApp() {
     creatingPullRequest,
     refreshPullRequest,
     jiraStatus: jira.jiraStatus,
+    jiraRestStatus: jira.restStatus,
+    jiraRestConnected: jira.restConnected,
     jiraProjects: jira.projects,
+    jiraProjectStatuses: jira.projectStatuses,
     jiraColumns: jira.columns,
     jiraLoading: jira.loading,
     refreshJira: jira.refresh,
     transitionJira: jira.transition,
     assignJira: jira.assign,
     commentJira: jira.comment,
+    setJiraApiToken: jira.setApiToken,
+    clearJiraApiToken: jira.clearApiToken,
     setJiraBoardConfig,
     selectedJiraItem,
     setSelectedJiraItem,

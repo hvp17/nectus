@@ -1,6 +1,13 @@
-import { Plus, RefreshCw } from "lucide-react";
+import { ListFilter, Plus, RefreshCw } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -26,6 +33,7 @@ export interface JiraBoardFilters {
   myIssues: boolean;
   unresolved: boolean;
   currentSprint: boolean;
+  statuses: string[];
 }
 
 export interface JiraBoardConfigChange {
@@ -33,6 +41,7 @@ export interface JiraBoardConfigChange {
   myIssues?: boolean;
   unresolved?: boolean;
   currentSprint?: boolean;
+  statuses?: string[];
 }
 
 interface JiraBoardPageProps {
@@ -71,6 +80,8 @@ interface JiraBoardPageProps {
   /** REST token connected — enables legal-transition dropdowns. */
   restConnected?: boolean;
   onListTransitions?: (key: string) => Promise<JiraTransition[]>;
+  /** Statuses offered in the board's status filter (project set when connected). */
+  filterableStatuses?: string[];
   onAssign?: (key: string, assignee: string) => void;
   onComment?: (key: string, body: string) => void;
   onPickAgent?: (profileId: number) => void;
@@ -102,6 +113,7 @@ export function JiraBoardPage({
   site,
   restConnected,
   onListTransitions,
+  filterableStatuses,
   onAssign,
   onComment,
   onPickAgent,
@@ -216,6 +228,49 @@ export function JiraBoardPage({
               Current sprint
             </button>
           </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!project}
+                className="gap-2"
+                aria-label="Filter by status"
+              >
+                <ListFilter className="size-4" />
+                Status
+                {filters.statuses.length > 0 && (
+                  <Badge variant="secondary" className="ml-0.5">
+                    {filters.statuses.length}
+                  </Badge>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+              {(filterableStatuses ?? []).length === 0 ? (
+                <DropdownMenuItem disabled>No statuses</DropdownMenuItem>
+              ) : (
+                (filterableStatuses ?? []).map((name) => (
+                  <DropdownMenuCheckboxItem
+                    key={name}
+                    checked={filters.statuses.includes(name)}
+                    onCheckedChange={(checked) =>
+                      onChangeConfig({
+                        statuses: checked
+                          ? [...filters.statuses, name]
+                          : filters.statuses.filter((status) => status !== name),
+                      })
+                    }
+                    onSelect={(event) => event.preventDefault()}
+                  >
+                    {name}
+                  </DropdownMenuCheckboxItem>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {onOpenCreate && (
             <Button

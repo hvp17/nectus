@@ -89,13 +89,18 @@ function App() {
     creatingPullRequest,
     refreshPullRequest,
     jiraStatus,
+    jiraRestStatus,
+    jiraRestConnected,
     jiraProjects,
+    jiraProjectStatuses,
     jiraColumns,
     jiraLoading,
     refreshJira,
     transitionJira,
     assignJira,
     commentJira,
+    setJiraApiToken,
+    clearJiraApiToken,
     setJiraBoardConfig,
     selectedJiraItem,
     setSelectedJiraItem,
@@ -268,6 +273,7 @@ function App() {
                 myIssues: settings?.jiraFilterMyIssues ?? false,
                 unresolved: settings?.jiraFilterUnresolved ?? true,
                 currentSprint: settings?.jiraFilterCurrentSprint ?? false,
+                statuses: settings?.jiraFilterStatuses ?? [],
               }}
               columns={jiraColumns}
               loading={jiraLoading}
@@ -287,6 +293,13 @@ function App() {
                 newTaskAgentProfileId ?? settings?.defaultAgentProfileId ?? agentProfiles[0]?.id
               }
               site={jiraStatus?.site}
+              restConnected={jiraRestConnected}
+              onListTransitions={api.jiraListTransitions}
+              filterableStatuses={
+                jiraRestConnected
+                  ? jiraProjectStatuses.map((status) => status.name)
+                  : jiraColumns.map((column) => column.statusName)
+              }
               onAssign={assignJira}
               onComment={commentJira}
               onPickAgent={setNewTaskAgentProfileId}
