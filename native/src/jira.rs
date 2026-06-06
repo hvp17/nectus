@@ -153,20 +153,12 @@ struct RawAssignee {
 }
 
 fn map_category(raw: Option<&RawStatusCategory>) -> JiraStatusCategory {
+    // JIRA status categories: "new"/"to do", "indeterminate"/"in progress", "done".
+    // The token logic is shared with the REST path via `JiraStatusCategory::from_token`.
     let token = raw
         .and_then(|c| c.key.as_deref().or(c.name.as_deref()))
-        .unwrap_or("")
-        .to_ascii_lowercase();
-    // JIRA status categories: "new"/"to do", "indeterminate"/"in progress", "done".
-    if token.contains("done") {
-        JiraStatusCategory::Done
-    } else if token.contains("progress") || token.contains("indeterminate") {
-        JiraStatusCategory::InProgress
-    } else if token.contains("new") || token.contains("to do") || token.contains("todo") {
-        JiraStatusCategory::ToDo
-    } else {
-        JiraStatusCategory::Unknown
-    }
+        .unwrap_or("");
+    JiraStatusCategory::from_token(token)
 }
 
 fn work_item_from_raw(raw: RawWorkItem) -> Option<JiraWorkItem> {
