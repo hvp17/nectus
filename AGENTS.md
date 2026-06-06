@@ -189,7 +189,7 @@ Important backend files:
 
 - `native/src/main.rs`: binary entry point that calls `nectus_desktop_lib::run`
 - `native/src/lib.rs`: Tauri command registration, command bodies, and app setup
-- `native/src/db/`: SQLite schema, row mapping, agent profiles, review loops, and persistence tests
+- `native/src/db/`: SQLite access split by domain into `impl Database` blocks — `mod.rs` (connection open/pragmas, repos, the `now`/`generated_branch_name` helpers), `tasks.rs`, `settings.rs`, `sessions.rs`, plus `agent_profiles.rs`, `review_loops.rs`, `pr_reviews.rs`; `schema.rs` (create/migrate), `rows.rs` (row mapping), and `tests.rs` (persistence tests)
 - `native/src/git_ops.rs`: git repo/worktree validation and operations
 - `native/src/github.rs`: `gh` CLI integration — connection status plus pull request create/detect/status parsing (no OAuth, no stored tokens)
 - `native/src/jira.rs`: `acli` (Atlassian CLI) integration — connection status, project list, work-item search/view/create/transition/assign/comment with tolerant JSON parsing, the structured-config JQL builder (`build_board_jql`, incl. the `status in (...)` filter clause, so the UI never types JQL), and the create argument builder + new-key parser (`build_create_args`, `parse_created_key`); no OAuth, no stored tokens
