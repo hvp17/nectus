@@ -33,6 +33,12 @@ vi.mock("../api", () => ({
     githubStatus: vi.fn().mockResolvedValue({ installed: false, authenticated: false, account: null }),
     createGithubPullRequest: vi.fn(),
     githubPullRequestStatus: vi.fn(),
+    jiraStatus: vi
+      .fn()
+      .mockResolvedValue({ installed: false, authenticated: false, account: null, site: null }),
+    jiraRestStatus: vi
+      .fn()
+      .mockResolvedValue({ connected: false, site: null, email: null, error: null }),
   },
 }));
 

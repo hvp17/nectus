@@ -96,6 +96,26 @@ export function defineAppSmokeTests() {
     });
   });
 
+  it("shows a connected JIRA token in Settings without first visiting the board", async () => {
+    // REST status must load on mount, not when the JIRA board becomes active —
+    // otherwise opening Settings directly shows a real Keychain token as
+    // "Not connected" and hides the disconnect path.
+    mockedApi.jiraRestStatus.mockResolvedValue({
+      connected: true,
+      site: "team.atlassian.net",
+      email: "me@example.com",
+      error: null,
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+
+    expect(await screen.findByLabelText("JIRA REST Connected")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Disconnect" })).toBeInTheDocument();
+    expect(mockedApi.jiraSearchBoard).not.toHaveBeenCalled();
+  });
+
   it("does not render the temporary dummy notification preview on launch", async () => {
     render(<App />);
 

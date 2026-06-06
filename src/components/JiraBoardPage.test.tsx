@@ -221,4 +221,36 @@ describe("JiraBoardPage status filter", () => {
 
     expect(onChangeConfig).toHaveBeenCalledWith({ statuses: ["Done"] });
   });
+
+  it("keeps an active status uncheckable even when it matches no current column", async () => {
+    // Token-free path: filterableStatuses comes from the (already-filtered) columns,
+    // so a selected status with zero items would otherwise vanish from the menu and
+    // strand the user. The selection must always remain clearable.
+    const onChangeConfig = vi.fn();
+    renderWithTooltipProvider(
+      <JiraBoardPage
+        status={status}
+        projects={[{ key: "SCRUM", name: "Scrum" }]}
+        tasks={[]}
+        project="SCRUM"
+        filters={{ myIssues: false, unresolved: true, currentSprint: false, statuses: ["Done"] }}
+        columns={[]}
+        loading={false}
+        onChangeConfig={onChangeConfig}
+        onRefresh={vi.fn()}
+        onTransition={vi.fn()}
+        onOpenItem={vi.fn()}
+        onOpenTask={vi.fn()}
+        onCreateTask={vi.fn()}
+        filterableStatuses={[]}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByRole("button", { name: "Filter by status" }), { key: "Enter" });
+    const doneItem = await screen.findByRole("menuitemcheckbox", { name: "Done" });
+    expect(doneItem).toBeInTheDocument();
+    fireEvent.click(doneItem);
+
+    expect(onChangeConfig).toHaveBeenCalledWith({ statuses: [] });
+  });
 });

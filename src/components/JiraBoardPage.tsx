@@ -122,6 +122,12 @@ export function JiraBoardPage({
   const ready = Boolean(status?.installed && status?.authenticated);
   const itemsByKey = new Map(columns.flatMap((column) => column.items).map((item) => [item.key, item]));
   const statusOptions = columns.map((column) => column.statusName);
+  // Always include the currently-selected statuses so they stay uncheckable even
+  // when the active filter leaves the board with no matching columns (otherwise a
+  // user could filter to a status with zero items and be unable to clear it).
+  const statusFilterOptions = Array.from(
+    new Set([...(filterableStatuses ?? []), ...filters.statuses]),
+  );
 
   // Group local tasks by the JIRA story they are attached to, so each card can
   // list its own sessions without re-scanning the whole task list per render.
@@ -249,10 +255,10 @@ export function JiraBoardPage({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
-              {(filterableStatuses ?? []).length === 0 ? (
+              {statusFilterOptions.length === 0 ? (
                 <DropdownMenuItem disabled>No statuses</DropdownMenuItem>
               ) : (
-                (filterableStatuses ?? []).map((name) => (
+                statusFilterOptions.map((name) => (
                   <DropdownMenuCheckboxItem
                     key={name}
                     checked={filters.statuses.includes(name)}

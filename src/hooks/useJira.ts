@@ -124,19 +124,18 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
     }
   }, []);
 
-  useAsyncEffect(
-    async (alive) => {
-      if (!active || !ready) return;
-      const status = await api.jiraRestStatus().catch(() => ({
-        connected: false,
-        site: null,
-        email: null,
-        error: null,
-      }));
+  // Load once on mount, independent of the active view: Settings consumes the REST
+  // status too, and a stored Keychain token is valid even when acli is down — so
+  // gating this on the JIRA board being active would show a real token as
+  // "Not connected" when Settings is opened first.
+  useAsyncEffect(async (alive) => {
+    try {
+      const status = await api.jiraRestStatus();
       if (alive()) setRestStatus(status);
-    },
-    [active, ready],
-  );
+    } catch {
+      if (alive()) setRestStatus({ connected: false, site: null, email: null, error: null });
+    }
+  }, []);
 
   // With a connected token, load the project's full custom-workflow status set so
   // the board can render every column (incl. empty) and the filter can offer them.

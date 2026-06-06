@@ -41,6 +41,13 @@ vi.mock("./api", () => ({
     jiraTransitionWorkItem: vi.fn(),
     jiraAssignWorkItem: vi.fn(),
     jiraCommentWorkItem: vi.fn(),
+    jiraRestStatus: vi
+      .fn()
+      .mockResolvedValue({ connected: false, site: null, email: null, error: null }),
+    jiraListTransitions: vi.fn().mockResolvedValue([]),
+    jiraProjectStatuses: vi.fn().mockResolvedValue([]),
+    setJiraApiToken: vi.fn(),
+    clearJiraApiToken: vi.fn(),
     setTaskJiraLink: vi.fn(),
   },
 }));
