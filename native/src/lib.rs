@@ -346,6 +346,7 @@ async fn jira_search_board(state: State<'_, AppState>) -> AppResult<Vec<JiraWork
             settings.jira_filter_my_issues,
             settings.jira_filter_unresolved,
             settings.jira_filter_current_sprint,
+            &settings.jira_filter_statuses,
         )
     };
     tauri::async_runtime::spawn_blocking(move || jira::search(&jql, 200))
