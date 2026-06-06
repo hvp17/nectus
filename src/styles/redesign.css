@@ -294,7 +294,6 @@
   background: var(--card); overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow-lg);
 }
 .nx-term-host { flex: 1; min-height: 0; overflow: hidden; }
-.nx-term-launcher { flex: 1; display: flex; align-items: center; justify-content: center; gap: 18px; padding: 28px; font-family: var(--font-mono); }
 /* inline action bar — appears when the agent needs you */
 .nx-actionbar {
   display: flex; align-items: center; gap: 12px; padding: 12px 14px; flex: none;

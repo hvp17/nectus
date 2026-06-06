@@ -1,9 +1,11 @@
 import { Play, RotateCcw, TerminalSquare } from "lucide-react";
 import { Button } from "../ui/button";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 import type { TaskSummary } from "../../types";
 
 /// Empty-stage state shown when a task has no active session: resume a saved
-/// session (Codex/Claude) or start/restart the agent.
+/// session (Codex/Claude) or start/restart the agent. Mirrors the Review pane's
+/// `Empty` treatment so the no-session stage reads as sleek as the rest of the app.
 export function TaskTerminalLauncher({
   task,
   canResumeSession,
@@ -15,34 +17,43 @@ export function TaskTerminalLauncher({
   onResumeSession: (task: TaskSummary) => void;
   onStartSession: (task: TaskSummary) => void;
 }) {
-  const canResume = Boolean(task.lastSessionId && canResumeSession);
+  const hasSavedSession = Boolean(task.lastSessionId);
+  const canResume = hasSavedSession && canResumeSession;
 
   return (
-    <div className="terminal-launcher">
-      <div className="terminal-launcher-copy">
-        <div className="terminal-launcher-kicker">
-          <TerminalSquare size={15} />
-          <span>{task.lastSessionId ? "Session saved" : "Ready"}</span>
-        </div>
-        <p className="terminal-launcher-title">No active session</p>
-        {task.lastSessionLabel && <p className="terminal-launcher-detail">{task.lastSessionLabel}</p>}
-      </div>
-      <div className="terminal-launcher-actions">
-        {canResume && (
-          <Button type="button" variant="outline" aria-label="Resume session" onClick={() => onResumeSession(task)}>
-            <RotateCcw data-icon="inline-start" />
-            Resume
+    <Empty className="h-full">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <TerminalSquare />
+        </EmptyMedia>
+        <EmptyTitle>{hasSavedSession ? "No active session" : "Ready when you are"}</EmptyTitle>
+        <EmptyDescription>
+          {hasSavedSession
+            ? "Pick up where the agent left off, or restart it from a clean slate."
+            : "Launch the agent to start working on this task."}
+        </EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {canResume && (
+            <Button type="button" variant="outline" aria-label="Resume session" onClick={() => onResumeSession(task)}>
+              <RotateCcw data-icon="inline-start" />
+              Resume
+            </Button>
+          )}
+          <Button
+            type="button"
+            aria-label={hasSavedSession ? "Restart agent" : "Start agent"}
+            onClick={() => onStartSession(task)}
+          >
+            <Play data-icon="inline-start" fill="currentColor" />
+            {hasSavedSession ? "Restart" : "Start"}
           </Button>
+        </div>
+        {task.lastSessionLabel && (
+          <p className="max-w-[48ch] truncate font-mono text-xs text-muted-foreground">{task.lastSessionLabel}</p>
         )}
-        <Button
-          type="button"
-          aria-label={task.lastSessionId ? "Restart agent" : "Start agent"}
-          onClick={() => onStartSession(task)}
-        >
-          <Play data-icon="inline-start" fill="currentColor" />
-          {task.lastSessionId ? "Restart" : "Start"}
-        </Button>
-      </div>
-    </div>
+      </EmptyContent>
+    </Empty>
   );
 }
