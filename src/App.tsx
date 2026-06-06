@@ -43,8 +43,11 @@ function App() {
     workspaces,
     activeWorkspaceId,
     setActiveWorkspaceId,
+    activeWorkspaceRepos,
     scopedRepos,
     missionTasks,
+    newTaskRepoIds,
+    setNewTaskRepoIds,
     createWorkspace,
     updateWorkspace,
     deleteWorkspace,
@@ -279,6 +282,9 @@ function App() {
               newTaskRepoId={newTaskRepoId}
               setNewTaskRepoId={setNewTaskRepoId}
               linkedJiraKey={pendingJiraLink?.key ?? null}
+              workspaceRepos={activeWorkspaceRepos}
+              selectedRepoIds={newTaskRepoIds}
+              onSetRepoIds={setNewTaskRepoIds}
             />
           ) : managingWorkspaces ? (
             <WorkspaceManager

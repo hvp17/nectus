@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import App from "../App";
 import { api } from "../api";
@@ -90,6 +90,40 @@ export function defineAppWorkspacesTests() {
     fireEvent.click(screen.getByRole("switch", { name: appRepo.name }));
     expect(screen.getByRole("button", { name: "Create workspace" })).toBeEnabled();
     expect(mockedApi.createWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("creates a cross-repo task from the workspace composer", async () => {
+    mockedApi.listRepos.mockResolvedValue([appRepo, secondRepo]);
+    mockedApi.listWorkspaces.mockResolvedValue([
+      workspace({ id: 1, name: "Platform", repoIds: [appRepo.id, secondRepo.id] }),
+    ]);
+    mockedApi.createCrossRepoTask.mockResolvedValue(
+      appTask({ id: 500, title: "Cross feature", branchName: "feat/cross", hasWorktree: true }),
+    );
+
+    render(<App />);
+
+    // Activate the workspace, then open the board's New Task composer.
+    fireEvent.click(await screen.findByText("Platform"));
+    fireEvent.click(screen.getByRole("button", { name: "Board" }));
+    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+
+    // Cross-repo mode: a Repositories checklist with both repos pre-selected.
+    const repoGroup = await screen.findByRole("group", { name: "Repositories" });
+    const repoSwitches = within(repoGroup).getAllByRole("switch");
+    expect(repoSwitches).toHaveLength(2);
+    repoSwitches.forEach((toggle) => expect(toggle).toBeChecked());
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Cross feature" } });
+    fireEvent.click(screen.getByRole("button", { name: /create & start/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.createCrossRepoTask).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceId: 1, repoIds: [appRepo.id, secondRepo.id] }),
+      );
+    });
+    // It does NOT fall through to the single-repo create path.
+    expect(mockedApi.createTask).not.toHaveBeenCalled();
   });
 
   it("edits an existing workspace's name and membership", async () => {

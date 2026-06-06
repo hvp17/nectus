@@ -39,6 +39,8 @@ export function useApp() {
   const [repos, setRepos] = useState<Repo[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<number | undefined>();
+  // Repos chosen for a cross-repo task in the composer (Increment B). Primary first.
+  const [newTaskRepoIds, setNewTaskRepoIds] = useState<number[]>([]);
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [settings, setSettings] = useState<AppSettings | undefined>();
@@ -135,6 +137,12 @@ export function useApp() {
   const scopedRepos = useMemo(
     () => (workspaceRepoIds ? repos.filter((repo) => workspaceRepoIds.has(repo.id)) : repos),
     [repos, workspaceRepoIds],
+  );
+  // The active workspace's repos, offered as a multi-select in the composer so a
+  // task can span several of them (cross-repo). Empty when no workspace is active.
+  const activeWorkspaceRepos = useMemo(
+    () => (activeWorkspace ? scopedRepos : []),
+    [activeWorkspace, scopedRepos],
   );
   // Cross-project (Mission Control) tasks, narrowed to the active workspace.
   const missionTasks = useMemo(
@@ -379,6 +387,52 @@ export function useApp() {
     );
 
   const createTask = async () => {
+    // Cross-repo task (Increment B): a workspace is active and the composer has
+    // ≥2 repos selected. One worktree per repo, a single agent across them.
+    if (activeWorkspaceId && newTaskRepoIds.length >= 2) {
+      if (!newTaskAgentProfileId) {
+        setMessage("Select an agent before creating a task.");
+        return;
+      }
+      const agentProfileId = newTaskAgentProfileId;
+      const repoIds = newTaskRepoIds;
+      await run(
+        async () => {
+          const branchName = resolveWorktreeBranchName(
+            newTaskBranchName,
+            settings?.defaultBranchPrefix,
+          );
+          const task = await api.createCrossRepoTask({
+            workspaceId: activeWorkspaceId,
+            repoIds,
+            title: getGeneratedTaskTitle(),
+            prompt: newTaskPrompt.trim() || null,
+            agentProfileId,
+            branchName,
+          });
+          resetCreateTaskForm();
+          setNewTaskRepoIds([]);
+          setCreateTaskOpen(false);
+          setSelectedRepoId(repoIds[0]);
+          setSelectedTaskId(task.id);
+          let startError: string | null = null;
+          try {
+            await api.startSession(task.id, agentProfileId);
+          } catch (error) {
+            startError = String(error);
+          }
+          await refresh(repoIds[0]);
+          if (startError) {
+            setMessage(`Created ${task.title}, but failed to start session: ${startError}`);
+          } else {
+            setMessage(`Created ${task.branchName} across ${repoIds.length} repos`);
+          }
+        },
+        { busy: true },
+      );
+      return;
+    }
+
     const repoId = newTaskRepoId ?? selectedRepoId;
     if (!repoId) {
       setMessage("Choose a project before creating a task.");
@@ -560,8 +614,11 @@ export function useApp() {
     activeWorkspaceId,
     setActiveWorkspaceId,
     activeWorkspace,
+    activeWorkspaceRepos,
     scopedRepos,
     missionTasks,
+    newTaskRepoIds,
+    setNewTaskRepoIds,
     createWorkspace,
     updateWorkspace,
     deleteWorkspace,

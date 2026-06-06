@@ -29,9 +29,22 @@ export interface Workspace {
   updatedAt: string;
 }
 
+/** One repo's working state within a task (Increment B). A task spans 1..N repos. */
+export interface TaskRepo {
+  repoId: number;
+  repoName: string;
+  branchName?: string | null;
+  worktreePath?: string | null;
+  prUrl?: string | null;
+  isDirty: boolean;
+  position: number;
+}
+
 export interface TaskSummary {
   id: number;
   repoId: number;
+  /** The workspace this task was created in, if any (Increment B). */
+  workspaceId?: number | null;
   title: string;
   prompt?: string | null;
   status: TaskStatus;
@@ -52,6 +65,8 @@ export interface TaskSummary {
   jiraIssueKey?: string | null;
   jiraIssueSummary?: string | null;
   jiraIssueUrl?: string | null;
+  /** Every repo this task spans, in display order (Increment B); always ≥1. */
+  taskRepos: TaskRepo[];
   createdAt: string;
   updatedAt: string;
 }

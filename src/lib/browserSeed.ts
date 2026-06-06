@@ -52,6 +52,8 @@ export const seedWorkspaces: Workspace[] = [
 
 function task(partial: Partial<TaskSummary> & Pick<TaskSummary, "id" | "repoId" | "title">): TaskSummary {
   return {
+    workspaceId: null,
+    taskRepos: [],
     prompt: null,
     status: "in_progress",
     prUrl: null,
@@ -125,6 +127,20 @@ export const seedTasks: TaskSummary[] = [
   task({
     id: 9, repoId: 1, title: "Persist terminal scrollback per session", status: "planned", agentProfileId: 2, agentName: "Claude Sonnet", agentKind: "claude",
     hasWorktree: false, jiraIssueKey: "WEB-418", jiraIssueSummary: "Persist terminal scrollback per session", updatedAt: ago(140),
+  }),
+  // A cross-repo task (Increment B): one agent across the Web platform workspace's
+  // repos, each on its own sibling worktree under a shared parent.
+  task({
+    id: 10, repoId: 1, title: "Unify button tokens across web-app and design-system", status: "in_progress",
+    workspaceId: 1, agentProfileId: 2, agentName: "Claude Sonnet", agentKind: "claude",
+    branchName: "feat/button-tokens", isDirty: true,
+    worktreePath: "/Users/you/dev/web-app-worktrees/workspaces/feat/button-tokens/web-app",
+    activeSessionId: "s-10", lastSessionId: "s-10",
+    taskRepos: [
+      { repoId: 1, repoName: "web-app", branchName: "feat/button-tokens", worktreePath: "/Users/you/dev/web-app-worktrees/workspaces/feat/button-tokens/web-app", prUrl: null, isDirty: true, position: 0 },
+      { repoId: 3, repoName: "design-system", branchName: "feat/button-tokens", worktreePath: "/Users/you/dev/web-app-worktrees/workspaces/feat/button-tokens/design-system", prUrl: null, isDirty: false, position: 1 },
+    ],
+    updatedAt: ago(3),
   }),
 ];
 

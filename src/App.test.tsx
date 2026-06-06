@@ -11,6 +11,7 @@ vi.mock("./api", () => ({
     listAgentProfiles: vi.fn(),
     listTasks: vi.fn(),
     createTask: vi.fn(),
+    createCrossRepoTask: vi.fn(),
     pickRepositoryFolder: vi.fn(),
     addRepo: vi.fn(),
     updateTaskMetadata: vi.fn(),

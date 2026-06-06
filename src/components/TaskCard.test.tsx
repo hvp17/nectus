@@ -8,6 +8,7 @@ import { TaskCard } from "./TaskCard";
 const task: TaskSummary = {
   id: 42,
   repoId: 7,
+  taskRepos: [],
   title: "Finished task with long output",
   prompt: "Check the final agent output.",
   status: "done",

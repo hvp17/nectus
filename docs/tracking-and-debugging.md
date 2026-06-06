@@ -20,7 +20,8 @@ Core tables:
 | `workspace_repos` | Workspace membership: `(workspace_id, repo_id, position)`. Many-to-many, so a repo can belong to several workspaces; cascade-deletes with either side. |
 | `agent_profiles` | CLI agent configuration, including command, model, args, and env. |
 | `app_settings` | Default agent, worktree pattern, branch prefix, theme, density, and the JIRA board config (selected project + filter flags + `jira_filter_statuses`; the JQL is built from these). Also the non-secret JIRA REST account email (`jira_rest_email`); the REST API token itself lives in the macOS Keychain, never here. |
-| `tasks` | Primary work item, status, prompt, optional worktree, active session, saved session, and optional JIRA story link. |
+| `tasks` | Primary work item, status, prompt, optional worktree, active session, saved session, optional JIRA story link, and optional `workspace_id` (the workspace a cross-repo task was created in). For a cross-repo task the `repo_id`/`branch_name`/`worktree_path`/`pr_url` columns describe the **primary** repo. |
+| `task_repos` | Per-repo working state for a task (Increment B): `(task_id, repo_id, branch_name, worktree_path, pr_url, position)`. The complete repo set; a single-repo task has one row mirroring `tasks`. Unique on `worktree_path` and on `(repo_id, branch_name)`. Cascade-deletes with the task or repo. |
 | `review_loops` | Current review configuration and status per task. |
 | `review_runs` | Reviewer prompts, outputs, verdicts, and errors by review attempt. |
 | `pr_reviews` | External pull-request reviews: PR metadata, status, `verdict` (`passed`/`blockers`/`inconclusive`, set when a review reaches `ready`), Markdown output, ephemeral worktree path, and the consensus columns `mode` (`single`/`consensus`), `max_rounds`, `rounds_completed`, `converged`. For consensus, `reviewer_profile_id` is the synthesizer. |
@@ -131,8 +132,9 @@ Current commands:
 | `list_repos` | Load saved projects. |
 | `get_app_settings` | Load global settings. |
 | `update_app_settings` | Save settings and refresh project worktree roots. |
-| `create_task` | Create a direct-edit task or create a git worktree-backed task. |
-| `list_tasks` | Load task summaries and dirty-state checks. |
+| `create_task` | Create a direct-edit task or create a git worktree-backed task (single repo). |
+| `create_cross_repo_task` | Create a task spanning ≥2 repos (Increment B): one worktree per repo as siblings under a shared parent, a single agent rooted in the primary repo's worktree, and a `task_repos` row per repo. Rolls back created worktrees on failure. |
+| `list_tasks` | Load task summaries (each with its `taskRepos`) and per-repo dirty-state checks. |
 | `update_task_metadata` | Update title, status, or PR URL. |
 | `delete_task` | Delete a task and remove its worktree when applicable. Takes a `force` flag: without it a worktree with uncommitted changes is preserved and an error is returned; with it (after the delete dialog's warning) the worktree is force-removed. |
 | `list_workspaces` | Load workspaces, each with its ordered member `repoIds`. |

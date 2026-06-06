@@ -12,9 +12,11 @@ export function appTask(overrides: Partial<TaskSummary> = {}): TaskSummary {
   return {
     id: 21,
     repoId: appRepo.id,
+    workspaceId: null,
     title: "Test task",
     prompt: null,
     status: "planned",
+    taskRepos: [],
     prUrl: null,
     agentProfileId: 1,
     agentName: "Codex",

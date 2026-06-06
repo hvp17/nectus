@@ -72,9 +72,34 @@ Key files:
 - Persistence: `workspaces` + `workspace_repos` tables (`native/src/db/schema.rs`,
   `native/src/db/workspaces.rs`)
 
-This is Increment A of multi-repo workspaces. Increment B (a single task spanning
-several repos, one agent across their worktrees) builds on this grouping; see
-`docs/superpowers/specs/2026-06-06-multi-repo-workspaces-design.md`.
+### Cross-repo tasks
+
+A task created while a workspace is active can span **several of the workspace's
+repos**, driven by a single agent. In the New Task composer the Project dropdown
+becomes a **Repositories checklist** (the workspace's repos, all pre-selected); the
+first selected repo is the primary. Picking two or more creates a cross-repo task.
+
+- Each repo gets its own worktree on a **shared branch**, laid out as siblings under
+  one parent: `<…/.nectus/worktrees>/workspaces/<branch>/<repoName>` (sibling
+  folders are disambiguated by id when two repos share a directory name).
+- A **single agent session** runs in the primary repo's worktree; the other repos
+  are reachable as siblings at `../<repoName>`. The task prompt is prefixed with this
+  layout so the agent has cross-repo context. Each repo keeps its own branch.
+- The task inspector lists every repo (branch + dirty indicator, primary marked).
+  Deleting the task removes **all** its worktrees; with uncommitted work in any of
+  them the delete is refused until confirmed (then force-removes all).
+- Per-repo state lives in the `task_repos` table; a single-repo task is the N=1 case
+  (one row mirroring the task). `tasks.repo_id` is the primary repo.
+
+Current scope: the Diff tab and GitHub PR panel operate on the **primary** repo's
+worktree for a cross-repo task. Per-repo diffs and per-repo PRs are a planned
+follow-up; see `docs/superpowers/specs/2026-06-06-multi-repo-workspaces-design.md`.
+
+Key files: `create_cross_repo_task` (`native/src/db/tasks.rs`, command in
+`native/src/lib.rs`), the `task_repos` table (`native/src/db/schema.rs`), the
+composer's multi-repo mode (`src/components/CreateTaskModal.tsx`), the create flow
+(`src/hooks/useApp.ts`), and the inspector repo list
+(`src/components/taskWorkspace/TaskWorkspaceFactsRail.tsx`).
 
 ## Tasks
 

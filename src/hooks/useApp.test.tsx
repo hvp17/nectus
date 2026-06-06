@@ -25,6 +25,7 @@ vi.mock("../api", () => ({
     deleteWorkspace: vi.fn(),
     listAgentProfiles: vi.fn(),
     listTasks: vi.fn(),
+    createCrossRepoTask: vi.fn(),
     getAppSettings: vi.fn(),
     startPairLoop: vi.fn(),
     runPairReview: vi.fn(),
@@ -66,6 +67,7 @@ const activeTask: TaskSummary = {
   lastSessionAgent: null,
   lastSessionCwd: null,
   lastSessionLabel: null,
+  taskRepos: [],
   createdAt: "2026-05-14T00:00:00.000Z",
   updatedAt: "2026-05-14T00:00:00.000Z",
 };

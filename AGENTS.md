@@ -189,7 +189,7 @@ Important backend files:
 
 - `native/src/main.rs`: binary entry point that calls `nectus_desktop_lib::run`
 - `native/src/lib.rs`: Tauri command registration, command bodies, and app setup
-- `native/src/db/`: SQLite access split by domain into `impl Database` blocks — `mod.rs` (connection open/pragmas, repos, the `now`/`generated_branch_name` helpers), `tasks.rs`, `settings.rs`, `sessions.rs`, plus `agent_profiles.rs`, `review_loops.rs`, `pr_reviews.rs`, `workspaces.rs` (durable repo groups: CRUD with transactional `workspace_repos` membership); `schema.rs` (create/migrate), `rows.rs` (row mapping), and `tests.rs` (persistence tests)
+- `native/src/db/`: SQLite access split by domain into `impl Database` blocks — `mod.rs` (connection open/pragmas, repos, the `now`/`generated_branch_name` helpers), `tasks.rs` (single- and cross-repo task CRUD; `create_cross_repo_task` fans out a worktree per repo as siblings under a shared parent, with per-repo state in the `task_repos` child table — `tasks.*` stays the primary repo), `settings.rs`, `sessions.rs`, plus `agent_profiles.rs`, `review_loops.rs`, `pr_reviews.rs`, `workspaces.rs` (durable repo groups: CRUD with transactional `workspace_repos` membership); `schema.rs` (create/migrate), `rows.rs` (row mapping), and `tests.rs` (persistence tests)
 - `native/src/git_ops/`: git repo/worktree validation and operations — `mod.rs` (the `git_output`/`git_output_allowing_codes` helpers, repo/branch validation, worktree-root pattern, remote resolution, worktree create/remove/branch lifecycle, `is_dirty`) and `diff.rs` (the cohesive task-diff sub-domain: `resolve_diff_base`, `diff_summary`, `diff_file`, re-exported from `mod.rs`)
 - `native/src/github.rs`: `gh` CLI integration — connection status plus pull request create/detect/status parsing (no OAuth, no stored tokens)
 - `native/src/jira.rs`: `acli` (Atlassian CLI) integration — connection status, project list, work-item search/view/create/transition/assign/comment with tolerant JSON parsing, the structured-config JQL builder (`build_board_jql`, incl. the `status in (...)` filter clause, so the UI never types JQL), and the create argument builder + new-key parser (`build_create_args`, `parse_created_key`); no OAuth, no stored tokens
@@ -207,6 +207,7 @@ Tauri commands exposed to the frontend include:
 - `get_app_settings`
 - `update_app_settings`
 - `create_task`
+- `create_cross_repo_task`
 - `list_tasks`
 - `update_task_metadata`
 - `delete_task`

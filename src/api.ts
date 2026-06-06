@@ -139,6 +139,23 @@ export const api = {
   async deleteTask(taskId: number, force = false): Promise<void> {
     return invoke("delete_task", { taskId, force });
   },
+  async createCrossRepoTask(input: {
+    workspaceId?: number | null;
+    repoIds: number[];
+    title: string;
+    prompt?: string | null;
+    agentProfileId?: number | null;
+    branchName?: string | null;
+  }): Promise<TaskSummary> {
+    return invoke("create_cross_repo_task", {
+      workspaceId: input.workspaceId ?? null,
+      repoIds: input.repoIds,
+      title: input.title,
+      prompt: input.prompt ?? null,
+      agentProfileId: input.agentProfileId ?? null,
+      branchName: input.branchName ?? null,
+    });
+  },
   async listWorkspaces(): Promise<Workspace[]> {
     if (isBrowserPreview) return seedWorkspaces;
     if (!isTauri) return [];
