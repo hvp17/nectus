@@ -307,10 +307,14 @@ pub fn create_pull_request(
     draft: bool,
 ) -> Result<String, String> {
     // Ensure the branch exists on the remote so `gh` can open the PR against it.
+    // Force non-interactive auth so a missing HTTPS credential or first-time SSH
+    // host-key prompt fails fast instead of hanging the (tty-less) worker thread.
     let push = Command::new("git")
         .arg("-C")
         .arg(worktree)
         .args(["push", "--set-upstream", "origin", "HEAD"])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes")
         .output()
         .map_err(|error| format!("Failed to push branch: {error}"))?;
     if !push.status.success() {

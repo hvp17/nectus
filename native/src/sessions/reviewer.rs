@@ -71,7 +71,11 @@ pub(super) fn run_reviewer_command(
 
     // Read stdout incrementally: emit each chunk for the live view while
     // accumulating the raw bytes so the recorded output is decoded cleanly once.
+    // On a read error we stop the loop but still fall through to the single
+    // kill/wait + stderr join below, so neither the child nor the stderr thread
+    // is leaked.
     let mut stdout_bytes = Vec::new();
+    let mut read_error = None;
     if let Some(mut stdout) = child.stdout.take() {
         let mut buffer = [0_u8; 8192];
         loop {
@@ -92,12 +96,18 @@ pub(super) fn run_reviewer_command(
                     stdout_bytes.extend_from_slice(chunk);
                 }
                 Err(error) => {
-                    return Err(format!("Failed to read reviewer output: {error}"));
+                    read_error = Some(format!("Failed to read reviewer output: {error}"));
+                    break;
                 }
             }
         }
     }
 
+    // A read error leaves the child possibly still running; kill it so the wait
+    // below can't block forever.
+    if read_error.is_some() {
+        let _ = child.kill();
+    }
     let status = child
         .wait()
         .map_err(|error| format!("Failed to read reviewer output: {error}"))?;
@@ -105,6 +115,9 @@ pub(super) fn run_reviewer_command(
         .and_then(|handle| handle.join().ok())
         .map(|bytes| String::from_utf8_lossy(&bytes).trim().to_string())
         .unwrap_or_default();
+    if let Some(error) = read_error {
+        return Err(error);
+    }
     let stdout = String::from_utf8_lossy(&stdout_bytes).to_string();
     if !status.success() {
         return Err(if stderr.is_empty() {

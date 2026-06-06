@@ -195,6 +195,9 @@ describe("api", () => {
   });
 
   it("requests live pull request status for a task", async () => {
+    // `isTauri` is captured at module load, so re-import with the flag present
+    // (githubPullRequestStatus returns a disconnected fallback outside Tauri).
+    vi.resetModules();
     Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
     mockedInvoke.mockResolvedValueOnce({
       number: 9,
@@ -207,10 +210,19 @@ describe("api", () => {
       checksState: "pending",
     });
 
-    const info = await api.githubPullRequestStatus(9);
+    const { api: tauriApi } = await import("./api");
+    const info = await tauriApi.githubPullRequestStatus(9);
 
     expect(info.number).toBe(9);
     expect(mockedInvoke).toHaveBeenCalledWith("github_pull_request_status", { taskId: 9 });
+  });
+
+  it("returns a disconnected pull request status outside Tauri", async () => {
+    const info = await api.githubPullRequestStatus(9);
+
+    expect(info.number).toBe(0);
+    expect(info.state).toBe("unknown");
+    expect(mockedInvoke).not.toHaveBeenCalled();
   });
 
   it("detects an existing pull request for a task branch", async () => {

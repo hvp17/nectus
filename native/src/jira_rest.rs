@@ -5,6 +5,23 @@
 use crate::models::{JiraStatusCategory, JiraStatusDef, JiraTransition};
 use base64::Engine;
 use serde::Deserialize;
+use std::sync::OnceLock;
+use std::time::Duration;
+
+/// Shared `ureq` agent with bounded timeouts. All REST calls run inside a
+/// `spawn_blocking` worker, so without these a connect-but-never-respond JIRA
+/// host would pin that thread forever and defeat the documented degrade-to-acli
+/// fallback. Built once and reused.
+fn agent() -> &'static ureq::Agent {
+    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+    AGENT.get_or_init(|| {
+        ureq::AgentBuilder::new()
+            .timeout_connect(Duration::from_secs(10))
+            .timeout_read(Duration::from_secs(30))
+            .timeout_write(Duration::from_secs(30))
+            .build()
+    })
+}
 
 #[derive(Deserialize)]
 struct RawTransitions {
@@ -119,7 +136,8 @@ fn base(site: &str) -> String {
 
 fn get(site: &str, email: &str, token: &str, path: &str) -> Result<String, String> {
     let url = format!("{}{path}", base(site));
-    match ureq::get(&url)
+    match agent()
+        .get(&url)
         .set("Authorization", &auth_header(email, token))
         .set("Accept", "application/json")
         .call()
@@ -168,7 +186,8 @@ pub fn perform_transition(
     transition_id: &str,
 ) -> Result<(), String> {
     let url = format!("{}/issue/{key}/transitions", base(site));
-    match ureq::post(&url)
+    match agent()
+        .post(&url)
         .set("Authorization", &auth_header(email, token))
         .set("Accept", "application/json")
         .send_json(ureq::json!({ "transition": { "id": transition_id } }))

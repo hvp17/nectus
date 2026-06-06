@@ -9,3 +9,8 @@ export function replaceById<T extends { id: number }>(list: readonly T[], update
 export function upsertById<T extends { id: number }>(list: readonly T[], item: T): T[] {
   return list.some((existing) => existing.id === item.id) ? replaceById(list, item) : [...list, item];
 }
+
+/** Replace the item sharing `item.id`, or prepend it (newest-first) when absent. */
+export function upsertNewestById<T extends { id: number }>(list: readonly T[], item: T): T[] {
+  return list.some((existing) => existing.id === item.id) ? replaceById(list, item) : [item, ...list];
+}

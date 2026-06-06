@@ -89,6 +89,13 @@ impl Database {
         self.agent_profile_by_id(input.reviewer_profile_id)?
             .ok_or_else(|| "Reviewer profile not found".to_string())?;
 
+        // Record the run, transition the loop state, and (on Pass) flip the task
+        // to Done atomically, so a failure partway can't leave a recorded run
+        // whose loop/task state never updated.
+        let tx = self
+            .conn
+            .unchecked_transaction()
+            .map_err(|error| format!("Failed to record review run: {error}"))?;
         let created_at = now();
         self.conn
             .execute(
@@ -117,6 +124,8 @@ impl Database {
         if run.verdict == ReviewVerdict::Pass {
             self.update_task_metadata(input.task_id, None, Some(TaskStatus::Done), None)?;
         }
+        tx.commit()
+            .map_err(|error| format!("Failed to record review run: {error}"))?;
         Ok(run)
     }
 

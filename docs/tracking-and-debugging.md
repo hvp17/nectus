@@ -130,7 +130,7 @@ Current commands:
 | `create_task` | Create a direct-edit task or create a git worktree-backed task. |
 | `list_tasks` | Load task summaries and dirty-state checks. |
 | `update_task_metadata` | Update title, status, or PR URL. |
-| `delete_task` | Delete a task and remove its worktree when applicable. |
+| `delete_task` | Delete a task and remove its worktree when applicable. Takes a `force` flag: without it a worktree with uncommitted changes is preserved and an error is returned; with it (after the delete dialog's warning) the worktree is force-removed. |
 | `task_diff_summary` | List the files a task changed: a worktree task's branch vs the locally-resolved base (`origin/HEAD` merge-base, committed + uncommitted), or a direct-edit task's working tree vs `HEAD`. Returns the base label plus per-file change kind and `+/-` counts. |
 | `task_diff_file` | Return the unified patch for one file in a task's diff (lazy-loaded per file; untracked files diff against `/dev/null`). |
 | `github_status` | Report whether `gh` is installed, authenticated, and the active account. |

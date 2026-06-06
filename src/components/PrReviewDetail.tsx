@@ -16,6 +16,7 @@ import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
 import { AgentLogo } from "./AgentBrand";
 import { PrReviewBadge } from "./PrReviewBadge";
+import { openExternal } from "../lib/openExternal";
 import type { AgentKind, AgentProfile, PrReview, PrReviewRun, PrReviewStatus, PrReviewVerdict } from "../types";
 
 interface PrReviewDetailProps {
@@ -94,7 +95,17 @@ export function PrReviewDetail({ review, runs, agentProfiles, onRerun, onDelete 
               ))}
             </span>
           )}
-          <a href={review.prUrl} target="_blank" rel="noreferrer">
+          <a
+            href={review.prUrl}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(event) => {
+              // A plain target="_blank" does nothing in the Tauri webview; route
+              // through the opener plugin (and surface a toast on failure).
+              event.preventDefault();
+              openExternal(review.prUrl);
+            }}
+          >
             Open PR <ExternalLink aria-hidden="true" />
           </a>
         </div>

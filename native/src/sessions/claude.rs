@@ -1,4 +1,4 @@
-use super::{emit_session_signal, RunningSession, SessionSignal};
+use super::{watch_event_log, RunningSession, SessionSignal};
 use crate::db::Database;
 use parking_lot::Mutex;
 use serde::Deserialize;
@@ -157,36 +157,34 @@ pub(super) fn spawn_claude_event_watcher(
             "watching Claude hook sink"
         );
 
-        let mut processed_lines = 0_usize;
-        loop {
-            if !sessions.lock().contains_key(&session_id) {
-                return;
-            }
-            let Ok(contents) = fs::read_to_string(&sink) else {
-                std::thread::sleep(CLAUDE_POLL_INTERVAL);
-                continue;
-            };
-            for line in contents.lines().skip(processed_lines) {
-                let signal = match claude_session_event_from_line(line) {
-                    Some(ClaudeSessionEvent::Idle { message }) => SessionSignal::Idle {
-                        turn_id: None,
-                        message,
-                    },
-                    Some(ClaudeSessionEvent::NeedsInput { reason, prompt }) => {
-                        SessionSignal::NeedsInput {
-                            turn_id: None,
-                            reason,
-                            prompt,
-                        }
-                    }
-                    None => continue,
-                };
-                emit_session_signal(&app, &db, &sessions, task_id, &session_id, &cwd, signal);
-            }
-            processed_lines = contents.lines().count();
-            std::thread::sleep(CLAUDE_POLL_INTERVAL);
-        }
+        watch_event_log(
+            &app,
+            &db,
+            &sessions,
+            task_id,
+            &session_id,
+            &cwd,
+            &sink,
+            CLAUDE_POLL_INTERVAL,
+            claude_signal_from_line,
+        );
     });
+}
+
+/// Translate a Claude hook-sink line into a [`SessionSignal`]. Claude carries no
+/// turn id, so both arms use `turn_id: None`.
+fn claude_signal_from_line(line: &str) -> Option<SessionSignal> {
+    match claude_session_event_from_line(line)? {
+        ClaudeSessionEvent::Idle { message } => Some(SessionSignal::Idle {
+            turn_id: None,
+            message,
+        }),
+        ClaudeSessionEvent::NeedsInput { reason, prompt } => Some(SessionSignal::NeedsInput {
+            turn_id: None,
+            reason,
+            prompt,
+        }),
+    }
 }
 
 pub(super) fn claude_session_event_from_line(line: &str) -> Option<ClaudeSessionEvent> {

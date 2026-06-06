@@ -45,7 +45,10 @@ export function useTaskDeletion({
 
       const runDelete = async () => {
         try {
-          await api.deleteTask(task.id);
+          // The delete dialog warns when the worktree is dirty, so a confirmed
+          // deletion of a dirty worktree-backed task force-discards its changes;
+          // otherwise the backend removes only a clean worktree.
+          await api.deleteTask(task.id, Boolean(task.hasWorktree && task.isDirty));
           setTasks((current) => current.filter((item) => item.id !== task.id));
           setSelectedTaskId((current) => (current === task.id ? undefined : current));
           setTaskAttention((current) => clearTaskAttention(current, task.id));

@@ -698,6 +698,58 @@ fn creates_worktree_task_with_generated_branch_when_branch_name_is_blank() {
 }
 
 #[test]
+fn create_task_record_removes_orphan_worktree_when_insert_fails() {
+    let db = Database::open_in_memory().unwrap();
+    let (dir, repo) = add_repo_with_remote(&db);
+    // Keep worktrees inside the test's tempdir rather than the real home.
+    let wt_root = dir.path().join("worktrees");
+    db.conn
+        .execute(
+            "UPDATE repos SET default_worktree_root = ?1 WHERE id = ?2",
+            rusqlite::params![wt_root.to_string_lossy(), repo.id],
+        )
+        .unwrap();
+
+    // First task claims branch "dup" and creates its worktree on disk.
+    db.create_task_record(
+        repo.id,
+        "First".to_string(),
+        None,
+        None,
+        true,
+        Some("dup".to_string()),
+    )
+    .unwrap();
+    let wt_path = wt_root.join("dup");
+    assert!(wt_path.exists());
+
+    // Externally remove the worktree and its branch so a *new* create_worktree
+    // for "dup" succeeds — but the DB row still holds branch "dup", so the
+    // INSERT will conflict on the unique (repo_id, branch_name) index.
+    run_git(
+        Path::new(&repo.path),
+        &["worktree", "remove", "--force", wt_path.to_str().unwrap()],
+    );
+    run_git(Path::new(&repo.path), &["branch", "-D", "dup"]);
+    assert!(!wt_path.exists());
+
+    let result = db.create_task_record(
+        repo.id,
+        "Second".to_string(),
+        None,
+        None,
+        true,
+        Some("dup".to_string()),
+    );
+
+    assert!(result.is_err(), "duplicate branch insert must fail");
+    assert!(
+        !wt_path.exists(),
+        "the worktree created before the failed INSERT must be cleaned up, not orphaned"
+    );
+}
+
+#[test]
 fn adding_existing_repo_returns_existing_repo() {
     let db = Database::open_in_memory().unwrap();
     let first_repo_dir = tempdir().unwrap();
@@ -860,7 +912,7 @@ fn deletes_task_without_active_session() {
         )
         .unwrap();
 
-    db.delete_task(task.id).unwrap();
+    db.delete_task(task.id, false).unwrap();
 
     assert!(db.task_by_id(task.id).unwrap().is_none());
 }
@@ -889,7 +941,7 @@ fn delete_task_rejects_active_session() {
     )
     .unwrap();
 
-    let error = db.delete_task(task.id).unwrap_err();
+    let error = db.delete_task(task.id, false).unwrap_err();
 
     assert!(error.contains("Stop the running session"), "{error}");
     assert!(db.task_by_id(task.id).unwrap().is_some());

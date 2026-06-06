@@ -42,9 +42,12 @@ export function TaskDeleteDialog({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const deleteDisabled = busy || isDeleting || Boolean(task.activeSessionId);
   const deleteLabel = task.activeSessionId ? "Stop session first" : isDeleting ? "Deleting task" : "Delete task";
-  const deleteDescription = task.hasWorktree
-    ? `This removes "${task.title}" and its worktree from Nectus and disk.`
-    : `This removes "${task.title}" from Nectus. No files are deleted.`;
+  const worktreeDirty = Boolean(task.hasWorktree && task.isDirty);
+  const deleteDescription = worktreeDirty
+    ? `This worktree has uncommitted changes. Deleting "${task.title}" will permanently discard them along with the worktree.`
+    : task.hasWorktree
+      ? `This removes "${task.title}" and its worktree from Nectus and disk.`
+      : `This removes "${task.title}" from Nectus. No files are deleted.`;
 
   return (
     <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

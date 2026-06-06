@@ -1,26 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { api } from "../api";
+import { upsertById, upsertNewestById } from "../lib/listState";
 import { useAsyncEffect } from "./useAsyncEffect";
 import { isTauriRuntime, notifySessionEvent } from "../sessionNotifications";
 import type { PrReview, PrReviewRun, PrReviewUpdatedEvent } from "../types";
 
 interface UsePrReviewsArgs {
   onMessage: (message: string) => void;
-}
-
-/** Newest-first upsert: replace a matching review in place, else prepend it. */
-function upsertNewestFirst(list: PrReview[], review: PrReview): PrReview[] {
-  return list.some((item) => item.id === review.id)
-    ? list.map((item) => (item.id === review.id ? review : item))
-    : [review, ...list];
-}
-
-/** Append a round run, replacing it if its id is already present. */
-function appendRun(list: PrReviewRun[], run: PrReviewRun): PrReviewRun[] {
-  return list.some((item) => item.id === run.id)
-    ? list.map((item) => (item.id === run.id ? run : item))
-    : [...list, run];
 }
 
 function reviewLabel(review: PrReview): string {
@@ -85,13 +72,13 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
       if (disposed) return;
       const review = event.payload.prReview;
       const previousStatus = prReviewsRef.current.find((item) => item.id === review.id)?.status;
-      setReviews((current) => upsertNewestFirst(current, review));
+      setReviews((current) => upsertNewestById(current, review));
 
       const latestRun = event.payload.latestRun;
       if (latestRun) {
         setRunsByReview((current) => ({
           ...current,
-          [latestRun.prReviewId]: appendRun(current[latestRun.prReviewId] ?? [], latestRun),
+          [latestRun.prReviewId]: upsertById(current[latestRun.prReviewId] ?? [], latestRun),
         }));
       }
 
@@ -124,7 +111,7 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
       setCreatingReview(true);
       try {
         const review = await api.createPrReview({ prUrl, reviewerProfileIds, maxRounds });
-        setReviews((current) => upsertNewestFirst(current, review));
+        setReviews((current) => upsertNewestById(current, review));
         setSelectedPrReviewId(review.id);
         onMessage(`PR review queued: ${reviewLabel(review)}`);
         return review;
@@ -142,7 +129,7 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
     async (reviewId: number) => {
       try {
         const review = await api.rerunPrReview(reviewId);
-        setReviews((current) => upsertNewestFirst(current, review));
+        setReviews((current) => upsertNewestById(current, review));
         // The backend cleared the prior rounds; drop the stale ones so the
         // re-run's rounds stream in fresh.
         setRunsByReview((current) => ({ ...current, [reviewId]: [] }));
@@ -159,6 +146,14 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
         await api.deletePrReview(reviewId);
         setReviews((current) => current.filter((item) => item.id !== reviewId));
         setSelectedPrReviewId((current) => (current === reviewId ? undefined : current));
+        // Drop the deleted review's cached round outputs so the per-review map
+        // doesn't grow unbounded across a session.
+        setRunsByReview((current) => {
+          if (!(reviewId in current)) return current;
+          const next = { ...current };
+          delete next[reviewId];
+          return next;
+        });
       } catch (error) {
         onMessage(String(error));
       }

@@ -16,6 +16,7 @@ import { useAppTheme } from "./hooks/useAppTheme";
 import { useTaskNotificationToast } from "./hooks/useTaskNotificationToast";
 import { formatNotificationBody } from "./notificationText";
 import { planTaskFocus } from "./taskNavigation";
+import { openExternal } from "./lib/openExternal";
 import { api } from "./api";
 
 function getToastContent(message: string) {
@@ -164,6 +165,9 @@ function App() {
   const openTask = useCallback(
     (taskId: number) => {
       const task = tasks.find((item) => item.id === taskId);
+      // A stale toast or JIRA card can reference a just-deleted task; don't leave
+      // a dangling selection or switch views for a task that no longer exists.
+      if (!task) return;
       const plan = planTaskFocus(currentView, task, createTaskOpen);
       if (plan.dismissComposer) closeCreateTaskModal();
       if (plan.repoId !== undefined) setSelectedRepoId(plan.repoId);
@@ -187,10 +191,6 @@ function App() {
       setSelectedRepoId(repos[0].id);
     }
     setCurrentView(view);
-  };
-
-  const openExternalUrl = (url: string) => {
-    void api.openExternalUrl(url);
   };
 
   // A task is opened on top of Mission Control or the board, never the secondary views.
@@ -307,7 +307,7 @@ function App() {
               onAssign={assignJira}
               onComment={commentJira}
               onPickAgent={setNewTaskAgentProfileId}
-              onOpenUrl={openExternalUrl}
+              onOpenUrl={openExternal}
             />
           ) : currentView === "reviews" ? (
             <ReviewsPage
@@ -331,6 +331,7 @@ function App() {
               data-task-workspace="true"
             >
               <TaskWorkspace
+                key={selectedTask.id}
                 task={selectedTask}
                 attention={selectedTaskAttention}
                 agentProfiles={agentProfiles}
@@ -371,7 +372,7 @@ function App() {
                 liveLines={liveLines}
                 loading={loading}
                 onOpenTask={openTask}
-                onOpenPr={openExternalUrl}
+                onOpenPr={openExternal}
                 onRefresh={() => refresh()}
               />
             </div>

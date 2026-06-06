@@ -13,7 +13,7 @@ pub fn build_board_jql(
     current_sprint: bool,
     statuses: &[String],
 ) -> String {
-    let mut clauses = vec![format!("project = \"{}\"", project.replace('"', "\\\""))];
+    let mut clauses = vec![format!("project = {}", jql_quote(project))];
     if my_issues {
         clauses.push("assignee = currentUser()".to_string());
     }
@@ -29,12 +29,22 @@ pub fn build_board_jql(
         .iter()
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
-        .map(|s| format!("\"{}\"", s.replace('"', "\\\"")))
+        .map(jql_quote)
         .collect();
     if !statuses.is_empty() {
         clauses.push(format!("status in ({})", statuses.join(", ")));
     }
     format!("{} ORDER BY updated DESC", clauses.join(" AND "))
+}
+
+/// Quote a value for a JQL string literal, escaping backslashes first and then
+/// double quotes. Escaping `\` before `"` matters: a value ending in `\` would
+/// otherwise produce `\"` and break the literal.
+fn jql_quote(value: impl AsRef<str>) -> String {
+    format!(
+        "\"{}\"",
+        value.as_ref().replace('\\', "\\\\").replace('"', "\\\"")
+    )
 }
 
 /// Tolerant raw shape of a work item from `acli jira workitem search --json` /
@@ -696,6 +706,16 @@ mod tests {
         assert_eq!(
             build_board_jql("A\"B", false, true, false, &[]),
             "project = \"A\\\"B\" AND statusCategory != Done ORDER BY updated DESC"
+        );
+    }
+
+    #[test]
+    fn builds_board_jql_escapes_backslashes_before_quotes() {
+        // A status ending in a backslash must escape the backslash first, so it
+        // can't escape the closing quote and break (400) the whole query.
+        assert_eq!(
+            build_board_jql("ENG", false, false, false, &["weird\\".into()]),
+            "project = \"ENG\" AND status in (\"weird\\\\\") ORDER BY updated DESC"
         );
     }
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { api } from "../api";
 import { toSettingsInput } from "../components/settings/profileDrafts";
 import { replaceById, upsertById } from "../lib/listState";
-import { jiraBrowseUrl } from "../lib/jira";
+import { jiraBrowseUrl, syncSelectedWorkItem } from "../lib/jira";
 import { isBrowserPreview, seedAttention, seedLiveLines } from "../lib/browserSeed";
 import { useGuardedAction } from "./useGuardedAction";
 import {
@@ -236,6 +236,14 @@ export function useApp() {
     statusFilter: settings?.jiraFilterStatuses ?? [],
     setMessage,
   });
+
+  // Keep the docked work-item panel in lockstep with the board: a panel-driven
+  // transition/assign mutates `jira.items` and refreshes, so re-read the
+  // selected item from the fresh results (a just-created item not yet on the
+  // board is preserved).
+  useEffect(() => {
+    setSelectedJiraItem((current) => syncSelectedWorkItem(current, jira.items));
+  }, [jira.items]);
 
   const setJiraBoardConfig = (partial: {
     project?: string | null;

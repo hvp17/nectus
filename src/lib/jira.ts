@@ -1,3 +1,19 @@
+import type { JiraWorkItem } from "../types";
+
+/**
+ * Re-read the selected work item from the freshly loaded board so the docked
+ * view panel stays in lockstep after a transition/assign refresh. A selection
+ * that is not on the board (e.g. a just-created item not yet in the results) is
+ * preserved as-is, and a null selection passes through.
+ */
+export function syncSelectedWorkItem(
+  current: JiraWorkItem | null,
+  items: JiraWorkItem[],
+): JiraWorkItem | null {
+  if (!current) return current;
+  return items.find((item) => item.key === current.key) ?? current;
+}
+
 /**
  * Canonical JIRA Cloud browse URL for an issue, e.g.
  * `https://acme.atlassian.net/browse/PROJ-1`.

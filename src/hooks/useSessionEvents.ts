@@ -1,7 +1,7 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useEffect, type Dispatch, type RefObject, type SetStateAction } from "react";
 import { isTauriRuntime, notifySessionEvent } from "../sessionNotifications";
-import { upsertTaskAttention, type TaskAttention } from "../sessionAttention";
+import { clearTaskAttention, upsertTaskAttention, type TaskAttention } from "../sessionAttention";
 import { taskFinishedToast, taskNeedsInputToast, type TaskToast } from "../taskNotification";
 import type {
   SessionActivityEvent,
@@ -90,6 +90,11 @@ export function useSessionEvents({
             delete next[exited.id];
             return next;
           });
+          // A background task's agent can exit while in needs_input/idle; the
+          // per-TerminalPane clear only covers the *selected* task, so the global
+          // listener owns clearing attention to avoid phantom Mission Control
+          // groups and a stale needs-input badge.
+          setTaskAttention((current) => clearTaskAttention(current, exited.id));
         }
       });
     };

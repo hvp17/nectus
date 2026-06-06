@@ -285,6 +285,31 @@ describe("TerminalPane", () => {
     );
   });
 
+  it("strips control characters from dropped paths so a newline can't submit early", async () => {
+    const onSessionInput = vi.fn();
+    render(
+      <TerminalPane sessionId="session-21" onSessionExit={vi.fn()} onSessionInput={onSessionInput} />,
+    );
+
+    await waitFor(() => {
+      expect(terminalTestState.instances).toHaveLength(1);
+    });
+
+    act(() => {
+      terminalTestState.getDragDropHandler()?.({
+        payload: {
+          type: "drop",
+          paths: ["/tmp/evil\nname.txt"],
+          position: { x: 20, y: 20 },
+        },
+      });
+    });
+
+    const sent = mockedApi.sendSessionInput.mock.calls.at(-1)?.[1] as string;
+    expect(sent).not.toContain("\n");
+    expect(sent).toBe("/tmp/evilname.txt ");
+  });
+
   it("activates Unicode 11 width tables so wide glyphs match the agent's layout", async () => {
     render(
       <TerminalPane sessionId="session-21" onSessionExit={vi.fn()} onSessionInput={vi.fn()} />,

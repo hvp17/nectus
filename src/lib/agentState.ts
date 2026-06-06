@@ -26,7 +26,11 @@ export const AGENT_STATE_META: Record<AgentState, AgentStateMeta> = {
 /** Triage priority — lower sorts first (most urgent on top). */
 export const AGENT_STATE_ORDER: AgentState[] = ["needs_you", "running", "review", "done", "idle"];
 
-const REVIEW_STATUSES = new Set(["running", "reviewing", "passed", "feedback_sent"]);
+// Every review-loop status counts as the "review" state, so the rail colour and
+// the TaskCard review badge always agree. Driving the set from the label map
+// keeps it exhaustive: a newly added ReviewLoopStatus can't silently fall
+// through to "idle".
+const REVIEW_STATUSES = new Set<string>(Object.keys(REVIEW_LOOP_STATUS_LABELS));
 
 export function deriveAgentState(task: TaskSummary, attention?: TaskAttention): AgentState {
   if (attention?.kind === "needs_input") return "needs_you";

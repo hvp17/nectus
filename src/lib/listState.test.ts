@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { replaceById, upsertById } from "./listState";
+import { replaceById, upsertById, upsertNewestById } from "./listState";
 
 interface Item {
   id: number;
@@ -27,5 +27,16 @@ describe("upsertById", () => {
   it("appends a new item", () => {
     const c: Item = { id: 3, name: "c" };
     expect(upsertById([a, b], c)).toEqual([a, b, c]);
+  });
+});
+
+describe("upsertNewestById", () => {
+  it("replaces an existing item in place", () => {
+    expect(upsertNewestById([a, b], { id: 1, name: "A" })).toEqual([{ id: 1, name: "A" }, b]);
+  });
+
+  it("prepends a new item (newest first)", () => {
+    const c: Item = { id: 3, name: "c" };
+    expect(upsertNewestById([a, b], c)).toEqual([c, a, b]);
   });
 });
