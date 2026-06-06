@@ -2,6 +2,8 @@ mod db;
 mod git_ops;
 mod github;
 mod jira;
+mod jira_rest;
+mod jira_secret;
 mod models;
 mod process_util;
 mod sessions;
