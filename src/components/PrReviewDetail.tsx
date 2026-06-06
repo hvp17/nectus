@@ -17,6 +17,7 @@ import { Skeleton } from "./ui/skeleton";
 import { AgentLogo } from "./AgentBrand";
 import { PrReviewBadge } from "./PrReviewBadge";
 import { openExternal } from "../lib/openExternal";
+import { toast } from "sonner";
 import type { AgentKind, AgentProfile, PrReview, PrReviewRun, PrReviewStatus, PrReviewVerdict } from "../types";
 
 interface PrReviewDetailProps {
@@ -67,7 +68,12 @@ export function PrReviewDetail({ review, runs, agentProfiles, onRerun, onDelete 
       await navigator.clipboard.writeText(review.reviewOutput);
       setCopied(true);
     } catch {
+      // In the packaged webview writeText can reject (secure-context/permission);
+      // tell the user instead of silently doing nothing.
       setCopied(false);
+      toast.error("Couldn't copy review", {
+        description: "Copying to the clipboard failed.",
+      });
     }
   };
 

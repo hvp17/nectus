@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { CheckCheck, GitBranch, GitPullRequest, MessageSquareReply, RefreshCw, Radio, Terminal } from "lucide-react";
 import { Button } from "./ui/button";
 import { AgentLogo } from "./AgentBrand";
@@ -37,10 +38,29 @@ export function MissionControl({
   onOpenPr,
   onRefresh,
 }: MissionControlProps) {
-  const repoNames = new Map(repos.map((repo) => [repo.id, repo.name]));
-  const rows = buildAgentRows(tasks, taskAttention, repoNames, liveLines);
-  const byState = (state: AgentState) => rows.filter((row) => row.state === state);
-  const count = (state: AgentState) => byState(state).length;
+  // Tick once a minute so the relative elapsed times ("2m", "1h") keep advancing
+  // even when nothing else re-renders.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const repoNames = useMemo(() => new Map(repos.map((repo) => [repo.id, repo.name])), [repos]);
+  const rows = useMemo(
+    () => buildAgentRows(tasks, taskAttention, repoNames, liveLines, now),
+    [tasks, taskAttention, repoNames, liveLines, now],
+  );
+  // Bucket once instead of re-filtering the row list for every pill and group.
+  const rowsByState = useMemo(() => {
+    const grouped = Object.fromEntries(AGENT_STATE_ORDER.map((state) => [state, [] as AgentRow[]])) as Record<
+      AgentState,
+      AgentRow[]
+    >;
+    for (const row of rows) grouped[row.state].push(row);
+    return grouped;
+  }, [rows]);
+  const count = (state: AgentState) => rowsByState[state].length;
 
   return (
     <main className="nx-main">
@@ -85,7 +105,7 @@ export function MissionControl({
             <AttentionGroup
               key={state}
               state={state}
-              rows={byState(state)}
+              rows={rowsByState[state]}
               onOpenTask={onOpenTask}
               onOpenPr={onOpenPr}
             />

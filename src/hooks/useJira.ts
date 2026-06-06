@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { api } from "../api";
 import { useAsyncEffect } from "./useAsyncEffect";
 import { isCliConnected } from "../lib/connection";
@@ -284,6 +284,15 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
     await refreshRestStatus();
   }, [refreshRestStatus]);
 
+  // Callers pass a fresh `statusFilter` array literal each render, so key the
+  // memo on its content to avoid rebuilding+sorting the columns every render.
+  const statusFilterKey = statusFilter.join(" ");
+  const columns = useMemo(
+    () => deriveColumns(items, projectStatuses, statusFilter),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [items, projectStatuses, statusFilterKey],
+  );
+
   return {
     jiraStatus,
     restStatus,
@@ -292,7 +301,7 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
     projects,
     projectStatuses,
     items,
-    columns: deriveColumns(items, projectStatuses, statusFilter),
+    columns,
     loading,
     refresh,
     transition,
