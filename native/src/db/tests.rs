@@ -1324,3 +1324,38 @@ fn rejects_a_blank_workspace_name() {
     let error = db.create_workspace("   ".to_string(), vec![]).unwrap_err();
     assert!(error.contains("name"));
 }
+
+#[test]
+fn rejects_a_workspace_with_no_repos() {
+    let db = Database::open_in_memory().unwrap();
+    // An empty workspace would resolve to a filter that hides every project.
+    let error = db.create_workspace("Empty".to_string(), vec![]).unwrap_err();
+    assert!(error.contains("repository"));
+}
+
+#[test]
+fn rejects_a_duplicate_workspace_name() {
+    let db = Database::open_in_memory().unwrap();
+    let alpha = insert_workspace_test_repo(&db, "alpha");
+    db.create_workspace("Platform".to_string(), vec![alpha])
+        .unwrap();
+
+    // Case-insensitive duplicate is rejected on create...
+    let error = db
+        .create_workspace("platform".to_string(), vec![alpha])
+        .unwrap_err();
+    assert!(error.contains("already exists"));
+
+    // ...and on update, but a workspace can keep its own name.
+    let other = db
+        .create_workspace("Other".to_string(), vec![alpha])
+        .unwrap();
+    let kept = db
+        .update_workspace(other.id, "Other".to_string(), vec![alpha])
+        .unwrap();
+    assert_eq!(kept.name, "Other");
+    let clash = db
+        .update_workspace(other.id, "Platform".to_string(), vec![alpha])
+        .unwrap_err();
+    assert!(clash.contains("already exists"));
+}

@@ -76,6 +76,22 @@ export function defineAppWorkspacesTests() {
     });
   });
 
+  it("disables creating a workspace until at least one repo is selected", async () => {
+    mockedApi.listRepos.mockResolvedValue([appRepo, secondRepo]);
+    mockedApi.listWorkspaces.mockResolvedValue([]);
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Manage workspaces" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Naming only" } });
+
+    // A name alone is not enough — an empty workspace would hide every project.
+    expect(screen.getByRole("button", { name: "Create workspace" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("switch", { name: appRepo.name }));
+    expect(screen.getByRole("button", { name: "Create workspace" })).toBeEnabled();
+    expect(mockedApi.createWorkspace).not.toHaveBeenCalled();
+  });
+
   it("edits an existing workspace's name and membership", async () => {
     mockedApi.listRepos.mockResolvedValue([appRepo, secondRepo]);
     mockedApi.listWorkspaces.mockResolvedValue([
@@ -89,7 +105,10 @@ export function defineAppWorkspacesTests() {
 
     fireEvent.click(await screen.findByRole("button", { name: "Manage workspaces" }));
     // Select the existing workspace to edit (its pill in the manager's edit group).
-    fireEvent.click(await screen.findByRole("button", { name: "Frontend" }));
+    const editPill = await screen.findByRole("button", { name: "Frontend" });
+    fireEvent.click(editPill);
+    // The selected edit target exposes its state to assistive tech.
+    expect(editPill).toHaveAttribute("aria-pressed", "true");
 
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Frontend+" } });
     fireEvent.click(screen.getByRole("switch", { name: secondRepo.name }));

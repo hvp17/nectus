@@ -209,8 +209,10 @@ function App() {
     if (createTaskOpen) closeCreateTaskModal();
     setManagingWorkspaces(false);
     setSelectedTaskId(undefined);
-    if (view === "board" && selectedRepoId === undefined && repos[0]) {
-      setSelectedRepoId(repos[0].id);
+    // Fall back to the first repo *in the active workspace's scope*, so the board
+    // never selects a project the rail doesn't list.
+    if (view === "board" && selectedRepoId === undefined && scopedRepos[0]) {
+      setSelectedRepoId(scopedRepos[0].id);
     }
     setCurrentView(view);
   };

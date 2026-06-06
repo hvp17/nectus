@@ -44,6 +44,12 @@ impl Database {
         repo_ids: Vec<i64>,
     ) -> Result<Workspace, String> {
         let name = trimmed_name(name)?;
+        // A workspace with no repos would resolve to an empty repo-scope filter
+        // that hides every project, so reject it (the UI also gates the button).
+        if repo_ids.is_empty() {
+            return Err("Select at least one repository for the workspace".to_string());
+        }
+        self.ensure_unique_workspace_name(&name, None)?;
         let now = now();
         // The workspace row and its membership are written together so a bad
         // member id (a missing repo tripping the FK) rolls back the whole insert
@@ -73,8 +79,12 @@ impl Database {
         repo_ids: Vec<i64>,
     ) -> Result<Workspace, String> {
         let name = trimmed_name(name)?;
+        if repo_ids.is_empty() {
+            return Err("Select at least one repository for the workspace".to_string());
+        }
         self.workspace_by_id(id)?
             .ok_or_else(|| "Workspace not found".to_string())?;
+        self.ensure_unique_workspace_name(&name, Some(id))?;
 
         let tx = self
             .conn
@@ -99,6 +109,27 @@ impl Database {
             .execute("DELETE FROM workspaces WHERE id = ?1", params![id])
             .map_err(|error| format!("Failed to delete workspace: {error}"))?;
         Ok(())
+    }
+
+    /// Reject a name already used by another workspace (case-insensitive), so the
+    /// switcher never shows two indistinguishable entries. `exclude_id` lets an
+    /// update keep its own name.
+    fn ensure_unique_workspace_name(&self, name: &str, exclude_id: Option<i64>) -> Result<(), String> {
+        let existing: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT id FROM workspaces WHERE name = ?1 COLLATE NOCASE",
+                params![name],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        match existing {
+            Some(id) if Some(id) != exclude_id => {
+                Err(format!("A workspace named \"{name}\" already exists"))
+            }
+            _ => Ok(()),
+        }
     }
 
     fn workspace_repo_ids(&self, workspace_id: i64) -> Result<Vec<i64>, String> {

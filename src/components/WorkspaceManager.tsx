@@ -74,7 +74,9 @@ export function WorkspaceManager({
     }
   };
 
-  const saveDisabled = busy || !name.trim();
+  // A workspace must have a name and at least one repo — an empty membership
+  // would resolve to a filter that hides every project (see the backend guard).
+  const saveDisabled = busy || !name.trim() || repoIds.length === 0;
 
   return (
     <div
@@ -111,6 +113,7 @@ export function WorkspaceManager({
               type="button"
               size="sm"
               variant={editingId === workspace.id ? "default" : "outline"}
+              aria-pressed={editingId === workspace.id}
               onClick={() => setEditingId(workspace.id)}
             >
               <Layers data-icon="inline-start" />
@@ -121,6 +124,7 @@ export function WorkspaceManager({
             type="button"
             size="sm"
             variant={editingId === "new" ? "default" : "outline"}
+            aria-pressed={editingId === "new"}
             onClick={() => setEditingId("new")}
           >
             <Plus data-icon="inline-start" />
