@@ -1,0 +1,17 @@
+[
+  {
+    "id": "10001", "name": "Task", "subtask": false,
+    "statuses": [
+      { "id": "10", "name": "To Do", "statusCategory": { "key": "new", "name": "To Do" } },
+      { "id": "11", "name": "In Progress", "statusCategory": { "key": "indeterminate", "name": "In Progress" } },
+      { "id": "12", "name": "Done", "statusCategory": { "key": "done", "name": "Done" } }
+    ]
+  },
+  {
+    "id": "10002", "name": "Bug", "subtask": false,
+    "statuses": [
+      { "id": "10", "name": "To Do", "statusCategory": { "key": "new", "name": "To Do" } },
+      { "id": "13", "name": "Triage" }
+    ]
+  }
+]
