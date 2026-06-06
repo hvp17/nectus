@@ -232,6 +232,8 @@ export function useApp() {
   const jira = useJira({
     active: currentView === "jira",
     configured: Boolean(settings?.jiraBoardProject),
+    project: settings?.jiraBoardProject ?? null,
+    statusFilter: settings?.jiraFilterStatuses ?? [],
     setMessage,
   });
 
