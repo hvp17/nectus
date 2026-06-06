@@ -23,6 +23,7 @@ mod codex_tests;
 mod command;
 mod pr_consensus;
 mod pr_review;
+mod pr_verdict;
 mod pr_worktree;
 mod review_loop;
 mod reviewer;
