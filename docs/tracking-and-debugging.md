@@ -17,7 +17,7 @@ Core tables:
 | --- | --- |
 | `repos` | Saved project repositories and each project's default worktree root. |
 | `agent_profiles` | CLI agent configuration, including command, model, args, and env. |
-| `app_settings` | Default agent, worktree pattern, branch prefix, theme, density, and the JIRA board config (selected project + filter flags; the JQL is built from these). |
+| `app_settings` | Default agent, worktree pattern, branch prefix, theme, density, and the JIRA board config (selected project + filter flags + `jira_filter_statuses`; the JQL is built from these). Also the non-secret JIRA REST account email (`jira_rest_email`); the REST API token itself lives in the macOS Keychain, never here. |
 | `tasks` | Primary work item, status, prompt, optional worktree, active session, saved session, and optional JIRA story link. |
 | `review_loops` | Current review configuration and status per task. |
 | `review_runs` | Reviewer prompts, outputs, verdicts, and errors by review attempt. |
@@ -141,9 +141,14 @@ Current commands:
 | `jira_list_projects` | List visible JIRA projects for the board's project picker (`acli jira project list --json`). |
 | `jira_search_board` | Load board work items; the JQL is built from the structured board config (project + filter flags), so no JQL is typed. |
 | `jira_get_work_item` | Fetch a single work item (e.g. to backfill a story description). |
-| `jira_transition_work_item` | Transition a work item to a target status (optimistic; fails on illegal workflow moves). |
+| `jira_transition_work_item` | Transition a work item to a target status. REST-aware: with a connected token it resolves the status to a legal transition and POSTs it; otherwise falls back to optimistic `acli` transition. |
 | `jira_assign_work_item` | Assign a work item to a user. |
 | `jira_comment_work_item` | Add a comment to a work item. |
+| `jira_rest_status` | Report whether the optional JIRA REST API token is connected (Keychain token present for the configured site + email). |
+| `set_jira_api_token` | Verify a token via `GET /myself`, then store it in the macOS Keychain and persist the non-secret site/email. Stores nothing on failure. |
+| `clear_jira_api_token` | Disconnect: delete the Keychain token and clear the stored REST email. |
+| `jira_list_transitions` | List an issue's legal transitions via REST (`GET /issue/{key}/transitions`). Requires a connected token. |
+| `jira_project_statuses` | Load a project's full workflow status set via REST (`GET /project/{key}/statuses`), unioned across issue types. Requires a connected token. |
 | `set_task_jira_link` | Set or clear the local JIRA story link on a task (never writes to JIRA). |
 | `list_agent_profiles` | Load agent profiles. |
 | `upsert_agent_profile` | Create or update an agent profile. |
@@ -225,9 +230,12 @@ worktree tasks have both.
 
 Additive columns (such as the `jira_*` task fields above and the `app_settings` JIRA
 board config — `jira_board_project`, `jira_filter_my_issues`, `jira_filter_unresolved`,
-`jira_filter_current_sprint`, plus the legacy `jira_board_jql` / `jira_site_url`) are
-introduced by `run_migrations` in `native/src/db/schema.rs`, which `ALTER TABLE`s any
-missing column on every open so existing databases upgrade in place.
+`jira_filter_current_sprint`, the REST `jira_rest_email`, the JSON-encoded
+`jira_filter_statuses` status filter, plus the legacy `jira_board_jql` /
+`jira_site_url`) are introduced by `run_migrations` in `native/src/db/schema.rs`, which
+`ALTER TABLE`s any missing column on every open so existing databases upgrade in place.
+The JIRA REST API token is **not** a column — it lives in the macOS Keychain
+(`native/src/jira_secret.rs`).
 
 `run_migrations` also runs `migrate_legacy_worktree_pattern`: a one-time data
 migration that moves databases still on the legacy worktree default
