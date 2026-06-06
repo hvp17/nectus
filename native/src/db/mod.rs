@@ -104,7 +104,7 @@ impl Database {
         self.conn
             .query_row(
                 "
-                SELECT default_agent_profile_id, default_worktree_root_pattern, default_branch_prefix, theme, density, updated_at, jira_board_jql, jira_site_url, jira_board_project, jira_filter_my_issues, jira_filter_unresolved, jira_filter_current_sprint
+                SELECT default_agent_profile_id, default_worktree_root_pattern, default_branch_prefix, theme, density, updated_at, jira_board_jql, jira_site_url, jira_board_project, jira_filter_my_issues, jira_filter_unresolved, jira_filter_current_sprint, jira_rest_email, jira_filter_statuses
                 FROM app_settings
                 WHERE id = 1
                 ",
@@ -147,6 +147,8 @@ impl Database {
             .jira_board_project
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty());
+        let jira_filter_statuses = serde_json::to_string(&settings.jira_filter_statuses)
+            .unwrap_or_else(|_| "[]".to_string());
         let pattern = settings.default_worktree_root_pattern.trim().to_string();
         let updated_at = now();
         self.conn
@@ -164,7 +166,8 @@ impl Database {
                     jira_board_project = ?9,
                     jira_filter_my_issues = ?10,
                     jira_filter_unresolved = ?11,
-                    jira_filter_current_sprint = ?12
+                    jira_filter_current_sprint = ?12,
+                    jira_filter_statuses = ?13
                 WHERE id = 1
                 ",
                 params![
@@ -179,12 +182,33 @@ impl Database {
                     jira_board_project,
                     settings.jira_filter_my_issues,
                     settings.jira_filter_unresolved,
-                    settings.jira_filter_current_sprint
+                    settings.jira_filter_current_sprint,
+                    jira_filter_statuses
                 ],
             )
             .map_err(|error| format!("Failed to update app settings: {error}"))?;
         self.refresh_repo_worktree_roots(&pattern)?;
         self.get_app_settings()
+    }
+
+    /// Persist the non-secret REST account (site + email). The token itself lives
+    /// only in the Keychain; this never writes it.
+    pub fn set_jira_rest_account(&self, site: &str, email: &str) -> Result<(), String> {
+        self.conn
+            .execute(
+                "UPDATE app_settings SET jira_site_url = ?1, jira_rest_email = ?2 WHERE id = 1",
+                params![site, email],
+            )
+            .map_err(|error| format!("Failed to save JIRA REST account: {error}"))?;
+        Ok(())
+    }
+
+    /// Clear the stored REST email (called on disconnect; the site is left as-is).
+    pub fn clear_jira_rest_email(&self) -> Result<(), String> {
+        self.conn
+            .execute("UPDATE app_settings SET jira_rest_email = NULL WHERE id = 1", [])
+            .map_err(|error| format!("Failed to clear JIRA REST email: {error}"))?;
+        Ok(())
     }
 
     pub fn repo_by_id(&self, id: i64) -> Result<Option<Repo>, String> {

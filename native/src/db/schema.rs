@@ -208,6 +208,12 @@ impl Database {
             "jira_filter_current_sprint",
             "INTEGER NOT NULL DEFAULT 0",
         )?;
+        self.add_column_if_missing("app_settings", "jira_rest_email", "TEXT")?;
+        self.add_column_if_missing(
+            "app_settings",
+            "jira_filter_statuses",
+            "TEXT NOT NULL DEFAULT '[]'",
+        )?;
         // Consensus PR review: a single-reviewer review is `mode = 'single'`; a
         // multi-model run is `mode = 'consensus'` with the participants tracked in
         // `pr_review_reviewers` and their per-round outputs in `pr_review_runs`.

@@ -133,6 +133,9 @@ pub(super) fn app_settings_from_row(row: &Row<'_>) -> rusqlite::Result<AppSettin
         jira_filter_my_issues: row.get(9)?,
         jira_filter_unresolved: row.get(10)?,
         jira_filter_current_sprint: row.get(11)?,
+        jira_rest_email: row.get(12)?,
+        jira_filter_statuses: serde_json::from_str::<Vec<String>>(&row.get::<_, String>(13)?)
+            .unwrap_or_default(),
     })
 }
 

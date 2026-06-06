@@ -192,6 +192,7 @@ fn seeds_and_updates_global_app_settings() {
             jira_filter_my_issues: false,
             jira_filter_unresolved: true,
             jira_filter_current_sprint: false,
+            jira_filter_statuses: vec![],
             theme: ThemeMode::Dark,
             density: DensityMode::Compact,
         })
@@ -262,6 +263,7 @@ fn persists_jira_link_and_board_settings() {
             jira_filter_my_issues: true,
             jira_filter_unresolved: false,
             jira_filter_current_sprint: true,
+            jira_filter_statuses: vec![],
             theme: base.theme,
             density: base.density,
         })
@@ -279,6 +281,41 @@ fn persists_jira_link_and_board_settings() {
     let reloaded = db.get_app_settings().unwrap();
     assert_eq!(reloaded.jira_board_project.as_deref(), Some("PROJ"));
     assert!(reloaded.jira_filter_current_sprint);
+}
+
+#[test]
+fn persists_jira_filter_statuses_and_rest_account() {
+    let db = Database::open_in_memory().unwrap();
+    let base = db.get_app_settings().unwrap();
+
+    db.update_app_settings(AppSettingsInput {
+        default_agent_profile_id: base.default_agent_profile_id,
+        default_worktree_root_pattern: base.default_worktree_root_pattern,
+        default_branch_prefix: base.default_branch_prefix,
+        jira_board_jql: None,
+        jira_site_url: None,
+        jira_board_project: None,
+        jira_filter_my_issues: false,
+        jira_filter_unresolved: true,
+        jira_filter_current_sprint: false,
+        jira_filter_statuses: vec!["To Do".into(), "Done".into()],
+        theme: base.theme,
+        density: base.density,
+    })
+    .unwrap();
+    db.set_jira_rest_account("acme.atlassian.net", "a@b.com")
+        .unwrap();
+
+    let reloaded = db.get_app_settings().unwrap();
+    assert_eq!(reloaded.jira_filter_statuses, vec!["To Do", "Done"]);
+    assert_eq!(reloaded.jira_rest_email.as_deref(), Some("a@b.com"));
+    assert_eq!(reloaded.jira_site_url.as_deref(), Some("acme.atlassian.net"));
+
+    // Disconnect clears the email but leaves the rest of the board config intact.
+    db.clear_jira_rest_email().unwrap();
+    let after = db.get_app_settings().unwrap();
+    assert_eq!(after.jira_rest_email, None);
+    assert_eq!(after.jira_filter_statuses, vec!["To Do", "Done"]);
 }
 
 #[test]
@@ -308,6 +345,7 @@ fn updated_worktree_root_pattern_applies_to_existing_and_new_repos() {
         jira_filter_my_issues: false,
         jira_filter_unresolved: true,
         jira_filter_current_sprint: false,
+        jira_filter_statuses: vec![],
         theme: ThemeMode::System,
         density: DensityMode::Comfortable,
     })

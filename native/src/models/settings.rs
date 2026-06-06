@@ -46,6 +46,12 @@ pub struct AppSettings {
     pub jira_filter_my_issues: bool,
     pub jira_filter_unresolved: bool,
     pub jira_filter_current_sprint: bool,
+    /// Non-secret REST account email (Basic-auth username). Written only by the
+    /// API-token flow, never by the general settings save. The token itself lives
+    /// in the Keychain.
+    pub jira_rest_email: Option<String>,
+    /// Board status filter selection (the statuses to show); empty means no filter.
+    pub jira_filter_statuses: Vec<String>,
     pub theme: ThemeMode,
     pub density: DensityMode,
     pub updated_at: String,
@@ -69,6 +75,8 @@ pub struct AppSettingsInput {
     pub jira_filter_unresolved: bool,
     #[serde(default)]
     pub jira_filter_current_sprint: bool,
+    #[serde(default)]
+    pub jira_filter_statuses: Vec<String>,
     pub theme: ThemeMode,
     pub density: DensityMode,
 }
