@@ -195,6 +195,23 @@ export const api = {
   async jiraCommentWorkItem(key: string, body: string): Promise<void> {
     return invoke("jira_comment_work_item", { key, body });
   },
+  async jiraCreateWorkItem(input: {
+    project: string;
+    issueType: string;
+    summary: string;
+    description?: string | null;
+    assignee?: string | null;
+    labels?: string | null;
+  }): Promise<JiraWorkItem> {
+    return invoke("jira_create_work_item", {
+      project: input.project,
+      issueType: input.issueType,
+      summary: input.summary,
+      description: input.description ?? null,
+      assignee: input.assignee ?? null,
+      labels: input.labels ?? null,
+    });
+  },
   async setTaskJiraLink(input: {
     taskId: number;
     key?: string | null;

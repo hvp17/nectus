@@ -387,6 +387,33 @@ async fn jira_comment_work_item(key: String, body: String) -> AppResult<()> {
         .map_err(Into::into)
 }
 
+/// Create a JIRA work item from the board's structured form, returning the new
+/// item (re-fetched so it carries status/type for the board panel). Optional
+/// fields are passed through to `acli` only when present.
+#[tauri::command]
+async fn jira_create_work_item(
+    project: String,
+    issue_type: String,
+    summary: String,
+    description: Option<String>,
+    assignee: Option<String>,
+    labels: Option<String>,
+) -> AppResult<JiraWorkItem> {
+    tauri::async_runtime::spawn_blocking(move || {
+        jira::create(
+            &project,
+            &issue_type,
+            &summary,
+            description.as_deref(),
+            assignee.as_deref(),
+            labels.as_deref().unwrap_or(""),
+        )
+    })
+    .await
+    .map_err(|error| AppError::from(format!("Failed to create work item: {error}")))?
+    .map_err(Into::into)
+}
+
 /// Set or clear the local JIRA story link on a task. Never writes to JIRA.
 #[tauri::command]
 fn set_task_jira_link(
@@ -770,6 +797,7 @@ pub fn run() {
             jira_transition_work_item,
             jira_assign_work_item,
             jira_comment_work_item,
+            jira_create_work_item,
             set_task_jira_link,
             create_pr_review,
             list_pr_reviews,

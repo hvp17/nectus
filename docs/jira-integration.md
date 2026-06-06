@@ -36,6 +36,26 @@ The board is entirely UI-driven; no JQL is ever typed.
 - The board refreshes when the view becomes active, when the project/filters change,
   and via the `Refresh` button. There is no background polling or webhook.
 
+## Creating a work item
+
+- The board toolbar has a **New work item** button (enabled once `acli` is connected
+  and a project is chosen). It opens an **inline create form** in the same right-hand
+  dock slot the work-item view panel uses — the two are mutually exclusive, so opening
+  one closes the other (no modal, matching the rest of the JIRA surfaces).
+- Fields: **Project** (defaults to the board's project; any visible project can be
+  picked), **Type** (`Task`/`Bug`/`Story`/`Epic`), **Summary** (required), and optional
+  **Description**, **Assignee** (email/account id, or `@me`), and comma-separated
+  **Labels**. Submit is disabled until a project and a summary are present.
+- On submit Nectus runs `acli jira workitem create --project <key> --type <type>
+  --summary "<summary>" --json` plus `--description/--assignee/--label` when provided,
+  reads the new key from the JSON (falling back to a `KEY-123` token in the output),
+  then `view`s it to return a fully populated card. The board refreshes and the new
+  item's **view panel** auto-opens, where the launch row can start an agent on it.
+- Type is **optimistic**: `acli` cannot enumerate a project's configured issue types,
+  so an invalid type for the chosen project surfaces as an `acli` error (same model as
+  drag-to-transition). `acli workitem create` has no priority flag, so priority is not
+  set at create time.
+
 ## Managing work items
 
 All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
@@ -92,15 +112,18 @@ All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
 
 - Board view: `src/components/JiraBoardPage.tsx`
 - Work item management dialog: `src/components/JiraWorkItemDialog.tsx`
+- New-work-item create panel: `src/components/JiraCreateWorkItemPanel.tsx`
 - Linked-story inspector panel: `src/components/JiraPanel.tsx`
 - Board + connection state, project list, auto-derived columns, optimistic
-  transition: `src/hooks/useJira.ts`
-- Create-from-story and board-config persistence: `src/hooks/useApp.ts`
+  transition, and work-item creation: `src/hooks/useJira.ts`
+- Create-from-story, create-work-item handlers, and board-config persistence:
+  `src/hooks/useApp.ts`
 - Frontend API: `src/api.ts`
-- `acli` shell-out, JSON parsing, and JQL builder (`build_board_jql`):
-  `native/src/jira.rs`
+- `acli` shell-out, JSON parsing, the JQL builder (`build_board_jql`), and the
+  create argument builder/key parser: `native/src/jira.rs`
 - Backend commands: `jira_status`, `jira_list_projects`, `jira_search_board`,
   `jira_get_work_item`, `jira_transition_work_item`, `jira_assign_work_item`,
-  `jira_comment_work_item`, `set_task_jira_link` (registered in `native/src/lib.rs`)
+  `jira_comment_work_item`, `jira_create_work_item`, `set_task_jira_link`
+  (registered in `native/src/lib.rs`)
 - Link persistence: `jira_issue_key/summary/url` columns on the `tasks` table; board
   config in `jira_board_project` and the `jira_filter_*` flags on `app_settings`

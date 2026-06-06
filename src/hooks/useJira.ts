@@ -156,6 +156,34 @@ export function useJira({ active, configured, setMessage }: UseJiraInput) {
     [setMessage],
   );
 
+  /**
+   * Create a work item in JIRA, then refresh the board. Returns the new item so the
+   * caller can open it in the side panel; returns null on failure (error surfaced
+   * via `setMessage`). The board only re-shows the new item when it was created in
+   * the board's project, so opening the returned item is what guarantees it appears.
+   */
+  const create = useCallback(
+    async (input: {
+      project: string;
+      issueType: string;
+      summary: string;
+      description?: string;
+      assignee?: string;
+      labels?: string;
+    }): Promise<JiraWorkItem | null> => {
+      try {
+        const item = await api.jiraCreateWorkItem(input);
+        await refresh();
+        setMessage(`Created ${item.key}`);
+        return item;
+      } catch (error) {
+        setMessage(String(error));
+        return null;
+      }
+    },
+    [refresh, setMessage],
+  );
+
   return {
     jiraStatus,
     ready,
@@ -167,5 +195,6 @@ export function useJira({ active, configured, setMessage }: UseJiraInput) {
     transition,
     assign,
     comment,
+    create,
   };
 }

@@ -192,7 +192,7 @@ Important backend files:
 - `native/src/db/`: SQLite schema, row mapping, agent profiles, review loops, and persistence tests
 - `native/src/git_ops.rs`: git repo/worktree validation and operations
 - `native/src/github.rs`: `gh` CLI integration — connection status plus pull request create/detect/status parsing (no OAuth, no stored tokens)
-- `native/src/jira.rs`: `acli` (Atlassian CLI) integration — connection status, project list, work-item search/view/transition/assign/comment with tolerant JSON parsing, and the structured-config JQL builder (`build_board_jql`, so the UI never types JQL); no OAuth, no stored tokens
+- `native/src/jira.rs`: `acli` (Atlassian CLI) integration — connection status, project list, work-item search/view/create/transition/assign/comment with tolerant JSON parsing, the structured-config JQL builder (`build_board_jql`, so the UI never types JQL), and the create argument builder + new-key parser (`build_create_args`, `parse_created_key`); no OAuth, no stored tokens
 - `native/src/process_util.rs`: shared command helpers — binary resolution (`resolve_executable`), child `PATH` augmentation (`augmented_path`), the install-dir source of truth (`third_party_bin_dirs`), and `command_error` stderr formatting. See [Spawning External CLIs](#spawning-external-clis-macos-gui-path).
 - `native/src/sessions/`: PTY lifecycle, terminal event emission, Codex JSONL watching, Claude Code hook event bridge (`claude.rs`), agent command setup, and the task review-loop / external PR-review runtimes (`review_loop.rs`, `pr_review.rs`, `pr_consensus.rs`). The headless reviewer-CLI launcher shared by all three reviewing surfaces lives in `reviewer.rs`; the PTY submission helper in `terminal_io.rs`
 - `native/src/sessions/agents/`: provider-specific Codex, Claude, and Gemini command arguments and fallback locations
@@ -221,6 +221,7 @@ Tauri commands exposed to the frontend include:
 - `jira_transition_work_item`
 - `jira_assign_work_item`
 - `jira_comment_work_item`
+- `jira_create_work_item`
 - `set_task_jira_link`
 - `list_agent_profiles`
 - `upsert_agent_profile`
@@ -319,6 +320,7 @@ Important frontend files:
 - `src/components/GitHubPanel.tsx`: task-inspector GitHub panel for connection state and pull request actions
 - `src/components/JiraBoardPage.tsx`: global JIRA board view — JQL config, auto-derived columns, drag-to-transition; composes `JiraBoardBody` (column grid + empty/loading states) and `JiraCard` (draggable story card + its linked Nectus tasks)
 - `src/components/JiraWorkItemDialog.tsx`: `JiraWorkItemPanel` — the de-modaled work-item side panel docked beside the board (transition/assign/comment + an agent-select "Create task & start" launch row)
+- `src/components/JiraCreateWorkItemPanel.tsx`: `JiraCreateWorkItemPanel` — the inline "New work item" create form docked in the board's right-hand slot (project/type/summary/description/assignee/labels → `acli jira workitem create`); shares the slot with the view panel
 - `src/components/JiraPanel.tsx`: task-inspector panel for the linked JIRA story (display + detach)
 - `src/components/settings/`: settings subcomponents (`ProfileEditor`, `GithubConnectionCard`, `SegmentedRadioGroup`, `SettingsOverviewItem`) and profile-draft helpers
 - `src/test/testUtils.tsx`: shared frontend test helpers for providers, pointer events, DOM rects, and async deferrals
