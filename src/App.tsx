@@ -152,6 +152,13 @@ function App() {
   // The workspace manager overlays the routed view, like the New Task composer.
   const [managingWorkspaces, setManagingWorkspaces] = useState(false);
 
+  // Close the composer AND clear the cross-repo selection in one place, so the
+  // selection can't leak across opens (it owns the cross-vs-single create routing).
+  const closeComposer = useCallback(() => {
+    closeCreateTaskModal();
+    setNewTaskRepoIds([]);
+  }, [closeCreateTaskModal, setNewTaskRepoIds]);
+
   useEffect(() => {
     if (!message) return;
 
@@ -177,7 +184,7 @@ function App() {
   // Open the workspace manager, dismissing the New Task composer / open task that
   // would otherwise overlay it.
   const openManageWorkspaces = () => {
-    if (createTaskOpen) closeCreateTaskModal();
+    if (createTaskOpen) closeComposer();
     setSelectedTaskId(undefined);
     setManagingWorkspaces(true);
   };
@@ -192,13 +199,13 @@ function App() {
       // a dangling selection or switch views for a task that no longer exists.
       if (!task) return;
       const plan = planTaskFocus(currentView, task, createTaskOpen);
-      if (plan.dismissComposer) closeCreateTaskModal();
+      if (plan.dismissComposer) closeComposer();
       setManagingWorkspaces(false);
       if (plan.repoId !== undefined) setSelectedRepoId(plan.repoId);
       setSelectedTaskId(taskId);
       setCurrentView(plan.view);
     },
-    [tasks, currentView, createTaskOpen, closeCreateTaskModal, setSelectedRepoId, setSelectedTaskId, setCurrentView],
+    [tasks, currentView, createTaskOpen, closeComposer, setSelectedRepoId, setSelectedTaskId, setCurrentView],
   );
 
   // A finished / needs-input notification opens that task's workspace on click.
@@ -209,7 +216,7 @@ function App() {
   const navigate = (view: RailView) => {
     // The composer, workspace manager, and task workspace overlay the routed
     // view, so leaving via the rail must dismiss them.
-    if (createTaskOpen) closeCreateTaskModal();
+    if (createTaskOpen) closeComposer();
     setManagingWorkspaces(false);
     setSelectedTaskId(undefined);
     // Fall back to the first repo *in the active workspace's scope*, so the board
@@ -260,7 +267,7 @@ function App() {
         <div className="nx-viewport">
           {composing ? (
             <CreateTaskComposer
-              onClose={closeCreateTaskModal}
+              onClose={closeComposer}
               onSubmit={(e) => {
                 e.preventDefault();
                 createTask();

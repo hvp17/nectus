@@ -1,7 +1,7 @@
 use super::rows::{rows, task_from_row, task_repo_from_row};
 use super::{generated_branch_name, now, Database};
 use crate::git_ops;
-use crate::models::{TaskRepo, TaskStatus, TaskSummary};
+use crate::models::{Repo, TaskRepo, TaskStatus, TaskSummary};
 use rusqlite::{params, OptionalExtension};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -152,19 +152,7 @@ impl Database {
             .unwrap_or_else(|| base.join("workspaces"))
             .join(&branch_name);
 
-        let mut used_folders: HashSet<String> = HashSet::new();
-        let folders: Vec<String> = repos
-            .iter()
-            .map(|repo| {
-                let folder = if used_folders.contains(&repo.name) {
-                    format!("{}-{}", repo.name, repo.id)
-                } else {
-                    repo.name.clone()
-                };
-                used_folders.insert(folder.clone());
-                folder
-            })
-            .collect();
+        let folders = unique_worktree_folders(&repos);
 
         // Create every worktree first; on any failure tear down the ones made so far.
         let mut created: Vec<usize> = Vec::new();
@@ -453,6 +441,12 @@ impl Database {
                 }
             }
         }
+        // If a removal fails mid-loop for a non-dirty reason (e.g. a locked
+        // worktree), earlier repos are already removed and the task row stays —
+        // the same multi-step filesystem/DB non-atomicity the single-repo path has.
+        // It self-heals: a retry sees the missing worktrees as clean (is_dirty
+        // false on a gone path) and remove_worktree short-circuits, completing the
+        // delete cleanly.
         for (repo_path, worktree_path) in &worktrees {
             git_ops::remove_worktree(Path::new(repo_path), Path::new(worktree_path), force)?;
         }
@@ -463,6 +457,30 @@ impl Database {
             .map_err(|error| format!("Failed to delete task: {error}"))?;
         Ok(())
     }
+}
+
+/// Per-repo sibling folder names for a cross-repo task: the repo name, made unique
+/// (when two repos share a name) by appending the repo id, then a counter if even
+/// that collides with an already-chosen folder. Guarantees all-distinct folders so
+/// the sibling worktree paths under the shared parent never clash.
+fn unique_worktree_folders(repos: &[Repo]) -> Vec<String> {
+    let mut used: HashSet<String> = HashSet::new();
+    repos
+        .iter()
+        .map(|repo| {
+            let mut candidate = repo.name.clone();
+            if used.contains(&candidate) {
+                candidate = format!("{}-{}", repo.name, repo.id);
+            }
+            let mut suffix = 2;
+            while used.contains(&candidate) {
+                candidate = format!("{}-{}-{}", repo.name, repo.id, suffix);
+                suffix += 1;
+            }
+            used.insert(candidate.clone());
+            candidate
+        })
+        .collect()
 }
 
 /// Prepend cross-repo context to the user's prompt so the single agent knows the
@@ -484,5 +502,31 @@ fn cross_repo_prompt(folders: &[String], prompt: Option<String>) -> String {
     match prompt {
         Some(prompt) if !prompt.trim().is_empty() => format!("{context}\n\n{prompt}"),
         _ => context,
+    }
+}
+
+#[cfg(test)]
+mod folder_tests {
+    use super::*;
+
+    fn repo(name: &str, id: i64) -> Repo {
+        Repo {
+            id,
+            name: name.to_string(),
+            path: String::new(),
+            default_worktree_root: String::new(),
+            created_at: String::new(),
+        }
+    }
+
+    #[test]
+    fn unique_worktree_folders_disambiguate_even_when_the_id_fallback_collides() {
+        // A repo literally named "api-6" alongside two repos named "api" (one with
+        // id 6) would make the `{name}-{id}` fallback collide; the counter resolves it.
+        let folders = unique_worktree_folders(&[repo("api-6", 8), repo("api", 5), repo("api", 6)]);
+        let distinct: std::collections::HashSet<_> = folders.iter().collect();
+        assert_eq!(distinct.len(), 3, "all folders must be distinct: {folders:?}");
+        assert_eq!(folders[0], "api-6");
+        assert_eq!(folders[1], "api");
     }
 }

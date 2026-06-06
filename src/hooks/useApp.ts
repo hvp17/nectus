@@ -387,9 +387,13 @@ export function useApp() {
     );
 
   const createTask = async () => {
-    // Cross-repo task (Increment B): a workspace is active and the composer has
-    // ≥2 repos selected. One worktree per repo, a single agent across them.
-    if (activeWorkspaceId && newTaskRepoIds.length >= 2) {
+    // Workspace composer (Increment B): a workspace with ≥2 repos is active, so the
+    // composer offered a repo checklist. The checklist is the source of truth, and
+    // this gate keys on the SAME signal as the UI's cross-repo mode
+    // (activeWorkspaceRepos.length >= 2) so they can't diverge. Routes by how many
+    // repos were picked: ≥2 → cross-repo; exactly 1 → a single worktree task on
+    // that repo (never the board-selected one).
+    if (activeWorkspaceRepos.length >= 2 && newTaskRepoIds.length >= 1) {
       if (!newTaskAgentProfileId) {
         setMessage("Select an agent before creating a task.");
         return;
@@ -402,14 +406,24 @@ export function useApp() {
             newTaskBranchName,
             settings?.defaultBranchPrefix,
           );
-          const task = await api.createCrossRepoTask({
-            workspaceId: activeWorkspaceId,
-            repoIds,
-            title: getGeneratedTaskTitle(),
-            prompt: newTaskPrompt.trim() || null,
-            agentProfileId,
-            branchName,
-          });
+          const task =
+            repoIds.length >= 2
+              ? await api.createCrossRepoTask({
+                  workspaceId: activeWorkspaceId,
+                  repoIds,
+                  title: getGeneratedTaskTitle(),
+                  prompt: newTaskPrompt.trim() || null,
+                  agentProfileId,
+                  branchName,
+                })
+              : await api.createTask({
+                  repoId: repoIds[0],
+                  title: getGeneratedTaskTitle(),
+                  prompt: newTaskPrompt.trim() || null,
+                  agentProfileId,
+                  hasWorktree: true,
+                  branchName,
+                });
           resetCreateTaskForm();
           setNewTaskRepoIds([]);
           setCreateTaskOpen(false);
@@ -424,8 +438,10 @@ export function useApp() {
           await refresh(repoIds[0]);
           if (startError) {
             setMessage(`Created ${task.title}, but failed to start session: ${startError}`);
-          } else {
+          } else if (repoIds.length >= 2) {
             setMessage(`Created ${task.branchName} across ${repoIds.length} repos`);
+          } else {
+            setMessage(`Created ${task.branchName}`);
           }
         },
         { busy: true },
@@ -461,6 +477,7 @@ export function useApp() {
           jiraIssueUrl: jiraLink?.url ?? null,
         });
         resetCreateTaskForm();
+        setNewTaskRepoIds([]);
         setCreateTaskOpen(false);
         setSelectedRepoId(repoId);
         setSelectedTaskId(task.id);

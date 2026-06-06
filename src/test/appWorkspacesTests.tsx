@@ -126,6 +126,35 @@ export function defineAppWorkspacesTests() {
     expect(mockedApi.createTask).not.toHaveBeenCalled();
   });
 
+  it("selecting one repo in the workspace composer creates a worktree task on that repo", async () => {
+    mockedApi.listRepos.mockResolvedValue([appRepo, secondRepo]);
+    mockedApi.listWorkspaces.mockResolvedValue([
+      workspace({ id: 1, name: "Platform", repoIds: [appRepo.id, secondRepo.id] }),
+    ]);
+    mockedApi.createTask.mockResolvedValue(appTask({ id: 600, title: "Solo in workspace" }));
+
+    render(<App />);
+    fireEvent.click(await screen.findByText("Platform"));
+    fireEvent.click(screen.getByRole("button", { name: "Board" }));
+    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+
+    // Deselect the primary/board repo (appRepo), leaving only the second.
+    const repoGroup = await screen.findByRole("group", { name: "Repositories" });
+    fireEvent.click(within(repoGroup).getByRole("switch", { name: appRepo.name }));
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Solo in workspace" } });
+    fireEvent.click(screen.getByRole("button", { name: /create & start/i }));
+
+    // It uses the PICKED repo (a worktree task), not the board-selected repo, and
+    // does not fan out a cross-repo task.
+    await waitFor(() => {
+      expect(mockedApi.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({ repoId: secondRepo.id, hasWorktree: true }),
+      );
+    });
+    expect(mockedApi.createCrossRepoTask).not.toHaveBeenCalled();
+  });
+
   it("edits an existing workspace's name and membership", async () => {
     mockedApi.listRepos.mockResolvedValue([appRepo, secondRepo]);
     mockedApi.listWorkspaces.mockResolvedValue([
