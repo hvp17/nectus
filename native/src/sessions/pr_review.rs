@@ -1,4 +1,4 @@
-use super::review_loop::run_reviewer_command;
+use super::reviewer::run_reviewer_command;
 use crate::db::Database;
 use crate::github::{self, PrMeta};
 use crate::git_ops;

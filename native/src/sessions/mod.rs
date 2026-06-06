@@ -24,6 +24,8 @@ mod command;
 mod pr_consensus;
 mod pr_review;
 mod review_loop;
+mod reviewer;
+mod terminal_io;
 
 use agents::configure_agent_command;
 use claude::{cleanup_event_sink, spawn_claude_event_watcher};
@@ -31,7 +33,8 @@ use codex::{latest_codex_session_metadata, spawn_codex_event_watcher};
 use command::resolve_agent_command;
 use pr_consensus::spawn_consensus_pr_review;
 use pr_review::spawn_pr_review;
-use review_loop::{spawn_review_on_session_idle, write_agent_submission};
+use review_loop::spawn_review_on_session_idle;
+use terminal_io::write_agent_submission;
 
 const OUTPUT_BUFFER_LIMIT: usize = 2 * 1024 * 1024;
 // Minimum gap between `session_activity` emissions per session, so spinner
