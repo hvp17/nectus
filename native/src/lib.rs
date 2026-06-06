@@ -11,9 +11,9 @@ mod sessions;
 use crate::db::Database;
 use crate::models::{
     AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings, AppSettingsInput,
-    GithubStatus, JiraProject, JiraStatus, JiraWorkItem, PrReview, PrReviewMode, PrReviewRun,
-    PullRequestInfo, Repo, ReviewLoop, ReviewRun, Session, SessionExitedEvent,
-    SessionOutputSnapshot, TaskDiffSummary, TaskStatus, TaskSummary,
+    GithubStatus, JiraProject, JiraRestStatus, JiraStatus, JiraStatusDef, JiraTransition,
+    JiraWorkItem, PrReview, PrReviewMode, PrReviewRun, PullRequestInfo, Repo, ReviewLoop, ReviewRun,
+    Session, SessionExitedEvent, SessionOutputSnapshot, TaskDiffSummary, TaskStatus, TaskSummary,
 };
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
@@ -363,10 +363,31 @@ async fn jira_get_work_item(key: String) -> AppResult<JiraWorkItem> {
         .map_err(Into::into)
 }
 
-/// Transition a work item. Fails when JIRA's workflow forbids the move; the UI
-/// reverts the optimistic card and surfaces the error.
+/// Transition a work item. When a REST token is connected, resolve the target
+/// status name to a legal transition id and POST it; otherwise fall back to acli.
+/// JIRA workflow rejections surface as errors and the UI reverts the card.
 #[tauri::command]
-async fn jira_transition_work_item(key: String, status: String) -> AppResult<()> {
+async fn jira_transition_work_item(
+    state: State<'_, AppState>,
+    key: String,
+    status: String,
+) -> AppResult<()> {
+    if let Ok((site, email, token)) = rest_credentials(&state) {
+        let (k, s) = (key.clone(), status.clone());
+        return tauri::async_runtime::spawn_blocking(move || {
+            let transitions = jira_rest::list_transitions(&site, &email, &token, &k)?;
+            let target = transitions
+                .iter()
+                .find(|t| t.to_status_name.eq_ignore_ascii_case(&s))
+                .ok_or_else(|| {
+                    format!("No legal transition to \"{s}\" from the current status")
+                })?;
+            jira_rest::perform_transition(&site, &email, &token, &k, &target.id)
+        })
+        .await
+        .map_err(|error| AppError::from(format!("Failed to transition work item: {error}")))?
+        .map_err(Into::into);
+    }
     tauri::async_runtime::spawn_blocking(move || jira::transition(&key, &status))
         .await
         .map_err(|error| AppError::from(format!("Failed to transition work item: {error}")))?
@@ -413,6 +434,128 @@ async fn jira_create_work_item(
     })
     .await
     .map_err(|error| AppError::from(format!("Failed to create work item: {error}")))?
+    .map_err(Into::into)
+}
+
+/// Resolve `(site, email, token)` for a REST call, or an error when not connected.
+fn rest_credentials(state: &State<'_, AppState>) -> Result<(String, String, String), AppError> {
+    let (site, email) = {
+        let db = state.db.lock();
+        let settings = db.get_app_settings()?;
+        (settings.jira_site_url, settings.jira_rest_email)
+    };
+    let site = site
+        .filter(|s| !s.trim().is_empty())
+        .ok_or_else(|| AppError::from("Connect a JIRA API token in Settings first"))?;
+    let email = email
+        .filter(|e| !e.trim().is_empty())
+        .ok_or_else(|| AppError::from("Connect a JIRA API token in Settings first"))?;
+    let token = jira_secret::read_token(&site)?
+        .ok_or_else(|| AppError::from("Connect a JIRA API token in Settings first"))?;
+    Ok((site, email, token))
+}
+
+/// REST connection state: a token is "connected" when the Keychain holds one for
+/// the configured site and an email is set.
+#[tauri::command]
+fn jira_rest_status(state: State<'_, AppState>) -> AppResult<JiraRestStatus> {
+    let (site, email) = {
+        let db = state.db.lock();
+        let settings = db.get_app_settings()?;
+        (settings.jira_site_url, settings.jira_rest_email)
+    };
+    let Some(site) = site.filter(|s| !s.trim().is_empty()) else {
+        return Ok(JiraRestStatus {
+            connected: false,
+            site: None,
+            email,
+            error: None,
+        });
+    };
+    let has_token = jira_secret::read_token(&site)?.is_some();
+    Ok(JiraRestStatus {
+        connected: has_token && email.is_some(),
+        site: Some(site),
+        email,
+        error: None,
+    })
+}
+
+/// Verify a token via `GET /myself`, then store it in the Keychain and persist the
+/// non-secret site/email. Stores nothing on failure.
+#[tauri::command]
+async fn set_jira_api_token(
+    state: State<'_, AppState>,
+    site: String,
+    email: String,
+    token: String,
+) -> AppResult<JiraRestStatus> {
+    let (site, email) = (site.trim().to_string(), email.trim().to_string());
+    if site.is_empty() || email.is_empty() || token.is_empty() {
+        return Err(AppError::from("Site, email, and token are all required"));
+    }
+    let verify = {
+        let (s, e, t) = (site.clone(), email.clone(), token.clone());
+        tauri::async_runtime::spawn_blocking(move || jira_rest::verify(&s, &e, &t))
+            .await
+            .map_err(|error| AppError::from(format!("Failed to verify JIRA token: {error}")))?
+    };
+    verify.map_err(AppError::from)?;
+    jira_secret::store_token(&site, &token).map_err(AppError::from)?;
+    {
+        let db = state.db.lock();
+        db.set_jira_rest_account(&site, &email)?;
+    }
+    Ok(JiraRestStatus {
+        connected: true,
+        site: Some(site),
+        email: Some(email),
+        error: None,
+    })
+}
+
+/// Disconnect the REST token: delete it from the Keychain and clear the stored email.
+#[tauri::command]
+fn clear_jira_api_token(state: State<'_, AppState>) -> AppResult<()> {
+    let site = {
+        let db = state.db.lock();
+        let settings = db.get_app_settings()?;
+        db.clear_jira_rest_email()?;
+        settings.jira_site_url
+    };
+    if let Some(site) = site.filter(|s| !s.trim().is_empty()) {
+        jira_secret::delete_token(&site).map_err(AppError::from)?;
+    }
+    Ok(())
+}
+
+/// List an issue's legal transitions via REST. Errors if no token is connected.
+#[tauri::command]
+async fn jira_list_transitions(
+    state: State<'_, AppState>,
+    key: String,
+) -> AppResult<Vec<JiraTransition>> {
+    let (site, email, token) = rest_credentials(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        jira_rest::list_transitions(&site, &email, &token, &key)
+    })
+    .await
+    .map_err(|error| AppError::from(format!("Failed to list transitions: {error}")))?
+    .map_err(Into::into)
+}
+
+/// Load a project's full status set via REST (for the board filter + empty columns).
+#[tauri::command]
+async fn jira_project_statuses(
+    state: State<'_, AppState>,
+    project: String,
+) -> AppResult<Vec<JiraStatusDef>> {
+    let (site, email, token) = rest_credentials(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        jira_rest::project_statuses(&site, &email, &token, &project)
+    })
+    .await
+    .map_err(|error| AppError::from(format!("Failed to load project statuses: {error}")))?
     .map_err(Into::into)
 }
 
@@ -800,6 +943,11 @@ pub fn run() {
             jira_assign_work_item,
             jira_comment_work_item,
             jira_create_work_item,
+            jira_rest_status,
+            set_jira_api_token,
+            clear_jira_api_token,
+            jira_list_transitions,
+            jira_project_statuses,
             set_task_jira_link,
             create_pr_review,
             list_pr_reviews,
