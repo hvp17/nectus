@@ -127,13 +127,15 @@ The watcher:
 
 - Sends new task prompts with `--prompt <task prompt>` and skips the generic
   post-spawn PTY prompt write, so OpenCode does not receive the prompt twice.
-- Discovers the matching OpenCode session from `GET /session` and saves the id
-  and label in `tasks.last_session_id` / `tasks.last_session_label` when
-  available.
-- Polls `GET /session/status` and maps idle transitions to `session_idle`.
-- Polls `GET /tui/control/next` as a best-effort needs-input source. If the
-  endpoint is unavailable, Nectus logs once and falls back to terminal-only
-  interaction.
+- Discovers the matching top-level OpenCode session from `GET /session` (skipping
+  subagent sessions, which carry a `parentID`) and saves the id and label in
+  `tasks.last_session_id` / `tasks.last_session_label` when available.
+- Subscribes to the server's `GET /event` SSE stream and translates native
+  OpenCode events into Nectus signals: `session.idle` maps to `session_idle`;
+  `permission.asked`, `permission.v2.asked`, `question.asked`, and
+  `question.v2.asked` map to `session_needs_input`. Events for other sessions
+  (e.g. subagents) are ignored. The stream is re-established while the session is
+  alive and ends when the OpenCode process exits.
 
 OpenCode authentication stays owned by OpenCode (`opencode auth login` or TUI
 `/connect`). Nectus stores only the profile command, model, args, env, and saved
@@ -211,8 +213,8 @@ Backend-to-frontend events:
 | `session_output` | PTY output chunk and stream offset. | `native/src/sessions/mod.rs` |
 | `session_activity` | Task id, session id, and the agent's latest human-readable activity line (ANSI-stripped tail of PTY output, throttled and de-duplicated). | `native/src/sessions/mod.rs` |
 | `session_exited` | Session id and optional exit code. | `native/src/sessions/mod.rs`, `native/src/lib.rs` |
-| `session_idle` | Task id, session id, turn id, optional message. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL), `claude.rs` (hooks), and `opencode.rs` (local server status) |
-| `session_needs_input` | Task id, session id, reason, optional prompt. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL), `claude.rs` (hooks), and `opencode.rs` (best-effort local server control requests) |
+| `session_idle` | Task id, session id, turn id, optional message. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL), `claude.rs` (hooks), and `opencode.rs` (local server `/event` `session.idle`) |
+| `session_needs_input` | Task id, session id, reason, optional prompt. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL), `claude.rs` (hooks), and `opencode.rs` (local server `/event` permission/question asks) |
 | `review_loop_updated` | Review-loop state and optional review run. | `native/src/sessions/review_loop.rs` |
 | `review_output` | Task id, a chunk of the task reviewer's live stdout, and the chunk's byte offset (a `0` offset starts a new run). Streamed only by the task review loop, not by PR reviews. | `native/src/sessions/review_loop.rs` |
 | `pr_review_updated` | Updated external PR review (status, verdict, metadata, Markdown output), plus an optional `latest_run` carrying the consensus round output that triggered the update. | `native/src/sessions/pr_review.rs`, `native/src/sessions/pr_consensus.rs` |
@@ -467,9 +469,9 @@ Check:
 - The Nectus session was still active when Codex first wrote matching
   `session_meta` metadata; metadata discovery stops when the task session ends.
 - The matching `session_meta` was not a Codex subagent or auto-review session.
-- For OpenCode, the CLI was launched with the Nectus-owned localhost port and
-  `/session/status` reported the session as idle, or `/tui/control/next` exposed a
-  control request.
+- For OpenCode, the CLI was launched with the Nectus-owned localhost port and the
+  `/event` stream delivered a `session.idle` (idle) or a permission/question ask
+  (needs input) for the discovered session id.
 
 Relevant code:
 

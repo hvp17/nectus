@@ -330,9 +330,11 @@ Attention tracking is UI state derived from backend events.
   a rollout JSONL: the `Stop` hook maps to `session_idle` and the `Notification`
   hook maps to `session_needs_input`.
 - OpenCode sessions are launched with a local server port. Nectus discovers the
-  matching session through `/session`, polls `/session/status` for idle
-  transitions, and treats `/tui/control/next` as a best-effort needs-input source
-  when that endpoint is available.
+  matching top-level session through `/session`, then subscribes to the server's
+  `/event` SSE stream: `session.idle` maps to `session_idle`, and the permission
+  and question asks (`permission.asked`, `permission.v2.asked`, `question.asked`,
+  `question.v2.asked`) map to `session_needs_input`. Events for subagent sessions
+  are ignored.
 - Codex, Claude, and OpenCode funnel through the shared `emit_session_signal` in
   `native/src/sessions/mod.rs`.
 - Starting, resuming, stopping, marking done, or sending input clears the marker
@@ -366,7 +368,7 @@ Key files:
 - Event listener hook: `src/hooks/useSessionEvents.ts`
 - Codex event source (rollout JSONL): `native/src/sessions/codex.rs`
 - Claude event source (Claude Code hook bridge): `native/src/sessions/claude.rs`
-- OpenCode event source (local server status/control polling): `native/src/sessions/opencode.rs`
+- OpenCode event source (local server `/event` SSE stream): `native/src/sessions/opencode.rs`
 - Shared signal emission (Codex + Claude + OpenCode): `native/src/sessions/mod.rs`
   (`emit_session_signal`)
 

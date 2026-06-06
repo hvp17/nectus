@@ -429,7 +429,6 @@ impl SessionManager {
                     session_id.clone(),
                     cwd_path.clone(),
                     port,
-                    !resume && initial_prompt.is_some(),
                 );
             }
         }
