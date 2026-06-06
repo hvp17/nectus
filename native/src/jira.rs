@@ -211,6 +211,88 @@ pub fn parse_work_item(json: &str) -> Result<JiraWorkItem, String> {
     work_item_from_raw(raw).ok_or_else(|| "Work item is missing its key".to_string())
 }
 
+/// The work item types the create UI offers. `acli` cannot enumerate a project's
+/// configured issue types, so this is the common default set; an invalid type for
+/// a given project surfaces as an `acli` error (the optimistic pattern used across
+/// the JIRA integration).
+pub const DEFAULT_WORK_ITEM_TYPES: [&str; 4] = ["Task", "Bug", "Story", "Epic"];
+
+/// Build the `acli jira workitem create` argument list from the structured form.
+/// Kept pure (no shell-out) so the flag assembly is unit-tested. Optional fields
+/// are omitted entirely when blank, and labels are trimmed and comma-joined the
+/// way `acli --label` expects.
+fn build_create_args<'a>(
+    project: &'a str,
+    issue_type: &'a str,
+    summary: &'a str,
+    description: Option<&'a str>,
+    assignee: Option<&'a str>,
+    labels: &'a str,
+) -> Vec<String> {
+    let mut args = vec![
+        "jira".to_string(),
+        "workitem".to_string(),
+        "create".to_string(),
+        "--project".to_string(),
+        project.to_string(),
+        "--type".to_string(),
+        issue_type.to_string(),
+        "--summary".to_string(),
+        summary.to_string(),
+        "--json".to_string(),
+    ];
+    if let Some(description) = description.map(str::trim).filter(|value| !value.is_empty()) {
+        args.push("--description".to_string());
+        args.push(description.to_string());
+    }
+    if let Some(assignee) = assignee.map(str::trim).filter(|value| !value.is_empty()) {
+        args.push("--assignee".to_string());
+        args.push(assignee.to_string());
+    }
+    let labels = labels
+        .split(',')
+        .map(str::trim)
+        .filter(|label| !label.is_empty())
+        .collect::<Vec<_>>()
+        .join(",");
+    if !labels.is_empty() {
+        args.push("--label".to_string());
+        args.push(labels);
+    }
+    args
+}
+
+/// Find the new issue key from `acli jira workitem create --json` output. Prefers
+/// the structured `key` field, then a key embedded in the returned URL, then any
+/// `ABC-123`-shaped token in the raw output, so a shape drift still recovers the key.
+fn parse_created_key(stdout: &str) -> Option<String> {
+    if let Ok(raw) = serde_json::from_str::<RawWorkItem>(stdout) {
+        if let Some(key) = raw.key {
+            return Some(key);
+        }
+        if let Some(key) = raw.url.as_deref().and_then(key_from_text) {
+            return Some(key);
+        }
+    }
+    key_from_text(stdout)
+}
+
+/// Scan free text for the first JIRA issue key (`PROJ-123`: an uppercase/digit
+/// prefix of length >= 2 starting with a letter, a dash, then digits).
+fn key_from_text(text: &str) -> Option<String> {
+    text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+        .find_map(|token| {
+            let (prefix, number) = token.split_once('-')?;
+            let prefix_ok = prefix.len() >= 2
+                && prefix.starts_with(|c: char| c.is_ascii_uppercase())
+                && prefix
+                    .chars()
+                    .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit());
+            let number_ok = !number.is_empty() && number.chars().all(|c| c.is_ascii_digit());
+            (prefix_ok && number_ok).then(|| token.to_string())
+        })
+}
+
 /// Extract the active site host from `acli jira auth status` text output.
 pub fn parse_auth_site(text: &str) -> Option<String> {
     text.split(|c: char| c.is_whitespace() || c == '/' || c == '"' || c == '\'')
@@ -343,6 +425,35 @@ pub fn comment(key: &str, body: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Create a work item in JIRA, then re-fetch it so the caller gets a fully
+/// populated `JiraWorkItem` (status, type, assignee) to open in the board panel.
+/// `acli`'s create `--json` output only reliably carries the new key, so the
+/// second `view` call fills in the rest. Optional fields (description, assignee,
+/// labels) are omitted when blank.
+pub fn create(
+    project: &str,
+    issue_type: &str,
+    summary: &str,
+    description: Option<&str>,
+    assignee: Option<&str>,
+    labels: &str,
+) -> Result<JiraWorkItem, String> {
+    let args = build_create_args(project, issue_type, summary, description, assignee, labels);
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let output = run_acli(&arg_refs)?;
+    if !output.status.success() {
+        return Err(command_error(&output, "acli jira workitem create failed"));
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let key = parse_created_key(&stdout).ok_or_else(|| {
+        format!(
+            "Work item created but its key could not be read from acli output: {}",
+            stdout.trim()
+        )
+    })?;
+    view(&key)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -436,6 +547,89 @@ mod tests {
 
         let wrapped = r#"{"projects":[{"key":"PROJ","name":"Project"}]}"#;
         assert_eq!(parse_projects(wrapped).unwrap()[0].key, "PROJ");
+    }
+
+    #[test]
+    fn builds_create_args_minimal() {
+        let args = build_create_args("ENG", "Task", "Login bug", None, None, "");
+        assert_eq!(
+            args,
+            vec![
+                "jira",
+                "workitem",
+                "create",
+                "--project",
+                "ENG",
+                "--type",
+                "Task",
+                "--summary",
+                "Login bug",
+                "--json"
+            ]
+        );
+    }
+
+    #[test]
+    fn builds_create_args_with_all_fields_and_trims_labels() {
+        let args = build_create_args(
+            "ENG",
+            "Bug",
+            "Crash",
+            Some("Steps to reproduce"),
+            Some("user@example.com"),
+            " api , , crash ",
+        );
+        assert_eq!(
+            args,
+            vec![
+                "jira",
+                "workitem",
+                "create",
+                "--project",
+                "ENG",
+                "--type",
+                "Bug",
+                "--summary",
+                "Crash",
+                "--json",
+                "--description",
+                "Steps to reproduce",
+                "--assignee",
+                "user@example.com",
+                "--label",
+                "api,crash",
+            ]
+        );
+    }
+
+    #[test]
+    fn builds_create_args_omits_blank_optionals() {
+        let args = build_create_args("ENG", "Story", "Thing", Some("   "), Some(""), "  ,  ");
+        // Blank description/assignee/labels add no flags.
+        assert!(!args.iter().any(|a| a == "--description"));
+        assert!(!args.iter().any(|a| a == "--assignee"));
+        assert!(!args.iter().any(|a| a == "--label"));
+    }
+
+    #[test]
+    fn parse_created_key_prefers_json_key() {
+        assert_eq!(
+            parse_created_key(r#"{"key":"ENG-42","summary":"x"}"#),
+            Some("ENG-42".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_created_key_from_url_and_plain_text() {
+        assert_eq!(
+            parse_created_key(r#"{"url":"https://acme.atlassian.net/browse/ENG-7"}"#),
+            Some("ENG-7".to_string())
+        );
+        assert_eq!(
+            parse_created_key("Created work item ENG-100"),
+            Some("ENG-100".to_string())
+        );
+        assert_eq!(parse_created_key("no key here"), None);
     }
 
     #[test]

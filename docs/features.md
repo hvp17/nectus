@@ -466,11 +466,16 @@ project from a dropdown (populated by `acli jira project list`) and toggle filte
 loads work items into **auto-derived columns** grouped by status and ordered by JIRA
 status category.
 
-It is a full management surface: drag a card between columns to transition it
-(optimistic — reverted if JIRA's workflow rejects the move), and open a card to
-dock an **inline side panel** beside the board (the board stays in context as a
-2-column split; it is no longer a modal dialog) to change status, assign, or
-comment. The panel's bottom launch row (agent select + **Create task & start**)
+It is a full management surface: create a new work item, drag a card between
+columns to transition it (optimistic — reverted if JIRA's workflow rejects the
+move), and open a card to dock an **inline side panel** beside the board (the
+board stays in context as a 2-column split; it is no longer a modal dialog) to
+change status, assign, or comment. **New work item** in the toolbar opens an
+inline create form in that same dock slot (project defaulting to the board's,
+type Task/Bug/Story/Epic, summary, description, assignee, labels); on submit
+Nectus runs `acli jira workitem create`, refreshes the board, and auto-opens the
+new card's view panel — where the launch row can immediately start an agent on
+it. The panel's bottom launch row (agent select + **Create task & start**)
 and the card's **Create task** affordance both open the task composer pre-seeded
 from the story (title, description) with a project selector; the resulting
 task↔story link is stored locally on the task (`jira_issue_key/summary/url`) and
@@ -484,12 +489,13 @@ Key files:
 
 - Board view + docked work-item split: `src/components/JiraBoardPage.tsx`
 - Work-item side panel (`JiraWorkItemPanel`, de-modaled): `src/components/JiraWorkItemDialog.tsx`
+- New-work-item create panel (`JiraCreateWorkItemPanel`): `src/components/JiraCreateWorkItemPanel.tsx`
 - Linked-story inspector panel: `src/components/JiraPanel.tsx`
-- Board/connection state and columns: `src/hooks/useJira.ts`
+- Board/connection state, columns, and create: `src/hooks/useJira.ts`
 - acli shell-out and parsing: `native/src/jira.rs`
 - Backend commands: `jira_status`, `jira_list_projects`, `jira_search_board`,
   `jira_get_work_item`, `jira_transition_work_item`, `jira_assign_work_item`,
-  `jira_comment_work_item`, `set_task_jira_link`
+  `jira_comment_work_item`, `jira_create_work_item`, `set_task_jira_link`
 
 ## Settings
 

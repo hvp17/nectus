@@ -43,6 +43,7 @@ export function useApp() {
     "mission",
   );
   const [selectedJiraItem, setSelectedJiraItem] = useState<JiraWorkItem | null>(null);
+  const [createJiraItemOpen, setCreateJiraItemOpen] = useState(false);
   const [selectedRepoId, setSelectedRepoId] = useState<number | undefined>();
   const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>();
   const [selectedAgentProfileId, setSelectedAgentProfileId] = useState<number | undefined>();
@@ -287,6 +288,41 @@ export function useApp() {
       setNewTaskRepoId,
       setCreateTaskOpen,
     ],
+  );
+
+  // Open an existing work item in the board side panel; the create panel and the
+  // view panel share that dock slot, so opening one closes the other.
+  const openJiraItem = useCallback((item: JiraWorkItem) => {
+    setCreateJiraItemOpen(false);
+    setSelectedJiraItem(item);
+  }, []);
+
+  const openCreateJiraItem = useCallback(() => {
+    setSelectedJiraItem(null);
+    setCreateJiraItemOpen(true);
+  }, []);
+
+  const closeCreateJiraItem = useCallback(() => setCreateJiraItemOpen(false), []);
+
+  // Create a JIRA work item, then (on success) swap the create panel for the new
+  // item's view panel — where "Create task & start" can spin up an agent on it.
+  const createJiraWorkItem = useCallback(
+    async (input: {
+      project: string;
+      issueType: string;
+      summary: string;
+      description?: string;
+      assignee?: string;
+      labels?: string;
+    }) => {
+      const item = await jira.create(input);
+      if (item) {
+        setCreateJiraItemOpen(false);
+        setSelectedJiraItem(item);
+      }
+      return item;
+    },
+    [jira],
   );
 
   const setTaskJiraLink = (
@@ -560,6 +596,11 @@ export function useApp() {
     setJiraBoardConfig,
     selectedJiraItem,
     setSelectedJiraItem,
+    openJiraItem,
+    createJiraItemOpen,
+    openCreateJiraItem,
+    closeCreateJiraItem,
+    createJiraWorkItem,
     startPairLoop,
     startReview,
     stopPairLoop,

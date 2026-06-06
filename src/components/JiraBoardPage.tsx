@@ -1,4 +1,4 @@
-import { RefreshCw } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import {
@@ -11,6 +11,7 @@ import {
 import { Skeleton } from "./ui/skeleton";
 import { BoardBody } from "./JiraBoardBody";
 import { JiraWorkItemPanel } from "./JiraWorkItemDialog";
+import { JiraCreateWorkItemPanel } from "./JiraCreateWorkItemPanel";
 import type { JiraColumn } from "../hooks/useJira";
 import type {
   AgentProfile,
@@ -51,6 +52,18 @@ interface JiraBoardPageProps {
   /** When set, the board splits to dock the work-item side panel beside it. */
   selectedItem?: JiraWorkItem | null;
   onCloseItem?: () => void;
+  /** Create-work-item panel state; shares the dock slot with the view panel. */
+  createOpen?: boolean;
+  onOpenCreate?: () => void;
+  onCloseCreate?: () => void;
+  onCreateWorkItem?: (input: {
+    project: string;
+    issueType: string;
+    summary: string;
+    description?: string;
+    assignee?: string;
+    labels?: string;
+  }) => Promise<JiraWorkItem | null>;
   agentProfiles?: AgentProfile[];
   selectedAgentProfileId?: number;
   site?: string | null;
@@ -76,6 +89,10 @@ export function JiraBoardPage({
   onCreateTask,
   selectedItem,
   onCloseItem,
+  createOpen,
+  onOpenCreate,
+  onCloseCreate,
+  onCreateWorkItem,
   agentProfiles,
   selectedAgentProfileId,
   site,
@@ -97,6 +114,34 @@ export function JiraBoardPage({
     if (bucket) bucket.push(task);
     else tasksByKey.set(task.jiraIssueKey, [task]);
   }
+
+  // The right-hand dock slot holds at most one panel: the create form takes
+  // precedence over the work-item view (they are kept mutually exclusive upstream).
+  const dockedPanel =
+    createOpen && onCloseCreate && onCreateWorkItem ? (
+      <JiraCreateWorkItemPanel
+        projects={projects}
+        defaultProject={project}
+        onClose={onCloseCreate}
+        onCreate={onCreateWorkItem}
+      />
+    ) : selectedItem && onCloseItem ? (
+      <JiraWorkItemPanel
+        key={selectedItem.key}
+        item={selectedItem}
+        statusOptions={statusOptions}
+        site={site}
+        agentProfiles={agentProfiles ?? []}
+        selectedAgentProfileId={selectedAgentProfileId}
+        onClose={onCloseItem}
+        onTransition={onTransition}
+        onAssign={onAssign ?? (() => {})}
+        onComment={onComment ?? (() => {})}
+        onCreateTask={onCreateTask}
+        onPickAgent={onPickAgent ?? (() => {})}
+        onOpenUrl={onOpenUrl ?? (() => {})}
+      />
+    ) : null;
 
   return (
     <div className="nx-jira" data-testid="jira-board">
@@ -163,10 +208,23 @@ export function JiraBoardPage({
               Current sprint
             </button>
           </div>
+
+          {onOpenCreate && (
+            <Button
+              type="button"
+              size="sm"
+              className="ml-auto gap-2"
+              disabled={!project}
+              onClick={onOpenCreate}
+            >
+              <Plus className="size-4" />
+              New work item
+            </Button>
+          )}
         </div>
       )}
 
-      {selectedItem && onCloseItem ? (
+      {dockedPanel ? (
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_372px] overflow-hidden">
           <div className="flex min-h-0 flex-col overflow-hidden">
             <BoardBody
@@ -176,28 +234,14 @@ export function JiraBoardPage({
               columns={columns}
               itemsByKey={itemsByKey}
               tasksByKey={tasksByKey}
-              selectedKey={selectedItem.key}
+              selectedKey={selectedItem?.key}
               onTransition={onTransition}
               onOpenItem={onOpenItem}
               onOpenTask={onOpenTask}
               onCreateTask={onCreateTask}
             />
           </div>
-          <JiraWorkItemPanel
-            key={selectedItem.key}
-            item={selectedItem}
-            statusOptions={statusOptions}
-            site={site}
-            agentProfiles={agentProfiles ?? []}
-            selectedAgentProfileId={selectedAgentProfileId}
-            onClose={onCloseItem}
-            onTransition={onTransition}
-            onAssign={onAssign ?? (() => {})}
-            onComment={onComment ?? (() => {})}
-            onCreateTask={onCreateTask}
-            onPickAgent={onPickAgent ?? (() => {})}
-            onOpenUrl={onOpenUrl ?? (() => {})}
-          />
+          {dockedPanel}
         </div>
       ) : (
         <BoardBody

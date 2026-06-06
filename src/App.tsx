@@ -99,6 +99,11 @@ function App() {
     setJiraBoardConfig,
     selectedJiraItem,
     setSelectedJiraItem,
+    openJiraItem,
+    createJiraItemOpen,
+    openCreateJiraItem,
+    closeCreateJiraItem,
+    createJiraWorkItem,
     createTaskFromStory,
     setTaskJiraLink,
     newTaskRepoId,
@@ -269,10 +274,14 @@ function App() {
               onChangeConfig={setJiraBoardConfig}
               onRefresh={refreshJira}
               onTransition={transitionJira}
-              onOpenItem={setSelectedJiraItem}
+              onOpenItem={openJiraItem}
               onCreateTask={createTaskFromStory}
               selectedItem={selectedJiraItem}
               onCloseItem={() => setSelectedJiraItem(null)}
+              createOpen={createJiraItemOpen}
+              onOpenCreate={openCreateJiraItem}
+              onCloseCreate={closeCreateJiraItem}
+              onCreateWorkItem={createJiraWorkItem}
               agentProfiles={agentProfiles}
               selectedAgentProfileId={
                 newTaskAgentProfileId ?? settings?.defaultAgentProfileId ?? agentProfiles[0]?.id
