@@ -82,6 +82,11 @@ fn update_app_settings(
     app_result(state.db.lock().update_app_settings(settings))
 }
 
+// The parameter list is the Tauri IPC contract: each field maps 1:1 to the
+// `api.ts` `create_task` invoke payload (and is asserted by the frontend tests).
+// Folding them into a struct would only nest the same fields under a key, so the
+// flat signature is kept deliberately.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 fn create_task(
     repo_id: i64,
@@ -929,7 +934,7 @@ pub fn run() {
                 if let Some(state) = window.try_state::<AppState>() {
                     state
                         .sessions
-                        .stop_all(&window.app_handle(), state.db.clone());
+                        .stop_all(window.app_handle(), state.db.clone());
                 }
             }
         })

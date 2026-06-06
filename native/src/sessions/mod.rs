@@ -597,6 +597,132 @@ impl SessionManager {
     }
 }
 
+/// Longest activity line we forward to the UI; the card truncates further with
+/// an ellipsis, this just bounds the payload.
+const ACTIVITY_LINE_MAX: usize = 200;
+
+/// Derive the agent's latest human-readable activity line from raw PTY output.
+///
+/// Agents render full-screen TUIs, so the raw tail is mostly ANSI escapes,
+/// carriage-return repaints, spinners, and box-drawing chrome. This strips the
+/// escape sequences, treats `\r` and `\n` as line breaks (so an in-place repaint
+/// keeps only its final text), and returns the last line that still carries a
+/// readable token — skipping spinner/box-only frames. Returns `None` when no
+/// meaningful line is present yet.
+fn latest_activity_line(buffer: &str) -> Option<String> {
+    buffer
+        .split(['\n', '\r'])
+        .rev()
+        .map(|segment| strip_ansi(segment).trim().to_string())
+        .find(|line| line.chars().any(char::is_alphanumeric))
+        .map(|line| line.chars().take(ACTIVITY_LINE_MAX).collect())
+}
+
+/// Remove ANSI escape sequences (CSI and OSC) and stray control bytes from a
+/// single line of terminal output. Callers split on `\n`/`\r` first, so neither
+/// appears here.
+fn strip_ansi(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match ch {
+            '\u{1b}' => match chars.peek() {
+                // CSI `ESC [ … final`: drop through a final byte in 0x40..=0x7E.
+                Some('[') => {
+                    chars.next();
+                    while let Some(&c) = chars.peek() {
+                        chars.next();
+                        if ('\u{40}'..='\u{7e}').contains(&c) {
+                            break;
+                        }
+                    }
+                }
+                // OSC `ESC ] … BEL` or `… ESC \`: drop through the terminator.
+                Some(']') => {
+                    chars.next();
+                    while let Some(c) = chars.next() {
+                        if c == '\u{07}' {
+                            break;
+                        }
+                        if c == '\u{1b}' {
+                            if chars.peek() == Some(&'\\') {
+                                chars.next();
+                            }
+                            break;
+                        }
+                    }
+                }
+                // Other two-byte escapes: drop ESC and its single intro byte.
+                Some(_) => {
+                    chars.next();
+                }
+                None => {}
+            },
+            // Keep tabs (trimmed/collapsed downstream); drop other control bytes.
+            c if c.is_control() && c != '\t' => {}
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// Compute the activity line to emit for a session after new output, applying
+/// de-duplication and throttling, and record what was emitted on the session.
+fn next_activity_line(running: &mut RunningSession) -> Option<String> {
+    let now = Instant::now();
+    let candidate = latest_activity_line(&running.output_buffer);
+    let line = activity_to_emit(
+        candidate,
+        running.last_activity_line.as_deref(),
+        running.last_activity_at,
+        now,
+    )?;
+    running.last_activity_line = Some(line.clone());
+    running.last_activity_at = Some(now);
+    Some(line)
+}
+
+/// Pure throttle/de-dup decision: forward `candidate` only when it is present,
+/// differs from the last forwarded line, and the throttle window has elapsed.
+fn activity_to_emit(
+    candidate: Option<String>,
+    last_line: Option<&str>,
+    last_at: Option<Instant>,
+    now: Instant,
+) -> Option<String> {
+    let line = candidate?;
+    if last_line == Some(line.as_str()) {
+        return None;
+    }
+    if let Some(at) = last_at {
+        if now.duration_since(at) < ACTIVITY_THROTTLE {
+            return None;
+        }
+    }
+    Some(line)
+}
+
+fn append_output_buffer(running: &mut RunningSession, data: &str) -> u64 {
+    let start_offset = running.output_end_offset;
+    running.output_buffer.push_str(data);
+    running.output_end_offset += data.len() as u64;
+
+    if running.output_buffer.len() > OUTPUT_BUFFER_LIMIT {
+        running.output_truncated = true;
+        let excess = running.output_buffer.len() - OUTPUT_BUFFER_LIMIT;
+        let drain_to = running
+            .output_buffer
+            .char_indices()
+            .map(|(index, _)| index)
+            .find(|index| *index >= excess)
+            .unwrap_or(running.output_buffer.len());
+        running.output_buffer.drain(..drain_to);
+        running.output_start_offset += drain_to as u64;
+    }
+
+    start_offset
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -725,130 +851,4 @@ mod tests {
         let now = Instant::now();
         assert_eq!(activity_to_emit(None, Some("Older line"), None, now), None);
     }
-}
-
-/// Longest activity line we forward to the UI; the card truncates further with
-/// an ellipsis, this just bounds the payload.
-const ACTIVITY_LINE_MAX: usize = 200;
-
-/// Derive the agent's latest human-readable activity line from raw PTY output.
-///
-/// Agents render full-screen TUIs, so the raw tail is mostly ANSI escapes,
-/// carriage-return repaints, spinners, and box-drawing chrome. This strips the
-/// escape sequences, treats `\r` and `\n` as line breaks (so an in-place repaint
-/// keeps only its final text), and returns the last line that still carries a
-/// readable token — skipping spinner/box-only frames. Returns `None` when no
-/// meaningful line is present yet.
-fn latest_activity_line(buffer: &str) -> Option<String> {
-    buffer
-        .split(['\n', '\r'])
-        .rev()
-        .map(|segment| strip_ansi(segment).trim().to_string())
-        .find(|line| line.chars().any(char::is_alphanumeric))
-        .map(|line| line.chars().take(ACTIVITY_LINE_MAX).collect())
-}
-
-/// Remove ANSI escape sequences (CSI and OSC) and stray control bytes from a
-/// single line of terminal output. Callers split on `\n`/`\r` first, so neither
-/// appears here.
-fn strip_ansi(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    let mut chars = input.chars().peekable();
-    while let Some(ch) = chars.next() {
-        match ch {
-            '\u{1b}' => match chars.peek() {
-                // CSI `ESC [ … final`: drop through a final byte in 0x40..=0x7E.
-                Some('[') => {
-                    chars.next();
-                    while let Some(&c) = chars.peek() {
-                        chars.next();
-                        if ('\u{40}'..='\u{7e}').contains(&c) {
-                            break;
-                        }
-                    }
-                }
-                // OSC `ESC ] … BEL` or `… ESC \`: drop through the terminator.
-                Some(']') => {
-                    chars.next();
-                    while let Some(c) = chars.next() {
-                        if c == '\u{07}' {
-                            break;
-                        }
-                        if c == '\u{1b}' {
-                            if chars.peek() == Some(&'\\') {
-                                chars.next();
-                            }
-                            break;
-                        }
-                    }
-                }
-                // Other two-byte escapes: drop ESC and its single intro byte.
-                Some(_) => {
-                    chars.next();
-                }
-                None => {}
-            },
-            // Keep tabs (trimmed/collapsed downstream); drop other control bytes.
-            c if c.is_control() && c != '\t' => {}
-            c => out.push(c),
-        }
-    }
-    out
-}
-
-/// Compute the activity line to emit for a session after new output, applying
-/// de-duplication and throttling, and record what was emitted on the session.
-fn next_activity_line(running: &mut RunningSession) -> Option<String> {
-    let now = Instant::now();
-    let candidate = latest_activity_line(&running.output_buffer);
-    let line = activity_to_emit(
-        candidate,
-        running.last_activity_line.as_deref(),
-        running.last_activity_at,
-        now,
-    )?;
-    running.last_activity_line = Some(line.clone());
-    running.last_activity_at = Some(now);
-    Some(line)
-}
-
-/// Pure throttle/de-dup decision: forward `candidate` only when it is present,
-/// differs from the last forwarded line, and the throttle window has elapsed.
-fn activity_to_emit(
-    candidate: Option<String>,
-    last_line: Option<&str>,
-    last_at: Option<Instant>,
-    now: Instant,
-) -> Option<String> {
-    let line = candidate?;
-    if last_line == Some(line.as_str()) {
-        return None;
-    }
-    if let Some(at) = last_at {
-        if now.duration_since(at) < ACTIVITY_THROTTLE {
-            return None;
-        }
-    }
-    Some(line)
-}
-
-fn append_output_buffer(running: &mut RunningSession, data: &str) -> u64 {
-    let start_offset = running.output_end_offset;
-    running.output_buffer.push_str(data);
-    running.output_end_offset += data.len() as u64;
-
-    if running.output_buffer.len() > OUTPUT_BUFFER_LIMIT {
-        running.output_truncated = true;
-        let excess = running.output_buffer.len() - OUTPUT_BUFFER_LIMIT;
-        let drain_to = running
-            .output_buffer
-            .char_indices()
-            .map(|(index, _)| index)
-            .find(|index| *index >= excess)
-            .unwrap_or(running.output_buffer.len());
-        running.output_buffer.drain(..drain_to);
-        running.output_start_offset += drain_to as u64;
-    }
-
-    start_offset
 }

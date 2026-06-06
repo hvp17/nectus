@@ -287,12 +287,6 @@ pub fn parse_work_item(json: &str) -> Result<JiraWorkItem, String> {
     work_item_from_raw(raw).ok_or_else(|| "Work item is missing its key".to_string())
 }
 
-/// The work item types the create UI offers. `acli` cannot enumerate a project's
-/// configured issue types, so this is the common default set; an invalid type for
-/// a given project surfaces as an `acli` error (the optimistic pattern used across
-/// the JIRA integration).
-pub const DEFAULT_WORK_ITEM_TYPES: [&str; 4] = ["Task", "Bug", "Story", "Epic"];
-
 /// Build the `acli jira workitem create` argument list from the structured form.
 /// Kept pure (no shell-out) so the flag assembly is unit-tested. Optional fields
 /// are omitted entirely when blank, and labels are trimmed and comma-joined the
