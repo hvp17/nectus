@@ -116,6 +116,60 @@ export function defineAppSmokeTests() {
     expect(mockedApi.jiraSearchBoard).not.toHaveBeenCalled();
   });
 
+  it("keeps jira_site_url fresh after connecting a token so a later save can't clobber it", async () => {
+    // Connecting writes jira_site_url server-side; useApp must re-read settings so a
+    // subsequent Save Settings re-sends the new site, not the stale one (which would
+    // orphan the Keychain token and show REST as disconnected).
+    const baseSettings = {
+      defaultAgentProfileId: 1,
+      defaultWorktreeRootPattern: "~/.nectus/worktrees/{repoName}",
+      defaultBranchPrefix: null,
+      jiraBoardJql: null,
+      jiraBoardProject: null,
+      jiraFilterMyIssues: false,
+      jiraFilterUnresolved: true,
+      jiraFilterCurrentSprint: false,
+      jiraFilterStatuses: [],
+      theme: "system" as const,
+      density: "comfortable" as const,
+      updatedAt: "2026-05-14T00:00:00.000Z",
+    };
+    mockedApi.getAppSettings.mockReset();
+    mockedApi.getAppSettings
+      .mockResolvedValueOnce({ ...baseSettings, jiraSiteUrl: null, jiraRestEmail: null }) // mount
+      .mockResolvedValue({
+        // re-read after connecting reflects the server-side write
+        ...baseSettings,
+        jiraSiteUrl: "team.atlassian.net",
+        jiraRestEmail: "me@example.com",
+      });
+    mockedApi.setJiraApiToken.mockResolvedValue({
+      connected: true,
+      site: "team.atlassian.net",
+      email: "me@example.com",
+      error: null,
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+
+    fireEvent.change(screen.getByLabelText("Site"), { target: { value: "team.atlassian.net" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "me@example.com" } });
+    fireEvent.change(screen.getByLabelText("API token"), { target: { value: "tok-123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Test & connect" }));
+
+    // Wait until the connect completed and settings were re-read.
+    expect(await screen.findByLabelText("JIRA REST Connected")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
+
+    await waitFor(() =>
+      expect(mockedApi.updateAppSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ jiraSiteUrl: "team.atlassian.net" }),
+      ),
+    );
+  });
+
   it("does not render the temporary dummy notification preview on launch", async () => {
     render(<App />);
 

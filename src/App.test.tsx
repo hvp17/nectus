@@ -107,6 +107,15 @@ describe("App", () => {
     }));
     mockedApi.getTaskReviewLoop.mockResolvedValue(null);
     mockedApi.listTaskReviewRuns.mockResolvedValue([]);
+    // Re-establish the default each test: clearAllMocks resets call history but not
+    // implementations, so a test that connects a token would otherwise leak a
+    // connected status into later tests.
+    mockedApi.jiraRestStatus.mockResolvedValue({
+      connected: false,
+      site: null,
+      email: null,
+      error: null,
+    });
   });
 
   defineAppSmokeTests();
