@@ -192,7 +192,9 @@ Important backend files:
 - `native/src/db/`: SQLite schema, row mapping, agent profiles, review loops, and persistence tests
 - `native/src/git_ops.rs`: git repo/worktree validation and operations
 - `native/src/github.rs`: `gh` CLI integration — connection status plus pull request create/detect/status parsing (no OAuth, no stored tokens)
-- `native/src/jira.rs`: `acli` (Atlassian CLI) integration — connection status, project list, work-item search/view/create/transition/assign/comment with tolerant JSON parsing, the structured-config JQL builder (`build_board_jql`, so the UI never types JQL), and the create argument builder + new-key parser (`build_create_args`, `parse_created_key`); no OAuth, no stored tokens
+- `native/src/jira.rs`: `acli` (Atlassian CLI) integration — connection status, project list, work-item search/view/create/transition/assign/comment with tolerant JSON parsing, the structured-config JQL builder (`build_board_jql`, incl. the `status in (...)` filter clause, so the UI never types JQL), and the create argument builder + new-key parser (`build_create_args`, `parse_created_key`); no OAuth, no stored tokens
+- `native/src/jira_rest.rs`: **optional** JIRA Cloud REST layer (`ureq`, Basic auth) for what `acli` cannot do — fixture-tested parsers `parse_transitions` / `parse_project_statuses`, plus `verify` (`/myself`), `list_transitions`, `project_statuses`, `perform_transition`. Additive to `acli`, gated on a user API token; powers the legal-transition dropdown, the board status filter, and all status columns (incl. empty)
+- `native/src/jira_secret.rs`: macOS Keychain store for the optional JIRA API token (`keyring`; service = the app identifier, account = `jira-api-token:{site}`). The token never touches SQLite — only the non-secret site/email persist in `app_settings`
 - `native/src/process_util.rs`: shared command helpers — binary resolution (`resolve_executable`), child `PATH` augmentation (`augmented_path`), the install-dir source of truth (`third_party_bin_dirs`), and `command_error` stderr formatting. See [Spawning External CLIs](#spawning-external-clis-macos-gui-path).
 - `native/src/sessions/`: PTY lifecycle, terminal event emission, Codex JSONL watching, Claude Code hook event bridge (`claude.rs`), agent command setup, and the task review-loop / external PR-review runtimes (`review_loop.rs`, `pr_review.rs`, `pr_consensus.rs`). The headless reviewer-CLI launcher shared by all three reviewing surfaces lives in `reviewer.rs`; the PTY submission helper in `terminal_io.rs`
 - `native/src/sessions/agents/`: provider-specific Codex, Claude, and Gemini command arguments and fallback locations
@@ -222,6 +224,11 @@ Tauri commands exposed to the frontend include:
 - `jira_assign_work_item`
 - `jira_comment_work_item`
 - `jira_create_work_item`
+- `jira_rest_status`
+- `set_jira_api_token`
+- `clear_jira_api_token`
+- `jira_list_transitions`
+- `jira_project_statuses`
 - `set_task_jira_link`
 - `list_agent_profiles`
 - `upsert_agent_profile`
@@ -303,7 +310,7 @@ Important frontend files:
 - `src/hooks/useSessionEvents.ts`: subscribes to Rust session events (`session_activity`, `session_exited`, `session_idle`, `session_needs_input`); keeps the per-task `liveLines` map (latest activity line) and the task attention list
 - `src/hooks/useSessionCommands.ts`: start/resume/stop/resize/input session command bindings
 - `src/hooks/useGithub.ts`: `gh` connection status and pull request create/detect/status orchestration
-- `src/hooks/useJira.ts`: `acli` connection status, board items, auto-derived columns, and optimistic transition
+- `src/hooks/useJira.ts`: `acli` connection status, board items, columns, and optimistic transition. Also owns the optional REST layer: `restStatus`/`restConnected`, the project status set (`projectStatuses`), `setApiToken`/`clearApiToken`, and the connected `deriveColumns` variant (full status skeleton incl. empty columns, narrowed by the status filter)
 - `src/hooks/useTaskReviewLoop.ts`: selected-task review-loop loading and event handling, including the live reviewer output stream (`review_output`) for the read-only Review pane
 - `src/hooks/useTaskDiff.ts`: task diff data — summary load, lazy per-file patches, and `session_idle` refresh
 - `src/hooks/useTaskCardPointerDrag.ts`: task-card pointer drag and ghost lifecycle
@@ -319,10 +326,10 @@ Important frontend files:
 - `src/components/ReviewTerminalPane.tsx`: read-only xterm.js pane that renders a task reviewer's live stdout (and its last recorded output between runs); no input, session, or snapshot
 - `src/components/GitHubPanel.tsx`: task-inspector GitHub panel for connection state and pull request actions
 - `src/components/JiraBoardPage.tsx`: global JIRA board view — JQL config, auto-derived columns, drag-to-transition; composes `JiraBoardBody` (column grid + empty/loading states) and `JiraCard` (draggable story card + its linked Nectus tasks)
-- `src/components/JiraWorkItemDialog.tsx`: `JiraWorkItemPanel` — the de-modaled work-item side panel docked beside the board (transition/assign/comment + an agent-select "Create task & start" launch row)
+- `src/components/JiraWorkItemDialog.tsx`: `JiraWorkItemPanel` — the de-modaled work-item side panel docked beside the board (transition/assign/comment + an agent-select "Create task & start" launch row). When a REST token is connected, the status dropdown shows the issue's legal transitions (fetched on open); otherwise it falls back to the board-derived options
 - `src/components/JiraCreateWorkItemPanel.tsx`: `JiraCreateWorkItemPanel` — the inline "New work item" create form docked in the board's right-hand slot (project/type/summary/description/assignee/labels → `acli jira workitem create`); shares the slot with the view panel
 - `src/components/JiraPanel.tsx`: task-inspector panel for the linked JIRA story (display + detach)
-- `src/components/settings/`: settings subcomponents (`ProfileEditor`, `GithubConnectionCard`, `SegmentedRadioGroup`, `SettingsOverviewItem`) and profile-draft helpers
+- `src/components/settings/`: settings subcomponents (`ProfileEditor`, `GithubConnectionCard`, `JiraConnectionCard` — the optional JIRA REST API-token connect/disconnect card, `SegmentedRadioGroup`, `SettingsOverviewItem`) and profile-draft helpers
 - `src/test/testUtils.tsx`: shared frontend test helpers for providers, pointer events, DOM rects, and async deferrals
 - `src/test/app*Tests.tsx`: focused App test groups registered by `src/App.test.tsx`
 - `src/styles.css`: Tailwind imports, theme tokens, and global base rules
@@ -350,6 +357,7 @@ Preserve these V1 decisions unless the user asks to change them:
 
 - Avoid destructive filesystem deletion for worktrees unless there is an explicit confirmation path.
 - Keep GitHub integration optional, additive, and `gh`-CLI-based; do not introduce app-managed OAuth or token storage.
+- JIRA is `acli`-based by default (no stored tokens). The **one** deliberate exception is the optional JIRA REST layer: a user-pasted API token kept in the macOS Keychain (`native/src/jira_secret.rs`), never in SQLite, and never an OAuth flow. Keep it opt-in, additive, and degrade-to-`acli` when no token is present; don't broaden token storage beyond this.
 - If adding persistent background sessions, introduce a deliberate session manager such as tmux/zellij instead of silently detaching child processes.
 - If adding more terminal features, prefer extending `native/src/sessions/` and `src/TerminalPane.tsx` rather than mixing PTY concerns into dashboard components.
 - When spawning any external CLI, follow [Spawning External CLIs](#spawning-external-clis-macos-gui-path): resolve the binary and set `PATH` to `process_util::augmented_path()`. A GUI-launched app's minimal PATH otherwise breaks node-based agents with `env: node: No such file or directory` (exit 127).

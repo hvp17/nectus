@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { Bot, GitBranch, Github, Palette, Plus, Save, Terminal } from "lucide-react";
+import { Bot, GitBranch, Github, KanbanSquare, Palette, Plus, Save, Terminal } from "lucide-react";
 import { AgentLogo } from "./AgentBrand";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -7,9 +7,10 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import type { AgentProfile, AppSettings, AppSettingsInput, GithubStatus } from "../types";
+import type { AgentProfile, AppSettings, AppSettingsInput, GithubStatus, JiraRestStatus } from "../types";
 import { ProfileEditor } from "./settings/ProfileEditor";
 import { GithubConnectionCard } from "./settings/GithubConnectionCard";
+import { JiraConnectionCard } from "./settings/JiraConnectionCard";
 import { SegmentedRadioGroup } from "./settings/SegmentedRadioGroup";
 import { SettingsOverviewItem } from "./settings/SettingsOverviewItem";
 import {
@@ -27,23 +28,32 @@ interface SettingsPageProps {
   settings?: AppSettings;
   agentProfiles: AgentProfile[];
   githubStatus?: GithubStatus;
+  jiraRestStatus?: JiraRestStatus;
+  /** Site detected from acli, used to prefill the JIRA token card. */
+  jiraDetectedSite?: string | null;
   busy: boolean;
   onBack: () => void;
   onSaveSettings: (settings: AppSettingsInput) => Promise<unknown>;
   onSaveAgentProfile: (
     profile: Partial<AgentProfile> & Pick<AgentProfile, "name" | "agentKind" | "command">,
   ) => Promise<AgentProfile>;
+  onSaveJiraToken: (site: string, email: string, token: string) => Promise<JiraRestStatus>;
+  onDisconnectJira: () => Promise<void>;
 }
 
-type SettingsSectionId = "profiles" | "projects" | "github" | "appearance";
+type SettingsSectionId = "profiles" | "projects" | "github" | "jira" | "appearance";
 
 export function SettingsPage({
   settings,
   agentProfiles,
   githubStatus,
+  jiraRestStatus,
+  jiraDetectedSite,
   busy,
   onSaveSettings,
   onSaveAgentProfile,
+  onSaveJiraToken,
+  onDisconnectJira,
 }: SettingsPageProps) {
   const activeSettings = settings ?? fallbackSettings;
   const [settingsDraft, setSettingsDraft] = useState<AppSettingsInput>(() => toSettingsInput(activeSettings));
@@ -74,6 +84,7 @@ export function SettingsPage({
     { id: "profiles", icon: <Bot />, label: "Agent Profiles", count: String(profileDrafts.length) },
     { id: "projects", icon: <GitBranch />, label: "Projects & Worktrees" },
     { id: "github", icon: <Github />, label: "GitHub" },
+    { id: "jira", icon: <KanbanSquare />, label: "JIRA" },
     { id: "appearance", icon: <Palette />, label: "Appearance" },
   ];
 
@@ -279,6 +290,22 @@ export function SettingsPage({
           </div>
           <div className="nx-set-sec-body">
             <GithubConnectionCard status={githubStatus} />
+          </div>
+        </section>
+
+        <section id="settings-section-jira" className="nx-set-section">
+          <div className="nx-set-sec-head">
+            <KanbanSquare />
+            <h3>JIRA</h3>
+          </div>
+          <div className="nx-set-sec-body">
+            <JiraConnectionCard
+              status={jiraRestStatus}
+              detectedSite={jiraDetectedSite}
+              busy={busy}
+              onSave={onSaveJiraToken}
+              onDisconnect={onDisconnectJira}
+            />
           </div>
         </section>
 

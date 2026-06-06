@@ -41,6 +41,13 @@ vi.mock("./api", () => ({
     jiraTransitionWorkItem: vi.fn(),
     jiraAssignWorkItem: vi.fn(),
     jiraCommentWorkItem: vi.fn(),
+    jiraRestStatus: vi
+      .fn()
+      .mockResolvedValue({ connected: false, site: null, email: null, error: null }),
+    jiraListTransitions: vi.fn().mockResolvedValue([]),
+    jiraProjectStatuses: vi.fn().mockResolvedValue([]),
+    setJiraApiToken: vi.fn(),
+    clearJiraApiToken: vi.fn(),
     setTaskJiraLink: vi.fn(),
   },
 }));
@@ -89,6 +96,7 @@ describe("App", () => {
       jiraFilterMyIssues: false,
       jiraFilterUnresolved: true,
       jiraFilterCurrentSprint: false,
+      jiraFilterStatuses: [],
       theme: "system",
       density: "comfortable",
       updatedAt: "2026-05-14T00:00:00.000Z",
@@ -99,6 +107,15 @@ describe("App", () => {
     }));
     mockedApi.getTaskReviewLoop.mockResolvedValue(null);
     mockedApi.listTaskReviewRuns.mockResolvedValue([]);
+    // Re-establish the default each test: clearAllMocks resets call history but not
+    // implementations, so a test that connects a token would otherwise leak a
+    // connected status into later tests.
+    mockedApi.jiraRestStatus.mockResolvedValue({
+      connected: false,
+      site: null,
+      email: null,
+      error: null,
+    });
   });
 
   defineAppSmokeTests();

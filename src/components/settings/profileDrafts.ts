@@ -10,6 +10,8 @@ export const fallbackSettings: AppSettings = {
   jiraFilterMyIssues: false,
   jiraFilterUnresolved: true,
   jiraFilterCurrentSprint: false,
+  jiraRestEmail: null,
+  jiraFilterStatuses: [],
   theme: "system",
   density: "comfortable",
   updatedAt: new Date(0).toISOString(),
@@ -68,6 +70,7 @@ export function toSettingsInput(settings: AppSettings): AppSettingsInput {
     jiraFilterMyIssues: settings.jiraFilterMyIssues,
     jiraFilterUnresolved: settings.jiraFilterUnresolved,
     jiraFilterCurrentSprint: settings.jiraFilterCurrentSprint,
+    jiraFilterStatuses: settings.jiraFilterStatuses ?? [],
     theme: settings.theme,
     density: settings.density,
   };

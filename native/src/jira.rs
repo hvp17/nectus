@@ -11,6 +11,7 @@ pub fn build_board_jql(
     my_issues: bool,
     unresolved: bool,
     current_sprint: bool,
+    statuses: &[String],
 ) -> String {
     let mut clauses = vec![format!("project = \"{}\"", project.replace('"', "\\\""))];
     if my_issues {
@@ -21,6 +22,17 @@ pub fn build_board_jql(
     }
     if current_sprint {
         clauses.push("sprint in openSprints()".to_string());
+    }
+    // Status filter: quote each selected status and OR them via `status in (...)`.
+    // Empty selection adds no clause (the board shows every status).
+    let statuses: Vec<String> = statuses
+        .iter()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| format!("\"{}\"", s.replace('"', "\\\"")))
+        .collect();
+    if !statuses.is_empty() {
+        clauses.push(format!("status in ({})", statuses.join(", ")));
     }
     format!("{} ORDER BY updated DESC", clauses.join(" AND "))
 }
@@ -153,20 +165,12 @@ struct RawAssignee {
 }
 
 fn map_category(raw: Option<&RawStatusCategory>) -> JiraStatusCategory {
+    // JIRA status categories: "new"/"to do", "indeterminate"/"in progress", "done".
+    // The token logic is shared with the REST path via `JiraStatusCategory::from_token`.
     let token = raw
         .and_then(|c| c.key.as_deref().or(c.name.as_deref()))
-        .unwrap_or("")
-        .to_ascii_lowercase();
-    // JIRA status categories: "new"/"to do", "indeterminate"/"in progress", "done".
-    if token.contains("done") {
-        JiraStatusCategory::Done
-    } else if token.contains("progress") || token.contains("indeterminate") {
-        JiraStatusCategory::InProgress
-    } else if token.contains("new") || token.contains("to do") || token.contains("todo") {
-        JiraStatusCategory::ToDo
-    } else {
-        JiraStatusCategory::Unknown
-    }
+        .unwrap_or("");
+    JiraStatusCategory::from_token(token)
 }
 
 fn work_item_from_raw(raw: RawWorkItem) -> Option<JiraWorkItem> {
@@ -680,7 +684,7 @@ mod tests {
     #[test]
     fn builds_board_jql_from_project_only() {
         assert_eq!(
-            build_board_jql("ENG", false, false, false),
+            build_board_jql("ENG", false, false, false, &[]),
             "project = \"ENG\" ORDER BY updated DESC"
         );
     }
@@ -688,7 +692,7 @@ mod tests {
     #[test]
     fn builds_board_jql_with_all_filters() {
         assert_eq!(
-            build_board_jql("ENG", true, true, true),
+            build_board_jql("ENG", true, true, true, &[]),
             "project = \"ENG\" AND assignee = currentUser() AND statusCategory != Done AND sprint in openSprints() ORDER BY updated DESC"
         );
     }
@@ -696,8 +700,26 @@ mod tests {
     #[test]
     fn builds_board_jql_escapes_quotes_in_project_key() {
         assert_eq!(
-            build_board_jql("A\"B", false, true, false),
+            build_board_jql("A\"B", false, true, false, &[]),
             "project = \"A\\\"B\" AND statusCategory != Done ORDER BY updated DESC"
+        );
+    }
+
+    #[test]
+    fn builds_board_jql_with_status_filter() {
+        assert_eq!(
+            build_board_jql("ENG", false, false, false, &["To Do".into(), "In Progress".into()]),
+            "project = \"ENG\" AND status in (\"To Do\", \"In Progress\") ORDER BY updated DESC"
+        );
+    }
+
+    #[test]
+    fn builds_board_jql_empty_status_filter_adds_no_clause() {
+        // Blank/whitespace entries are filtered out, so an effectively-empty
+        // selection adds no clause.
+        assert_eq!(
+            build_board_jql("ENG", false, false, false, &["  ".into()]),
+            "project = \"ENG\" ORDER BY updated DESC"
         );
     }
 

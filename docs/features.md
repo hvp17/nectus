@@ -491,8 +491,16 @@ task↔story link is stored locally on the task (`jira_issue_key/summary/url`) a
 never writes back to JIRA. Linked stories appear as a badge on task
 cards/rows and a detachable panel in the task inspector, and — the other direction —
 each board card lists the tasks attached to that story (agent logo, title, live/
-status), each click-through opening that task. Full behavior and caveats live in
-[JIRA Integration](jira-integration.md).
+status), each click-through opening that task.
+
+**Custom workflows (optional REST token).** Because `acli` can't enumerate a
+project's statuses or an issue's valid transitions, an optional API-token layer
+(Settings → JIRA, stored in the macOS Keychain) unlocks custom-workflow support
+when connected: the status dropdown shows the issue's **legal transitions**, the
+board renders **every status column** (including empty ones), and a **status
+filter** in the board header narrows the board. It is additive and off by default —
+with no token, the board behaves exactly as the acli-only flow above. Full behavior
+and caveats live in [JIRA Integration](jira-integration.md).
 
 Key files:
 

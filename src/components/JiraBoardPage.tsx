@@ -1,6 +1,13 @@
-import { Plus, RefreshCw } from "lucide-react";
+import { ListFilter, Plus, RefreshCw } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -17,6 +24,7 @@ import type {
   AgentProfile,
   JiraProject,
   JiraStatus,
+  JiraTransition,
   JiraWorkItem,
   TaskSummary,
 } from "../types";
@@ -25,6 +33,7 @@ export interface JiraBoardFilters {
   myIssues: boolean;
   unresolved: boolean;
   currentSprint: boolean;
+  statuses: string[];
 }
 
 export interface JiraBoardConfigChange {
@@ -32,6 +41,7 @@ export interface JiraBoardConfigChange {
   myIssues?: boolean;
   unresolved?: boolean;
   currentSprint?: boolean;
+  statuses?: string[];
 }
 
 interface JiraBoardPageProps {
@@ -67,6 +77,11 @@ interface JiraBoardPageProps {
   agentProfiles?: AgentProfile[];
   selectedAgentProfileId?: number;
   site?: string | null;
+  /** REST token connected — enables legal-transition dropdowns. */
+  restConnected?: boolean;
+  onListTransitions?: (key: string) => Promise<JiraTransition[]>;
+  /** Statuses offered in the board's status filter (project set when connected). */
+  filterableStatuses?: string[];
   onAssign?: (key: string, assignee: string) => void;
   onComment?: (key: string, body: string) => void;
   onPickAgent?: (profileId: number) => void;
@@ -96,6 +111,9 @@ export function JiraBoardPage({
   agentProfiles,
   selectedAgentProfileId,
   site,
+  restConnected,
+  onListTransitions,
+  filterableStatuses,
   onAssign,
   onComment,
   onPickAgent,
@@ -104,6 +122,12 @@ export function JiraBoardPage({
   const ready = Boolean(status?.installed && status?.authenticated);
   const itemsByKey = new Map(columns.flatMap((column) => column.items).map((item) => [item.key, item]));
   const statusOptions = columns.map((column) => column.statusName);
+  // Always include the currently-selected statuses so they stay uncheckable even
+  // when the active filter leaves the board with no matching columns (otherwise a
+  // user could filter to a status with zero items and be unable to clear it).
+  const statusFilterOptions = Array.from(
+    new Set([...(filterableStatuses ?? []), ...filters.statuses]),
+  );
 
   // Group local tasks by the JIRA story they are attached to, so each card can
   // list its own sessions without re-scanning the whole task list per render.
@@ -130,6 +154,8 @@ export function JiraBoardPage({
         key={selectedItem.key}
         item={selectedItem}
         statusOptions={statusOptions}
+        restConnected={Boolean(restConnected)}
+        onListTransitions={onListTransitions ?? (async () => [])}
         site={site}
         agentProfiles={agentProfiles ?? []}
         selectedAgentProfileId={selectedAgentProfileId}
@@ -208,6 +234,49 @@ export function JiraBoardPage({
               Current sprint
             </button>
           </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!project}
+                className="gap-2"
+                aria-label="Filter by status"
+              >
+                <ListFilter className="size-4" />
+                Status
+                {filters.statuses.length > 0 && (
+                  <Badge variant="secondary" className="ml-0.5">
+                    {filters.statuses.length}
+                  </Badge>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+              {statusFilterOptions.length === 0 ? (
+                <DropdownMenuItem disabled>No statuses</DropdownMenuItem>
+              ) : (
+                statusFilterOptions.map((name) => (
+                  <DropdownMenuCheckboxItem
+                    key={name}
+                    checked={filters.statuses.includes(name)}
+                    onCheckedChange={(checked) =>
+                      onChangeConfig({
+                        statuses: checked
+                          ? [...filters.statuses, name]
+                          : filters.statuses.filter((status) => status !== name),
+                      })
+                    }
+                    onSelect={(event) => event.preventDefault()}
+                  >
+                    {name}
+                  </DropdownMenuCheckboxItem>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {onOpenCreate && (
             <Button

@@ -43,7 +43,9 @@ git, SQLite, and PTY work lives in the Rust backend.
   dropdown and toggle filters — no JQL to write — then browse stories in
   auto-derived status columns, drag to transition, assign and comment, and create a
   task from a story with a local-only task↔story link. Requires `acli` installed and
-  `acli jira auth login`. No tokens are stored. See
+  `acli jira auth login`. No tokens are stored by default. An **optional** API token
+  (Settings → JIRA, kept in the macOS Keychain) adds custom-workflow support — legal
+  transitions, all status columns, and a board status filter. See
   [docs/jira-integration.md](docs/jira-integration.md).
 - Configure agent commands, model arguments, environment variables, theme,
   density, branch prefixes, and worktree root patterns.

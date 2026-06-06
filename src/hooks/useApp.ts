@@ -232,6 +232,8 @@ export function useApp() {
   const jira = useJira({
     active: currentView === "jira",
     configured: Boolean(settings?.jiraBoardProject),
+    project: settings?.jiraBoardProject ?? null,
+    statusFilter: settings?.jiraFilterStatuses ?? [],
     setMessage,
   });
 
@@ -240,6 +242,7 @@ export function useApp() {
     myIssues?: boolean;
     unresolved?: boolean;
     currentSprint?: boolean;
+    statuses?: string[];
   }) =>
     run(async () => {
       if (!settings) return;
@@ -250,10 +253,30 @@ export function useApp() {
         jiraFilterMyIssues: partial.myIssues ?? settings.jiraFilterMyIssues,
         jiraFilterUnresolved: partial.unresolved ?? settings.jiraFilterUnresolved,
         jiraFilterCurrentSprint: partial.currentSprint ?? settings.jiraFilterCurrentSprint,
+        jiraFilterStatuses: partial.statuses ?? settings.jiraFilterStatuses,
       });
       setSettings(updated);
       await jira.refresh();
     });
+
+  // Connecting/disconnecting a token writes jira_site_url / jira_rest_email
+  // server-side. Re-read settings so the local copy stays fresh — otherwise a later
+  // settings or board-config save would re-send the stale jira_site_url and clobber
+  // the REST account, orphaning the Keychain token. Errors propagate so the
+  // connection card can surface them inline.
+  const saveJiraToken = useCallback(
+    async (site: string, email: string, token: string) => {
+      const status = await jira.setApiToken(site, email, token);
+      setSettings(await api.getAppSettings());
+      return status;
+    },
+    [jira],
+  );
+
+  const disconnectJira = useCallback(async () => {
+    await jira.clearApiToken();
+    setSettings(await api.getAppSettings());
+  }, [jira]);
 
   const createTaskFromStory = useCallback(
     async (item: JiraWorkItem) => {
@@ -586,13 +609,18 @@ export function useApp() {
     creatingPullRequest,
     refreshPullRequest,
     jiraStatus: jira.jiraStatus,
+    jiraRestStatus: jira.restStatus,
+    jiraRestConnected: jira.restConnected,
     jiraProjects: jira.projects,
+    jiraProjectStatuses: jira.projectStatuses,
     jiraColumns: jira.columns,
     jiraLoading: jira.loading,
     refreshJira: jira.refresh,
     transitionJira: jira.transition,
     assignJira: jira.assign,
     commentJira: jira.comment,
+    setJiraApiToken: saveJiraToken,
+    clearJiraApiToken: disconnectJira,
     setJiraBoardConfig,
     selectedJiraItem,
     setSelectedJiraItem,
