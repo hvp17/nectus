@@ -1334,6 +1334,129 @@ fn rejects_a_workspace_with_no_repos() {
 }
 
 #[test]
+fn single_repo_task_gets_one_mirrored_task_repo_row() {
+    let db = Database::open_in_memory().unwrap();
+    let alpha = insert_workspace_test_repo(&db, "alpha");
+    let task = db
+        .create_task_record(alpha, "Solo".to_string(), None, None, false, None)
+        .unwrap();
+    assert_eq!(task.task_repos.len(), 1);
+    assert_eq!(task.task_repos[0].repo_id, alpha);
+    assert_eq!(task.task_repos[0].repo_name, "alpha");
+    assert_eq!(task.task_repos[0].position, 0);
+}
+
+#[test]
+fn backfill_creates_a_task_repos_row_for_legacy_tasks() {
+    let db = Database::open_in_memory().unwrap();
+    let alpha = insert_workspace_test_repo(&db, "alpha");
+    // Simulate a pre-Increment-B task row with no task_repos row.
+    db.conn
+        .execute(
+            "INSERT INTO tasks (repo_id, title, status, has_worktree, branch_name, worktree_path, created_at, updated_at)
+             VALUES (?1, 'Legacy', 'planned', 1, 'feat/legacy', '/tmp/legacy-wt', '2020-01-01', '2020-01-01')",
+            rusqlite::params![alpha],
+        )
+        .unwrap();
+    let task_id = db.conn.last_insert_rowid();
+    db.conn
+        .execute("DELETE FROM task_repos WHERE task_id = ?1", [task_id])
+        .unwrap();
+
+    db.backfill_task_repos().unwrap();
+
+    let repos = db.task_repos_for(task_id).unwrap();
+    assert_eq!(repos.len(), 1);
+    assert_eq!(repos[0].repo_id, alpha);
+    assert_eq!(repos[0].branch_name.as_deref(), Some("feat/legacy"));
+    assert_eq!(repos[0].worktree_path.as_deref(), Some("/tmp/legacy-wt"));
+}
+
+#[test]
+fn cross_repo_task_requires_at_least_two_repos() {
+    let db = Database::open_in_memory().unwrap();
+    let alpha = insert_workspace_test_repo(&db, "alpha");
+    let one = db
+        .create_cross_repo_task(None, vec![alpha], "x".to_string(), None, None, None)
+        .unwrap_err();
+    assert!(one.contains("at least two"));
+    // Duplicates collapse below the minimum too (no worktrees are created).
+    let dup = db
+        .create_cross_repo_task(None, vec![alpha, alpha], "x".to_string(), None, None, None)
+        .unwrap_err();
+    assert!(dup.contains("at least two"));
+}
+
+#[test]
+fn creates_a_cross_repo_task_with_a_worktree_per_repo() {
+    let db = Database::open_in_memory().unwrap();
+    let wt_root = tempdir().unwrap();
+    let (_dir_a, repo_a) = add_repo_with_remote(&db);
+    let (_dir_b, repo_b) = add_repo_with_remote(&db);
+    // Keep the worktrees inside the test's tempdir, not the real ~/.nectus. Both
+    // repos share the parent so the cross-repo layout resolves under wt_root.
+    for repo in [&repo_a, &repo_b] {
+        db.conn
+            .execute(
+                "UPDATE repos SET default_worktree_root = ?1 WHERE id = ?2",
+                rusqlite::params![
+                    wt_root.path().join(&repo.name).to_string_lossy(),
+                    repo.id
+                ],
+            )
+            .unwrap();
+    }
+
+    let task = db
+        .create_cross_repo_task(
+            None,
+            vec![repo_a.id, repo_b.id],
+            "Cross feature".to_string(),
+            Some("Wire the API to the UI".to_string()),
+            None,
+            Some("feat/cross".to_string()),
+        )
+        .unwrap();
+
+    assert_eq!(task.repo_id, repo_a.id, "first repo is primary");
+    assert!(task.has_worktree);
+    assert_eq!(task.task_repos.len(), 2);
+    // Both repos are on the shared branch with a worktree on disk.
+    for task_repo in &task.task_repos {
+        assert_eq!(task_repo.branch_name.as_deref(), Some("feat/cross"));
+        let path = task_repo.worktree_path.as_deref().unwrap();
+        assert!(Path::new(path).exists(), "worktree should exist: {path}");
+    }
+    let primary_wt = task.task_repos[0].worktree_path.clone().unwrap();
+    let sibling_wt = task.task_repos[1].worktree_path.clone().unwrap();
+    // The task's worktree_path is the primary's; siblings share one parent.
+    assert_eq!(task.worktree_path.as_deref(), Some(primary_wt.as_str()));
+    assert_eq!(
+        Path::new(&primary_wt).parent(),
+        Path::new(&sibling_wt).parent()
+    );
+    // The agent gets cross-repo context prepended to its prompt.
+    assert!(task
+        .prompt
+        .as_deref()
+        .unwrap()
+        .contains("spans 2 repositories"));
+
+    // Deleting the task removes every worktree and cascades task_repos.
+    db.delete_task(task.id, false).unwrap();
+    assert!(!Path::new(&primary_wt).exists());
+    assert!(!Path::new(&sibling_wt).exists());
+    assert!(db.task_by_id(task.id).unwrap().is_none());
+    let orphans: i64 = db
+        .conn
+        .query_row("SELECT COUNT(*) FROM task_repos WHERE task_id = ?1", [task.id], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(orphans, 0);
+}
+
+#[test]
 fn rejects_a_duplicate_workspace_name() {
     let db = Database::open_in_memory().unwrap();
     let alpha = insert_workspace_test_repo(&db, "alpha");

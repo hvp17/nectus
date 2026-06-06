@@ -146,6 +146,33 @@ async fn create_task(
     .map_err(Into::into)
 }
 
+/// Create a task that spans several repos (Increment B): one worktree per repo as
+/// siblings under a shared parent, driven by a single agent session. `repo_ids[0]`
+/// is the primary repo (the session's working directory).
+#[tauri::command]
+async fn create_cross_repo_task(
+    workspace_id: Option<i64>,
+    repo_ids: Vec<i64>,
+    title: String,
+    prompt: Option<String>,
+    agent_profile_id: Option<i64>,
+    branch_name: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<TaskSummary> {
+    let db = state.db.clone();
+    blocking("Failed to create cross-repo task", move || {
+        db.lock().create_cross_repo_task(
+            workspace_id,
+            repo_ids,
+            title,
+            prompt,
+            agent_profile_id,
+            branch_name,
+        )
+    })
+    .await
+}
+
 #[tauri::command]
 async fn list_tasks(
     repo_id: Option<i64>,
@@ -155,11 +182,17 @@ async fn list_tasks(
     tauri::async_runtime::spawn_blocking(move || -> Result<Vec<TaskSummary>, String> {
         let mut tasks = db.lock().list_tasks(repo_id)?;
         // Compute worktree dirtiness off the DB lock: one `git status` per
-        // worktree-backed task, which under the global mutex would otherwise
-        // serialize every concurrent command behind the whole board load.
+        // worktree-backed repo, which under the global mutex would otherwise
+        // serialize every concurrent command behind the whole board load. For a
+        // cross-repo task this checks each repo's worktree.
         for task in tasks.iter_mut() {
             if let Some(path) = task.worktree_path.as_deref() {
                 task.is_dirty = git_ops::is_dirty(Path::new(path));
+            }
+            for task_repo in task.task_repos.iter_mut() {
+                if let Some(path) = task_repo.worktree_path.as_deref() {
+                    task_repo.is_dirty = git_ops::is_dirty(Path::new(path));
+                }
             }
         }
         Ok(tasks)
@@ -1031,6 +1064,7 @@ pub fn run() {
             get_app_settings,
             update_app_settings,
             create_task,
+            create_cross_repo_task,
             list_tasks,
             update_task_metadata,
             delete_task,

@@ -103,6 +103,32 @@ impl Database {
                 ON tasks(repo_id, branch_name)
                 WHERE has_worktree = 1;
 
+                -- Per-repo working state for a task (Increment B). A task spans 1..N
+                -- repos; this is the complete set, one row per repo. For a single-repo
+                -- task it mirrors the task's own repo_id/branch_name/worktree_path/pr_url.
+                -- `tasks` keeps those columns as the PRIMARY repo's state for the
+                -- single-repo fast path; this table is the source of truth for the set.
+                CREATE TABLE IF NOT EXISTS task_repos (
+                  task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                  repo_id INTEGER NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+                  branch_name TEXT,
+                  worktree_path TEXT,
+                  pr_url TEXT,
+                  position INTEGER NOT NULL,
+                  PRIMARY KEY (task_id, repo_id)
+                );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS task_repos_worktree_path_unique
+                ON task_repos(worktree_path)
+                WHERE worktree_path IS NOT NULL;
+
+                CREATE UNIQUE INDEX IF NOT EXISTS task_repos_repo_branch_unique
+                ON task_repos(repo_id, branch_name)
+                WHERE branch_name IS NOT NULL;
+
+                CREATE INDEX IF NOT EXISTS task_repos_task_idx
+                ON task_repos(task_id, position);
+
                 CREATE TABLE IF NOT EXISTS review_loops (
                   task_id INTEGER PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
                   reviewer_profile_id INTEGER NOT NULL REFERENCES agent_profiles(id),
@@ -253,7 +279,33 @@ impl Database {
             "INTEGER NOT NULL DEFAULT 0",
         )?;
         self.add_column_if_missing("pr_reviews", "converged", "INTEGER")?;
+        // Increment B: a task may belong to a workspace, and per-repo working state
+        // moves into task_repos. The FK is intentionally omitted from the ALTER
+        // (SQLite can't add a REFERENCES column cleanly to an existing table); the
+        // app resolves workspace_id against the loaded workspaces and tolerates a
+        // dangling id (treated as "no workspace").
+        self.add_column_if_missing("tasks", "workspace_id", "INTEGER")?;
         self.migrate_legacy_worktree_pattern()?;
+        self.backfill_task_repos()?;
+        Ok(())
+    }
+
+    /// Seed `task_repos` with one row per existing task (its primary repo), so the
+    /// table is the complete per-repo set for every task going forward. Idempotent:
+    /// only inserts for tasks that have no `task_repos` row yet. New cross-repo
+    /// tasks write their own N rows at creation.
+    pub(super) fn backfill_task_repos(&self) -> Result<(), String> {
+        self.conn
+            .execute(
+                "
+                INSERT INTO task_repos (task_id, repo_id, branch_name, worktree_path, pr_url, position)
+                SELECT t.id, t.repo_id, t.branch_name, t.worktree_path, t.pr_url, 0
+                FROM tasks t
+                WHERE NOT EXISTS (SELECT 1 FROM task_repos tr WHERE tr.task_id = t.id)
+                ",
+                [],
+            )
+            .map_err(|error| format!("Failed to backfill task_repos: {error}"))?;
         Ok(())
     }
 

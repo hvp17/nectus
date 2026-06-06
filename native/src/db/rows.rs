@@ -1,7 +1,7 @@
 use crate::models::{
     AgentKind, AgentProfile, AppSettings, DensityMode, PrReview, PrReviewMode, PrReviewReviewer,
     PrReviewRun, PrReviewStatus, PrReviewVerdict, Repo, ReviewLoop, ReviewLoopStatus, ReviewRun,
-    ReviewVerdict, TaskStatus, TaskSummary, ThemeMode, Workspace,
+    ReviewVerdict, TaskRepo, TaskStatus, TaskSummary, ThemeMode, Workspace,
 };
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ValueRef};
 use rusqlite::Row;
@@ -58,6 +58,7 @@ pub(super) fn task_from_row(row: &Row<'_>) -> rusqlite::Result<TaskSummary> {
     Ok(TaskSummary {
         id: row.get(0)?,
         repo_id: row.get(1)?,
+        workspace_id: row.get(23)?,
         title: row.get(2)?,
         prompt: row.get(3)?,
         status: row.get(4)?,
@@ -78,8 +79,25 @@ pub(super) fn task_from_row(row: &Row<'_>) -> rusqlite::Result<TaskSummary> {
         jira_issue_key: row.get(20)?,
         jira_issue_summary: row.get(21)?,
         jira_issue_url: row.get(22)?,
+        // Filled by the caller via a follow-up query against task_repos.
+        task_repos: Vec::new(),
         created_at: row.get(17)?,
         updated_at: row.get(18)?,
+    })
+}
+
+/// Maps a `task_repos` row joined to `repos` for the name. `is_dirty` is left
+/// false here and computed off the DB lock by the command layer (one `git status`
+/// per worktree), mirroring how the task's own dirtiness is handled.
+pub(super) fn task_repo_from_row(row: &Row<'_>) -> rusqlite::Result<TaskRepo> {
+    Ok(TaskRepo {
+        repo_id: row.get(0)?,
+        repo_name: row.get(1)?,
+        branch_name: row.get(2)?,
+        worktree_path: row.get(3)?,
+        pr_url: row.get(4)?,
+        is_dirty: false,
+        position: row.get(5)?,
     })
 }
 
