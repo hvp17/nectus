@@ -27,7 +27,10 @@ import type {
   AppSettingsInput,
   GithubStatus,
   JiraProject,
+  JiraRestStatus,
   JiraStatus,
+  JiraStatusDef,
+  JiraTransition,
   JiraWorkItem,
   PrReview,
   PrReviewRun,
@@ -195,6 +198,24 @@ export const api = {
   async jiraCommentWorkItem(key: string, body: string): Promise<void> {
     return invoke("jira_comment_work_item", { key, body });
   },
+  async jiraRestStatus(): Promise<JiraRestStatus> {
+    if (isBrowserPreview) return { connected: false, site: null, email: null, error: null };
+    return invoke("jira_rest_status");
+  },
+  async setJiraApiToken(site: string, email: string, token: string): Promise<JiraRestStatus> {
+    return invoke("set_jira_api_token", { site, email, token });
+  },
+  async clearJiraApiToken(): Promise<void> {
+    return invoke("clear_jira_api_token");
+  },
+  async jiraListTransitions(key: string): Promise<JiraTransition[]> {
+    if (isBrowserPreview) return [];
+    return invoke("jira_list_transitions", { key });
+  },
+  async jiraProjectStatuses(project: string): Promise<JiraStatusDef[]> {
+    if (isBrowserPreview) return [];
+    return invoke("jira_project_statuses", { project });
+  },
   async jiraCreateWorkItem(input: {
     project: string;
     issueType: string;
@@ -299,6 +320,7 @@ export const api = {
         jiraFilterMyIssues: false,
         jiraFilterUnresolved: true,
         jiraFilterCurrentSprint: false,
+        jiraFilterStatuses: [],
         theme: "system",
         density: "comfortable",
         updatedAt: new Date().toISOString(),

@@ -113,6 +113,29 @@ export interface JiraWorkItem {
   description?: string | null;
 }
 
+/** A legal transition for a work item (from `GET /issue/{key}/transitions`). */
+export interface JiraTransition {
+  id: string;
+  name: string;
+  toStatusName: string;
+  toStatusCategory: JiraStatusCategory;
+}
+
+/** A status in a project's workflow (from `GET /project/{key}/statuses`). */
+export interface JiraStatusDef {
+  id: string;
+  name: string;
+  category: JiraStatusCategory;
+}
+
+/** REST connection state for the optional API-token layer. */
+export interface JiraRestStatus {
+  connected: boolean;
+  site?: string | null;
+  email?: string | null;
+  error?: string | null;
+}
+
 export interface AgentProfile {
   id: number;
   name: string;
@@ -222,6 +245,10 @@ export interface AppSettings {
   jiraFilterMyIssues: boolean;
   jiraFilterUnresolved: boolean;
   jiraFilterCurrentSprint: boolean;
+  /** Non-secret REST account email; written only by the API-token flow. */
+  jiraRestEmail?: string | null;
+  /** Board status filter selection; empty means no filter. */
+  jiraFilterStatuses: string[];
   theme: ThemeMode;
   density: DensityMode;
   updatedAt: string;
@@ -237,6 +264,7 @@ export interface AppSettingsInput {
   jiraFilterMyIssues: boolean;
   jiraFilterUnresolved: boolean;
   jiraFilterCurrentSprint: boolean;
+  jiraFilterStatuses: string[];
   theme: ThemeMode;
   density: DensityMode;
 }

@@ -89,6 +89,7 @@ describe("App", () => {
       jiraFilterMyIssues: false,
       jiraFilterUnresolved: true,
       jiraFilterCurrentSprint: false,
+      jiraFilterStatuses: [],
       theme: "system",
       density: "comfortable",
       updatedAt: "2026-05-14T00:00:00.000Z",

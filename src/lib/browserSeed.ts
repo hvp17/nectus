@@ -153,6 +153,7 @@ export const seedSettings: AppSettings = {
   jiraFilterMyIssues: false,
   jiraFilterUnresolved: true,
   jiraFilterCurrentSprint: false,
+  jiraFilterStatuses: [],
   theme: "system",
   density: "comfortable",
   updatedAt: ago(5000),
