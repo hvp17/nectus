@@ -90,6 +90,17 @@ describe("App", () => {
         createdAt: "2026-05-14T00:00:00.000Z",
         updatedAt: "2026-05-14T00:00:00.000Z",
       },
+      {
+        id: 3,
+        name: "OpenCode",
+        agentKind: "opencode",
+        command: "opencode",
+        model: null,
+        args: [],
+        env: {},
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+      },
     ]);
     mockedApi.listTasks.mockResolvedValue([]);
     mockedApi.listWorkspaces.mockResolvedValue([]);

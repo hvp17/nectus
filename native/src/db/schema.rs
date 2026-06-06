@@ -344,6 +344,7 @@ impl Database {
             ("Codex", AgentKind::Codex, "codex"),
             ("Claude", AgentKind::Claude, "claude"),
             ("Gemini", AgentKind::Gemini, "gemini"),
+            ("OpenCode", AgentKind::OpenCode, "opencode"),
         ] {
             self.conn
                 .execute(

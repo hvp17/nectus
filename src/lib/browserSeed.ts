@@ -36,6 +36,7 @@ export const seedProfiles: AgentProfile[] = [
   { id: 1, name: "Codex", agentKind: "codex", command: "codex", model: null, args: [], env: {}, createdAt: ago(9000), updatedAt: ago(9000) },
   { id: 2, name: "Claude Sonnet", agentKind: "claude", command: "claude", model: "sonnet", args: [], env: {}, createdAt: ago(9000), updatedAt: ago(9000) },
   { id: 3, name: "Gemini", agentKind: "gemini", command: "gemini", model: null, args: [], env: {}, createdAt: ago(9000), updatedAt: ago(9000) },
+  { id: 4, name: "OpenCode", agentKind: "opencode", command: "opencode", model: null, args: [], env: {}, createdAt: ago(9000), updatedAt: ago(9000) },
 ];
 
 export const seedRepos: Repo[] = [
@@ -96,7 +97,7 @@ export const seedTasks: TaskSummary[] = [
     jiraIssueKey: "WEB-409", jiraIssueSummary: "Add JIRA board status filters", updatedAt: ago(1),
   }),
   task({
-    id: 3, repoId: 2, title: "Stream agent logs to a file sink", agentProfileId: 3, agentName: "Gemini", agentKind: "gemini",
+    id: 3, repoId: 2, title: "Stream agent logs to a file sink", agentProfileId: 4, agentName: "OpenCode", agentKind: "opencode",
     branchName: "feat/log-sink", worktreePath: "/Users/you/dev/cli-tools-worktrees/log-sink", isDirty: true,
     activeSessionId: "s-3", lastSessionId: "s-3", jiraIssueKey: "CLI-88", updatedAt: ago(12),
   }),

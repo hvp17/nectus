@@ -5,17 +5,28 @@ use std::path::{Path, PathBuf};
 mod claude;
 mod codex;
 mod gemini;
+mod opencode;
 
 pub(super) fn configure_agent_command(
     command: &mut CommandBuilder,
     agent: &AgentProfile,
     session_id: &str,
     resume: bool,
+    initial_prompt: Option<&str>,
+    opencode_port: Option<u16>,
 ) {
     match agent.agent_kind {
         AgentKind::Codex => codex::configure(command, agent, session_id, resume),
         AgentKind::Claude => claude::configure(command, agent, session_id, resume),
         AgentKind::Gemini => gemini::configure(command, agent),
+        AgentKind::OpenCode => opencode::configure(
+            command,
+            agent,
+            session_id,
+            resume,
+            initial_prompt,
+            opencode_port,
+        ),
         AgentKind::Custom => command.args(&agent.args),
     }
 }
@@ -26,9 +37,14 @@ pub(super) fn fallback_agent_candidates(command: &str, home: Option<&Path>) -> V
         "codex" => candidates.extend(codex::fallback_candidates(home)),
         "claude" => candidates.extend(claude::fallback_candidates(home)),
         "gemini" => candidates.extend(gemini::fallback_candidates(home)),
+        "opencode" => candidates.extend(opencode::fallback_candidates(home)),
         _ => {}
     }
     candidates
+}
+
+pub(super) fn sends_initial_prompt_in_args(agent_kind: AgentKind) -> bool {
+    agent_kind == AgentKind::OpenCode
 }
 
 fn add_model_arg(command: &mut CommandBuilder, agent: &AgentProfile) {
@@ -89,6 +105,8 @@ mod tests {
             &agent(AgentKind::Codex, Some("gpt-5.3-codex"), &["--full-auto"]),
             "session-1",
             true,
+            None,
+            None,
         );
 
         assert_eq!(
@@ -109,6 +127,8 @@ mod tests {
             ),
             "session-2",
             false,
+            None,
+            None,
         );
 
         let argv = argv(&command);
@@ -140,11 +160,79 @@ mod tests {
             &agent(AgentKind::Gemini, Some("gemini-pro"), &["--yolo"]),
             "unused-session",
             false,
+            None,
+            None,
         );
 
         assert_eq!(
             argv(&command),
             ["gemini", "--model", "gemini-pro", "--yolo"]
+        );
+    }
+
+    #[test]
+    fn configures_opencode_new_session_with_local_server_and_prompt_arg() {
+        let mut command = CommandBuilder::new(OsString::from("opencode"));
+        configure_agent_command(
+            &mut command,
+            &agent(
+                AgentKind::OpenCode,
+                Some("anthropic/claude-sonnet-4-5-20250929"),
+                &["--agent", "build"],
+            ),
+            "nectus-session-id",
+            false,
+            Some("Implement the task"),
+            Some(49152),
+        );
+
+        assert_eq!(
+            argv(&command),
+            [
+                "opencode",
+                "--hostname",
+                "127.0.0.1",
+                "--port",
+                "49152",
+                "--model",
+                "anthropic/claude-sonnet-4-5-20250929",
+                "--agent",
+                "build",
+                "--prompt",
+                "Implement the task",
+            ]
+        );
+    }
+
+    #[test]
+    fn configures_opencode_resume_with_saved_session_and_no_model_or_prompt() {
+        let mut command = CommandBuilder::new(OsString::from("opencode"));
+        configure_agent_command(
+            &mut command,
+            &agent(
+                AgentKind::OpenCode,
+                Some("anthropic/claude-sonnet-4-5-20250929"),
+                &["--agent", "build"],
+            ),
+            "ses_saved",
+            true,
+            Some("ignored on resume"),
+            Some(49153),
+        );
+
+        assert_eq!(
+            argv(&command),
+            [
+                "opencode",
+                "--hostname",
+                "127.0.0.1",
+                "--port",
+                "49153",
+                "--session",
+                "ses_saved",
+                "--agent",
+                "build",
+            ]
         );
     }
 }

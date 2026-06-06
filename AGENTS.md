@@ -2,7 +2,7 @@
 
 ## Project Shape
 
-Nectus Desktop is a Mac-first Tauri 2 desktop app for managing parallel Codex/Claude work across local git projects and optional git worktrees.
+Nectus Desktop is a Mac-first Tauri 2 desktop app for managing parallel Codex, Claude, and OpenCode work across local git projects and optional git worktrees.
 
 - Frontend: React + TypeScript + Vite in `src/`
 - Desktop backend: Rust + Tauri in `native/`
@@ -118,7 +118,7 @@ Use this for validating:
 
 - adding existing git repos
 - creating worktrees
-- launching Codex/Claude sessions
+- launching Codex/Claude/OpenCode sessions
 - terminal input/output
 - app-owned session cleanup
 
@@ -196,8 +196,8 @@ Important backend files:
 - `native/src/jira_rest.rs`: **optional** JIRA Cloud REST layer (`ureq`, Basic auth) for what `acli` cannot do — fixture-tested parsers `parse_transitions` / `parse_project_statuses`, plus `verify` (`/myself`), `list_transitions`, `project_statuses`, `perform_transition`. Additive to `acli`, gated on a user API token; powers the legal-transition dropdown, the board status filter, and all status columns (incl. empty)
 - `native/src/jira_secret.rs`: macOS Keychain store for the optional JIRA API token (`keyring`; service = the app identifier, account = `jira-api-token:{site}`). The token never touches SQLite — only the non-secret site/email persist in `app_settings`
 - `native/src/process_util.rs`: shared command helpers — binary resolution (`resolve_executable`), child `PATH` augmentation (`augmented_path`), the install-dir source of truth (`third_party_bin_dirs`), and `command_error` stderr formatting. See [Spawning External CLIs](#spawning-external-clis-macos-gui-path).
-- `native/src/sessions/`: PTY lifecycle, terminal event emission, Codex JSONL watching, Claude Code hook event bridge (`claude.rs`), agent command setup, and the task review-loop / external PR-review runtimes (`review_loop.rs`, `pr_review.rs`, `pr_consensus.rs`). The append-only event-log tail loop shared by the Codex and Claude watchers (newline-terminated only, via `watch_event_log` in `mod.rs`) keeps line-tailing in one place. The headless reviewer-CLI launcher shared by all three reviewing surfaces lives in `reviewer.rs`; the PTY submission helper in `terminal_io.rs`. The single + consensus PR runtimes share one ephemeral-worktree scaffold (`pr_worktree.rs`: unique per-review branch/path + guaranteed teardown) and one verdict contract (`pr_verdict.rs`: the `NECTUS_PR_VERDICT:` marker + parser)
-- `native/src/sessions/agents/`: provider-specific Codex, Claude, and Gemini command arguments and fallback locations
+- `native/src/sessions/`: PTY lifecycle, terminal event emission, Codex JSONL watching, Claude Code hook event bridge (`claude.rs`), OpenCode local-server polling (`opencode.rs`), agent command setup, and the task review-loop / external PR-review runtimes (`review_loop.rs`, `pr_review.rs`, `pr_consensus.rs`). The append-only event-log tail loop shared by the Codex and Claude watchers (newline-terminated only, via `watch_event_log` in `mod.rs`) keeps line-tailing in one place. The headless reviewer-CLI launcher shared by all three reviewing surfaces lives in `reviewer.rs`; the PTY submission helper in `terminal_io.rs`. The single + consensus PR runtimes share one ephemeral-worktree scaffold (`pr_worktree.rs`: unique per-review branch/path + guaranteed teardown) and one verdict contract (`pr_verdict.rs`: the `NECTUS_PR_VERDICT:` marker + parser)
+- `native/src/sessions/agents/`: provider-specific Codex, Claude, Gemini, and OpenCode command arguments and fallback locations
 - `native/src/models/`: shared serializable data types, split by domain (`error`, `task`, `review`, `agent`, `github`, `jira`, `settings`, `session`, `workspace`) and re-exported flat from `mod.rs`, so every `crate::models::Foo` path still resolves
 
 Tauri commands exposed to the frontend include:
@@ -280,7 +280,7 @@ single source of truth for the extra locations
    `gh` and general tools) or `resolve_agent_command` (for agent profiles); both
    search PATH first, then the common install dirs.
 2. **Tools the CLI then spawns.** A resolved absolute path is not enough —
-   node-based CLIs such as Codex `exec` `node` themselves, which must be on the
+   node-based CLIs such as Codex and OpenCode exec `node` themselves, which must be on the
    child process's PATH. Set `command.env("PATH", process_util::augmented_path())`
    on the spawned command so nested executables resolve too. Missing this surfaces
    as `env: node: No such file or directory` with **exit status 127**.
@@ -356,7 +356,7 @@ Preserve these V1 decisions unless the user asks to change them:
 - Tasks can be direct-edit or worktree-backed; worktree is optional.
 - Tasks and PR URLs are stored locally.
 - GitHub integration runs through the local `gh` CLI; the app stores no GitHub tokens and runs no OAuth flow.
-- Codex, Claude, Gemini, and custom agents are launched as configurable CLI commands.
+- Codex, Claude, Gemini, OpenCode, and custom agents are launched as configurable CLI commands.
 - Embedded sessions are app-owned child processes.
 - Closing the app stops owned sessions.
 
@@ -367,5 +367,5 @@ Preserve these V1 decisions unless the user asks to change them:
 - JIRA is `acli`-based by default (no stored tokens). The **one** deliberate exception is the optional JIRA REST layer: a user-pasted API token kept in the macOS Keychain (`native/src/jira_secret.rs`), never in SQLite, and never an OAuth flow. Keep it opt-in, additive, and degrade-to-`acli` when no token is present; don't broaden token storage beyond this.
 - If adding persistent background sessions, introduce a deliberate session manager such as tmux/zellij instead of silently detaching child processes.
 - If adding more terminal features, prefer extending `native/src/sessions/` and `src/TerminalPane.tsx` rather than mixing PTY concerns into dashboard components.
-- When spawning any external CLI, follow [Spawning External CLIs](#spawning-external-clis-macos-gui-path): resolve the binary and set `PATH` to `process_util::augmented_path()`. A GUI-launched app's minimal PATH otherwise breaks node-based agents with `env: node: No such file or directory` (exit 127).
+- When spawning any external CLI, follow [Spawning External CLIs](#spawning-external-clis-macos-gui-path): resolve the binary and set `PATH` to `process_util::augmented_path()`. A GUI-launched app's minimal PATH otherwise breaks node-based agents with `env: node: No such file or directory` (exit 127). OpenCode also has provider-specific fallback candidates under `~/.opencode/bin/opencode` and `~/bin/opencode`.
 - The current icon is a simple generated placeholder and can be replaced later with proper app assets.

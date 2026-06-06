@@ -158,6 +158,7 @@ Seeded profiles:
 - Codex: `codex`
 - Claude: `claude`
 - Gemini: `gemini`
+- OpenCode: `opencode`
 
 Profiles can also be customized with:
 
@@ -181,7 +182,8 @@ Key files:
 
 Command resolution checks PATH first, then common user binary locations.
 Provider modules own command arguments and app-specific fallback locations, such
-as Codex app bundle resource paths.
+as Codex app bundle resource paths and OpenCode installs under
+`~/.opencode/bin/opencode` or `~/bin/opencode`.
 
 ## Sessions And Terminal
 
@@ -192,7 +194,9 @@ Current behavior:
 - A task can have only one active session.
 - Direct-edit tasks launch in the project path.
 - Worktree-backed tasks launch in the worktree path.
-- New task prompts are written to the PTY after launch.
+- New task prompts are written to the PTY after launch. OpenCode is the exception:
+  its initial task prompt is passed through `opencode --prompt`, so Nectus skips the
+  post-spawn PTY write to avoid a duplicate prompt.
 - Dropping files on the terminal inserts their escaped paths into the active
   session input, matching the local terminal workflow for Codex image/file paths.
 - Selecting a task replaces the current view with a focused terminal workspace.
@@ -274,7 +278,7 @@ Key files:
 
 ## Session Resume
 
-Codex and Claude profiles support resume from a saved session id.
+Codex, Claude, and OpenCode profiles support resume from a saved session id.
 
 Codex:
 
@@ -289,6 +293,16 @@ Claude:
 
 - New sessions launch with `--session-id <session-id>`.
 - Resume launches with `--resume <session-id>`.
+
+OpenCode:
+
+- New sessions launch with a reserved local server:
+  `opencode --hostname 127.0.0.1 --port <port> [--model provider/model] [args]
+  --prompt <task prompt>`.
+- Resume launches with the saved OpenCode id:
+  `opencode --hostname 127.0.0.1 --port <port> --session <session-id> [args]`.
+- Nectus discovers the OpenCode session from the local server's `/session` API and
+  saves the id and label when available.
 
 Resume is disabled for Gemini and custom profiles unless their behavior is added
 explicitly.
@@ -314,8 +328,13 @@ Attention tracking is UI state derived from backend events.
   default.
 - Claude sessions emit the same two markers through Claude Code hooks instead of
   a rollout JSONL: the `Stop` hook maps to `session_idle` and the `Notification`
-  hook maps to `session_needs_input`. Both providers funnel through the shared
-  `emit_session_signal` in `native/src/sessions/mod.rs`.
+  hook maps to `session_needs_input`.
+- OpenCode sessions are launched with a local server port. Nectus discovers the
+  matching session through `/session`, polls `/session/status` for idle
+  transitions, and treats `/tui/control/next` as a best-effort needs-input source
+  when that endpoint is available.
+- Codex, Claude, and OpenCode funnel through the shared `emit_session_signal` in
+  `native/src/sessions/mod.rs`.
 - Starting, resuming, stopping, marking done, or sending input clears the marker
   for that task.
 - Counts are shown as Mission Control summary pills and the icon-rail needs-input
@@ -328,9 +347,9 @@ Attention tracking is UI state derived from backend events.
   desktop — the notification plugin's desktop `show()` is fire-and-forget and its
   `onAction` listener is mobile-only — so the toast is the navigable surface.
   Events that cannot be matched to a loaded task fall back to a plain toast.
-- The toast's icon is the provider logo (Claude/Codex/Gemini, falling back to a
-  generic mark for custom agents) so you can tell at a glance which agent the
-  update is from. The body text is built by `formatNotificationBody`, which strips
+- The toast's icon is the provider logo (Claude/Codex/Gemini/OpenCode, falling
+  back to a generic mark for custom agents) so you can tell at a glance which
+  agent the update is from. The body text is built by `formatNotificationBody`, which strips
   the Markdown agents emit in their final messages (`**bold**`, `` `code` ``,
   `[text](url)`, bullets/headings) and truncates on a word boundary with a `…`,
   hard-cutting only a single very long token such as a bare URL. The same
@@ -347,7 +366,8 @@ Key files:
 - Event listener hook: `src/hooks/useSessionEvents.ts`
 - Codex event source (rollout JSONL): `native/src/sessions/codex.rs`
 - Claude event source (Claude Code hook bridge): `native/src/sessions/claude.rs`
-- Shared signal emission (Codex + Claude): `native/src/sessions/mod.rs`
+- OpenCode event source (local server status/control polling): `native/src/sessions/opencode.rs`
+- Shared signal emission (Codex + Claude + OpenCode): `native/src/sessions/mod.rs`
   (`emit_session_signal`)
 
 ## AI Review
@@ -385,10 +405,11 @@ Current behavior:
 - Manual review runs require a running worker session so blockers or
   feedback can be written back into that session.
 - Claude and Gemini reviewers are run in headless prompt mode with `-p` and the
-  generated review prompt. Codex reviewers run non-interactively with `codex exec`
-  and the prompt as a trailing positional argument; bare `codex` is the
-  interactive TUI and aborts with `stdin is not a terminal` when spawned without a
-  real terminal. Custom reviewers receive the prompt on stdin.
+  generated review prompt. Codex reviewers run non-interactively with `codex exec`,
+  and OpenCode reviewers run with `opencode run`; both receive the prompt as a
+  trailing positional argument. Bare `codex` is the interactive TUI and aborts
+  with `stdin is not a terminal` when spawned without a real terminal. Custom
+  reviewers receive the prompt on stdin.
 - Reviewer output is parsed as:
   - `pass` when a line is exactly `NECTUS_NO_BLOCKERS`, `PASS`, or starts with
     `PASS:`.
@@ -459,7 +480,8 @@ Current behavior:
   new commits and clears the prior verdict), and Delete.
 - Reviewer profiles are the same agent profiles used elsewhere; the default reviewer
   is the configured default agent profile. Claude and Gemini reviewers run with `-p`;
-  Codex reviewers run with `codex exec`; custom reviewers receive the prompt on stdin.
+  Codex reviewers run with `codex exec`, OpenCode reviewers run with `opencode run`,
+  and custom reviewers receive the prompt on stdin.
 
 **Consensus mode.** Selecting two or more reviewers (optionally setting a round
 count, 1–5, default 3) runs them as a consensus review:

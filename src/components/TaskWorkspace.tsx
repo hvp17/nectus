@@ -145,7 +145,7 @@ export function TaskWorkspace({
   const selectedReviewerProfile = reviewerProfiles.find((profile) => profile.id === reviewerProfileId);
   const reviewActive = Boolean(reviewLoop && isReviewLoopActive(reviewLoop.status));
   const reviewInProgress = reviewLoop?.status === "reviewing";
-  const canResumeSession = task.agentKind === "codex" || task.agentKind === "claude";
+  const canResumeSession = task.agentKind === "codex" || task.agentKind === "claude" || task.agentKind === "opencode";
   const sessionAgentLabel = task.lastSessionAgent ?? task.agentName ?? "None";
   const sessionId = task.activeSessionId ?? task.lastSessionId;
   const {

@@ -21,6 +21,7 @@ mod codex;
 #[cfg(test)]
 mod codex_tests;
 mod command;
+mod opencode;
 mod pr_consensus;
 mod pr_review;
 mod pr_verdict;
@@ -29,10 +30,11 @@ mod review_loop;
 mod reviewer;
 mod terminal_io;
 
-use agents::configure_agent_command;
+use agents::{configure_agent_command, sends_initial_prompt_in_args};
 use claude::{cleanup_event_sink, spawn_claude_event_watcher};
 use codex::{latest_codex_session_metadata, spawn_codex_event_watcher};
 use command::resolve_agent_command;
+use opencode::{latest_opencode_session_metadata_from_server, spawn_opencode_event_watcher};
 use pr_consensus::spawn_consensus_pr_review;
 use pr_review::spawn_pr_review;
 use review_loop::spawn_review_on_session_idle;
@@ -48,9 +50,9 @@ const ACTIVITY_THROTTLE: Duration = Duration::from_millis(300);
 const DEFAULT_PTY_ROWS: u16 = 28;
 const DEFAULT_PTY_COLS: u16 = 100;
 
-/// A turn-completion or input-request signal parsed from an agent's session log.
-/// Both the Claude and Codex watchers translate their agent-specific events into
-/// this shape so emission and review kick-off stay in one place.
+/// A turn-completion or input-request signal parsed from an agent-specific event
+/// source. Provider watchers translate their native events into this shape so
+/// emission and review kick-off stay in one place.
 enum SessionSignal {
     Idle {
         turn_id: Option<String>,
@@ -64,7 +66,7 @@ enum SessionSignal {
 }
 
 /// Emit the frontend event for a session signal and, on idle, spawn any pending
-/// review. Shared by the Claude and Codex watchers.
+/// review. Shared by provider-specific watchers.
 fn emit_session_signal(
     app: &AppHandle,
     db: &Arc<Mutex<Database>>,
@@ -200,6 +202,7 @@ struct RunningSession {
     last_activity_line: Option<String>,
     /// When that line was forwarded, for throttling.
     last_activity_at: Option<Instant>,
+    opencode_port: Option<u16>,
 }
 
 struct ReviewSessionTarget {
@@ -217,6 +220,13 @@ fn review_session_target<'a>(
             session_id: session.id.clone(),
             cwd: cwd.clone(),
         })
+}
+
+fn reserve_localhost_port() -> Result<u16, String> {
+    std::net::TcpListener::bind(("127.0.0.1", 0))
+        .and_then(|listener| listener.local_addr())
+        .map(|addr| addr.port())
+        .map_err(|error| format!("Failed to reserve OpenCode server port: {error}"))
 }
 
 impl SessionManager {
@@ -261,9 +271,26 @@ impl SessionManager {
         let session_id = resume_session_id
             .map(ToOwned::to_owned)
             .unwrap_or_else(|| Uuid::new_v4().to_string());
+        let initial_prompt = task
+            .prompt
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        let opencode_port = if agent.agent_kind == AgentKind::OpenCode {
+            Some(reserve_localhost_port()?)
+        } else {
+            None
+        };
         let executable = resolve_agent_command(&agent.command)?;
         let mut command = CommandBuilder::new(executable);
-        configure_agent_command(&mut command, &agent, &session_id, resume);
+        configure_agent_command(
+            &mut command,
+            &agent,
+            &session_id,
+            resume,
+            initial_prompt,
+            opencode_port,
+        );
         // Bundled apps launched from Finder inherit a minimal environment with no
         // TERM, so agents (Claude Code via Ink/supports-color) render monochrome.
         // Advertise the color-capable terminal xterm.js provides; a profile's own
@@ -309,13 +336,8 @@ impl SessionManager {
             }
         };
 
-        if !resume {
-            if let Some(prompt) = task
-                .prompt
-                .as_deref()
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-            {
+        if !resume && !sends_initial_prompt_in_args(agent.agent_kind) {
+            if let Some(prompt) = initial_prompt {
                 if let Err(error) = write_agent_submission(writer.as_mut(), prompt) {
                     reap(&mut child);
                     return Err(format!("Failed to send initial prompt: {error}"));
@@ -374,6 +396,7 @@ impl SessionManager {
                 cols: DEFAULT_PTY_COLS,
                 last_activity_line: None,
                 last_activity_at: None,
+                opencode_port,
             },
         );
 
@@ -396,6 +419,19 @@ impl SessionManager {
                 session_id.clone(),
                 cwd_path.clone(),
             );
+        } else if agent.agent_kind == AgentKind::OpenCode {
+            if let Some(port) = opencode_port {
+                spawn_opencode_event_watcher(
+                    app.clone(),
+                    db.clone(),
+                    self.sessions.clone(),
+                    task.id,
+                    session_id.clone(),
+                    cwd_path.clone(),
+                    port,
+                    !resume && initial_prompt.is_some(),
+                );
+            }
         }
 
         std::thread::spawn({
@@ -489,6 +525,27 @@ impl SessionManager {
                         }
                     } else if agent_kind == AgentKind::Claude {
                         cleanup_event_sink(&session_id);
+                    } else if agent_kind == AgentKind::OpenCode {
+                        if let Some(port) = running.opencode_port {
+                            if let Some(metadata) =
+                                latest_opencode_session_metadata_from_server(port, &cwd)
+                            {
+                                let _ = db
+                                    .lock()
+                                    .set_last_session(
+                                        task_id,
+                                        &metadata.id,
+                                        metadata.label.as_deref(),
+                                    )
+                                    .inspect_err(|error| {
+                                        tracing::warn!(
+                                            ?error,
+                                            task_id,
+                                            "failed to save latest OpenCode session"
+                                        )
+                                    });
+                            }
+                        }
                     }
                     let _ = db
                         .lock()
@@ -560,6 +617,20 @@ impl SessionManager {
             }
         } else if running.agent_kind == AgentKind::Claude {
             cleanup_event_sink(&session_id);
+        } else if running.agent_kind == AgentKind::OpenCode {
+            if let Some(port) = running.opencode_port {
+                if let Some(metadata) =
+                    latest_opencode_session_metadata_from_server(port, &running.cwd)
+                {
+                    db.lock().set_last_session(
+                        running.session.task_id,
+                        &metadata.id,
+                        metadata.label.as_deref(),
+                    )?;
+                    running.session.resumable_session_id = Some(metadata.id);
+                    running.session.resumable_session_label = metadata.label;
+                }
+            }
         }
         db.lock()
             .set_active_session(running.session.task_id, None)?;

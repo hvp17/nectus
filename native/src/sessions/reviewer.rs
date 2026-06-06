@@ -145,11 +145,14 @@ struct ReviewerCommandPlan {
 ///   `exec` must precede the model/profile flags. Bare `codex` launches the
 ///   interactive TUI, which aborts with "stdin is not a terminal" when spawned
 ///   without a real terminal.
+/// - OpenCode: the `run` subcommand with the prompt as a trailing positional arg.
 /// - Custom: the prompt is piped to stdin, since the command is arbitrary.
 fn build_reviewer_args(reviewer: &AgentProfile, prompt: &str) -> ReviewerCommandPlan {
     let mut args = Vec::new();
-    if reviewer.agent_kind == AgentKind::Codex {
-        args.push("exec".to_string());
+    match reviewer.agent_kind {
+        AgentKind::Codex => args.push("exec".to_string()),
+        AgentKind::OpenCode => args.push("run".to_string()),
+        AgentKind::Claude | AgentKind::Gemini | AgentKind::Custom => {}
     }
     if let Some(model) = reviewer
         .model
@@ -167,7 +170,7 @@ fn build_reviewer_args(reviewer: &AgentProfile, prompt: &str) -> ReviewerCommand
             args.push(prompt.to_string());
             false
         }
-        AgentKind::Codex => {
+        AgentKind::Codex | AgentKind::OpenCode => {
             args.push(prompt.to_string());
             false
         }
@@ -250,6 +253,28 @@ mod tests {
             vec!["-p".to_string(), "Review this".to_string()]
         );
         assert!(!gemini.pipe_prompt_to_stdin);
+    }
+
+    #[test]
+    fn opencode_reviewer_uses_run_subcommand_with_prompt_as_positional_arg() {
+        let mut profile = agent("OpenCode", AgentKind::OpenCode, "opencode");
+        profile.model = Some("anthropic/claude-sonnet-4-5-20250929".to_string());
+        profile.args = vec!["--agent".to_string(), "build".to_string()];
+
+        let plan = build_reviewer_args(&profile, "Review this");
+
+        assert_eq!(
+            plan.args,
+            vec![
+                "run".to_string(),
+                "--model".to_string(),
+                "anthropic/claude-sonnet-4-5-20250929".to_string(),
+                "--agent".to_string(),
+                "build".to_string(),
+                "Review this".to_string(),
+            ]
+        );
+        assert!(!plan.pipe_prompt_to_stdin);
     }
 
     #[test]
