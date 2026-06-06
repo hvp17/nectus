@@ -17,6 +17,7 @@ import type {
   AgentProfile,
   JiraProject,
   JiraStatus,
+  JiraTransition,
   JiraWorkItem,
   TaskSummary,
 } from "../types";
@@ -67,6 +68,9 @@ interface JiraBoardPageProps {
   agentProfiles?: AgentProfile[];
   selectedAgentProfileId?: number;
   site?: string | null;
+  /** REST token connected — enables legal-transition dropdowns. */
+  restConnected?: boolean;
+  onListTransitions?: (key: string) => Promise<JiraTransition[]>;
   onAssign?: (key: string, assignee: string) => void;
   onComment?: (key: string, body: string) => void;
   onPickAgent?: (profileId: number) => void;
@@ -96,6 +100,8 @@ export function JiraBoardPage({
   agentProfiles,
   selectedAgentProfileId,
   site,
+  restConnected,
+  onListTransitions,
   onAssign,
   onComment,
   onPickAgent,
@@ -130,6 +136,8 @@ export function JiraBoardPage({
         key={selectedItem.key}
         item={selectedItem}
         statusOptions={statusOptions}
+        restConnected={Boolean(restConnected)}
+        onListTransitions={onListTransitions ?? (async () => [])}
         site={site}
         agentProfiles={agentProfiles ?? []}
         selectedAgentProfileId={selectedAgentProfileId}

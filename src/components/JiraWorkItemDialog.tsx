@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ExternalLink, Play, X } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -15,11 +15,14 @@ import { Textarea } from "./ui/textarea";
 import { AgentLogo } from "./AgentBrand";
 import { JiraAvatar, JiraIssueTypeIcon } from "./jiraVisuals";
 import { jiraBrowseUrl } from "../lib/jira";
-import type { AgentProfile, JiraWorkItem } from "../types";
+import type { AgentProfile, JiraTransition, JiraWorkItem } from "../types";
 
 export interface JiraWorkItemPanelProps {
   item: JiraWorkItem;
   statusOptions: string[];
+  /** When a REST token is connected, the dropdown shows the issue's legal moves. */
+  restConnected: boolean;
+  onListTransitions: (key: string) => Promise<JiraTransition[]>;
   /** Connected JIRA site host, used to build the issue's browse URL. */
   site?: string | null;
   agentProfiles: AgentProfile[];
@@ -42,6 +45,8 @@ export interface JiraWorkItemPanelProps {
 export function JiraWorkItemPanel({
   item,
   statusOptions,
+  restConnected,
+  onListTransitions,
   site,
   agentProfiles,
   selectedAgentProfileId,
@@ -55,13 +60,38 @@ export function JiraWorkItemPanel({
 }: JiraWorkItemPanelProps) {
   const [assignee, setAssignee] = useState("");
   const [comment, setComment] = useState("");
+  const [restOptions, setRestOptions] = useState<string[] | null>(null);
   const browseUrl = jiraBrowseUrl(site, item.key);
 
-  // Ensure the current status is selectable even if it is not one of the derived
-  // board columns (e.g. a status with no other items).
-  const options = statusOptions.includes(item.statusName)
-    ? statusOptions
-    : [item.statusName, ...statusOptions];
+  // With a token connected, fetch the issue's legal transitions on open so the
+  // dropdown offers exactly the moves JIRA's (custom) workflow allows.
+  useEffect(() => {
+    if (!restConnected) {
+      setRestOptions(null);
+      return;
+    }
+    let alive = true;
+    setRestOptions(null);
+    onListTransitions(item.key)
+      .then((transitions) => {
+        if (alive) setRestOptions(transitions.map((transition) => transition.toStatusName));
+      })
+      .catch(() => {
+        if (alive) setRestOptions([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [restConnected, item.key, onListTransitions]);
+
+  // Connected: the issue's legal transitions plus its current status (so the Select
+  // always shows a value). Disconnected: the board-derived options, ensuring the
+  // current status is selectable even when no other item shares it.
+  const options = restConnected
+    ? Array.from(new Set([item.statusName, ...(restOptions ?? [])]))
+    : statusOptions.includes(item.statusName)
+      ? statusOptions
+      : [item.statusName, ...statusOptions];
 
   const launchAgentId = selectedAgentProfileId ?? agentProfiles[0]?.id;
   const launchAgent = agentProfiles.find((profile) => profile.id === launchAgentId);
