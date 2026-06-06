@@ -194,9 +194,9 @@ Important backend files:
 - `native/src/github.rs`: `gh` CLI integration — connection status plus pull request create/detect/status parsing (no OAuth, no stored tokens)
 - `native/src/jira.rs`: `acli` (Atlassian CLI) integration — connection status, project list, work-item search/view/transition/assign/comment with tolerant JSON parsing, and the structured-config JQL builder (`build_board_jql`, so the UI never types JQL); no OAuth, no stored tokens
 - `native/src/process_util.rs`: shared command helpers — binary resolution (`resolve_executable`), child `PATH` augmentation (`augmented_path`), the install-dir source of truth (`third_party_bin_dirs`), and `command_error` stderr formatting. See [Spawning External CLIs](#spawning-external-clis-macos-gui-path).
-- `native/src/sessions/`: PTY lifecycle, terminal event emission, Codex JSONL watching, agent command setup, and review-loop runtime
+- `native/src/sessions/`: PTY lifecycle, terminal event emission, Codex JSONL watching, Claude Code hook event bridge (`claude.rs`), agent command setup, and the task review-loop / external PR-review runtimes (`review_loop.rs`, `pr_review.rs`, `pr_consensus.rs`). The headless reviewer-CLI launcher shared by all three reviewing surfaces lives in `reviewer.rs`; the PTY submission helper in `terminal_io.rs`
 - `native/src/sessions/agents/`: provider-specific Codex, Claude, and Gemini command arguments and fallback locations
-- `native/src/models.rs`: shared serializable data types
+- `native/src/models/`: shared serializable data types, split by domain (`error`, `task`, `review`, `agent`, `github`, `jira`, `settings`, `session`) and re-exported flat from `mod.rs`, so every `crate::models::Foo` path still resolves
 
 Tauri commands exposed to the frontend include:
 
@@ -232,6 +232,7 @@ Tauri commands exposed to the frontend include:
 - `create_pr_review`
 - `list_pr_reviews`
 - `get_pr_review`
+- `list_pr_review_runs`
 - `rerun_pr_review`
 - `delete_pr_review`
 - `start_session`
@@ -245,7 +246,6 @@ Tauri commands exposed to the frontend include:
 Events emitted by Rust:
 
 - `session_output`
-- `session_meta`
 - `session_activity`
 - `session_exited`
 - `session_idle`
@@ -279,7 +279,7 @@ a profile's own PATH still wins. Current call sites:
 
 - agent PTY sessions — `native/src/sessions/mod.rs`
 - the reviewer launch shared by the task AI review loop and external PR reviews —
-  `native/src/sessions/review_loop.rs`
+  `native/src/sessions/reviewer.rs` (`run_reviewer_command`)
 - `gh` invocations resolve `gh` via `resolve_executable`; `gh` is a single static
   binary that spawns no node, so it needs resolution but not `augmented_path`
   (`native/src/github.rs`).
@@ -312,14 +312,15 @@ Important frontend files:
 - `src/api.ts`: typed Tauri command wrapper
 - `src/types.ts`: frontend data contracts matching Rust serde output
 - `src/components/`: icon rail, Mission Control, board, task workspace (workflow ribbon + facts rail), settings, GitHub panel, and the inline composer/side-panel UI (no modals/dialogs for create-task or JIRA work items)
-- `src/components/TaskWorkspace.tsx`: selected-task workspace; the stage has a `Terminal | Diff | Review` toggle, with the diff or the read-only reviewer terminal getting the full stage when active. A starting review auto-selects the Review tab; the facts-rail review card has a `Watch live`/`View output` button that opens it too
+- `src/components/TaskWorkspace.tsx`: selected-task workspace orchestrator — owns the derived workflow/review state and composes the stage and facts rail. The stage has a `Terminal | Diff | Review` toggle, with the diff or the read-only reviewer terminal getting the full stage when active. A starting review auto-selects the Review tab; the facts-rail review card has a `Watch live`/`View output` button that opens it too
+- `src/components/taskWorkspace/`: the workspace's presentation pieces — `TaskWorkspaceStage` (header, workflow ribbon, stage body), `TaskWorkspaceFactsRail` (inspector: metadata, GitHub/JIRA panels, review card, brief, delete), and the leaf helpers `ActionBar`, `TaskStatusBadges`, `TaskTerminalLauncher`
 - `src/components/TaskDiffView.tsx`: task diff view — changed-file list plus the lazy-loaded, line-colorized unified patch pane
 - `src/components/ReviewTerminalPane.tsx`: read-only xterm.js pane that renders a task reviewer's live stdout (and its last recorded output between runs); no input, session, or snapshot
 - `src/components/GitHubPanel.tsx`: task-inspector GitHub panel for connection state and pull request actions
-- `src/components/JiraBoardPage.tsx`: global JIRA board view — JQL config, auto-derived columns, drag-to-transition
+- `src/components/JiraBoardPage.tsx`: global JIRA board view — JQL config, auto-derived columns, drag-to-transition; composes `JiraBoardBody` (column grid + empty/loading states) and `JiraCard` (draggable story card + its linked Nectus tasks)
 - `src/components/JiraWorkItemDialog.tsx`: `JiraWorkItemPanel` — the de-modaled work-item side panel docked beside the board (transition/assign/comment + an agent-select "Create task & start" launch row)
 - `src/components/JiraPanel.tsx`: task-inspector panel for the linked JIRA story (display + detach)
-- `src/components/settings/`: settings subcomponents and profile-draft helpers
+- `src/components/settings/`: settings subcomponents (`ProfileEditor`, `GithubConnectionCard`, `SegmentedRadioGroup`, `SettingsOverviewItem`) and profile-draft helpers
 - `src/test/testUtils.tsx`: shared frontend test helpers for providers, pointer events, DOM rects, and async deferrals
 - `src/test/app*Tests.tsx`: focused App test groups registered by `src/App.test.tsx`
 - `src/styles.css`: Tailwind imports, theme tokens, and global base rules

@@ -152,7 +152,8 @@ src/                 React app, UI components, typed Tauri API wrapper
 src/components/settings/
                      Settings subcomponents and pure profile-draft helpers
 src/styles/          Focused CSS files for layout, settings, task board, detail,
-                     and forms
+                     forms, the task diff (diff.css), and the reimagined shell
+                     (redesign.css)
 src/test/            Shared Vitest and Testing Library helpers
 native/src/          Rust Tauri commands, database, git ops, session runtime
 native/src/sessions/agents/
@@ -180,7 +181,9 @@ Important frontend files:
 - `src/api.ts`: typed frontend wrapper around Tauri commands
 - `src/TerminalPane.tsx`: xterm.js lifecycle, PTY input/output, and dropped
   file-path insertion
-- `src/components/`: icon rail, Mission Control, board, task workspace, settings, and modal UI
+- `src/components/`: icon rail, Mission Control, board, task workspace (terminal/diff/review stage), settings, GitHub/JIRA panels, and the inline composer/side-panel UI
+- `src/components/TaskDiffView.tsx`: in-app task diff viewer (changed-file list + lazy unified patch)
+- `src/components/ReviewTerminalPane.tsx`: read-only xterm.js pane for a task reviewer's live output
 - `src/components/TaskDeleteDialog.tsx`: shared task deletion confirmation UI
 - `src/styles.css`: Tailwind imports, theme tokens, and global base rules
 - `src/styles/`: focused CSS files imported by `src/main.tsx`

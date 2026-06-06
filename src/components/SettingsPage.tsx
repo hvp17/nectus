@@ -1,16 +1,17 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { Bot, CheckCircle2, GitBranch, Github, Palette, Plus, Save, Terminal, XCircle } from "lucide-react";
+import { Bot, GitBranch, Github, Palette, Plus, Save, Terminal } from "lucide-react";
 import { AgentLogo } from "./AgentBrand";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "./ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
-import { Skeleton } from "./ui/skeleton";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import type { AgentProfile, AppSettings, AppSettingsInput, GithubStatus } from "../types";
 import { ProfileEditor } from "./settings/ProfileEditor";
+import { GithubConnectionCard } from "./settings/GithubConnectionCard";
+import { SegmentedRadioGroup } from "./settings/SegmentedRadioGroup";
+import { SettingsOverviewItem } from "./settings/SettingsOverviewItem";
 import {
   createProfileDraft,
   fallbackSettings,
@@ -327,116 +328,5 @@ export function SettingsPage({
         </div>
       </div>
     </section>
-  );
-}
-
-function GithubConnectionCard({ status }: { status?: GithubStatus }) {
-  if (!status) {
-    return (
-      <div className="nx-strip">
-        <span className="nx-strip-ic">
-          <Github />
-        </span>
-        <span className="nx-strip-copy">
-          <strong>GitHub CLI</strong>
-          <Skeleton className="mt-1 h-3 w-44" />
-        </span>
-        <span className="nx-strip-right">
-          <Skeleton className="h-6 w-24" />
-        </span>
-      </div>
-    );
-  }
-
-  const connected = Boolean(status.installed && status.authenticated);
-  const detail = !status.installed
-    ? "Install the gh CLI to open pull requests from Nectus."
-    : !status.authenticated
-      ? "Run gh auth login in your terminal to connect."
-      : `Connected as ${status.account ?? "your account"}.`;
-  const badgeLabel = connected ? "Connected" : status.installed ? "Not signed in" : "Not installed";
-
-  return (
-    <div className="nx-strip">
-      <span className="nx-strip-ic">
-        <Github />
-      </span>
-      <span className="nx-strip-copy">
-        <strong>GitHub CLI</strong>
-        <small>{detail}</small>
-      </span>
-      <span className="nx-strip-right">
-        <Badge variant={connected ? "success" : "outline"} className="gap-1.5" aria-label={`GitHub ${badgeLabel}`}>
-          {connected ? (
-            <CheckCircle2 size={13} className="text-status-success" />
-          ) : (
-            <XCircle size={13} className="text-muted-foreground" />
-          )}
-          {badgeLabel}
-        </Badge>
-      </span>
-    </div>
-  );
-}
-
-function SettingsOverviewItem({
-  icon,
-  label,
-  value,
-  mono,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <div className="nx-ov">
-      <span className="nx-ov-ic">{icon}</span>
-      <span>
-        <small>{label}</small>
-        <strong className={mono ? "mono" : undefined}>{value}</strong>
-      </span>
-    </div>
-  );
-}
-
-function SegmentedRadioGroup<T extends string>({
-  label,
-  name,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  name: string;
-  value: T;
-  options: [T, string][];
-  onChange: (value: T) => void;
-}) {
-  return (
-    <FieldSet>
-      <FieldLegend variant="label">{label}</FieldLegend>
-      <ToggleGroup
-        type="single"
-        value={value}
-        onValueChange={(nextValue) => {
-          if (nextValue) onChange(nextValue as T);
-        }}
-        variant="outline"
-        className="flex-wrap"
-      >
-        {options.map(([optionValue, optionLabel]) => (
-          <ToggleGroupItem
-            key={optionValue}
-            value={optionValue}
-            aria-label={`${name} ${optionLabel}`}
-            className="min-h-8 px-3"
-          >
-            {optionLabel}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
-    </FieldSet>
   );
 }

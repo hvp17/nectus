@@ -1,5 +1,5 @@
 use super::pr_review::{build_pr_review_prompt, parse_pr_review_output, PR_VERDICT_MARKER};
-use super::review_loop::run_reviewer_command;
+use super::reviewer::run_reviewer_command;
 use crate::db::Database;
 use crate::git_ops;
 use crate::github::{self, PrMeta};

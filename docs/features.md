@@ -253,6 +253,10 @@ Attention tracking is UI state derived from backend events.
 - Codex `session_needs_input` remains best-effort because several
   input-request event names are defined by Codex but are not persisted by
   default.
+- Claude sessions emit the same two markers through Claude Code hooks instead of
+  a rollout JSONL: the `Stop` hook maps to `session_idle` and the `Notification`
+  hook maps to `session_needs_input`. Both providers funnel through the shared
+  `emit_session_signal` in `native/src/sessions/mod.rs`.
 - Starting, resuming, stopping, marking done, or sending input clears the marker
   for that task.
 - Counts are shown as Mission Control summary pills and the icon-rail needs-input
@@ -273,7 +277,10 @@ Key files:
 - Task toast payload builders: `src/taskNotification.ts`
 - Clickable toast hook: `src/hooks/useTaskNotificationToast.ts`
 - Event listener hook: `src/hooks/useSessionEvents.ts`
-- Codex event source: `native/src/sessions/codex.rs`
+- Codex event source (rollout JSONL): `native/src/sessions/codex.rs`
+- Claude event source (Claude Code hook bridge): `native/src/sessions/claude.rs`
+- Shared signal emission (Codex + Claude): `native/src/sessions/mod.rs`
+  (`emit_session_signal`)
 
 ## AI Review
 
