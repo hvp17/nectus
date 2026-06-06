@@ -1,7 +1,7 @@
 use crate::models::{
     AgentKind, AgentProfile, AppSettings, DensityMode, PrReview, PrReviewMode, PrReviewReviewer,
     PrReviewRun, PrReviewStatus, PrReviewVerdict, Repo, ReviewLoop, ReviewLoopStatus, ReviewRun,
-    ReviewVerdict, TaskStatus, TaskSummary, ThemeMode,
+    ReviewVerdict, TaskStatus, TaskSummary, ThemeMode, Workspace,
 };
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ValueRef};
 use rusqlite::Row;
@@ -80,6 +80,19 @@ pub(super) fn task_from_row(row: &Row<'_>) -> rusqlite::Result<TaskSummary> {
         jira_issue_url: row.get(22)?,
         created_at: row.get(17)?,
         updated_at: row.get(18)?,
+    })
+}
+
+/// Maps a `workspaces` row. `repo_ids` is left empty here and populated by the
+/// caller with a follow-up query against `workspace_repos` (see `db/workspaces.rs`),
+/// mirroring how `pr_review_from_row` leaves `reviewers` for the caller.
+pub(super) fn workspace_from_row(row: &Row<'_>) -> rusqlite::Result<Workspace> {
+    Ok(Workspace {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        repo_ids: Vec::new(),
+        created_at: row.get(2)?,
+        updated_at: row.get(3)?,
     })
 }
 

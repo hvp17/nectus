@@ -1202,3 +1202,125 @@ fn deleting_a_repo_cascades_to_its_pr_reviews() {
 
     assert!(db.pr_review_by_id(review.id).unwrap().is_none());
 }
+
+/// Insert a minimal repo row directly (no git setup) so workspace membership
+/// tests can reference real repo ids without the cost of `add_repo_with_remote`.
+fn insert_workspace_test_repo(db: &Database, name: &str) -> i64 {
+    db.conn
+        .execute(
+            "INSERT INTO repos (name, path, default_worktree_root, created_at) VALUES (?1, ?2, ?3, '2020-01-01T00:00:00Z')",
+            rusqlite::params![name, format!("/tmp/{name}"), format!("/tmp/{name}-wt")],
+        )
+        .unwrap();
+    db.conn.last_insert_rowid()
+}
+
+#[test]
+fn creates_and_lists_workspaces_with_ordered_repos() {
+    let db = Database::open_in_memory().unwrap();
+    let alpha = insert_workspace_test_repo(&db, "alpha");
+    let beta = insert_workspace_test_repo(&db, "beta");
+    let gamma = insert_workspace_test_repo(&db, "gamma");
+
+    // Membership order is the order given, not a sort of repo ids.
+    let workspace = db
+        .create_workspace("Payments".to_string(), vec![gamma, alpha])
+        .unwrap();
+    assert_eq!(workspace.name, "Payments");
+    assert_eq!(workspace.repo_ids, vec![gamma, alpha]);
+
+    let all = db.list_workspaces().unwrap();
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].repo_ids, vec![gamma, alpha]);
+    let _ = beta;
+}
+
+#[test]
+fn update_workspace_replaces_members_and_reorders() {
+    let db = Database::open_in_memory().unwrap();
+    let alpha = insert_workspace_test_repo(&db, "alpha");
+    let beta = insert_workspace_test_repo(&db, "beta");
+    let gamma = insert_workspace_test_repo(&db, "gamma");
+    let workspace = db
+        .create_workspace("Stack".to_string(), vec![alpha, beta])
+        .unwrap();
+
+    let updated = db
+        .update_workspace(
+            workspace.id,
+            "Stack v2".to_string(),
+            vec![gamma, beta, alpha],
+        )
+        .unwrap();
+    assert_eq!(updated.name, "Stack v2");
+    assert_eq!(updated.repo_ids, vec![gamma, beta, alpha]);
+
+    // Membership is fully replaced — no stale rows from the previous set.
+    let member_count: i64 = db
+        .conn
+        .query_row(
+            "SELECT COUNT(*) FROM workspace_repos WHERE workspace_id = ?1",
+            [workspace.id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(member_count, 3);
+}
+
+#[test]
+fn create_workspace_drops_duplicate_repo_ids() {
+    let db = Database::open_in_memory().unwrap();
+    let alpha = insert_workspace_test_repo(&db, "alpha");
+    let beta = insert_workspace_test_repo(&db, "beta");
+
+    let workspace = db
+        .create_workspace("Dedup".to_string(), vec![alpha, beta, alpha])
+        .unwrap();
+    assert_eq!(workspace.repo_ids, vec![alpha, beta]);
+}
+
+#[test]
+fn deleting_a_workspace_cascades_membership() {
+    let db = Database::open_in_memory().unwrap();
+    let alpha = insert_workspace_test_repo(&db, "alpha");
+    let workspace = db
+        .create_workspace("Temp".to_string(), vec![alpha])
+        .unwrap();
+
+    db.delete_workspace(workspace.id).unwrap();
+
+    assert!(db.list_workspaces().unwrap().is_empty());
+    let member_count: i64 = db
+        .conn
+        .query_row(
+            "SELECT COUNT(*) FROM workspace_repos WHERE workspace_id = ?1",
+            [workspace.id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(member_count, 0);
+}
+
+#[test]
+fn deleting_a_member_repo_prunes_workspace_membership() {
+    let db = Database::open_in_memory().unwrap();
+    let alpha = insert_workspace_test_repo(&db, "alpha");
+    let beta = insert_workspace_test_repo(&db, "beta");
+    let workspace = db
+        .create_workspace("Pair".to_string(), vec![alpha, beta])
+        .unwrap();
+
+    db.conn
+        .execute("DELETE FROM repos WHERE id = ?1", [alpha])
+        .unwrap();
+
+    let reloaded = db.workspace_by_id(workspace.id).unwrap().unwrap();
+    assert_eq!(reloaded.repo_ids, vec![beta]);
+}
+
+#[test]
+fn rejects_a_blank_workspace_name() {
+    let db = Database::open_in_memory().unwrap();
+    let error = db.create_workspace("   ".to_string(), vec![]).unwrap_err();
+    assert!(error.contains("name"));
+}

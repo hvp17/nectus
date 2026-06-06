@@ -14,6 +14,7 @@ use crate::models::{
     GithubStatus, JiraProject, JiraRestStatus, JiraStatus, JiraStatusDef, JiraTransition,
     JiraWorkItem, PrReview, PrReviewMode, PrReviewRun, PullRequestInfo, Repo, ReviewLoop, ReviewRun,
     Session, SessionExitedEvent, SessionOutputSnapshot, TaskDiffSummary, TaskStatus, TaskSummary,
+    Workspace,
 };
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
@@ -196,6 +197,35 @@ async fn delete_task(
         db.lock().delete_task(task_id, force)
     })
     .await
+}
+
+#[tauri::command]
+fn list_workspaces(state: State<'_, AppState>) -> AppResult<Vec<Workspace>> {
+    app_result(state.db.lock().list_workspaces())
+}
+
+#[tauri::command]
+fn create_workspace(
+    name: String,
+    repo_ids: Vec<i64>,
+    state: State<'_, AppState>,
+) -> AppResult<Workspace> {
+    app_result(state.db.lock().create_workspace(name, repo_ids))
+}
+
+#[tauri::command]
+fn update_workspace(
+    id: i64,
+    name: String,
+    repo_ids: Vec<i64>,
+    state: State<'_, AppState>,
+) -> AppResult<Workspace> {
+    app_result(state.db.lock().update_workspace(id, name, repo_ids))
+}
+
+#[tauri::command]
+fn delete_workspace(id: i64, state: State<'_, AppState>) -> AppResult<()> {
+    app_result(state.db.lock().delete_workspace(id))
 }
 
 /// Report whether `gh` is installed, authenticated, and which account is active.
@@ -1004,6 +1034,10 @@ pub fn run() {
             list_tasks,
             update_task_metadata,
             delete_task,
+            list_workspaces,
+            create_workspace,
+            update_workspace,
+            delete_workspace,
             task_diff_summary,
             task_diff_file,
             github_status,

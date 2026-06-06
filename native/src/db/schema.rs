@@ -28,6 +28,26 @@ impl Database {
                   created_at TEXT NOT NULL
                 );
 
+                -- A workspace is a durable, named group of repos (VSCode-workspace
+                -- style). Membership lives in workspace_repos; a repo may belong to
+                -- more than one workspace. See docs/superpowers/specs for the design.
+                CREATE TABLE IF NOT EXISTS workspaces (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  name TEXT NOT NULL,
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS workspace_repos (
+                  workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                  repo_id INTEGER NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+                  position INTEGER NOT NULL,
+                  PRIMARY KEY (workspace_id, repo_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS workspace_repos_workspace_idx
+                ON workspace_repos(workspace_id, position);
+
                 CREATE TABLE IF NOT EXISTS agent_profiles (
                   id INTEGER PRIMARY KEY AUTOINCREMENT,
                   name TEXT NOT NULL UNIQUE,

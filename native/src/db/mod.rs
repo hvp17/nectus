@@ -21,6 +21,7 @@ mod schema;
 mod sessions;
 mod settings;
 mod tasks;
+mod workspaces;
 
 use rows::{repo_from_row, rows};
 
