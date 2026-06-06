@@ -14,12 +14,6 @@ pub enum AgentKind {
     Custom,
 }
 
-impl AgentKind {
-    pub fn as_str(&self) -> &'static str {
-        self.into()
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentProfile {

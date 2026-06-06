@@ -1,7 +1,7 @@
 use crate::models::{JiraProject, JiraStatus, JiraStatusCategory, JiraWorkItem};
-use crate::process_util::{command_error, resolve_executable};
+use crate::process_util::{command_error, run_cli};
 use serde::{Deserialize, Deserializer};
-use std::process::{Command, Output};
+use std::process::Output;
 
 /// Build the board JQL from the structured UI selections, so the user never types
 /// JQL. `project` is required; the flags add the usual board filters. Ordering by
@@ -381,19 +381,7 @@ pub fn parse_auth_site(text: &str) -> Option<String> {
 }
 
 fn run_acli(args: &[&str]) -> Result<Output, String> {
-    // Resolve `acli` against PATH + common install dirs (a GUI-launched macOS app
-    // gets a minimal PATH). Like `gh`, `acli` is a single binary that spawns no
-    // node, so it needs resolution but not `augmented_path`.
-    Command::new(resolve_executable("acli"))
-        .args(args)
-        .output()
-        .map_err(|error| {
-            if error.kind() == std::io::ErrorKind::NotFound {
-                "Atlassian CLI (acli) is not installed".to_string()
-            } else {
-                format!("Failed to run acli: {error}")
-            }
-        })
+    run_cli("acli", None, "Atlassian CLI (acli) is not installed", args)
 }
 
 /// Report whether `acli` is installed, authenticated, and the active site.

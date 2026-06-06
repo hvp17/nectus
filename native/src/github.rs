@@ -2,7 +2,7 @@ use crate::models::{
     GithubCheckState, GithubCheckSummary, GithubStatus, PullRequestInfo, PullRequestReviewDecision,
     PullRequestState,
 };
-use crate::process_util::{command_error, resolve_executable};
+use crate::process_util::{command_error, run_cli};
 use serde::Deserialize;
 use std::path::Path;
 use std::process::{Command, Output};
@@ -250,19 +250,7 @@ fn parse_pull_request_meta(json: &str) -> Result<PrMeta, String> {
 }
 
 fn run_gh(current_dir: Option<&Path>, args: &[&str]) -> Result<Output, String> {
-    // Resolve `gh` against PATH and the common install locations: a built app
-    // launched from Finder inherits only a minimal PATH that excludes Homebrew.
-    let mut command = Command::new(resolve_executable("gh"));
-    if let Some(dir) = current_dir {
-        command.current_dir(dir);
-    }
-    command.args(args).output().map_err(|error| {
-        if error.kind() == std::io::ErrorKind::NotFound {
-            "GitHub CLI (gh) is not installed".to_string()
-        } else {
-            format!("Failed to run gh: {error}")
-        }
-    })
+    run_cli("gh", current_dir, "GitHub CLI (gh) is not installed", args)
 }
 
 /// Report whether `gh` is installed, authenticated, and which account is active.

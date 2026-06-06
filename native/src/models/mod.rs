@@ -19,3 +19,31 @@ pub use review::*;
 pub use session::*;
 pub use settings::*;
 pub use task::*;
+
+/// Generate the `as_str(&self) -> &'static str` shim that every string-backed enum
+/// here would otherwise hand-write identically. Each enum derives strum's
+/// `IntoStaticStr`, so `self.into()` yields its `serialize_all` rename — keeping
+/// the SQL-param representation in one place.
+macro_rules! enum_as_str {
+    ($($ty:ty),+ $(,)?) => {
+        $(
+            impl $ty {
+                pub fn as_str(&self) -> &'static str {
+                    self.into()
+                }
+            }
+        )+
+    };
+}
+
+enum_as_str!(
+    AgentKind,
+    TaskStatus,
+    ThemeMode,
+    DensityMode,
+    ReviewLoopStatus,
+    ReviewVerdict,
+    PrReviewStatus,
+    PrReviewVerdict,
+    PrReviewMode,
+);

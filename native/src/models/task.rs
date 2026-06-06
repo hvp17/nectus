@@ -24,12 +24,6 @@ pub enum TaskStatus {
     Done,
 }
 
-impl TaskStatus {
-    pub fn as_str(&self) -> &'static str {
-        self.into()
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskSummary {

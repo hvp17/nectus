@@ -15,12 +15,6 @@ pub enum ReviewLoopStatus {
     Stopped,
 }
 
-impl ReviewLoopStatus {
-    pub fn as_str(&self) -> &'static str {
-        self.into()
-    }
-}
-
 #[derive(
     Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Display, EnumString, IntoStaticStr,
 )]
@@ -31,12 +25,6 @@ pub enum ReviewVerdict {
     NeedsChanges,
     Feedback,
     Unknown,
-}
-
-impl ReviewVerdict {
-    pub fn as_str(&self) -> &'static str {
-        self.into()
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -108,12 +96,6 @@ pub enum PrReviewStatus {
     Error,
 }
 
-impl PrReviewStatus {
-    pub fn as_str(&self) -> &'static str {
-        self.into()
-    }
-}
-
 /// The conclusion of a completed PR review, parsed from the reviewer's
 /// machine-readable verdict marker. Only set once a review reaches `Ready`;
 /// `Inconclusive` covers reviews that finished without emitting a recognizable
@@ -129,12 +111,6 @@ pub enum PrReviewVerdict {
     Inconclusive,
 }
 
-impl PrReviewVerdict {
-    pub fn as_str(&self) -> &'static str {
-        self.into()
-    }
-}
-
 /// How a PR review is run: a single reviewer (the original behavior) or a
 /// multi-model consensus where several reviewers review in parallel, share each
 /// other's reviews, iterate, and a final synthesis pass merges the result.
@@ -146,12 +122,6 @@ impl PrReviewVerdict {
 pub enum PrReviewMode {
     Single,
     Consensus,
-}
-
-impl PrReviewMode {
-    pub fn as_str(&self) -> &'static str {
-        self.into()
-    }
 }
 
 /// A review of an external GitHub pull request, resolved against a known local
