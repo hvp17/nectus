@@ -201,6 +201,35 @@ pub fn perform_transition(
     }
 }
 
+/// Id of the legal transition whose target status matches `status_name`
+/// (case-insensitive). Pure, so the matching is unit-tested against the fixtures.
+fn transition_id_for_status<'a>(
+    transitions: &'a [JiraTransition],
+    status_name: &str,
+) -> Option<&'a str> {
+    transitions
+        .iter()
+        .find(|transition| transition.to_status_name.eq_ignore_ascii_case(status_name))
+        .map(|transition| transition.id.as_str())
+}
+
+/// Resolve `status_name` to a legal transition for `key` and perform it. Returns
+/// an error when no legal transition matches the target status. Keeps the
+/// REST-side list→match→perform algorithm out of the command layer (`lib.rs`),
+/// which only owns the decision to fall back to acli.
+pub fn transition_to_status(
+    site: &str,
+    email: &str,
+    token: &str,
+    key: &str,
+    status_name: &str,
+) -> Result<(), String> {
+    let transitions = list_transitions(site, email, token, key)?;
+    let transition_id = transition_id_for_status(&transitions, status_name)
+        .ok_or_else(|| format!("No legal transition to \"{status_name}\" from the current status"))?;
+    perform_transition(site, email, token, key, transition_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,6 +257,18 @@ mod tests {
         // "Triage" has no statusCategory; falls back to name-based -> Unknown.
         assert_eq!(items[3].category, JiraStatusCategory::Unknown);
         assert_eq!(items[0].category, JiraStatusCategory::ToDo);
+    }
+
+    #[test]
+    fn finds_transition_id_for_status_case_insensitively() {
+        let transitions = parse_transitions(include_str!("jira_fixtures/transitions.json")).unwrap();
+
+        assert_eq!(
+            transition_id_for_status(&transitions, "in progress"),
+            Some("21")
+        );
+        assert_eq!(transition_id_for_status(&transitions, "Done"), Some("31"));
+        assert_eq!(transition_id_for_status(&transitions, "Nonexistent"), None);
     }
 
     #[test]

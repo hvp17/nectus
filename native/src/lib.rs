@@ -422,14 +422,7 @@ async fn jira_transition_work_item(
     if let Ok((site, email, token)) = rest_credentials(&state) {
         let (k, s) = (key.clone(), status.clone());
         let rest_result = tauri::async_runtime::spawn_blocking(move || {
-            let transitions = jira_rest::list_transitions(&site, &email, &token, &k)?;
-            let target = transitions
-                .iter()
-                .find(|t| t.to_status_name.eq_ignore_ascii_case(&s))
-                .ok_or_else(|| {
-                    format!("No legal transition to \"{s}\" from the current status")
-                })?;
-            jira_rest::perform_transition(&site, &email, &token, &k, &target.id)
+            jira_rest::transition_to_status(&site, &email, &token, &k, &s)
         })
         .await;
         // Fold a task panic (JoinError) into the same fall-through as an inner
