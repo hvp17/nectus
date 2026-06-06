@@ -21,6 +21,7 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: listenMock }));
 const baseTask: TaskSummary = {
   id: 7,
   repoId: 1,
+  taskRepos: [],
   title: "Stream agent activity",
   prompt: null,
   status: "in_progress",

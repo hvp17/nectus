@@ -20,6 +20,7 @@ import {
   seedTaskDiffFile,
   seedTaskDiffSummary,
   seedTasks,
+  seedWorkspaces,
 } from "./lib/browserSeed";
 import type {
   AgentProfile,
@@ -43,6 +44,7 @@ import type {
   TaskDiffSummary,
   TaskStatus,
   TaskSummary,
+  Workspace,
 } from "./types";
 
 const isTauri = "__TAURI_INTERNALS__" in window;
@@ -136,6 +138,37 @@ export const api = {
   // refuses (preserving user work) when it is false.
   async deleteTask(taskId: number, force = false): Promise<void> {
     return invoke("delete_task", { taskId, force });
+  },
+  async createCrossRepoTask(input: {
+    workspaceId?: number | null;
+    repoIds: number[];
+    title: string;
+    prompt?: string | null;
+    agentProfileId?: number | null;
+    branchName?: string | null;
+  }): Promise<TaskSummary> {
+    return invoke("create_cross_repo_task", {
+      workspaceId: input.workspaceId ?? null,
+      repoIds: input.repoIds,
+      title: input.title,
+      prompt: input.prompt ?? null,
+      agentProfileId: input.agentProfileId ?? null,
+      branchName: input.branchName ?? null,
+    });
+  },
+  async listWorkspaces(): Promise<Workspace[]> {
+    if (isBrowserPreview) return seedWorkspaces;
+    if (!isTauri) return [];
+    return invoke("list_workspaces");
+  },
+  async createWorkspace(name: string, repoIds: number[]): Promise<Workspace> {
+    return invoke("create_workspace", { name, repoIds });
+  },
+  async updateWorkspace(id: number, name: string, repoIds: number[]): Promise<Workspace> {
+    return invoke("update_workspace", { id, name, repoIds });
+  },
+  async deleteWorkspace(id: number): Promise<void> {
+    return invoke("delete_workspace", { id });
   },
   async taskDiffSummary(taskId: number): Promise<TaskDiffSummary> {
     if (isBrowserPreview) return seedTaskDiffSummary(taskId);

@@ -79,6 +79,9 @@ export function TaskWorkspaceFactsRail({
   onDeleteTask,
   onWatchReview,
 }: TaskWorkspaceFactsRailProps) {
+  // A cross-repo task spans several repos; show the full set instead of the single
+  // primary branch/worktree rows.
+  const crossRepo = task.taskRepos.length > 1;
   return (
     <aside
       className="flex min-w-0 flex-col overflow-hidden border-l bg-[color-mix(in_srgb,var(--card)_74%,var(--background))]"
@@ -137,7 +140,7 @@ export function TaskWorkspaceFactsRail({
             <Badge variant="outline">{task.hasWorktree ? "Worktree" : "Task only"}</Badge>
           </div>
 
-          {task.hasWorktree && task.branchName && (
+          {!crossRepo && task.hasWorktree && task.branchName && (
             <div className="flex items-center justify-between gap-2.5 text-xs">
               <span className="text-muted-foreground">Branch</span>
               <span className="flex min-w-0 items-center gap-1.5 font-mono text-[11.5px]" title={task.branchName}>
@@ -147,7 +150,7 @@ export function TaskWorkspaceFactsRail({
             </div>
           )}
 
-          {task.hasWorktree && task.worktreePath && (
+          {!crossRepo && task.hasWorktree && task.worktreePath && (
             <div className="flex items-center justify-between gap-2.5 text-xs">
               <span className="shrink-0 text-muted-foreground">Worktree</span>
               <span className="truncate font-mono text-[11.5px] text-muted-foreground" title={task.worktreePath}>
@@ -156,6 +159,39 @@ export function TaskWorkspaceFactsRail({
             </div>
           )}
         </section>
+
+        {crossRepo && (
+          <section className="flex flex-col gap-2 border-b px-4 py-3.5" aria-label="Task repositories">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-muted-foreground">
+              Repositories
+            </p>
+            {task.taskRepos.map((taskRepo, index) => (
+              <div key={taskRepo.repoId} className="flex items-center justify-between gap-2.5 text-xs">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <GitBranch className="size-3 shrink-0 opacity-70" aria-hidden="true" />
+                  <span className="truncate font-medium">{taskRepo.repoName}</span>
+                  {index === 0 && (
+                    <Badge variant="secondary" className="text-[10px]">
+                      primary
+                    </Badge>
+                  )}
+                </span>
+                <span
+                  className="flex min-w-0 items-center gap-1.5 font-mono text-[11px] text-muted-foreground"
+                  title={taskRepo.worktreePath ?? undefined}
+                >
+                  {taskRepo.isDirty && (
+                    <span
+                      className="size-1.5 shrink-0 rounded-full bg-[var(--status-warning)]"
+                      aria-label="Uncommitted changes"
+                    />
+                  )}
+                  <span className="truncate">{taskRepo.branchName ?? "—"}</span>
+                </span>
+              </div>
+            ))}
+          </section>
+        )}
 
         <div className="border-b px-4 py-3.5">
           <GitHubPanel

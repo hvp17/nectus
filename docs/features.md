@@ -45,6 +45,62 @@ folder with git before saving it.
 Adding the same project path again updates the existing row instead of creating
 a duplicate.
 
+## Workspaces
+
+A workspace is a durable, named group of repos (VSCode-workspace style) for when
+you work across several projects at once. The active workspace acts as a
+**repo-scope filter**: Mission Control and the board's project rail narrow to just
+that workspace's repos. "All repos" (the default) clears the filter, so nothing
+changes for users who don't define a workspace. A repo can belong to more than
+one workspace.
+
+- The workspace switcher (a pill group plus a Manage button) appears in the
+  Mission Control header and the board's project rail; both drive one shared
+  active selection.
+- The workspace manager is a de-modaled inline composer (matching New Task) to
+  create, rename, re-scope, and delete workspaces with a per-repo checklist.
+- Selection is in-memory (not persisted across launches); the workspaces and
+  their membership are persisted.
+
+Key files:
+
+- Switcher: `src/components/WorkspaceSwitcher.tsx`
+- Manager: `src/components/WorkspaceManager.tsx`
+- State, scope filter, and CRUD: `src/hooks/useApp.ts`
+- Backend commands: `list_workspaces`, `create_workspace`, `update_workspace`,
+  `delete_workspace`
+- Persistence: `workspaces` + `workspace_repos` tables (`native/src/db/schema.rs`,
+  `native/src/db/workspaces.rs`)
+
+### Cross-repo tasks
+
+A task created while a workspace is active can span **several of the workspace's
+repos**, driven by a single agent. In the New Task composer the Project dropdown
+becomes a **Repositories checklist** (the workspace's repos, all pre-selected); the
+first selected repo is the primary. Picking two or more creates a cross-repo task.
+
+- Each repo gets its own worktree on a **shared branch**, laid out as siblings under
+  one parent: `<…/.nectus/worktrees>/workspaces/<branch>/<repoName>` (sibling
+  folders are disambiguated by id when two repos share a directory name).
+- A **single agent session** runs in the primary repo's worktree; the other repos
+  are reachable as siblings at `../<repoName>`. The task prompt is prefixed with this
+  layout so the agent has cross-repo context. Each repo keeps its own branch.
+- The task inspector lists every repo (branch + dirty indicator, primary marked).
+  Deleting the task removes **all** its worktrees; with uncommitted work in any of
+  them the delete is refused until confirmed (then force-removes all).
+- Per-repo state lives in the `task_repos` table; a single-repo task is the N=1 case
+  (one row mirroring the task). `tasks.repo_id` is the primary repo.
+
+Current scope: the Diff tab and GitHub PR panel operate on the **primary** repo's
+worktree for a cross-repo task. Per-repo diffs and per-repo PRs are a planned
+follow-up; see `docs/superpowers/specs/2026-06-06-multi-repo-workspaces-design.md`.
+
+Key files: `create_cross_repo_task` (`native/src/db/tasks.rs`, command in
+`native/src/lib.rs`), the `task_repos` table (`native/src/db/schema.rs`), the
+composer's multi-repo mode (`src/components/CreateTaskModal.tsx`), the create flow
+(`src/hooks/useApp.ts`), and the inspector repo list
+(`src/components/taskWorkspace/TaskWorkspaceFactsRail.tsx`).
+
 ## Tasks
 
 Task is the primary work item. A task can be direct-edit or worktree-backed.

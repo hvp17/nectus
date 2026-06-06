@@ -242,6 +242,7 @@ mod tests {
         TaskSummary {
             id: 7,
             repo_id: 3,
+            workspace_id: None,
             title: "Implement settings panel".to_string(),
             prompt: Some("Add project settings with tests".to_string()),
             status: TaskStatus::InProgress,
@@ -262,6 +263,7 @@ mod tests {
             jira_issue_key: None,
             jira_issue_summary: None,
             jira_issue_url: None,
+            task_repos: Vec::new(),
             created_at: "now".to_string(),
             updated_at: "now".to_string(),
         }

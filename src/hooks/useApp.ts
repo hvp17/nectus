@@ -30,12 +30,17 @@ import type {
   ReviewLoop,
   TaskStatus,
   TaskSummary,
+  Workspace,
 } from "../types";
 
 const CREATE_PULL_REQUEST_PROMPT = `Create a pull request for this task. Use the current project/worktree branch. Before opening the PR, verify the work as appropriate for this repo, commit relevant changes with a Conventional Commit if needed, push the branch, create the PR against the remote default branch, and report the PR URL here.`;
 
 export function useApp() {
   const [repos, setRepos] = useState<Repo[]>([]);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<number | undefined>();
+  // Repos chosen for a cross-repo task in the composer (Increment B). Primary first.
+  const [newTaskRepoIds, setNewTaskRepoIds] = useState<number[]>([]);
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [settings, setSettings] = useState<AppSettings | undefined>();
@@ -85,12 +90,17 @@ export function useApp() {
 
   const selectedRepoIdRef = useRef<number | undefined>(undefined);
   const selectedAgentProfileIdRef = useRef<number | undefined>(undefined);
+  const activeWorkspaceIdRef = useRef<number | undefined>(undefined);
   const tasksRef = useRef<TaskSummary[]>([]);
   const deletingTaskIdsRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     selectedRepoIdRef.current = selectedRepoId;
   }, [selectedRepoId]);
+
+  useEffect(() => {
+    activeWorkspaceIdRef.current = activeWorkspaceId;
+  }, [activeWorkspaceId]);
 
   useEffect(() => {
     selectedAgentProfileIdRef.current = selectedAgentProfileId;
@@ -112,9 +122,47 @@ export function useApp() {
   }, []);
 
   const selectedRepo = useMemo(() => repos.find((repo) => repo.id === selectedRepoId), [repos, selectedRepoId]);
+
+  // The active workspace acts as a repo-scope filter (Increment A). When none is
+  // active, behavior is unchanged (all repos). `undefined` means "All repos".
+  const activeWorkspace = useMemo(
+    () => workspaces.find((workspace) => workspace.id === activeWorkspaceId),
+    [workspaces, activeWorkspaceId],
+  );
+  const workspaceRepoIds = useMemo(
+    () => (activeWorkspace ? new Set(activeWorkspace.repoIds) : undefined),
+    [activeWorkspace],
+  );
+  // The repo list the rail/board shows, narrowed to the active workspace.
+  const scopedRepos = useMemo(
+    () => (workspaceRepoIds ? repos.filter((repo) => workspaceRepoIds.has(repo.id)) : repos),
+    [repos, workspaceRepoIds],
+  );
+  // The active workspace's repos, offered as a multi-select in the composer so a
+  // task can span several of them (cross-repo). Empty when no workspace is active.
+  const activeWorkspaceRepos = useMemo(
+    () => (activeWorkspace ? scopedRepos : []),
+    [activeWorkspace, scopedRepos],
+  );
+  // Cross-project (Mission Control) tasks, narrowed to the active workspace.
+  const missionTasks = useMemo(
+    () => (workspaceRepoIds ? tasks.filter((task) => workspaceRepoIds.has(task.repoId)) : tasks),
+    [tasks, workspaceRepoIds],
+  );
+
+  // Keep the board's selected repo inside the active workspace, so switching
+  // workspace can't leave a now-out-of-scope project selected.
+  useEffect(() => {
+    if (!workspaceRepoIds || (selectedRepoId && workspaceRepoIds.has(selectedRepoId))) return;
+    const nextRepoId = scopedRepos[0]?.id;
+    selectedRepoIdRef.current = nextRepoId;
+    setSelectedRepoId(nextRepoId);
+  }, [workspaceRepoIds, selectedRepoId, scopedRepos]);
+
   const visibleTasks = useMemo(() => {
-    return selectedRepoId ? tasks.filter((task) => task.repoId === selectedRepoId) : tasks;
-  }, [tasks, selectedRepoId]);
+    const scoped = workspaceRepoIds ? tasks.filter((task) => workspaceRepoIds.has(task.repoId)) : tasks;
+    return selectedRepoId ? scoped.filter((task) => task.repoId === selectedRepoId) : scoped;
+  }, [tasks, selectedRepoId, workspaceRepoIds]);
   const selectedTask = useMemo(() => tasks.find((task) => task.id === selectedTaskId), [tasks, selectedTaskId]);
 
   const counts = useMemo(() => {
@@ -131,14 +179,26 @@ export function useApp() {
   const refresh = useCallback(async (preferredRepoId?: number) => {
     setLoading(true);
     try {
-      const [repoResult, profileResult, settingsResult] = await Promise.all([
+      const [repoResult, workspaceResult, profileResult, settingsResult] = await Promise.all([
         api.listRepos(),
+        api.listWorkspaces(),
         api.listAgentProfiles(),
         api.getAppSettings(),
       ]);
       setRepos(repoResult);
+      setWorkspaces(workspaceResult);
       setAgentProfiles(profileResult);
       setSettings(settingsResult);
+
+      // Drop the active-workspace filter if that workspace was deleted elsewhere,
+      // so the rail/Mission Control don't filter against a phantom id.
+      if (
+        activeWorkspaceIdRef.current &&
+        !workspaceResult.some((workspace) => workspace.id === activeWorkspaceIdRef.current)
+      ) {
+        activeWorkspaceIdRef.current = undefined;
+        setActiveWorkspaceId(undefined);
+      }
 
       const nextAgentProfileId =
         selectedAgentProfileIdRef.current ?? settingsResult.defaultAgentProfileId ?? profileResult[0]?.id;
@@ -327,6 +387,68 @@ export function useApp() {
     );
 
   const createTask = async () => {
+    // Workspace composer (Increment B): a workspace with ≥2 repos is active, so the
+    // composer offered a repo checklist. The checklist is the source of truth, and
+    // this gate keys on the SAME signal as the UI's cross-repo mode
+    // (activeWorkspaceRepos.length >= 2) so they can't diverge. Routes by how many
+    // repos were picked: ≥2 → cross-repo; exactly 1 → a single worktree task on
+    // that repo (never the board-selected one).
+    if (activeWorkspaceRepos.length >= 2 && newTaskRepoIds.length >= 1) {
+      if (!newTaskAgentProfileId) {
+        setMessage("Select an agent before creating a task.");
+        return;
+      }
+      const agentProfileId = newTaskAgentProfileId;
+      const repoIds = newTaskRepoIds;
+      await run(
+        async () => {
+          const branchName = resolveWorktreeBranchName(
+            newTaskBranchName,
+            settings?.defaultBranchPrefix,
+          );
+          const task =
+            repoIds.length >= 2
+              ? await api.createCrossRepoTask({
+                  workspaceId: activeWorkspaceId,
+                  repoIds,
+                  title: getGeneratedTaskTitle(),
+                  prompt: newTaskPrompt.trim() || null,
+                  agentProfileId,
+                  branchName,
+                })
+              : await api.createTask({
+                  repoId: repoIds[0],
+                  title: getGeneratedTaskTitle(),
+                  prompt: newTaskPrompt.trim() || null,
+                  agentProfileId,
+                  hasWorktree: true,
+                  branchName,
+                });
+          resetCreateTaskForm();
+          setNewTaskRepoIds([]);
+          setCreateTaskOpen(false);
+          setSelectedRepoId(repoIds[0]);
+          setSelectedTaskId(task.id);
+          let startError: string | null = null;
+          try {
+            await api.startSession(task.id, agentProfileId);
+          } catch (error) {
+            startError = String(error);
+          }
+          await refresh(repoIds[0]);
+          if (startError) {
+            setMessage(`Created ${task.title}, but failed to start session: ${startError}`);
+          } else if (repoIds.length >= 2) {
+            setMessage(`Created ${task.branchName} across ${repoIds.length} repos`);
+          } else {
+            setMessage(`Created ${task.branchName}`);
+          }
+        },
+        { busy: true },
+      );
+      return;
+    }
+
     const repoId = newTaskRepoId ?? selectedRepoId;
     if (!repoId) {
       setMessage("Choose a project before creating a task.");
@@ -355,6 +477,7 @@ export function useApp() {
           jiraIssueUrl: jiraLink?.url ?? null,
         });
         resetCreateTaskForm();
+        setNewTaskRepoIds([]);
         setCreateTaskOpen(false);
         setSelectedRepoId(repoId);
         setSelectedTaskId(task.id);
@@ -464,8 +587,58 @@ export function useApp() {
       { busy: true, rethrow: true },
     );
 
+  const createWorkspace = (name: string, repoIds: number[]) =>
+    run(
+      async () => {
+        const workspace = await api.createWorkspace(name, repoIds);
+        await refresh(selectedRepoIdRef.current);
+        setActiveWorkspaceId(workspace.id);
+        activeWorkspaceIdRef.current = workspace.id;
+        setMessage(`Workspace: Created ${workspace.name}`);
+        return workspace;
+      },
+      { busy: true, rethrow: true },
+    );
+
+  const updateWorkspace = (id: number, name: string, repoIds: number[]) =>
+    run(
+      async () => {
+        const workspace = await api.updateWorkspace(id, name, repoIds);
+        await refresh(selectedRepoIdRef.current);
+        setMessage(`Workspace: Saved ${workspace.name}`);
+        return workspace;
+      },
+      { busy: true, rethrow: true },
+    );
+
+  const deleteWorkspace = (id: number) =>
+    run(
+      async () => {
+        await api.deleteWorkspace(id);
+        if (activeWorkspaceIdRef.current === id) {
+          activeWorkspaceIdRef.current = undefined;
+          setActiveWorkspaceId(undefined);
+        }
+        await refresh(selectedRepoIdRef.current);
+        setMessage("Workspace: Deleted");
+      },
+      { busy: true, rethrow: true },
+    );
+
   return {
     repos,
+    workspaces,
+    activeWorkspaceId,
+    setActiveWorkspaceId,
+    activeWorkspace,
+    activeWorkspaceRepos,
+    scopedRepos,
+    missionTasks,
+    newTaskRepoIds,
+    setNewTaskRepoIds,
+    createWorkspace,
+    updateWorkspace,
+    deleteWorkspace,
     tasks,
     agentProfiles,
     settings,

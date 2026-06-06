@@ -6,6 +6,7 @@ function task(overrides: Partial<TaskSummary>): TaskSummary {
   return {
     id: 1,
     repoId: 1,
+    taskRepos: [],
     title: "A task",
     prompt: null,
     status: "in_progress",

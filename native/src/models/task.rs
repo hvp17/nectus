@@ -24,11 +24,29 @@ pub enum TaskStatus {
     Done,
 }
 
+/// One repo's working state within a task (Increment B). A task spans 1..N repos;
+/// `TaskSummary.task_repos` carries the full set in `position` order. For a
+/// single-repo task there is exactly one, mirroring the task's own fields.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskRepo {
+    pub repo_id: i64,
+    pub repo_name: String,
+    pub branch_name: Option<String>,
+    pub worktree_path: Option<String>,
+    pub pr_url: Option<String>,
+    pub is_dirty: bool,
+    pub position: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskSummary {
     pub id: i64,
     pub repo_id: i64,
+    /// The workspace this task was created in, if any (Increment B). The set of
+    /// repos a task spans lives in `task_repos`.
+    pub workspace_id: Option<i64>,
     pub title: String,
     pub prompt: Option<String>,
     pub status: TaskStatus,
@@ -49,6 +67,10 @@ pub struct TaskSummary {
     pub jira_issue_key: Option<String>,
     pub jira_issue_summary: Option<String>,
     pub jira_issue_url: Option<String>,
+    /// Every repo this task spans, in display order (Increment B). Always at least
+    /// one (the primary repo). Cross-repo tasks (`len > 1`) run one agent across
+    /// sibling worktrees.
+    pub task_repos: Vec<TaskRepo>,
     pub created_at: String,
     pub updated_at: String,
 }

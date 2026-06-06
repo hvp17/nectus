@@ -10,6 +10,7 @@ import type { SessionIdleEvent, SessionNeedsInputEvent, TaskSummary } from "./ty
 const task: TaskSummary = {
   id: 21,
   repoId: 7,
+  taskRepos: [],
   title: "Wire task attention",
   status: "in_progress",
   prUrl: null,

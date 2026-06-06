@@ -11,6 +11,10 @@ git, SQLite, and PTY work lives in the Rust backend.
 ## Features
 
 - Add existing local git repositories as Projects.
+- Group projects into named Workspaces (VSCode-workspace style) and filter Mission
+  Control and the project rail to the repos you're focused on.
+- Create cross-repo Tasks that span several of a workspace's repos: one agent runs
+  across sibling worktrees (one per repo, each on its own branch).
 - Create Tasks against a project in direct-edit mode or with a new git worktree;
   blank worktree branch names become generated `task-...` branches.
 - Launch Codex, Claude, Gemini, or custom CLI agent profiles in an embedded

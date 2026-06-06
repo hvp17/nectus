@@ -3,6 +3,7 @@ import { api } from "./api";
 import { defineAppSmokeTests } from "./test/appSmokeTests";
 import { defineAppTaskBoardTests } from "./test/appTaskBoardTests";
 import { defineAppTaskCreationTests } from "./test/appTaskCreationTests";
+import { defineAppWorkspacesTests } from "./test/appWorkspacesTests";
 
 vi.mock("./api", () => ({
   api: {
@@ -10,10 +11,15 @@ vi.mock("./api", () => ({
     listAgentProfiles: vi.fn(),
     listTasks: vi.fn(),
     createTask: vi.fn(),
+    createCrossRepoTask: vi.fn(),
     pickRepositoryFolder: vi.fn(),
     addRepo: vi.fn(),
     updateTaskMetadata: vi.fn(),
     deleteTask: vi.fn(),
+    listWorkspaces: vi.fn(),
+    createWorkspace: vi.fn(),
+    updateWorkspace: vi.fn(),
+    deleteWorkspace: vi.fn(),
     startSession: vi.fn(),
     resumeSession: vi.fn(),
     stopSession: vi.fn(),
@@ -86,6 +92,7 @@ describe("App", () => {
       },
     ]);
     mockedApi.listTasks.mockResolvedValue([]);
+    mockedApi.listWorkspaces.mockResolvedValue([]);
     mockedApi.getAppSettings.mockResolvedValue({
       defaultAgentProfileId: 1,
       defaultWorktreeRootPattern: "~/.nectus/worktrees/{repoName}",
@@ -121,4 +128,5 @@ describe("App", () => {
   defineAppSmokeTests();
   defineAppTaskCreationTests();
   defineAppTaskBoardTests();
+  defineAppWorkspacesTests();
 });

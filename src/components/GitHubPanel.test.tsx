@@ -16,6 +16,7 @@ beforeEach(() => {
 const baseTask: TaskSummary = {
   id: 42,
   repoId: 7,
+  taskRepos: [],
   title: "Add GitHub integration",
   prompt: "Wire up gh.",
   status: "review",

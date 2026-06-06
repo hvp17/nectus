@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CheckCheck, GitBranch, GitPullRequest, MessageSquareReply, RefreshCw, Radio, Terminal } from "lucide-react";
 import { Button } from "./ui/button";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { AgentLogo } from "./AgentBrand";
 import {
   AGENT_STATE_META,
@@ -10,7 +11,7 @@ import {
   type AgentState,
 } from "../lib/agentState";
 import type { TaskAttention } from "../sessionAttention";
-import type { AgentKind, Repo, TaskSummary } from "../types";
+import type { AgentKind, Repo, TaskSummary, Workspace } from "../types";
 
 interface MissionControlProps {
   repos: Repo[];
@@ -18,6 +19,10 @@ interface MissionControlProps {
   taskAttention: TaskAttention[];
   liveLines: Record<number, string>;
   loading: boolean;
+  workspaces: Workspace[];
+  activeWorkspaceId?: number;
+  onSelectWorkspace: (id: number | undefined) => void;
+  onManageWorkspaces: () => void;
   onOpenTask: (taskId: number) => void;
   onOpenPr: (url: string) => void;
   onRefresh: () => void;
@@ -34,6 +39,10 @@ export function MissionControl({
   taskAttention,
   liveLines,
   loading,
+  workspaces,
+  activeWorkspaceId,
+  onSelectWorkspace,
+  onManageWorkspaces,
   onOpenTask,
   onOpenPr,
   onRefresh,
@@ -70,6 +79,12 @@ export function MissionControl({
           <p className="nx-sub">Every agent across all projects, ordered by who needs you.</p>
         </div>
         <div className="nx-head-actions">
+          <WorkspaceSwitcher
+            workspaces={workspaces}
+            activeWorkspaceId={activeWorkspaceId}
+            onSelect={onSelectWorkspace}
+            onManage={onManageWorkspaces}
+          />
           <Button variant="outline" size="sm" onClick={onRefresh} title="Refresh">
             <RefreshCw data-icon="inline-start" className={loading ? "animate-spin" : undefined} />
             Refresh
