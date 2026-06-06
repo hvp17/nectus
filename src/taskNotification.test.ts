@@ -3,7 +3,7 @@ import { taskFinishedToast, taskNeedsInputToast } from "./taskNotification";
 import type { SessionIdleEvent, SessionNeedsInputEvent, TaskSummary } from "./types";
 
 const task = (overrides: Partial<TaskSummary> = {}): TaskSummary =>
-  ({ id: 7, title: "Wire up auth", agentName: "Claude", ...overrides }) as unknown as TaskSummary;
+  ({ id: 7, title: "Wire up auth", agentName: "Claude", agentKind: "claude", ...overrides }) as unknown as TaskSummary;
 
 describe("taskFinishedToast", () => {
   it("links the toast to the task with a success kind", () => {
@@ -14,7 +14,15 @@ describe("taskFinishedToast", () => {
       title: "Claude finished",
       body: "Wire up auth all green",
       kind: "success",
+      agentKind: "claude",
     });
+  });
+
+  it("carries the agent kind for the provider logo, defaulting to custom", () => {
+    const payload: SessionIdleEvent = { sessionId: "s1", taskId: 7 };
+
+    expect(taskFinishedToast(task({ agentKind: "codex" }), payload).agentKind).toBe("codex");
+    expect(taskFinishedToast(task({ agentKind: null }), payload).agentKind).toBe("custom");
   });
 
   it("omits the detail when the event has no message", () => {
@@ -44,6 +52,7 @@ describe("taskNeedsInputToast", () => {
       title: "Claude needs input",
       body: "Wire up auth (permission): Approve?",
       kind: "info",
+      agentKind: "claude",
     });
   });
 

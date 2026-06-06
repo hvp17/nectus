@@ -269,13 +269,22 @@ Attention tracking is UI state derived from backend events.
   desktop — the notification plugin's desktop `show()` is fire-and-forget and its
   `onAction` listener is mobile-only — so the toast is the navigable surface.
   Events that cannot be matched to a loaded task fall back to a plain toast.
+- The toast's icon is the provider logo (Claude/Codex/Gemini, falling back to a
+  generic mark for custom agents) so you can tell at a glance which agent the
+  update is from. The body text is built by `formatNotificationBody`, which strips
+  the Markdown agents emit in their final messages (`**bold**`, `` `code` ``,
+  `[text](url)`, bullets/headings) and truncates on a word boundary with a `…`,
+  hard-cutting only a single very long token such as a bare URL. The same
+  formatter cleans the macOS notification body.
 
 Key files:
 
 - Attention model: `src/sessionAttention.ts`
 - Notification wrapper: `src/sessionNotifications.ts`
+- Body cleanup + truncation: `src/notificationText.ts`
 - Task toast payload builders: `src/taskNotification.ts`
-- Clickable toast hook: `src/hooks/useTaskNotificationToast.ts`
+- Clickable toast hook (provider-logo icon): `src/hooks/useTaskNotificationToast.tsx`
+- Provider logos: `src/components/AgentBrand.tsx` (`AgentLogo`)
 - Event listener hook: `src/hooks/useSessionEvents.ts`
 - Codex event source (rollout JSONL): `native/src/sessions/codex.rs`
 - Claude event source (Claude Code hook bridge): `native/src/sessions/claude.rs`
