@@ -1,0 +1,63 @@
+[
+  {
+    "archived": null,
+    "archivedBy": null,
+    "archivedDate": null,
+    "assigneeType": null,
+    "avatarUrls": {
+      "16x16": "https://nectus-test.example/rest/api/3/universal_avatar/view/type/project/avatar/10405?size=xsmall",
+      "24x24": "https://nectus-test.example/rest/api/3/universal_avatar/view/type/project/avatar/10405?size=small",
+      "32x32": "https://nectus-test.example/rest/api/3/universal_avatar/view/type/project/avatar/10405?size=medium",
+      "48x48": "https://nectus-test.example/rest/api/3/universal_avatar/view/type/project/avatar/10405"
+    },
+    "components": null,
+    "deleted": null,
+    "deletedBy": null,
+    "deletedDate": null,
+    "description": "Your first project",
+    "email": null,
+    "expand": "description,lead,issueTypes,url,projectKeys,permissions,insight",
+    "favourite": null,
+    "id": "10000",
+    "insight": null,
+    "isPrivate": false,
+    "issueTypeHierarchy": null,
+    "issueTypes": null,
+    "key": "SCRUM",
+    "landingPageInfo": null,
+    "lead": {
+      "accountId": "5b10ac8d82e05b22cc7d4ef5",
+      "accountType": "atlassian",
+      "active": true,
+      "applicationRoles": null,
+      "avatarUrls": {
+        "16x16": "https://nectus-test.example/avatar/00000000000000000000000000000000?d=https%3A%2F%2Favatar-management--avatars.us-west-2.prod.public.atl-paas.net%2Finitials%2FXX.png",
+        "24x24": "https://nectus-test.example/avatar/00000000000000000000000000000000?d=https%3A%2F%2Favatar-management--avatars.us-west-2.prod.public.atl-paas.net%2Finitials%2FXX.png",
+        "32x32": "https://nectus-test.example/avatar/00000000000000000000000000000000?d=https%3A%2F%2Favatar-management--avatars.us-west-2.prod.public.atl-paas.net%2Finitials%2FXX.png",
+        "48x48": "https://nectus-test.example/avatar/00000000000000000000000000000000?d=https%3A%2F%2Favatar-management--avatars.us-west-2.prod.public.atl-paas.net%2Finitials%2FXX.png"
+      },
+      "displayName": "Test User",
+      "emailAddress": null,
+      "expand": null,
+      "groups": null,
+      "key": null,
+      "locale": null,
+      "name": null,
+      "self": "https://nectus-test.example/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+      "timeZone": null
+    },
+    "name": "My Software Team",
+    "permissions": null,
+    "projectCategory": null,
+    "projectTypeKey": "software",
+    "properties": {},
+    "retentionTillDate": null,
+    "roles": null,
+    "self": "https://nectus-test.example/rest/api/3/project/10000",
+    "simplified": true,
+    "style": "next-gen",
+    "url": null,
+    "uuid": "00000000-0000-0000-0000-000000000000",
+    "versions": null
+  }
+]

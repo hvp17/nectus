@@ -1,0 +1,60 @@
+{
+  "changelog": null,
+  "editmeta": null,
+  "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations",
+  "fields": {
+    "assignee": null,
+    "description": {
+      "content": [
+        {
+          "content": [
+            {
+              "text": "ewqweqew",
+              "type": "text"
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "type": "doc",
+      "version": 1
+    },
+    "issuetype": {
+      "avatarId": 10318,
+      "description": "Tasks track small, distinct pieces of work.",
+      "entityId": "bf8f10de-2cc8-48b1-a116-d3eb2b2a7b1d",
+      "hierarchyLevel": 0,
+      "iconUrl": "https://nectus-test.example/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+      "id": "10003",
+      "name": "Task",
+      "self": "https://nectus-test.example/rest/api/3/issuetype/10003",
+      "subtask": false
+    },
+    "status": {
+      "description": "",
+      "iconUrl": "https://nectus-test.example/images/icons/statuses/generic.png",
+      "id": "10000",
+      "name": "To Do",
+      "self": "https://nectus-test.example/rest/api/3/status/10000",
+      "statusCategory": {
+        "colorName": "blue-gray",
+        "id": 2,
+        "key": "new",
+        "name": "To Do",
+        "self": "https://nectus-test.example/rest/api/3/statuscategory/2"
+      }
+    },
+    "summary": "qweqwe"
+  },
+  "fieldsToInclude": null,
+  "id": "10036",
+  "key": "SCRUM-5",
+  "names": null,
+  "operations": null,
+  "properties": null,
+  "renderedFields": null,
+  "schema": null,
+  "self": "https://nectus-test.example/rest/api/3/issue/10036",
+  "transitions": null,
+  "versionedRepresentations": null
+}

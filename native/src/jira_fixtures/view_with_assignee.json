@@ -1,0 +1,74 @@
+{
+  "changelog": null,
+  "editmeta": null,
+  "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations",
+  "fields": {
+    "assignee": {
+      "accountId": "5b10ac8d82e05b22cc7d4ef5",
+      "accountType": "atlassian",
+      "active": true,
+      "avatarUrls": {
+        "16x16": "https://nectus-test.example/avatar/00000000000000000000000000000000?d=https%3A%2F%2Favatar-management--avatars.us-west-2.prod.public.atl-paas.net%2Finitials%2FXX.png",
+        "24x24": "https://nectus-test.example/avatar/00000000000000000000000000000000?d=https%3A%2F%2Favatar-management--avatars.us-west-2.prod.public.atl-paas.net%2Finitials%2FXX.png",
+        "32x32": "https://nectus-test.example/avatar/00000000000000000000000000000000?d=https%3A%2F%2Favatar-management--avatars.us-west-2.prod.public.atl-paas.net%2Finitials%2FXX.png",
+        "48x48": "https://nectus-test.example/avatar/00000000000000000000000000000000?d=https%3A%2F%2Favatar-management--avatars.us-west-2.prod.public.atl-paas.net%2Finitials%2FXX.png"
+      },
+      "displayName": "Test User",
+      "emailAddress": "test@example.com",
+      "self": "https://nectus-test.example/rest/api/3/user?accountId=5b10ac8d82e05b22cc7d4ef5",
+      "timeZone": "Europe/Vilnius"
+    },
+    "description": {
+      "content": [
+        {
+          "content": [
+            {
+              "text": "Description",
+              "type": "text"
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "type": "doc",
+      "version": 1
+    },
+    "issuetype": {
+      "avatarId": 10318,
+      "description": "Tasks track small, distinct pieces of work.",
+      "entityId": "bf8f10de-2cc8-48b1-a116-d3eb2b2a7b1d",
+      "hierarchyLevel": 0,
+      "iconUrl": "https://nectus-test.example/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+      "id": "10003",
+      "name": "Task",
+      "self": "https://nectus-test.example/rest/api/3/issuetype/10003",
+      "subtask": false
+    },
+    "status": {
+      "description": "",
+      "iconUrl": "https://nectus-test.example/images/icons/statuses/generic.png",
+      "id": "10000",
+      "name": "To Do",
+      "self": "https://nectus-test.example/rest/api/3/status/10000",
+      "statusCategory": {
+        "colorName": "blue-gray",
+        "id": 2,
+        "key": "new",
+        "name": "To Do",
+        "self": "https://nectus-test.example/rest/api/3/statuscategory/2"
+      }
+    },
+    "summary": "Title of work"
+  },
+  "fieldsToInclude": null,
+  "id": "10034",
+  "key": "SCRUM-3",
+  "names": null,
+  "operations": null,
+  "properties": null,
+  "renderedFields": null,
+  "schema": null,
+  "self": "https://nectus-test.example/rest/api/3/issue/10034",
+  "transitions": null,
+  "versionedRepresentations": null
+}

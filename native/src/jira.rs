@@ -1,6 +1,6 @@
 use crate::models::{JiraProject, JiraStatus, JiraStatusCategory, JiraWorkItem};
 use crate::process_util::{command_error, resolve_executable};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use std::process::{Command, Output};
 
 /// Build the board JQL from the structured UI selections, so the user never types
@@ -43,14 +43,86 @@ struct RawWorkItem {
     url: Option<String>,
 }
 
+// Field-type audit (the class of bug behind `invalid type: map, expected a
+// string`): every scalar we read from `acli` was checked against whether v3
+// could send an object/array instead. `summary`, `status.name`,
+// `statusCategory.{key,name}`, `issuetype.name`, `priority.name`, and the
+// `assignee.*` strings are plain JIRA system fields and are always scalars.
+// The only object-where-we-expected-a-scalar field is `description` — and any
+// other rich-text field (a comment body, `environment`, a rich-text custom
+// field) would be ADF too, so route those through `deserialize_rich_text`
+// rather than typing them `Option<String>`. Real shapes are pinned by the
+// golden fixtures in `native/src/jira_fixtures/`.
 #[derive(Debug, Deserialize)]
 struct RawFields {
     summary: Option<String>,
     status: Option<RawStatus>,
+    // JIRA Cloud's v3 API (`acli jira workitem view --json`) returns `description`
+    // as an Atlassian Document Format object, while search/older outputs give a
+    // plain string or null. Accept all three; an object is flattened to text.
+    #[serde(default, deserialize_with = "deserialize_rich_text")]
     description: Option<String>,
     issuetype: Option<RawNamed>,
     priority: Option<RawNamed>,
     assignee: Option<RawAssignee>,
+}
+
+/// Deserialize a JIRA rich-text field that may arrive as a plain string, `null`,
+/// or an Atlassian Document Format (ADF) object. Strings pass through, an ADF
+/// document is flattened to plain text, and anything else (or empty) becomes
+/// `None`, so a shape drift degrades gracefully instead of failing the parse.
+fn deserialize_rich_text<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(value.and_then(rich_text_to_string))
+}
+
+fn rich_text_to_string(value: serde_json::Value) -> Option<String> {
+    let text = match value {
+        serde_json::Value::String(text) => text,
+        serde_json::Value::Object(_) => {
+            let mut text = String::new();
+            collect_adf_text(&value, &mut text);
+            text
+        }
+        _ => return None,
+    };
+    let trimmed = text.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+/// Walk an ADF node tree, appending text-node content and inserting newlines at
+/// block and hard-break boundaries so the flattened text stays readable.
+fn collect_adf_text(node: &serde_json::Value, out: &mut String) {
+    if let Some(text) = node.get("text").and_then(serde_json::Value::as_str) {
+        out.push_str(text);
+    }
+    let node_type = node.get("type").and_then(serde_json::Value::as_str);
+    if node_type == Some("hardBreak") {
+        out.push('\n');
+    }
+    if let Some(content) = node.get("content").and_then(serde_json::Value::as_array) {
+        for child in content {
+            collect_adf_text(child, out);
+        }
+        // Separate adjacent block nodes (paragraphs, headings, list items, …)
+        // with a newline; the wrapping `doc` node adds none.
+        if matches!(
+            node_type,
+            Some(
+                "paragraph"
+                    | "heading"
+                    | "listItem"
+                    | "blockquote"
+                    | "codeBlock"
+                    | "rule"
+            )
+        ) {
+            out.push('\n');
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -509,6 +581,100 @@ mod tests {
         let item = parse_work_item(json).unwrap();
         assert_eq!(item.key, "V-1");
         assert_eq!(item.description.as_deref(), Some("details"));
+    }
+
+    #[test]
+    fn parses_view_with_adf_description() {
+        // JIRA Cloud's v3 API (what `acli jira workitem view --json` returns)
+        // carries `description` as an Atlassian Document Format object, not a
+        // string. Flatten it to plain text instead of failing the parse.
+        let json = r#"{
+          "key":"SCRUM-5",
+          "fields":{
+            "summary":"qweqwe",
+            "description":{
+              "type":"doc",
+              "version":1,
+              "content":[
+                {"type":"paragraph","content":[{"type":"text","text":"First line"}]},
+                {"type":"paragraph","content":[{"type":"text","text":"Second line"}]}
+              ]
+            },
+            "status":{"name":"To Do","statusCategory":{"key":"new"}}
+          }
+        }"#;
+        let item = parse_work_item(json).unwrap();
+        assert_eq!(item.key, "SCRUM-5");
+        assert_eq!(item.summary, "qweqwe");
+        assert_eq!(item.description.as_deref(), Some("First line\nSecond line"));
+    }
+
+    #[test]
+    fn parses_view_with_null_description() {
+        let json = r#"{"key":"V-2","fields":{"summary":"No body","description":null,"status":{"name":"To Do","statusCategory":{"key":"new"}}}}"#;
+        let item = parse_work_item(json).unwrap();
+        assert_eq!(item.description, None);
+    }
+
+    // Golden-fixture tests: real `acli ... --json` output (scrubbed) from
+    // `native/src/jira_fixtures/`. These guard against the actual CLI shape
+    // drifting from our structs — the hand-written tests above can only encode
+    // our assumptions, so the recurrence guard has to come from captured output.
+    // See `native/src/jira_fixtures/README.md` to refresh after an `acli` upgrade.
+
+    #[test]
+    fn real_acli_view_with_assignee_parses() {
+        let json = include_str!("jira_fixtures/view_with_assignee.json");
+        let item = parse_work_item(json).unwrap();
+        assert_eq!(item.key, "SCRUM-3");
+        assert_eq!(item.summary, "Title of work");
+        assert_eq!(item.status_name, "To Do");
+        assert_eq!(item.status_category, JiraStatusCategory::ToDo);
+        assert_eq!(item.issue_type.as_deref(), Some("Task"));
+        // The view payload carries no `priority` field for these items.
+        assert_eq!(item.priority, None);
+        assert_eq!(item.assignee.as_deref(), Some("Test User"));
+        // `description` arrives as an ADF object and is flattened to plain text.
+        assert_eq!(item.description.as_deref(), Some("Description"));
+    }
+
+    #[test]
+    fn real_acli_view_simple_parses() {
+        let json = include_str!("jira_fixtures/view_simple.json");
+        let item = parse_work_item(json).unwrap();
+        assert_eq!(item.key, "SCRUM-5");
+        assert_eq!(item.summary, "qweqwe");
+        assert_eq!(item.status_category, JiraStatusCategory::ToDo);
+        assert_eq!(item.assignee, None);
+        assert_eq!(item.description.as_deref(), Some("ewqweqew"));
+    }
+
+    #[test]
+    fn real_acli_search_parses_board() {
+        let json = include_str!("jira_fixtures/search.json");
+        let items = parse_work_items(json).unwrap();
+        assert_eq!(
+            items.iter().map(|i| i.key.as_str()).collect::<Vec<_>>(),
+            ["SCRUM-5", "SCRUM-4", "SCRUM-3"]
+        );
+        for item in &items {
+            assert_eq!(item.status_category, JiraStatusCategory::ToDo);
+            assert_eq!(item.priority.as_deref(), Some("Medium"));
+            // `search` omits `description` entirely (the board path never breaks).
+            assert_eq!(item.description, None);
+        }
+        // The second item is assigned; the first is not.
+        assert_eq!(items[0].assignee, None);
+        assert_eq!(items[1].assignee.as_deref(), Some("Test User"));
+    }
+
+    #[test]
+    fn real_acli_project_list_parses() {
+        let json = include_str!("jira_fixtures/project_list.json");
+        let projects = parse_projects(json).unwrap();
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0].key, "SCRUM");
+        assert_eq!(projects[0].name, "My Software Team");
     }
 
     #[test]
