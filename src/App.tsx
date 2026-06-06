@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { IconRail, type RailView } from "./components/IconRail";
+import { RunningAgentsFlyout } from "./components/RunningAgentsFlyout";
 import { ProjectPanel } from "./components/ProjectPanel";
 import { MissionControl } from "./components/MissionControl";
 import { Workspace } from "./components/Workspace";
@@ -241,7 +242,20 @@ function App() {
         className={`app-shell nx-app density-${settings?.density ?? "comfortable"} bg-background text-foreground`}
         data-frame={frame}
       >
-        <IconRail active={railActive} needsCount={counts.needsInput} onNavigate={navigate} />
+        <IconRail
+          active={railActive}
+          needsCount={counts.needsInput}
+          onNavigate={navigate}
+          runningAgentsSlot={
+            <RunningAgentsFlyout
+              tasks={tasks}
+              repos={repos}
+              taskAttention={taskAttention}
+              liveLines={liveLines}
+              onOpenTask={openTask}
+            />
+          }
+        />
 
         {showProjectPanel && (
           <ProjectPanel

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { FolderGit2, GitPullRequest, Radio, Settings, SquareKanban } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
@@ -7,6 +8,8 @@ interface IconRailProps {
   active: RailView;
   needsCount: number;
   onNavigate: (view: RailView) => void;
+  /** Quick-access running-agents trigger, rendered with the primary nav group. */
+  runningAgentsSlot?: ReactNode;
 }
 
 const NAV: Array<{ id: Exclude<RailView, "settings">; label: string; Icon: typeof Radio }> = [
@@ -16,7 +19,7 @@ const NAV: Array<{ id: Exclude<RailView, "settings">; label: string; Icon: typeo
   { id: "reviews", label: "PR Reviews", Icon: GitPullRequest },
 ];
 
-export function IconRail({ active, needsCount, onNavigate }: IconRailProps) {
+export function IconRail({ active, needsCount, onNavigate, runningAgentsSlot }: IconRailProps) {
   return (
     <nav className="nx-rail" aria-label="Primary">
       <div className="nx-brand-mark" aria-hidden="true">
@@ -47,6 +50,7 @@ export function IconRail({ active, needsCount, onNavigate }: IconRailProps) {
           </TooltipContent>
         </Tooltip>
       ))}
+      {runningAgentsSlot}
       <span className="nx-rail-sp" />
       <Tooltip>
         <TooltipTrigger asChild>

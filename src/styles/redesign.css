@@ -118,6 +118,50 @@
 }
 .nx-rail-sp { flex: 1; }
 
+/* ---------- Running-agents quick-access flyout (rail popover) ---------- */
+/* The running count rides the primary hue, distinct from the warning needs badge. */
+.nx-rail-badge[data-tone="running"] { background: var(--primary); }
+
+.nx-fly { display: flex; flex-direction: column; max-height: min(70vh, 520px); overflow: hidden; }
+.nx-fly-head {
+  display: flex; align-items: center; gap: 8px; padding: 11px 13px; border-bottom: 1px solid var(--border);
+  font-size: 13px; font-weight: 700; letter-spacing: -0.01em;
+}
+.nx-fly-head svg { width: 14px; height: 14px; color: var(--primary); }
+.nx-fly-title { flex: 1; }
+.nx-fly-count {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--muted-foreground);
+  background: var(--muted); border-radius: 999px; min-width: 20px; height: 19px; display: grid; place-items: center; padding: 0 6px;
+}
+.nx-fly-empty { padding: 24px 16px; text-align: center; font-size: 12.5px; color: var(--muted-foreground); }
+.nx-fly-scroll { overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 12px; }
+.nx-fly-group { display: flex; flex-direction: column; gap: 6px; }
+.nx-fly-gl { display: flex; align-items: center; gap: 7px; font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.nx-fly-gl .nx-dot { width: 7px; height: 7px; border-radius: 999px; }
+.nx-fly-gc { font-family: var(--font-mono); font-size: 10px; font-weight: 600; color: var(--muted-foreground); }
+
+.nx-fly-row {
+  position: relative; display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left;
+  background: var(--card); border: none; border-radius: var(--radius-md); padding: 9px 11px 9px 13px; cursor: pointer;
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 8%, transparent); transition: box-shadow .15s; overflow: hidden;
+}
+.nx-fly-row:hover { box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 45%, transparent), var(--shadow-xs); }
+.nx-fly-row:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.nx-fly-row::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--rail, transparent); }
+.nx-fly-row[data-state="needs_you"] { --rail: var(--status-warning); }
+.nx-fly-row[data-state="running"]   { --rail: var(--primary); }
+.nx-fly-row[data-state="review"]    { --rail: var(--status-info); }
+.nx-fly-row-top { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; color: var(--muted-foreground); }
+.nx-fly-loc { display: flex; align-items: center; gap: 5px; min-width: 0; flex: 1; }
+.nx-fly-proj { color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-fly-loc svg { width: 10px; height: 10px; opacity: .7; flex: none; }
+.nx-fly-branch { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-fly-time { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted-foreground); flex: none; }
+.nx-fly-row .nx-livedot { width: 7px; height: 7px; flex: none; }
+.nx-fly-row-title { font-size: 12.5px; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nx-fly-row-line { font-family: var(--font-mono); font-size: 11px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nx-fly-row[data-state="needs_you"] .nx-fly-row-line { color: color-mix(in oklch, var(--status-warning) 55%, var(--foreground)); }
+
 /* ---------- Contextual panel (project tree) ---------- */
 .nx-panel {
   border-right: 1px solid var(--sidebar-border); background: color-mix(in srgb, var(--sidebar) 60%, var(--background));

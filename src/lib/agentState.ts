@@ -26,6 +26,12 @@ export const AGENT_STATE_META: Record<AgentState, AgentStateMeta> = {
 /** Triage priority — lower sorts first (most urgent on top). */
 export const AGENT_STATE_ORDER: AgentState[] = ["needs_you", "running", "review", "done", "idle"];
 
+// The "in flight" states — an agent has a live session, is blocked on you, or is
+// running a review (terminal done/idle excluded). Shared so the running-agents
+// flyout, Mission Control's summary pills, and any future "active" surface agree
+// on what counts as active, in AGENT_STATE_ORDER priority.
+export const ACTIVE_AGENT_STATES: AgentState[] = ["needs_you", "running", "review"];
+
 // Every review-loop status counts as the "review" state, so the rail colour and
 // the TaskCard review badge always agree. Driving the set from the label map
 // keeps it exhaustive: a newly added ReviewLoopStatus can't silently fall

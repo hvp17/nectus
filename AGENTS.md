@@ -307,7 +307,8 @@ Keep React UI and command bindings in `src/`.
 Important frontend files:
 
 - `src/App.tsx`: icon-rail shell, view routing (`mission` | `board` | `jira` | `reviews` | `settings`), and top-level composition
-- `src/components/IconRail.tsx`: 58px primary navigation rail; Mission Control icon carries the cross-project needs-input badge
+- `src/components/IconRail.tsx`: 58px primary navigation rail; Mission Control icon carries the cross-project needs-input badge. Accepts a `runningAgentsSlot` rendered with the primary nav group
+- `src/components/RunningAgentsFlyout.tsx`: rail-anchored quick-access Popover listing every in-flight agent (states needs_you/running/review, terminal done/idle excluded) across all projects; reuses `buildAgentRows`/`AGENT_STATE_META` and the `nx-` row vocabulary, click-to-focus a task. Vendored Popover primitive: `src/components/ui/popover.tsx`
 - `src/components/ProjectPanel.tsx`: contextual project list (counts + needs-input dot) shown beside the board; hosts the workspace switcher and is scoped to the active workspace's repos
 - `src/components/WorkspaceSwitcher.tsx`: the active-workspace repo-scope selector (a `ToggleGroup` pill row + Manage button), reused in the Mission Control header and the project rail
 - `src/components/WorkspaceManager.tsx`: de-modaled inline composer to create/rename/re-scope/delete workspaces with a per-repo checklist
