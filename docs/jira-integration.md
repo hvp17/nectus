@@ -67,7 +67,10 @@ All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
 - **Assign:** `acli jira workitem assign --key <key> --assignee <user>`.
 - **Comment:** `acli jira workitem comment --key <key> --body "<text>"`.
 - **View:** `acli jira workitem view <key> --json` backfills a story description when
-  creating a task from it.
+  creating a task from it. JIRA Cloud's v3 API returns `description` as an Atlassian
+  Document Format (ADF) object, not a string; `native/src/jira.rs` flattens that node
+  tree to plain text (paragraphs/headings/list items separated by newlines) and still
+  accepts a plain-string or `null` description.
 - **Open in JIRA:** the work-item dialog and the linked-story panel open the canonical
   browse URL `https://<site>/browse/<KEY>`, built from the connected site host plus the
   issue key (`jiraBrowseUrl` in `src/lib/jira.ts`). `acli` only returns the issue's REST
@@ -105,8 +108,9 @@ All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
   transitions. Consequences: empty-status columns do not appear, and drag-to-transition
   is optimistic (validated only by `acli`'s exit status).
 - The `--json` field shape is parsed tolerantly in `native/src/jira.rs` (top-level
-  array or wrapped object; flat or `fields`-nested; every field optional). A drifting
-  shape drops a single bad item rather than failing the whole board.
+  array or wrapped object; flat or `fields`-nested; every field optional; `description`
+  accepted as an ADF object, plain string, or `null`). A drifting shape drops a single
+  bad item rather than failing the whole board.
 
 ## Key files
 
@@ -121,6 +125,11 @@ All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
 - Frontend API: `src/api.ts`
 - `acli` shell-out, JSON parsing, the JQL builder (`build_board_jql`), and the
   create argument builder/key parser: `native/src/jira.rs`
+- Parser regression guard: scrubbed real `acli --json` output in
+  `native/src/jira_fixtures/` (view/search/project list), `include_str!`ed by the
+  `real_acli_*` tests in `native/src/jira.rs`. These pin the live CLI shape (e.g.
+  ADF `description`) so a struct/CLI drift fails a test instead of users. Refresh
+  via `native/src/jira_fixtures/scrub.py` per that directory's `README.md`.
 - Backend commands: `jira_status`, `jira_list_projects`, `jira_search_board`,
   `jira_get_work_item`, `jira_transition_work_item`, `jira_assign_work_item`,
   `jira_comment_work_item`, `jira_create_work_item`, `set_task_jira_link`
