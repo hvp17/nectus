@@ -27,6 +27,7 @@ impl Database {
                   reviewer_profile_id = excluded.reviewer_profile_id,
                   status = excluded.status,
                   last_error = NULL,
+                  reviewer_session_id = NULL,
                   updated_at = excluded.updated_at
                 ",
                 params![
@@ -148,6 +149,39 @@ impl Database {
                 params![status.as_str(), last_error, now(), task_id],
             )
             .map_err(|error| format!("Failed to update review loop: {error}"))?;
+        if changed == 0 {
+            return Err("Review loop not found".to_string());
+        }
+        Ok(())
+    }
+
+    /// The reviewer session id reused across this loop's review rounds, if one
+    /// has been resolved yet.
+    pub fn review_loop_session_id(&self, task_id: i64) -> Result<Option<String>, String> {
+        self.conn
+            .query_row(
+                "SELECT reviewer_session_id FROM review_loops WHERE task_id = ?1",
+                params![task_id],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()
+            .map(|value| value.flatten())
+            .map_err(|error| error.to_string())
+    }
+
+    /// Store (or clear) the reviewer session id so the next round can resume it.
+    pub fn set_review_loop_session_id(
+        &self,
+        task_id: i64,
+        session_id: Option<&str>,
+    ) -> Result<(), String> {
+        let changed = self
+            .conn
+            .execute(
+                "UPDATE review_loops SET reviewer_session_id = ?1, updated_at = ?2 WHERE task_id = ?3",
+                params![session_id, now(), task_id],
+            )
+            .map_err(|error| format!("Failed to update review loop session: {error}"))?;
         if changed == 0 {
             return Err("Review loop not found".to_string());
         }
