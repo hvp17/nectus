@@ -41,6 +41,10 @@ export function useApp() {
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<number | undefined>();
   // Repos chosen for a cross-repo task in the composer (Increment B). Primary first.
   const [newTaskRepoIds, setNewTaskRepoIds] = useState<number[]>([]);
+  // Workspace the composer is targeting. Undefined = single-repo (Project) mode;
+  // a value = Workspace mode (cross-repo). Decoupled from the board's focused
+  // workspace so the composer's Project/Workspace toggle can pick any workspace.
+  const [newTaskWorkspaceId, setNewTaskWorkspaceId] = useState<number | undefined>();
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [settings, setSettings] = useState<AppSettings | undefined>();
@@ -313,6 +317,8 @@ export function useApp() {
         url: jiraBrowseUrl(jira.jiraStatus?.site, item.key),
       });
       setNewTaskRepoId(selectedRepoId ?? repos[0]?.id);
+      // A JIRA-seeded task is single-repo; make sure the composer opens in Project mode.
+      setNewTaskWorkspaceId(undefined);
       setSelectedJiraItem(null);
       setCurrentView("board");
       setSelectedTaskId(undefined);
@@ -387,13 +393,12 @@ export function useApp() {
     );
 
   const createTask = async () => {
-    // Workspace composer (Increment B): a workspace with ≥2 repos is active, so the
-    // composer offered a repo checklist. The checklist is the source of truth, and
-    // this gate keys on the SAME signal as the UI's cross-repo mode
-    // (activeWorkspaceRepos.length >= 2) so they can't diverge. Routes by how many
-    // repos were picked: ≥2 → cross-repo; exactly 1 → a single worktree task on
-    // that repo (never the board-selected one).
-    if (activeWorkspaceRepos.length >= 2 && newTaskRepoIds.length >= 1) {
+    // Workspace composer (Increment B): the composer is in Workspace mode, so it
+    // offered a repo checklist. The checklist is the source of truth, and this gate
+    // keys on the SAME signal as the UI's cross-repo mode (a targeted workspace) so
+    // they can't diverge. Routes by how many repos were picked: ≥2 → cross-repo;
+    // exactly 1 → a single worktree task on that repo (never the board-selected one).
+    if (newTaskWorkspaceId != null && newTaskRepoIds.length >= 1) {
       if (!newTaskAgentProfileId) {
         setMessage("Select an agent before creating a task.");
         return;
@@ -409,7 +414,7 @@ export function useApp() {
           const task =
             repoIds.length >= 2
               ? await api.createCrossRepoTask({
-                  workspaceId: activeWorkspaceId,
+                  workspaceId: newTaskWorkspaceId,
                   repoIds,
                   title: getGeneratedTaskTitle(),
                   prompt: newTaskPrompt.trim() || null,
@@ -426,6 +431,7 @@ export function useApp() {
                 });
           resetCreateTaskForm();
           setNewTaskRepoIds([]);
+          setNewTaskWorkspaceId(undefined);
           setCreateTaskOpen(false);
           setSelectedRepoId(repoIds[0]);
           setSelectedTaskId(task.id);
@@ -638,6 +644,8 @@ export function useApp() {
     openWorkspaceBoard,
     newTaskRepoIds,
     setNewTaskRepoIds,
+    newTaskWorkspaceId,
+    setNewTaskWorkspaceId,
     createWorkspace,
     updateWorkspace,
     deleteWorkspace,

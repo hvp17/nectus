@@ -176,4 +176,90 @@ export function defineAppWorkspacesTests() {
       expect(mockedApi.updateWorkspace).toHaveBeenCalledWith(3, "Frontend+", [appRepo.id, secondRepo.id]);
     });
   });
+
+  it("hides the composer scope toggle when no workspace resolves to ≥2 repos", async () => {
+    mockedApi.listRepos.mockResolvedValue([appRepo, secondRepo]);
+    // A 1-repo workspace is functionally a project, so it does not enable the toggle.
+    mockedApi.listWorkspaces.mockResolvedValue([
+      workspace({ id: 1, name: "Solo", repoIds: [appRepo.id] }),
+    ]);
+
+    render(<App />);
+
+    // Open the composer from the icon rail (a project context, not a workspace board).
+    fireEvent.click(await screen.findByRole("button", { name: "Create task" }));
+    expect(await screen.findByRole("heading", { name: "New Task" })).toBeInTheDocument();
+
+    expect(screen.queryByRole("radio", { name: "Workspace scope" })).not.toBeInTheDocument();
+    // It stays in single-repo Project mode.
+    expect(screen.getByRole("combobox", { name: "Project" })).toBeInTheDocument();
+  });
+
+  it("switches to Workspace scope from a project context and creates a cross-repo task", async () => {
+    mockedApi.listRepos.mockResolvedValue([appRepo, secondRepo]);
+    mockedApi.listWorkspaces.mockResolvedValue([
+      workspace({ id: 7, name: "Platform", repoIds: [appRepo.id, secondRepo.id] }),
+    ]);
+    mockedApi.createCrossRepoTask.mockResolvedValue(
+      appTask({ id: 700, title: "Cross from rail", branchName: "feat/cross", hasWorktree: true }),
+    );
+
+    render(<App />);
+
+    // Open from the icon rail: no workspace board is focused, so it defaults to Project.
+    fireEvent.click(await screen.findByRole("button", { name: "Create task" }));
+    expect(await screen.findByRole("heading", { name: "New Task" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Project scope" })).toBeChecked();
+    expect(screen.getByRole("combobox", { name: "Project" })).toBeInTheDocument();
+
+    // Flip to Workspace scope; the cross-repo checklist appears, pre-filled with both repos.
+    fireEvent.click(screen.getByRole("radio", { name: "Workspace scope" }));
+    const repoGroup = await screen.findByRole("group", { name: "Repositories" });
+    const repoSwitches = within(repoGroup).getAllByRole("switch");
+    expect(repoSwitches).toHaveLength(2);
+    repoSwitches.forEach((toggle) => expect(toggle).toBeChecked());
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Cross from rail" } });
+    fireEvent.click(screen.getByRole("button", { name: /create & start/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.createCrossRepoTask).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceId: 7, repoIds: [appRepo.id, secondRepo.id] }),
+      );
+    });
+    expect(mockedApi.createTask).not.toHaveBeenCalled();
+  });
+
+  it("defaults to Workspace scope from a workspace board and can switch back to Project", async () => {
+    mockedApi.listRepos.mockResolvedValue([appRepo, secondRepo]);
+    mockedApi.listWorkspaces.mockResolvedValue([
+      workspace({ id: 9, name: "Platform", repoIds: [appRepo.id, secondRepo.id] }),
+    ]);
+    mockedApi.createTask.mockResolvedValue(appTask({ id: 900, title: "Back to single" }));
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByText("Platform"));
+    fireEvent.click(await within(screen.getByTestId("workspace-board")).findByRole("button", { name: /new task/i }));
+
+    // Opened from the board → Workspace scope is the default, checklist visible.
+    expect(await screen.findByRole("radio", { name: "Workspace scope" })).toBeChecked();
+    expect(screen.getByRole("group", { name: "Repositories" })).toBeInTheDocument();
+
+    // Switch to Project: the single-repo Project select returns, checklist disappears.
+    fireEvent.click(screen.getByRole("radio", { name: "Project scope" }));
+    expect(await screen.findByRole("combobox", { name: "Project" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Repositories" })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Back to single" } });
+    fireEvent.click(screen.getByRole("button", { name: /create & start/i }));
+
+    // The primary board repo is the single-repo target; no cross-repo fan-out.
+    await waitFor(() => {
+      expect(mockedApi.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({ repoId: appRepo.id }),
+      );
+    });
+    expect(mockedApi.createCrossRepoTask).not.toHaveBeenCalled();
+  });
 }

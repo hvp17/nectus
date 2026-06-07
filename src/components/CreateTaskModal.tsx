@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { ArrowLeft, GitBranch, Play, TerminalSquare } from "lucide-react";
+import { useEffect, useMemo } from "react";
+import { ArrowLeft, GitBranch, Layers, Play, TerminalSquare } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Field, FieldDescription, FieldLabel } from "./ui/field";
@@ -7,8 +7,9 @@ import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Switch } from "./ui/switch";
 import { Textarea } from "./ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import { AgentLogo } from "./AgentBrand";
-import { AgentProfile, Repo } from "../types";
+import { AgentProfile, Repo, Workspace } from "../types";
 
 interface CreateTaskComposerProps {
   onClose: () => void;
@@ -31,17 +32,21 @@ interface CreateTaskComposerProps {
   newTaskRepoId: number | undefined;
   setNewTaskRepoId: (val: number) => void;
   linkedJiraKey?: string | null;
-  /** The active workspace's repos. With ≥2, the composer offers a multi-repo
-   *  checklist to create a cross-repo task (Increment B). */
-  workspaceRepos?: Repo[];
+  /** All workspaces. Those resolving to ≥2 known repos enable the Project/Workspace
+   *  scope toggle; Workspace scope switches to the cross-repo checklist (Increment B). */
+  workspaces?: Workspace[];
+  /** The workspace the composer targets. Undefined = Project (single-repo) mode. */
+  newTaskWorkspaceId?: number;
+  setNewTaskWorkspaceId?: (id: number | undefined) => void;
   selectedRepoIds?: number[];
   onSetRepoIds?: (ids: number[]) => void;
 }
 
 /**
  * De-modaled "New Task": a focused inline composer view (≤620px) reached from the
- * board's New Task action. Same fields, form state, and create logic as before —
- * the modal framing is gone.
+ * board's New Task action. A Project/Workspace scope toggle (shown only when an
+ * eligible workspace exists) switches between a single-repo project and a cross-repo
+ * workspace task — the latter reachable from any entry point, not just a workspace board.
  */
 export function CreateTaskComposer({
   onClose,
@@ -63,27 +68,73 @@ export function CreateTaskComposer({
   newTaskRepoId,
   setNewTaskRepoId,
   linkedJiraKey,
-  workspaceRepos = [],
+  workspaces = [],
+  newTaskWorkspaceId,
+  setNewTaskWorkspaceId,
   selectedRepoIds = [],
   onSetRepoIds,
 }: CreateTaskComposerProps) {
-  // Cross-repo mode: a workspace with ≥2 repos is active, so offer a multi-select.
-  const crossRepoMode = workspaceRepos.length >= 2;
+  const repoById = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos]);
+
+  // Workspaces that can fan out a cross-repo task: membership resolves to ≥2 known
+  // repos. A 1-repo workspace is just a project, so it isn't offered as a scope.
+  const eligibleWorkspaces = useMemo(
+    () => workspaces.filter((ws) => ws.repoIds.filter((id) => repoById.has(id)).length >= 2),
+    [workspaces, repoById],
+  );
+  const showScopeToggle = eligibleWorkspaces.length > 0;
+
+  const selectedWorkspace = eligibleWorkspaces.find((ws) => ws.id === newTaskWorkspaceId);
+  // Cross-repo mode is driven by the targeted workspace, not the board's focus.
+  const crossRepoMode = Boolean(selectedWorkspace);
+  const scope: "project" | "workspace" = crossRepoMode ? "workspace" : "project";
+
+  // The targeted workspace's repos, in membership order; the first picked is primary.
+  const workspaceRepos = useMemo(
+    () =>
+      selectedWorkspace
+        ? (selectedWorkspace.repoIds.map((id) => repoById.get(id)).filter(Boolean) as Repo[])
+        : [],
+    [selectedWorkspace, repoById],
+  );
+
   const selectedRepo = repos.find((repo) => repo.id === newTaskRepoId);
-  const repoLabel = crossRepoMode ? "Workspace" : selectedRepo?.name ?? "Board";
+  const repoLabel = crossRepoMode ? selectedWorkspace?.name ?? "Workspace" : selectedRepo?.name ?? "Board";
   const submitDisabled =
     busy ||
     !newTaskAgentProfileId ||
     (crossRepoMode ? selectedRepoIds.length === 0 : !newTaskRepoId);
 
-  // Seed the selection with the whole workspace on open; the composer remounts per
-  // open, so this runs once each time the cross-repo composer appears.
+  // Reset the checklist to a workspace's full membership (primary = first member).
+  const seedWorkspaceRepos = (ws: Workspace) => {
+    onSetRepoIds?.(ws.repoIds.filter((id) => repoById.has(id)));
+  };
+
+  // Seed the checklist when the composer opens already in Workspace mode (e.g. from a
+  // focused workspace board). Runs once per open since the composer remounts each time.
   useEffect(() => {
-    if (crossRepoMode && onSetRepoIds) {
-      onSetRepoIds(workspaceRepos.map((repo) => repo.id));
-    }
+    if (selectedWorkspace) seedWorkspaceRepos(selectedWorkspace);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const selectWorkspace = (workspaceId: number) => {
+    const ws = eligibleWorkspaces.find((candidate) => candidate.id === workspaceId);
+    if (!ws || !setNewTaskWorkspaceId) return;
+    setNewTaskWorkspaceId(ws.id);
+    seedWorkspaceRepos(ws);
+  };
+
+  const selectScope = (next: "project" | "workspace") => {
+    if (!setNewTaskWorkspaceId) return;
+    if (next === "workspace") {
+      const ws = selectedWorkspace ?? eligibleWorkspaces[0];
+      if (!ws) return;
+      setNewTaskWorkspaceId(ws.id);
+      seedWorkspaceRepos(ws);
+    } else {
+      setNewTaskWorkspaceId(undefined);
+    }
+  };
 
   // Toggle a repo while preserving workspace order; the first selected is primary.
   const toggleRepo = (repoId: number, on: boolean) => {
@@ -151,6 +202,28 @@ export function CreateTaskComposer({
         </div>
 
         <div className="flex flex-col gap-4 rounded-xl border bg-card px-[22px] py-5 shadow-sm">
+          {showScopeToggle && (
+            <ToggleGroup
+              type="single"
+              value={scope}
+              onValueChange={(value) => {
+                if (value === "project" || value === "workspace") selectScope(value);
+              }}
+              variant="outline"
+              aria-label="Task scope"
+              className="grid w-full grid-cols-2"
+            >
+              <ToggleGroupItem value="project" aria-label="Project scope" className="gap-1.5">
+                <GitBranch className="size-3.5 opacity-70" aria-hidden="true" />
+                Project
+              </ToggleGroupItem>
+              <ToggleGroupItem value="workspace" aria-label="Workspace scope" className="gap-1.5">
+                <Layers className="size-3.5 opacity-70" aria-hidden="true" />
+                Workspace
+              </ToggleGroupItem>
+            </ToggleGroup>
+          )}
+
           <Field>
             <FieldLabel htmlFor="new-task-title" className="text-[11px] font-bold tracking-[0.02em]">Title</FieldLabel>
             <Input
@@ -176,6 +249,29 @@ export function CreateTaskComposer({
 
           {crossRepoMode ? (
             <>
+              <div className="grid grid-cols-2 gap-4">
+                <Field>
+                  <FieldLabel htmlFor="new-task-workspace" className="text-[11px] font-bold tracking-[0.02em]">Workspace</FieldLabel>
+                  <Select value={newTaskWorkspaceId?.toString()} onValueChange={(value) => selectWorkspace(Number(value))}>
+                    <SelectTrigger id="new-task-workspace" className="h-[34px]" aria-label="Workspace">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <Layers className="size-3.5 shrink-0 opacity-70" aria-hidden="true" />
+                        <SelectValue placeholder="Choose a workspace" />
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {eligibleWorkspaces.map((ws) => (
+                        <SelectItem key={ws.id} value={ws.id.toString()}>
+                          {ws.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                {agentField}
+              </div>
+
               <Field>
                 <FieldLabel className="text-[11px] font-bold tracking-[0.02em]">Repositories</FieldLabel>
                 <div className="flex flex-col gap-2" role="group" aria-label="Repositories">
@@ -207,7 +303,6 @@ export function CreateTaskComposer({
                   Pick 2+ to run one agent across sibling worktrees; the first is its working directory.
                 </FieldDescription>
               </Field>
-              {agentField}
             </>
           ) : (
             <div className="grid grid-cols-2 gap-4">
@@ -291,7 +386,7 @@ export function CreateTaskComposer({
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
             <TerminalSquare className="size-3.5" aria-hidden="true" />
-            {newTaskHasWorktree
+            {crossRepoMode || newTaskHasWorktree
               ? "Creates the worktree and starts the agent immediately."
               : "Starts the agent in the project immediately."}
           </span>
