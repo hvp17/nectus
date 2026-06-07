@@ -31,8 +31,9 @@ export function useSettingsActions() {
       async () => {
         const updated = await api.updateAppSettings(input);
         setSettings(updated);
-        // The default agent may have changed; reflect it. The store's ref-sync
-        // keeps the bootstrap default-agent effect from re-overriding this pick.
+        // The default agent may have changed; reflect it. useShellBootstrap's
+        // getState() guard keeps the bootstrap default-agent effect from
+        // re-overriding this pick.
         setSelectedAgentProfileId(updated.defaultAgentProfileId ?? undefined);
         setMessage("Settings saved");
         await refresh();

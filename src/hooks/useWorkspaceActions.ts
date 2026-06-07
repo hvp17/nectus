@@ -5,8 +5,8 @@ import { useAppStore } from "../store/appStore";
 
 /**
  * Workspace create/update/delete — self-sufficient (reads/writes the store + the
- * query cache via refresh). The store's ref-sync keeps the bootstrap
- * "drop deleted workspace" effect from fighting a just-created focus.
+ * query cache via refresh). useShellBootstrap's getState() guard keeps the
+ * bootstrap "drop deleted workspace" effect from fighting a just-created focus.
  */
 export function useWorkspaceActions() {
   const setMessage = useAppStore((s) => s.setMessage);
