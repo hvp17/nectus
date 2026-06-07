@@ -23,7 +23,9 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # pnpm 11.x (pinned in package.json's packageManager) requires Node >= 22.13;
+          # it uses the node:sqlite builtin, so Node 20 crashes the setup-node cache step.
+          node-version: 22
           cache: pnpm
 
       - name: Install Rust toolchain
