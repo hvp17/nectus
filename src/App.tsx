@@ -183,7 +183,10 @@ function App() {
         setNewTaskAgentProfileId(defaultAgentProfileId);
       }
     }
-    setNewTaskRepoId(selectedRepoId);
+    // Reachable from the icon rail while a task or the workspace manager is open,
+    // so dismiss the manager and fall back to a scoped repo when none is selected.
+    setManagingWorkspaces(false);
+    setNewTaskRepoId(selectedRepoId ?? scopedRepos[0]?.id);
     setCreateTaskOpen(true);
   };
 
@@ -251,6 +254,8 @@ function App() {
           active={railActive}
           needsCount={counts.needsInput}
           onNavigate={navigate}
+          onCreateTask={openCreateTaskModal}
+          canCreateTask={repos.length > 0}
           runningAgentsSlot={
             <RunningAgentsFlyout
               tasks={tasks}

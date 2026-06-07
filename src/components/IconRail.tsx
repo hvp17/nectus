@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { FolderGit2, GitPullRequest, Radio, Settings, SquareKanban } from "lucide-react";
+import { FolderGit2, GitPullRequest, Plus, Radio, Settings, SquareKanban } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 export type RailView = "mission" | "board" | "jira" | "reviews" | "settings";
@@ -8,6 +8,10 @@ interface IconRailProps {
   active: RailView;
   needsCount: number;
   onNavigate: (view: RailView) => void;
+  /** Open the New Task composer from anywhere — including an open task's terminal. */
+  onCreateTask: () => void;
+  /** A task needs a project; disable the create action until one is added. */
+  canCreateTask: boolean;
   /** Quick-access running-agents trigger, rendered with the primary nav group. */
   runningAgentsSlot?: ReactNode;
 }
@@ -19,12 +23,35 @@ const NAV: Array<{ id: Exclude<RailView, "settings">; label: string; Icon: typeo
   { id: "reviews", label: "PR Reviews", Icon: GitPullRequest },
 ];
 
-export function IconRail({ active, needsCount, onNavigate, runningAgentsSlot }: IconRailProps) {
+export function IconRail({
+  active,
+  needsCount,
+  onNavigate,
+  onCreateTask,
+  canCreateTask,
+  runningAgentsSlot,
+}: IconRailProps) {
   return (
     <nav className="nx-rail" aria-label="Primary">
       <div className="nx-brand-mark" aria-hidden="true">
         N
       </div>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="nx-rail-btn nx-rail-new"
+            aria-label="Create task"
+            onClick={onCreateTask}
+            disabled={!canCreateTask}
+          >
+            <Plus aria-hidden="true" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right" className="text-xs">
+          {canCreateTask ? "New task" : "Add a project to create a task"}
+        </TooltipContent>
+      </Tooltip>
       {NAV.map(({ id, label, Icon }) => (
         <Tooltip key={id}>
           <TooltipTrigger asChild>

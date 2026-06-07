@@ -9,6 +9,12 @@ The app shell is a slim icon rail plus a contextual panel, not a full sidebar.
 - The icon rail (always visible, 58px) holds Mission Control, Board, JIRA, PR
   Reviews, and Settings. The Mission Control icon carries a badge with the
   cross-project needs-input count.
+- A **New task** "+" button sits at the top of the rail (a primary create action,
+  distinct from the ghost nav icons), so the New Task composer is reachable from
+  any view — including an open task's terminal, where the contextual project panel
+  is hidden. It opens the same composer as the board's "New Task", defaulting to
+  the selected repo (or the first repo in the active workspace's scope), and is
+  disabled until at least one project is added.
 - A **Running agents** rail trigger (sits with the primary nav group) opens a
   quick-access popover from anywhere. It lists every in-flight agent across all
   projects — **Needs you → Running → Review** (terminal Done/Idle are excluded) —
