@@ -14,6 +14,8 @@ import { ReviewsPage } from "./components/ReviewsPage";
 import { JiraBoardPage } from "./components/JiraBoardPage";
 import { useApp } from "./hooks/useApp";
 import { useAppTheme } from "./hooks/useAppTheme";
+import { useAppUpdate } from "./hooks/useAppUpdate";
+import { useAppUpdateToast } from "./hooks/useAppUpdateToast";
 import { useTaskNotificationToast } from "./hooks/useTaskNotificationToast";
 import { formatNotificationBody } from "./notificationText";
 import { planTaskFocus } from "./taskNavigation";
@@ -228,6 +230,14 @@ function App() {
   const clearTaskToast = useCallback(() => setTaskToast(null), [setTaskToast]);
   useTaskNotificationToast({ notification: taskToast, onOpenTask: openTask, onShown: clearTaskToast });
 
+  const appUpdate = useAppUpdate();
+  useAppUpdateToast({
+    status: appUpdate.status,
+    info: appUpdate.info,
+    onInstall: appUpdate.installUpdate,
+    onRelaunch: appUpdate.relaunch,
+  });
+
   // Top-level rail navigation. Board needs a selected project to show its kanban.
   const navigate = (view: RailView) => {
     // The composer, workspace manager, and task workspace overlay the routed
@@ -346,6 +356,7 @@ function App() {
               githubStatus={githubStatus}
               jiraRestStatus={jiraRestStatus}
               jiraDetectedSite={jiraStatus?.site}
+              appUpdate={appUpdate}
               busy={busy}
               onBack={() => setCurrentView("mission")}
               onSaveSettings={saveAppSettings}

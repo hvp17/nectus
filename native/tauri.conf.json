@@ -28,6 +28,15 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/icon.png"]
+    "icon": ["icons/icon.png"],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/hvp17/nectus/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE4MDcxRkVENkYxNkU0NEYKUldSUDVCWnY3UjhIR0NvMVB5dUtYS0lLZTV1eS80UGx6QnliZWRRbWFSbElreG9laHJyaVNuOUkK"
+    }
   }
 }
