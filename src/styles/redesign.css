@@ -12,6 +12,8 @@
 .nx-app {
   /* The primary rail is always collapsed to an icon-only strip. */
   --nx-rail-w: 60px;
+  /* The navigator panel matches shadcn's standard sidebar width (SIDEBAR_WIDTH). */
+  --nx-panel-w: 16rem;
   position: relative;
   isolation: isolate;
   display: grid;
@@ -31,7 +33,7 @@
     var(--background);
 }
 .nx-app[data-frame="railp"] {
-  grid-template-columns: var(--nx-rail-w) 232px minmax(0, 1fr);
+  grid-template-columns: var(--nx-rail-w) var(--nx-panel-w) minmax(0, 1fr);
 }
 .nx-viewport {
   position: relative;
@@ -58,7 +60,7 @@
 .density-compact .nx-app { font-size: 0.98em; }
 
 @media (max-width: 1180px) {
-  .nx-app[data-frame="railp"] { grid-template-columns: var(--nx-rail-w) 200px minmax(0, 1fr); }
+  .nx-app[data-frame="railp"] { grid-template-columns: var(--nx-rail-w) 14rem minmax(0, 1fr); }
 }
 
 /* Kanban: scroll columns horizontally before they crush card text. */
