@@ -21,12 +21,13 @@ import { WorkspaceManager } from "./components/WorkspaceManager";
 import { SettingsPage } from "./components/SettingsPage";
 import { ReviewsPage } from "./components/ReviewsPage";
 import { JiraBoardPage } from "./components/JiraBoardPage";
-import { useApp } from "./hooks/useApp";
 import { useEventBridge } from "./hooks/useEventBridge";
+import { useShellBootstrap } from "./hooks/useShellBootstrap";
 import { usePrReviews } from "./hooks/usePrReviews";
 import { useTaskActions } from "./hooks/useTaskActions";
 import { useTaskDeletion } from "./hooks/useTaskDeletion";
 import { useWorkspaceActions } from "./hooks/useWorkspaceActions";
+import { useProjectActions } from "./hooks/useProjectActions";
 import { useComposer } from "./hooks/useComposer";
 import { useJiraBoardView } from "./hooks/useJiraBoardView";
 import { useSettingsActions } from "./hooks/useSettingsActions";
@@ -47,6 +48,7 @@ import {
   useRefreshData,
 } from "./queries/core";
 import { useAppStore } from "./store/appStore";
+import { getAttentionCounts } from "./sessionAttention";
 import type { AgentProfile, Repo, TaskSummary, Workspace as WorkspaceModel } from "./types";
 import { useAppTheme } from "./hooks/useAppTheme";
 import { useAppUpdate } from "./hooks/useAppUpdate";
@@ -89,7 +91,6 @@ function getToastContent(message: string) {
 }
 
 interface AppContextValue {
-  app: ReturnType<typeof useApp>;
   openTask: (taskId: number) => void;
   openCreateTaskModal: () => void;
   appUpdate: ReturnType<typeof useAppUpdate>;
@@ -110,30 +111,55 @@ function useAppContext(): AppContextValue {
  * falling back to `<Outlet/>` for the routed base view.
  */
 function AppLayout() {
-  // Single, mount-once subscription to all Tauri session/review/PR events.
+  // Single, mount-once subscription to all Tauri session/review/PR events, and the
+  // boot-time default selection.
   useEventBridge();
-  const app = useApp();
+  useShellBootstrap();
   const workspaceActions = useWorkspaceActions();
-  const {
-    repos,
-    activeWorkspaceId,
-    activeWorkspaceRepos,
-    tasks,
-    selectedRepoId,
-    setSelectedRepoId,
-    setSelectedTaskId,
-    selectedTask,
-    counts,
-    message,
-    setMessage,
-    taskToast,
-    setTaskToast,
-    currentView,
-    setCurrentView,
-    setActiveWorkspaceId,
-    settings,
-    agentProfiles,
-  } = app;
+  const { addProject } = useProjectActions();
+
+  // Server reads (queries) + shell UI state (store) — the shell composes its own
+  // data directly now that `useApp` is gone.
+  const repos = useReposQuery().data ?? EMPTY_REPOS;
+  const workspaces = useWorkspacesQuery().data ?? EMPTY_WORKSPACES;
+  const tasks = useTasksQuery().data ?? EMPTY_TASKS;
+  const agentProfiles = useAgentProfilesQuery().data ?? EMPTY_PROFILES;
+  const settings = useSettingsQuery().data;
+  const loading = useBootstrapLoading();
+  const currentView = useAppStore((s) => s.currentView);
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
+  const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
+  const setActiveWorkspaceId = useAppStore((s) => s.setActiveWorkspaceId);
+  const openWorkspaceBoard = useAppStore((s) => s.openWorkspaceBoard);
+  const selectedRepoId = useAppStore((s) => s.selectedRepoId);
+  const setSelectedRepoId = useAppStore((s) => s.setSelectedRepoId);
+  const selectedTaskId = useAppStore((s) => s.selectedTaskId);
+  const setSelectedTaskId = useAppStore((s) => s.setSelectedTaskId);
+  const message = useAppStore((s) => s.message);
+  const setMessage = useAppStore((s) => s.setMessage);
+  const taskToast = useAppStore((s) => s.taskToast);
+  const setTaskToast = useAppStore((s) => s.setTaskToast);
+  const busy = useAppStore((s) => s.busy);
+  const taskAttention = useAppStore((s) => s.taskAttention);
+  const liveLines = useAppStore((s) => s.liveLines);
+
+  const selectedRepo = useMemo(() => repos.find((repo) => repo.id === selectedRepoId), [repos, selectedRepoId]);
+  const activeWorkspace = useMemo(
+    () => workspaces.find((workspace) => workspace.id === activeWorkspaceId),
+    [workspaces, activeWorkspaceId],
+  );
+  const activeWorkspaceRepos = useMemo(
+    () => (activeWorkspace ? repos.filter((repo) => activeWorkspace.repoIds.includes(repo.id)) : EMPTY_REPOS),
+    [activeWorkspace, repos],
+  );
+  const selectedTask = useMemo(() => tasks.find((task) => task.id === selectedTaskId), [tasks, selectedTaskId]);
+  const counts = useMemo(() => {
+    const attentionCounts = getAttentionCounts(taskAttention);
+    return {
+      needsInput: attentionCounts.needsInput,
+      finished: attentionCounts.finished,
+    };
+  }, [taskAttention]);
 
   // The New Task composer draft now lives in the store; AppLayout owns only the
   // open/close trigger (the overlay itself is self-sufficient via `ComposerOverlay`).
@@ -280,9 +306,9 @@ function AppLayout() {
   } else if (managingWorkspaces) {
     viewport = (
       <WorkspaceManager
-        workspaces={app.workspaces}
+        workspaces={workspaces}
         repos={repos}
-        busy={app.busy}
+        busy={busy}
         onClose={() => setManagingWorkspaces(false)}
         onCreate={workspaceActions.createWorkspace}
         onUpdate={workspaceActions.updateWorkspace}
@@ -298,8 +324,8 @@ function AppLayout() {
             currentView === "mission"
               ? "Mission Control"
               : currentView === "workspace"
-                ? app.activeWorkspace?.name ?? "Workspace"
-                : app.selectedRepo?.name ?? "Board"
+                ? activeWorkspace?.name ?? "Workspace"
+                : selectedRepo?.name ?? "Board"
           }
           repoName={repos.find((repo) => repo.id === selectedTask.repoId)?.name}
           onClose={() => setSelectedTaskId(undefined)}
@@ -310,7 +336,7 @@ function AppLayout() {
     viewport = <Outlet />;
   }
 
-  const contextValue: AppContextValue = { app, openTask, openCreateTaskModal, appUpdate };
+  const contextValue: AppContextValue = { openTask, openCreateTaskModal, appUpdate };
 
   return (
     <AppContext.Provider value={contextValue}>
@@ -329,10 +355,10 @@ function AppLayout() {
         {showProjectPanel && (
           <ProjectPanel
             repos={repos}
-            workspaces={app.workspaces}
+            workspaces={workspaces}
             tasks={tasks}
-            taskAttention={app.taskAttention}
-            liveLines={app.liveLines}
+            taskAttention={taskAttention}
+            liveLines={liveLines}
             selectedRepoId={currentView === "board" ? selectedRepoId : undefined}
             selectedWorkspaceId={currentView === "workspace" ? activeWorkspaceId : undefined}
             onSelectRepo={(id) => {
@@ -341,12 +367,12 @@ function AppLayout() {
               setSelectedRepoId(id);
               setCurrentView("board");
             }}
-            onSelectWorkspace={app.openWorkspaceBoard}
+            onSelectWorkspace={openWorkspaceBoard}
             onOpenTask={openTask}
-            onAddProject={app.addProject}
+            onAddProject={addProject}
             onManageWorkspaces={openManageWorkspaces}
-            busy={app.busy}
-            loading={app.loading}
+            busy={busy}
+            loading={loading}
           />
         )}
 
