@@ -1501,6 +1501,35 @@ fn review_loop_tracks_and_resets_reviewer_session_id() {
 }
 
 #[test]
+fn pr_review_tracks_reviewer_session_id_across_reruns() {
+    let db = Database::open_in_memory().unwrap();
+    let (_guard, repo) = add_repo_with_remote(&db);
+    let profiles = db.list_agent_profiles().unwrap();
+    let reviewer = profiles
+        .iter()
+        .find(|profile| profile.agent_kind == AgentKind::Claude)
+        .unwrap();
+    let review = db
+        .create_pr_review(repo.id, reviewer.id, "https://github.com/x/y/pull/1", 1)
+        .unwrap();
+
+    assert_eq!(db.pr_review_session_id(review.id).unwrap(), None);
+
+    db.set_pr_review_session_id(review.id, Some("sid-9")).unwrap();
+    assert_eq!(
+        db.pr_review_session_id(review.id).unwrap(),
+        Some("sid-9".to_string())
+    );
+
+    // A rerun preserves the session id so the reviewer resumes its prior review.
+    db.reset_pr_review_for_rerun(review.id).unwrap();
+    assert_eq!(
+        db.pr_review_session_id(review.id).unwrap(),
+        Some("sid-9".to_string())
+    );
+}
+
+#[test]
 fn rejects_a_duplicate_workspace_name() {
     let db = Database::open_in_memory().unwrap();
     let alpha = insert_workspace_test_repo(&db, "alpha");

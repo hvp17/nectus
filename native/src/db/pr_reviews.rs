@@ -356,6 +356,31 @@ impl Database {
             .ok_or_else(|| "PR review not found".to_string())
     }
 
+    /// The reviewer session id for a single PR review, reused across reruns.
+    pub fn pr_review_session_id(&self, id: i64) -> Result<Option<String>, String> {
+        self.conn
+            .query_row(
+                "SELECT reviewer_session_id FROM pr_reviews WHERE id = ?1",
+                params![id],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()
+            .map(|value| value.flatten())
+            .map_err(|error| error.to_string())
+    }
+
+    /// Store (or clear) the reviewer session id so a rerun can resume it.
+    pub fn set_pr_review_session_id(
+        &self,
+        id: i64,
+        session_id: Option<&str>,
+    ) -> Result<(), String> {
+        self.execute_pr_review_update(
+            "UPDATE pr_reviews SET reviewer_session_id = ?1, updated_at = ?2 WHERE id = ?3",
+            params![session_id, now(), id],
+        )
+    }
+
     pub fn delete_pr_review(&self, id: i64) -> Result<(), String> {
         self.conn
             .execute("DELETE FROM pr_reviews WHERE id = ?1", params![id])
