@@ -21,4 +21,24 @@ export const queryKeys = {
     /** Live PR status for one task (checks/review decision); polled while open. */
     pullRequest: (taskId: number) => ["github", "pull-request", taskId] as const,
   },
+
+  task: {
+    /** Changed-file summary for a task's diff; refetched on the task's `session_idle`. */
+    diffSummary: (taskId: number) => ["task", "diff-summary", taskId] as const,
+    reviewLoop: (taskId: number) => ["task", "review-loop", taskId] as const,
+    reviewRuns: (taskId: number) => ["task", "review-runs", taskId] as const,
+  },
+
+  prReviews: {
+    list: () => ["pr-reviews"] as const,
+    runs: (reviewId: number) => ["pr-reviews", reviewId, "runs"] as const,
+  },
+
+  jira: {
+    status: () => ["jira", "status"] as const,
+    restStatus: () => ["jira", "rest-status"] as const,
+    projects: () => ["jira", "projects"] as const,
+    projectStatuses: (project: string) => ["jira", "project-statuses", project] as const,
+    board: () => ["jira", "board"] as const,
+  },
 } as const;

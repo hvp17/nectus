@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import { useAsyncEffect } from "./useAsyncEffect";
+import { queryKeys } from "../queries/keys";
 import { useTauriEvent } from "./useTauriEvent";
 import type { ReviewLoop, ReviewLoopUpdatedEvent, ReviewOutputEvent, ReviewRun } from "../types";
 
@@ -10,9 +11,23 @@ interface UseTaskReviewLoopArgs {
   onReviewLoopUpdated?: (reviewLoop: ReviewLoop) => void;
 }
 
+const EMPTY_RUNS: ReviewRun[] = [];
+
+/**
+ * Owns the selected task's review loop + runs, backed by TanStack Query (keyed per
+ * task). The `setSelectedReviewLoop`/`setSelectedReviewRuns` setters write the
+ * current task's cache entry, so `useApp`'s `startReview`/`startPairLoop`/
+ * `stopPairLoop` keep working unchanged. The `review_loop_updated` subscription
+ * keeps the cache + the task-board summary live; `review_output` streams the
+ * reviewer's stdout into the ephemeral `liveReviewOutput` buffer (never cached).
+ *
+ * The `?? -1` key shared by the queries and the setters means an imperative
+ * `setSelectedReviewLoop(...)` made while no task is selected still lands in a cell
+ * the (disabled) query reads, preserving the immediate "reviewing" affordance.
+ */
 export function useTaskReviewLoop({ selectedTaskId, onMessage, onReviewLoopUpdated }: UseTaskReviewLoopArgs) {
-  const [selectedReviewLoop, setSelectedReviewLoop] = useState<ReviewLoop | null>(null);
-  const [selectedReviewRuns, setSelectedReviewRuns] = useState<ReviewRun[]>([]);
+  const queryClient = useQueryClient();
+
   // Accumulated live stdout of the selected task's reviewer, for the read-only
   // Review pane. Reset between runs and when the selected task changes.
   const [liveReviewOutput, setLiveReviewOutput] = useState("");
@@ -36,27 +51,39 @@ export function useTaskReviewLoop({ selectedTaskId, onMessage, onReviewLoopUpdat
     [onMessage],
   );
 
-  useAsyncEffect(
-    async (alive) => {
-      if (!selectedTaskId) {
-        setSelectedReviewLoop(null);
-        setSelectedReviewRuns([]);
-        return;
-      }
-      try {
-        const [reviewLoop, reviewRuns] = await Promise.all([
-          api.getTaskReviewLoop(selectedTaskId),
-          api.listTaskReviewRuns(selectedTaskId),
-        ]);
-        if (alive()) {
-          setSelectedReviewLoop(reviewLoop);
-          setSelectedReviewRuns(reviewRuns);
-        }
-      } catch (error) {
-        if (alive()) publishMessage(String(error));
-      }
+  const loopQuery = useQuery({
+    queryKey: queryKeys.task.reviewLoop(selectedTaskId ?? -1),
+    queryFn: () => api.getTaskReviewLoop(selectedTaskId as number),
+    enabled: selectedTaskId !== undefined,
+    staleTime: 0,
+  });
+  const runsQuery = useQuery({
+    queryKey: queryKeys.task.reviewRuns(selectedTaskId ?? -1),
+    queryFn: () => api.listTaskReviewRuns(selectedTaskId as number),
+    enabled: selectedTaskId !== undefined,
+    staleTime: 0,
+  });
+
+  // Surface a load failure via `onMessage`, matching the old try/catch.
+  useEffect(() => {
+    const error = loopQuery.error ?? runsQuery.error;
+    if (error) publishMessage(String(error));
+  }, [loopQuery.error, runsQuery.error, publishMessage]);
+
+  const selectedReviewLoop = loopQuery.data ?? null;
+  const selectedReviewRuns = runsQuery.data ?? EMPTY_RUNS;
+
+  const setSelectedReviewLoop = useCallback(
+    (loop: ReviewLoop | null) => {
+      queryClient.setQueryData(queryKeys.task.reviewLoop(selectedTaskIdRef.current ?? -1), loop);
     },
-    [publishMessage, selectedTaskId],
+    [queryClient],
+  );
+  const setSelectedReviewRuns = useCallback(
+    (runs: ReviewRun[]) => {
+      queryClient.setQueryData(queryKeys.task.reviewRuns(selectedTaskIdRef.current ?? -1), runs);
+    },
+    [queryClient],
   );
 
   useTauriEvent<ReviewLoopUpdatedEvent>(
@@ -64,11 +91,14 @@ export function useTaskReviewLoop({ selectedTaskId, onMessage, onReviewLoopUpdat
     (payload) => {
       onReviewLoopUpdated?.(payload.reviewLoop);
       if (selectedTaskIdRef.current !== payload.taskId) return;
-      setSelectedReviewLoop(payload.reviewLoop);
+      queryClient.setQueryData(queryKeys.task.reviewLoop(payload.taskId), payload.reviewLoop);
       // A run is starting: clear the live pane before its first chunk arrives.
       if (payload.reviewLoop.status === "reviewing") setLiveReviewOutput("");
       if (payload.reviewRun) {
-        setSelectedReviewRuns((current) => [...current, payload.reviewRun!]);
+        queryClient.setQueryData<ReviewRun[]>(queryKeys.task.reviewRuns(payload.taskId), (current = []) => [
+          ...current,
+          payload.reviewRun!,
+        ]);
       }
     },
     { onError: (error) => publishMessage(String(error)) },

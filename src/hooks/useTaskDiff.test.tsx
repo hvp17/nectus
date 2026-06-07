@@ -1,9 +1,20 @@
+import type { ReactNode } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
+import { createQueryClient } from "../queries/queryClient";
 import { deferred } from "../test/testUtils";
 import { useTaskDiff } from "./useTaskDiff";
 import type { TaskDiffSummary } from "../types";
+
+/** A renderHook wrapper with its own fresh QueryClient (isolated cache per test). */
+function makeWrapper() {
+  const client = createQueryClient();
+  return ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+}
 
 const eventTestState = vi.hoisted(() => ({
   handlers: new Map<string, (event: { payload: unknown }) => void>(),
@@ -44,14 +55,14 @@ beforeEach(() => {
 describe("useTaskDiff", () => {
   it("loads the changed-file summary as soon as a task is selected", async () => {
     mockedApi.taskDiffSummary.mockResolvedValue(summary);
-    const { result } = renderHook(() => useTaskDiff(1));
+    const { result } = renderHook(() => useTaskDiff(1), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.summary).toEqual(summary));
     expect(mockedApi.taskDiffSummary).toHaveBeenCalledWith(1);
   });
 
   it("reloads the summary on manual refresh", async () => {
     mockedApi.taskDiffSummary.mockResolvedValue(summary);
-    const { result } = renderHook(() => useTaskDiff(1));
+    const { result } = renderHook(() => useTaskDiff(1), { wrapper: makeWrapper() });
     await waitFor(() => expect(mockedApi.taskDiffSummary).toHaveBeenCalledTimes(1));
     await act(async () => {
       await result.current.refresh();
@@ -62,7 +73,7 @@ describe("useTaskDiff", () => {
   it("lazy-loads and caches a file patch", async () => {
     mockedApi.taskDiffSummary.mockResolvedValue(summary);
     mockedApi.taskDiffFile.mockResolvedValue("@@ -1 +1 @@\n+x");
-    const { result } = renderHook(() => useTaskDiff(1));
+    const { result } = renderHook(() => useTaskDiff(1), { wrapper: makeWrapper() });
     await waitFor(() => expect(mockedApi.taskDiffSummary).toHaveBeenCalled());
     await act(async () => {
       await result.current.loadFile("src/a.ts");
@@ -73,7 +84,7 @@ describe("useTaskDiff", () => {
 
   it("refreshes when the task's session goes idle, even before the diff is opened", async () => {
     mockedApi.taskDiffSummary.mockResolvedValue(summary);
-    renderHook(() => useTaskDiff(7));
+    renderHook(() => useTaskDiff(7), { wrapper: makeWrapper() });
     await waitFor(() => expect(mockedApi.taskDiffSummary).toHaveBeenCalledTimes(1));
 
     const handler = eventTestState.handlers.get("session_idle");
@@ -86,7 +97,7 @@ describe("useTaskDiff", () => {
 
   it("ignores idle events for other tasks", async () => {
     mockedApi.taskDiffSummary.mockResolvedValue(summary);
-    renderHook(() => useTaskDiff(7));
+    renderHook(() => useTaskDiff(7), { wrapper: makeWrapper() });
     await waitFor(() => expect(mockedApi.taskDiffSummary).toHaveBeenCalledTimes(1));
     const handler = eventTestState.handlers.get("session_idle");
     await act(async () => {
@@ -100,9 +111,7 @@ describe("useTaskDiff", () => {
     mockedApi.taskDiffSummary.mockImplementation((id: number) =>
       id === 2 ? second.promise : Promise.resolve(summary),
     );
-    const { result, rerender } = renderHook(({ id }) => useTaskDiff(id), {
-      initialProps: { id: 1 },
-    });
+    const { result, rerender } = renderHook(({ id }) => useTaskDiff(id), { initialProps: { id: 1 }, wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.summary).toEqual(summary));
 
     rerender({ id: 2 });

@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import { queryKeys } from "../queries/keys";
 import { upsertById, upsertNewestById } from "../lib/listState";
-import { useAsyncEffect } from "./useAsyncEffect";
 import { useTauriEvent } from "./useTauriEvent";
 import { notifySessionEvent } from "../sessionNotifications";
 import type { PrReview, PrReviewRun, PrReviewUpdatedEvent } from "../types";
@@ -10,72 +11,64 @@ interface UsePrReviewsArgs {
   onMessage: (message: string) => void;
 }
 
+const EMPTY_REVIEWS: PrReview[] = [];
+const EMPTY_RUNS: PrReviewRun[] = [];
+
 function reviewLabel(review: PrReview): string {
   return review.prTitle ?? `PR #${review.prNumber}`;
 }
 
 /**
- * Owns the PR-review list: initial load, create/rerun/delete, and the
- * `pr_review_updated` subscription that keeps the list live and notifies when a
- * review finishes. Kept separate from `useApp` so the review concern stays
- * self-contained.
+ * Owns the PR-review list, backed by TanStack Query: the list and the selected
+ * review's per-round outputs are queries, create/rerun/delete write through the
+ * cache, and the `pr_review_updated` subscription keeps both live and notifies on
+ * completion. The event handler reads/writes the cache directly (no `prReviewsRef`).
  */
 export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
-  const [prReviews, setPrReviews] = useState<PrReview[]>([]);
+  const queryClient = useQueryClient();
+
+  const reviewsQuery = useQuery({
+    queryKey: queryKeys.prReviews.list(),
+    queryFn: () => api.listPrReviews(),
+    staleTime: 5_000,
+    meta: { surfaceErrors: true },
+  });
+  const prReviews = reviewsQuery.data ?? EMPTY_REVIEWS;
+
   const [selectedPrReviewId, setSelectedPrReviewId] = useState<number | undefined>();
   const [creatingReview, setCreatingReview] = useState(false);
-  const [runsByReview, setRunsByReview] = useState<Record<number, PrReviewRun[]>>({});
-  const prReviewsRef = useRef<PrReview[]>([]);
 
-  const setReviews = useCallback((updater: (current: PrReview[]) => PrReview[]) => {
-    setPrReviews((current) => {
-      const next = updater(current);
-      prReviewsRef.current = next;
-      return next;
-    });
-  }, []);
+  // The selected (consensus) review's per-reviewer round outputs. Events keep them
+  // live afterward via `setQueryData`; single reviews simply return no runs.
+  const runsQuery = useQuery({
+    queryKey:
+      selectedPrReviewId != null ? queryKeys.prReviews.runs(selectedPrReviewId) : ["pr-reviews", "none", "runs"],
+    queryFn: () => api.listPrReviewRuns(selectedPrReviewId as number),
+    enabled: selectedPrReviewId != null,
+    meta: { surfaceErrors: true },
+  });
 
-  useAsyncEffect(
-    async (alive) => {
-      try {
-        const reviews = await api.listPrReviews();
-        if (alive()) setReviews(() => reviews);
-      } catch (error) {
-        if (alive()) onMessage(String(error));
-      }
+  const setReviews = useCallback(
+    (updater: (current: PrReview[]) => PrReview[]) => {
+      queryClient.setQueryData<PrReview[]>(queryKeys.prReviews.list(), (current) => updater(current ?? []));
     },
-    [onMessage, setReviews],
-  );
-
-  // Load the per-reviewer round outputs whenever a (consensus) review is opened.
-  // Events keep them live afterward; single reviews simply return no runs.
-  useAsyncEffect(
-    async (alive) => {
-      if (selectedPrReviewId === undefined) return;
-      const reviewId = selectedPrReviewId;
-      try {
-        const runs = await api.listPrReviewRuns(reviewId);
-        if (alive()) setRunsByReview((current) => ({ ...current, [reviewId]: runs }));
-      } catch (error) {
-        if (alive()) onMessage(String(error));
-      }
-    },
-    [selectedPrReviewId, onMessage],
+    [queryClient],
   );
 
   useTauriEvent<PrReviewUpdatedEvent>(
     "pr_review_updated",
     (payload) => {
       const review = payload.prReview;
-      const previousStatus = prReviewsRef.current.find((item) => item.id === review.id)?.status;
+      const previousStatus = queryClient
+        .getQueryData<PrReview[]>(queryKeys.prReviews.list())
+        ?.find((item) => item.id === review.id)?.status;
       setReviews((current) => upsertNewestById(current, review));
 
       const latestRun = payload.latestRun;
       if (latestRun) {
-        setRunsByReview((current) => ({
-          ...current,
-          [latestRun.prReviewId]: upsertById(current[latestRun.prReviewId] ?? [], latestRun),
-        }));
+        queryClient.setQueryData<PrReviewRun[]>(queryKeys.prReviews.runs(latestRun.prReviewId), (current) =>
+          upsertById(current ?? [], latestRun),
+        );
       }
 
       if (review.status === previousStatus) return;
@@ -115,23 +108,25 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
       try {
         const review = await api.rerunPrReview(reviewId);
         setReviews((current) => upsertNewestById(current, review));
-        // The backend cleared the prior rounds; drop the stale ones so the
-        // re-run's rounds stream in fresh.
-        setRunsByReview((current) => ({ ...current, [reviewId]: [] }));
+        // The backend cleared the prior rounds; drop the stale ones so the re-run's
+        // rounds stream in fresh.
+        queryClient.setQueryData<PrReviewRun[]>(queryKeys.prReviews.runs(reviewId), []);
       } catch (error) {
         onMessage(String(error));
       }
     },
-    [onMessage, setReviews],
+    [onMessage, setReviews, queryClient],
   );
 
-  // Post a finished review back to its pull request as a comment. Returns whether
-  // it succeeded so the caller can drive a transient "posting" affordance.
+  // Post a finished review back to its pull request as a comment. Returns whether it
+  // succeeded so the caller can drive a transient "posting" affordance.
   const postReviewComment = useCallback(
     async (reviewId: number): Promise<boolean> => {
       try {
         await api.postPrReviewComment(reviewId);
-        const review = prReviewsRef.current.find((item) => item.id === reviewId);
+        const review = queryClient
+          .getQueryData<PrReview[]>(queryKeys.prReviews.list())
+          ?.find((item) => item.id === reviewId);
         onMessage(`Posted review to ${review ? reviewLabel(review) : "the pull request"}`);
         return true;
       } catch (error) {
@@ -139,7 +134,7 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
         return false;
       }
     },
-    [onMessage],
+    [onMessage, queryClient],
   );
 
   const deletePrReview = useCallback(
@@ -148,19 +143,13 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
         await api.deletePrReview(reviewId);
         setReviews((current) => current.filter((item) => item.id !== reviewId));
         setSelectedPrReviewId((current) => (current === reviewId ? undefined : current));
-        // Drop the deleted review's cached round outputs so the per-review map
-        // doesn't grow unbounded across a session.
-        setRunsByReview((current) => {
-          if (!(reviewId in current)) return current;
-          const next = { ...current };
-          delete next[reviewId];
-          return next;
-        });
+        // Drop the deleted review's cached round outputs.
+        queryClient.removeQueries({ queryKey: queryKeys.prReviews.runs(reviewId) });
       } catch (error) {
         onMessage(String(error));
       }
     },
-    [onMessage, setReviews],
+    [onMessage, setReviews, queryClient],
   );
 
   const selectedPrReview = useMemo(
@@ -168,10 +157,7 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
     [prReviews, selectedPrReviewId],
   );
 
-  const selectedPrReviewRuns = useMemo(
-    () => (selectedPrReviewId === undefined ? [] : runsByReview[selectedPrReviewId] ?? []),
-    [runsByReview, selectedPrReviewId],
-  );
+  const selectedPrReviewRuns = runsQuery.data ?? EMPTY_RUNS;
 
   return {
     prReviews,
