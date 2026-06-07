@@ -1,4 +1,5 @@
 import { FolderGit2, GitPullRequest, Plus, Radio, Settings, SquareKanban } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 export type RailView = "mission" | "board" | "jira" | "reviews" | "settings";
 
@@ -19,65 +20,76 @@ const NAV: Array<{ id: Exclude<RailView, "settings">; label: string; Icon: typeo
   { id: "reviews", label: "PR Reviews", Icon: GitPullRequest },
 ];
 
-export function IconRail({
-  active,
-  needsCount,
-  onNavigate,
-  onCreateTask,
-  canCreateTask,
-}: IconRailProps) {
+/**
+ * The always-collapsed primary rail: icon-only, with a tooltip naming each
+ * destination. Every button keeps its `aria-label`, so the accessible name (and
+ * the tests that find buttons by name) is unchanged even though the text is hidden.
+ */
+export function IconRail({ active, needsCount, onNavigate, onCreateTask, canCreateTask }: IconRailProps) {
   return (
     <nav className="nx-rail" aria-label="Primary">
       <div className="nx-rail-head">
         <div className="nx-brand-mark" aria-hidden="true">
           N
         </div>
-        <span className="nx-brand-word">Nectus</span>
       </div>
       <div className="nx-rail-nav">
         {NAV.map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            type="button"
-            className="nx-rail-btn"
-            data-active={active === id}
-            aria-label={label}
-            aria-current={active === id ? "page" : undefined}
-            onClick={() => onNavigate(id)}
-          >
-            <Icon aria-hidden="true" />
-            <span className="nx-rail-label">{label}</span>
-            {id === "mission" && needsCount > 0 && (
-              <span className="nx-rail-badge" aria-hidden="true">
-                {needsCount}
-              </span>
-            )}
-          </button>
+          <Tooltip key={id}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="nx-rail-btn"
+                data-active={active === id}
+                aria-label={label}
+                aria-current={active === id ? "page" : undefined}
+                onClick={() => onNavigate(id)}
+              >
+                <Icon aria-hidden="true" />
+                {id === "mission" && needsCount > 0 && (
+                  <span className="nx-rail-badge" aria-hidden="true">
+                    {needsCount}
+                  </span>
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{label}</TooltipContent>
+          </Tooltip>
         ))}
       </div>
       <span className="nx-rail-sp" />
-      <button
-        type="button"
-        className="nx-rail-btn nx-rail-new"
-        aria-label="Create task"
-        title={canCreateTask ? undefined : "Add a project to create a task"}
-        onClick={onCreateTask}
-        disabled={!canCreateTask}
-      >
-        <Plus aria-hidden="true" />
-        <span className="nx-rail-label">New task</span>
-      </button>
-      <button
-        type="button"
-        className="nx-rail-btn"
-        data-active={active === "settings"}
-        aria-label="Settings"
-        aria-current={active === "settings" ? "page" : undefined}
-        onClick={() => onNavigate("settings")}
-      >
-        <Settings aria-hidden="true" />
-        <span className="nx-rail-label">Settings</span>
-      </button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="nx-rail-btn nx-rail-new"
+            aria-label="Create task"
+            // The Radix tooltip won't fire on a disabled trigger, so the native
+            // title still surfaces the "why" when create is unavailable.
+            title={canCreateTask ? undefined : "Add a project to create a task"}
+            onClick={onCreateTask}
+            disabled={!canCreateTask}
+          >
+            <Plus aria-hidden="true" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right">New task</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="nx-rail-btn"
+            data-active={active === "settings"}
+            aria-label="Settings"
+            aria-current={active === "settings" ? "page" : undefined}
+            onClick={() => onNavigate("settings")}
+          >
+            <Settings aria-hidden="true" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Settings</TooltipContent>
+      </Tooltip>
     </nav>
   );
 }

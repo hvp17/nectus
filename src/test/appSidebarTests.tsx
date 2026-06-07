@@ -58,6 +58,24 @@ export function defineAppSidebarTests() {
     expect(screen.queryByRole("complementary", { name: "Projects and workspaces" })).not.toBeInTheDocument();
   });
 
+  it("keeps the projects/workspaces navigator visible in task details", async () => {
+    mockedApi.listRepos.mockResolvedValue([appRepo]);
+    mockedApi.listWorkspaces.mockResolvedValue([]);
+    mockedApi.listTasks.mockResolvedValue([appTask({ id: 55, repoId: appRepo.id, title: "Open me" })]);
+
+    render(<App />);
+
+    // Open the task from the project board.
+    fireEvent.click(await screen.findByRole("button", { name: "Board" }));
+    const board = await screen.findByTestId("dashboard-layout");
+    fireEvent.click(within(board).getByRole("button", { name: /Open me/ }));
+
+    // The task workspace is shown AND the navigator panel stays visible beside it.
+    const taskView = await screen.findByTestId("dashboard-layout");
+    expect(taskView).toHaveAttribute("data-task-workspace", "true");
+    expect(screen.getByRole("complementary", { name: "Projects and workspaces" })).toBeInTheDocument();
+  });
+
   it("Mission Control no longer renders the workspace scope switcher", async () => {
     mockedApi.listRepos.mockResolvedValue([appRepo]);
     mockedApi.listWorkspaces.mockResolvedValue([workspace({ repoIds: [appRepo.id] })]);
