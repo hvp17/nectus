@@ -1,7 +1,7 @@
 use super::pr_review::build_pr_review_prompt;
 use super::pr_verdict::{parse_pr_review_output, PR_VERDICT_MARKER};
 use super::pr_worktree::with_pr_worktree;
-use super::reviewer::run_reviewer_command;
+use super::reviewer::{reviewer_supports_resume, run_reviewer_command, ReviewerRunOutput};
 use crate::db::Database;
 use crate::github::{self, PrMeta};
 use crate::models::{
@@ -9,6 +9,7 @@ use crate::models::{
     PrReviewVerdict,
 };
 use parking_lot::Mutex;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
@@ -138,11 +139,13 @@ fn run_rounds_and_synthesize(
     let mut last_round: Vec<ReviewerOutcome> = Vec::new();
     let mut converged = false;
     let mut agreed_verdict = PrReviewVerdict::Inconclusive;
+    // reviewer_profile_id -> resolved session id (capture once, keep).
+    let mut sessions: HashMap<i64, String> = HashMap::new();
 
     for round in 1..=max_rounds {
         // Round 1 is an independent review; later rounds share the previous
         // round's peer reviews and ask each reviewer to reconsider.
-        let plans: Vec<(&AgentProfile, String)> = reviewers
+        let plans: Vec<(&AgentProfile, String, Option<String>)> = reviewers
             .iter()
             .map(|reviewer| {
                 let prompt = if round == 1 {
@@ -150,17 +153,26 @@ fn run_rounds_and_synthesize(
                 } else {
                     build_debate_prompt(pr_number, meta, round, reviewer.id, &last_round)
                 };
-                (reviewer, prompt)
+                let resume_id = if reviewer_supports_resume(reviewer.agent_kind) {
+                    sessions.get(&reviewer.id).cloned()
+                } else {
+                    None
+                };
+                (reviewer, prompt, resume_id)
             })
             .collect();
 
         let outputs = run_round_parallel(&plans, worktree_path);
 
         let mut round_outcomes = Vec::with_capacity(plans.len());
-        for ((reviewer, _prompt), output) in plans.iter().zip(outputs) {
+        for ((reviewer, _prompt, _resume), output) in plans.iter().zip(outputs) {
             let (verdict, review, error) = match output {
-                Ok(raw) => {
-                    let (verdict, review) = parse_pr_review_output(&raw);
+                Ok(run) => {
+                    // Capture once, keep: store the resolved id the first time.
+                    if let Some(session_id) = run.session_id {
+                        sessions.entry(reviewer.id).or_insert(session_id);
+                    }
+                    let (verdict, review) = parse_pr_review_output(&run.text);
                     (verdict, review, None)
                 }
                 Err(error) => (PrReviewVerdict::Inconclusive, String::new(), Some(error)),
@@ -209,15 +221,15 @@ fn run_rounds_and_synthesize(
 /// input order. `run_reviewer_command` blocks on a child process, so a thread
 /// per reviewer is the right fit; a panicked thread becomes an error result.
 fn run_round_parallel(
-    plans: &[(&AgentProfile, String)],
+    plans: &[(&AgentProfile, String, Option<String>)],
     worktree_path: &Path,
-) -> Vec<Result<String, String>> {
+) -> Vec<Result<ReviewerRunOutput, String>> {
     std::thread::scope(|scope| {
         let handles: Vec<_> = plans
             .iter()
-            .map(|(reviewer, prompt)| {
+            .map(|(reviewer, prompt, resume)| {
                 scope.spawn(move || {
-                    run_reviewer_command(reviewer, worktree_path, prompt, None, None).map(|output| output.text)
+                    run_reviewer_command(reviewer, worktree_path, prompt, resume.as_deref(), None)
                 })
             })
             .collect();
