@@ -64,6 +64,14 @@ enum SessionSignal {
         reason: String,
         prompt: Option<String>,
     },
+    /// A human-readable "what the agent is doing now" line, parsed from the
+    /// provider's structured event stream (Codex reasoning/messages, Claude
+    /// tool-use hooks, OpenCode message parts). Replaces the raw-PTY scraper for
+    /// those providers, which on a full-screen TUI only surfaced statusline
+    /// chrome and echoed keystrokes.
+    Activity {
+        text: String,
+    },
 }
 
 /// Emit the frontend event for a session signal and, on idle, spawn any pending
@@ -121,7 +129,57 @@ fn emit_session_signal(
                     tracing::warn!(?error, session_id = %session_id, "failed to emit session_needs_input")
                 });
         }
+        SessionSignal::Activity { text } => {
+            emit_activity_line(app, sessions, task_id, session_id, &text);
+        }
     }
+}
+
+/// Normalize, throttle/de-duplicate, and emit a structured activity line for a
+/// session. Shares `last_activity_line`/`last_activity_at` (and the throttle
+/// window) with the PTY scraper, which is safe because exactly one of the two
+/// paths runs per session — `agent_emits_structured_activity` gates the scraper
+/// off for the providers that feed this one.
+fn emit_activity_line(
+    app: &AppHandle,
+    sessions: &Arc<Mutex<HashMap<String, RunningSession>>>,
+    task_id: i64,
+    session_id: &str,
+    text: &str,
+) {
+    let candidate = normalize_activity(text);
+    let now = Instant::now();
+    let line = {
+        let mut guard = sessions.lock();
+        let Some(running) = guard.get_mut(session_id) else {
+            return;
+        };
+        match activity_to_emit(
+            candidate,
+            running.last_activity_line.as_deref(),
+            running.last_activity_at,
+            now,
+        ) {
+            Some(line) => {
+                running.last_activity_line = Some(line.clone());
+                running.last_activity_at = Some(now);
+                line
+            }
+            None => return,
+        }
+    };
+    let _ = app
+        .emit(
+            "session_activity",
+            SessionActivityEvent {
+                session_id: session_id.to_string(),
+                task_id,
+                line,
+            },
+        )
+        .inspect_err(|error| {
+            tracing::warn!(?error, session_id = %session_id, "failed to emit session activity")
+        });
 }
 
 /// Split appended log contents into newline-terminated lines, skipping the first
@@ -447,6 +505,10 @@ impl SessionManager {
             let agent_kind = agent.agent_kind;
             let cwd = cwd_path;
             let started_at = started_at.clone();
+            // For providers with a structured event watcher, that watcher owns the
+            // activity line; scraping the PTY here would only fight it with TUI
+            // chrome and echoed keystrokes (see `agent_emits_structured_activity`).
+            let scrape_activity = !agent_emits_structured_activity(agent_kind);
             move || {
                 let mut buffer = [0_u8; 8192];
                 loop {
@@ -458,7 +520,9 @@ impl SessionManager {
                             let mut activity_line = None;
                             if let Some(running) = sessions.lock().get_mut(&session_id) {
                                 start_offset = append_output_buffer(running, &data);
-                                activity_line = next_activity_line(running);
+                                if scrape_activity {
+                                    activity_line = next_activity_line(running);
+                                }
                             }
                             let _ = app
                                 .emit(
@@ -770,6 +834,34 @@ impl SessionManager {
 /// an ellipsis, this just bounds the payload.
 const ACTIVITY_LINE_MAX: usize = 200;
 
+/// Providers whose watcher feeds [`SessionSignal::Activity`] from a structured
+/// event stream. For these we skip the raw-PTY [`latest_activity_line`] scraper:
+/// they render full-screen TUIs, so the scraper only ever surfaces statusline
+/// chrome and the user's own echoed keystrokes. Gemini and custom agents have no
+/// structured source yet, so they keep the best-effort PTY scraper.
+fn agent_emits_structured_activity(kind: AgentKind) -> bool {
+    matches!(
+        kind,
+        AgentKind::Codex | AgentKind::Claude | AgentKind::OpenCode
+    )
+}
+
+/// Reduce a structured progress string to a single short, readable line: take
+/// the first line that carries a readable token, strip leading/trailing markdown
+/// chrome (bold/heading/backtick markers), and bound it to [`ACTIVITY_LINE_MAX`].
+/// Returns `None` when nothing readable remains.
+fn normalize_activity(raw: &str) -> Option<String> {
+    let line = raw
+        .lines()
+        .map(str::trim)
+        .find(|line| line.chars().any(char::is_alphanumeric))?;
+    let line = line.trim_matches(|c: char| matches!(c, '*' | '#' | '`') || c.is_whitespace());
+    if line.is_empty() {
+        return None;
+    }
+    Some(line.chars().take(ACTIVITY_LINE_MAX).collect())
+}
+
 /// Derive the agent's latest human-readable activity line from raw PTY output.
 ///
 /// Agents render full-screen TUIs, so the raw tail is mostly ANSI escapes,
@@ -934,6 +1026,46 @@ mod tests {
             latest_activity_line(buffer),
             Some("Reading TaskCard.tsx".to_string())
         );
+    }
+
+    #[test]
+    fn structured_activity_providers_skip_the_pty_scraper() {
+        // Providers with a structured watcher must not scrape the PTY (chrome +
+        // echoed keystrokes); Gemini/custom keep the best-effort scraper.
+        assert!(agent_emits_structured_activity(AgentKind::Codex));
+        assert!(agent_emits_structured_activity(AgentKind::Claude));
+        assert!(agent_emits_structured_activity(AgentKind::OpenCode));
+        assert!(!agent_emits_structured_activity(AgentKind::Gemini));
+        assert!(!agent_emits_structured_activity(AgentKind::Custom));
+    }
+
+    #[test]
+    fn normalize_activity_strips_markdown_chrome_and_takes_first_real_line() {
+        assert_eq!(
+            normalize_activity("**Investigating the failing test**\n\ndetails follow"),
+            Some("Investigating the failing test".to_string())
+        );
+        assert_eq!(
+            normalize_activity("## Editing styles.css"),
+            Some("Editing styles.css".to_string())
+        );
+        assert_eq!(
+            normalize_activity("`cargo test`"),
+            Some("cargo test".to_string())
+        );
+    }
+
+    #[test]
+    fn normalize_activity_skips_blank_and_symbol_only_lines() {
+        assert_eq!(normalize_activity("\n\n   \n---\nRunning tests"), Some("Running tests".to_string()));
+        assert_eq!(normalize_activity("   \n***\n"), None);
+        assert_eq!(normalize_activity(""), None);
+    }
+
+    #[test]
+    fn normalize_activity_truncates_to_payload_cap() {
+        let line = normalize_activity(&"x".repeat(ACTIVITY_LINE_MAX + 50)).expect("a long line survives");
+        assert_eq!(line.chars().count(), ACTIVITY_LINE_MAX);
     }
 
     #[test]

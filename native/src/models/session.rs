@@ -67,9 +67,12 @@ pub struct SessionNeedsInputEvent {
     pub prompt: Option<String>,
 }
 
-/// The agent's latest human-readable activity line, derived from live PTY output
-/// and forwarded (throttled, de-duplicated) so task cards can show what a running
-/// session is doing without subscribing to the raw terminal stream.
+/// The agent's latest human-readable activity line, forwarded (throttled,
+/// de-duplicated) so task cards can show what a running session is doing without
+/// subscribing to the raw terminal stream. Sourced from each provider's
+/// structured event stream (Codex reasoning/messages, Claude tool-use hooks,
+/// OpenCode message parts); Gemini and custom agents fall back to a best-effort
+/// scrape of the live PTY output.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionActivityEvent {

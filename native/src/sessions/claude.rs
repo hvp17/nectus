@@ -2,6 +2,7 @@ use super::{watch_event_log, RunningSession, SessionSignal};
 use crate::db::Database;
 use parking_lot::Mutex;
 use serde::Deserialize;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
@@ -26,11 +27,15 @@ const CLAUDE_PROMPT_PREVIEW_LIMIT: usize = 500;
 //   * the `Stop` hook fires when a turn finishes        -> `session_idle`
 //   * the `Notification` hook (matcher `permission_prompt|elicitation_dialog`)
 //     fires when Claude needs the user                  -> `session_needs_input`
+//   * the `PreToolUse` hook (matcher `*`) fires before each
+//     tool runs                                         -> `session_activity`
 //
 // Each hook is a tiny POSIX command that appends its stdin payload as one JSON
 // line to a nectus-owned sink keyed by the session UUID we already pass via
 // `--session-id`. `spawn_claude_event_watcher` tails that sink and emits the same
 // events the Codex watcher does, reusing the whole frontend/DB/notification path.
+// The `PreToolUse` hook is purely observational: it appends and exits 0 without
+// printing, so the tool always proceeds (exit 2 would be the only blocking code).
 // ---------------------------------------------------------------------------
 
 /// One line written to the sink by a hook command:
@@ -55,6 +60,13 @@ struct ClaudeHookPayload {
     /// Claude's final turn message, when the `Stop` payload carries it.
     #[serde(default)]
     last_assistant_message: Option<String>,
+    /// The tool about to run. Present on `PreToolUse`.
+    #[serde(default)]
+    tool_name: Option<String>,
+    /// The tool's input arguments (`command`, `file_path`, …). Present on
+    /// `PreToolUse`; shape varies by tool.
+    #[serde(default)]
+    tool_input: Option<Value>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -65,6 +77,9 @@ pub(super) enum ClaudeSessionEvent {
     NeedsInput {
         reason: String,
         prompt: Option<String>,
+    },
+    Activity {
+        text: String,
     },
 }
 
@@ -94,11 +109,12 @@ pub(super) fn cleanup_event_sink(session_id: &str) {
     let _ = fs::remove_file(event_sink_path(session_id));
 }
 
-/// Build the inline `--settings` JSON that wires Claude Code's `Stop` and
-/// `Notification` hooks to append their payload to `sink`.
+/// Build the inline `--settings` JSON that wires Claude Code's `Stop`,
+/// `Notification`, and `PreToolUse` hooks to append their payload to `sink`.
 pub(super) fn hook_settings_json(sink: &Path) -> String {
     let idle = append_command(sink, "idle");
     let needs_input = append_command(sink, "needs_input");
+    let activity = append_command(sink, "activity");
     let settings = serde_json::json!({
         "hooks": {
             "Stop": [{
@@ -107,6 +123,10 @@ pub(super) fn hook_settings_json(sink: &Path) -> String {
             "Notification": [{
                 "matcher": "permission_prompt|elicitation_dialog",
                 "hooks": [{ "type": "command", "command": needs_input, "timeout": 10 }]
+            }],
+            "PreToolUse": [{
+                "matcher": "*",
+                "hooks": [{ "type": "command", "command": activity, "timeout": 10 }]
             }]
         }
     });
@@ -184,6 +204,7 @@ fn claude_signal_from_line(line: &str) -> Option<SessionSignal> {
             reason,
             prompt,
         }),
+        ClaudeSessionEvent::Activity { text } => Some(SessionSignal::Activity { text }),
     }
 }
 
@@ -205,8 +226,68 @@ pub(super) fn claude_session_event_from_line(line: &str) -> Option<ClaudeSession
                 .unwrap_or_else(|| "needs_input".to_string()),
             prompt: line.payload.message.as_deref().and_then(prompt_preview),
         }),
+        "activity" => claude_activity_text(
+            line.payload.tool_name.as_deref().unwrap_or_default(),
+            line.payload.tool_input.as_ref(),
+        )
+        .map(|text| ClaudeSessionEvent::Activity { text }),
         _ => None,
     }
+}
+
+/// Turn a `PreToolUse` `tool_name` + `tool_input` into a short "doing now" line,
+/// e.g. `Editing App.tsx`, `Running npm test`, `Reading types.ts`. Falls back to
+/// `<Tool>: <detail>` for tools without a known verb, then to the bare tool name.
+/// `None` only when there is no tool name at all.
+fn claude_activity_text(tool_name: &str, tool_input: Option<&Value>) -> Option<String> {
+    let tool_name = tool_name.trim();
+    if tool_name.is_empty() {
+        return None;
+    }
+    let verb = match tool_name {
+        "Edit" | "MultiEdit" | "NotebookEdit" => Some("Editing"),
+        "Write" => Some("Writing"),
+        "Read" | "NotebookRead" => Some("Reading"),
+        "Bash" | "BashOutput" => Some("Running"),
+        "Grep" => Some("Searching"),
+        "Glob" => Some("Finding"),
+        "WebFetch" => Some("Fetching"),
+        "WebSearch" => Some("Searching"),
+        _ => None,
+    };
+    let detail = tool_input.and_then(claude_tool_detail);
+    Some(match (verb, detail) {
+        (Some(verb), Some(detail)) => format!("{verb} {detail}"),
+        (None, Some(detail)) => format!("{tool_name}: {detail}"),
+        (_, None) => tool_name.to_string(),
+    })
+}
+
+/// Pull a human-readable detail out of a tool's input: a file's basename for
+/// path-shaped tools, otherwise the first line of the most relevant string field.
+fn claude_tool_detail(input: &Value) -> Option<String> {
+    const PATH_KEYS: [&str; 3] = ["file_path", "notebook_path", "path"];
+    const TEXT_KEYS: [&str; 5] = ["command", "pattern", "url", "query", "description"];
+    for key in PATH_KEYS {
+        if let Some(value) = string_field(input, key) {
+            let base = value.rsplit('/').next().unwrap_or(value);
+            return prompt_preview(base);
+        }
+    }
+    for key in TEXT_KEYS {
+        if let Some(value) = string_field(input, key) {
+            return value.lines().next().and_then(prompt_preview);
+        }
+    }
+    None
+}
+
+fn string_field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
 }
 
 fn prompt_preview(value: &str) -> Option<String> {
@@ -268,6 +349,62 @@ mod tests {
     }
 
     #[test]
+    fn activity_line_for_bash_is_running_command_first_line() {
+        // The command's first line only; trailing newline / extra lines dropped.
+        let event = claude_session_event_from_line(
+            r#"{"kind":"activity","payload":{"tool_name":"Bash","tool_input":{"command":"npm test\nshould-not-appear"}}}"#,
+        );
+        assert_eq!(
+            event,
+            Some(ClaudeSessionEvent::Activity {
+                text: "Running npm test".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn activity_line_for_edit_uses_verb_and_basename() {
+        let event = claude_session_event_from_line(
+            r#"{"kind":"activity","payload":{"tool_name":"Edit","tool_input":{"file_path":"/Users/x/proj/src/App.tsx"}}}"#,
+        );
+        assert_eq!(
+            event,
+            Some(ClaudeSessionEvent::Activity {
+                text: "Editing App.tsx".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn activity_line_for_bash_uses_running_verb() {
+        assert_eq!(
+            claude_activity_text("Bash", Some(&serde_json::json!({"command":"cargo build"}))),
+            Some("Running cargo build".to_string())
+        );
+    }
+
+    #[test]
+    fn activity_line_falls_back_to_tool_name_without_detail() {
+        assert_eq!(
+            claude_activity_text("TodoWrite", Some(&serde_json::json!({"todos":[]}))),
+            Some("TodoWrite".to_string())
+        );
+        assert_eq!(
+            claude_activity_text("Task", Some(&serde_json::json!({"description":"Audit auth"}))),
+            Some("Task: Audit auth".to_string())
+        );
+    }
+
+    #[test]
+    fn activity_line_without_tool_name_is_ignored() {
+        assert_eq!(
+            claude_session_event_from_line(r#"{"kind":"activity","payload":{}}"#),
+            None
+        );
+        assert_eq!(claude_activity_text("  ", None), None);
+    }
+
+    #[test]
     fn unknown_kind_and_malformed_lines_are_ignored() {
         assert_eq!(
             claude_session_event_from_line(r#"{"kind":"banana","payload":{}}"#),
@@ -297,6 +434,13 @@ mod tests {
             .as_str()
             .unwrap();
         assert!(notif_cmd.contains(r#""kind":"needs_input""#));
+
+        assert_eq!(settings["hooks"]["PreToolUse"][0]["matcher"], "*");
+        let activity_cmd = settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+            .as_str()
+            .unwrap();
+        assert!(activity_cmd.contains(r#""kind":"activity""#));
+        assert!(activity_cmd.contains("'/tmp/nectus/claude-hooks/abc.jsonl'"));
     }
 
     #[test]

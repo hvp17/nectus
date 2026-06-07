@@ -174,3 +174,37 @@ fn ignores_codex_subagent_session_metadata() {
     )
     .is_none());
 }
+
+#[test]
+fn recognizes_codex_agent_reasoning_as_activity() {
+    let started_at = chrono::DateTime::parse_from_rfc3339("2026-05-14T10:00:00Z").unwrap();
+    let line = r#"{"timestamp":"2026-05-14T10:00:05.000Z","type":"event_msg","payload":{"type":"agent_reasoning","text":"**Investigating the failing test**\n\nLooking at the assertion."}}"#;
+
+    assert_eq!(
+        codex_session_event_from_line(line, started_at),
+        Some(CodexSessionEvent::Activity {
+            text: "**Investigating the failing test**\n\nLooking at the assertion.".to_string(),
+        })
+    );
+}
+
+#[test]
+fn recognizes_codex_agent_message_as_activity() {
+    let started_at = chrono::DateTime::parse_from_rfc3339("2026-05-14T10:00:00Z").unwrap();
+    let line = r#"{"timestamp":"2026-05-14T10:00:05.000Z","type":"event_msg","payload":{"type":"agent_message","message":"Editing the parser now."}}"#;
+
+    assert_eq!(
+        codex_session_event_from_line(line, started_at),
+        Some(CodexSessionEvent::Activity {
+            text: "Editing the parser now.".to_string(),
+        })
+    );
+}
+
+#[test]
+fn codex_agent_message_without_text_is_ignored() {
+    let started_at = chrono::DateTime::parse_from_rfc3339("2026-05-14T10:00:00Z").unwrap();
+    let line = r#"{"timestamp":"2026-05-14T10:00:05.000Z","type":"event_msg","payload":{"type":"agent_message","message":"   "}}"#;
+
+    assert_eq!(codex_session_event_from_line(line, started_at), None);
+}

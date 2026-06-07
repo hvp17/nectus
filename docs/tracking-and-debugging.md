@@ -211,7 +211,7 @@ Backend-to-frontend events:
 | Event | Payload | Source |
 | --- | --- | --- |
 | `session_output` | PTY output chunk and stream offset. | `native/src/sessions/mod.rs` |
-| `session_activity` | Task id, session id, and the agent's latest human-readable activity line (ANSI-stripped tail of PTY output, throttled and de-duplicated). | `native/src/sessions/mod.rs` |
+| `session_activity` | Task id, session id, and the agent's latest human-readable activity line (throttled and de-duplicated). Parsed from each provider's structured event stream — Codex `agent_reasoning`/`agent_message`, Claude `PreToolUse` hook, OpenCode `message.part.updated` — so it reads as real progress ("Editing App.tsx", "Running npm test") rather than TUI chrome. Gemini and custom agents fall back to an ANSI-stripped tail of the PTY output. | `native/src/sessions/mod.rs` (`emit_activity_line`), driven by `codex.rs`, `claude.rs`, `opencode.rs` |
 | `session_exited` | Session id and optional exit code. | `native/src/sessions/mod.rs`, `native/src/lib.rs` |
 | `session_idle` | Task id, session id, turn id, optional message. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL), `claude.rs` (hooks), and `opencode.rs` (local server `/event` `session.idle`) |
 | `session_needs_input` | Task id, session id, reason, optional prompt. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL), `claude.rs` (hooks), and `opencode.rs` (local server `/event` permission/question asks) |

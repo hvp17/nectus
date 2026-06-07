@@ -64,7 +64,9 @@ pub(super) fn latest_opencode_session_metadata(
 /// session filter keeps Nectus from reacting to nested agent activity.
 ///
 /// `session.idle` maps to turn-complete; the permission/question asks are the
-/// canonical "needs input" sources (the TUI renders these as blocking prompts).
+/// canonical "needs input" sources (the TUI renders these as blocking prompts);
+/// `message.part.updated` carries the live activity line (the running tool or the
+/// streaming assistant text).
 pub(super) fn event_signal(json: &str, session_id: &str) -> Option<SessionSignal> {
     let value = serde_json::from_str::<Value>(json).ok()?;
     let event_type = text_field(&value, "type")?;
@@ -84,8 +86,30 @@ pub(super) fn event_signal(json: &str, session_id: &str) -> Option<SessionSignal
                 prompt: needs_input_prompt(event_type, properties),
             })
         }
+        "message.part.updated" => part_activity(properties.get("part")?),
         _ => None,
     }
+}
+
+/// Derive an activity line from a message `part`: the running tool's title (or
+/// its tool name) for tool parts, the assistant's text for text parts. Other part
+/// kinds (file, step-start/finish, snapshot, patch) carry no readable status.
+fn part_activity(part: &Value) -> Option<SessionSignal> {
+    let text = match text_field(part, "type")? {
+        "tool" => tool_part_label(part),
+        "text" => text_field(part, "text").map(str::to_string),
+        _ => None,
+    }?;
+    Some(SessionSignal::Activity { text })
+}
+
+/// A tool part's human-readable label: its `state.title` when present (e.g.
+/// "Read src/app.ts"), otherwise the bare tool name (e.g. "bash").
+fn tool_part_label(part: &Value) -> Option<String> {
+    part.get("state")
+        .and_then(|state| text_field(state, "title"))
+        .or_else(|| text_field(part, "tool"))
+        .map(str::to_string)
 }
 
 /// Best-effort human-readable summary for a needs-input event. The attention
@@ -380,5 +404,49 @@ mod tests {
                 ..
             }) if reason == "question.asked" && prompt.contains("Which database")
         ));
+    }
+
+    #[test]
+    fn maps_running_tool_part_to_activity_using_state_title() {
+        let json = r#"{"id":"evt_5","type":"message.part.updated","properties":{"sessionID":"ses_app","part":{"id":"prt_1","type":"tool","tool":"read","callID":"c1","state":{"status":"running","title":"Read src/app.ts"}}}}"#;
+
+        assert!(matches!(
+            event_signal(json, "ses_app"),
+            Some(SessionSignal::Activity { text }) if text == "Read src/app.ts"
+        ));
+    }
+
+    #[test]
+    fn maps_tool_part_without_title_to_tool_name() {
+        let json = r#"{"id":"evt_6","type":"message.part.updated","properties":{"sessionID":"ses_app","part":{"id":"prt_2","type":"tool","tool":"bash","callID":"c2","state":{"status":"running"}}}}"#;
+
+        assert!(matches!(
+            event_signal(json, "ses_app"),
+            Some(SessionSignal::Activity { text }) if text == "bash"
+        ));
+    }
+
+    #[test]
+    fn maps_text_part_to_activity() {
+        let json = r#"{"id":"evt_7","type":"message.part.updated","properties":{"sessionID":"ses_app","part":{"id":"prt_3","type":"text","text":"Editing the parser now"}}}"#;
+
+        assert!(matches!(
+            event_signal(json, "ses_app"),
+            Some(SessionSignal::Activity { text }) if text == "Editing the parser now"
+        ));
+    }
+
+    #[test]
+    fn ignores_non_status_part_kinds() {
+        let json = r#"{"id":"evt_8","type":"message.part.updated","properties":{"sessionID":"ses_app","part":{"id":"prt_4","type":"step-start"}}}"#;
+
+        assert!(event_signal(json, "ses_app").is_none());
+    }
+
+    #[test]
+    fn ignores_message_part_updated_for_other_sessions() {
+        let json = r#"{"id":"evt_9","type":"message.part.updated","properties":{"sessionID":"ses_other","part":{"id":"prt_5","type":"text","text":"hi"}}}"#;
+
+        assert!(event_signal(json, "ses_app").is_none());
     }
 }
