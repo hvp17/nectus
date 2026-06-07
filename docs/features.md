@@ -4,45 +4,60 @@ This document maps current Nectus Desktop behavior to the files that own it.
 
 ## Navigation And Mission Control
 
-The app shell is an always-expanded labeled sidebar plus a contextual panel.
+The app shell is an always-expanded labeled sidebar plus a persistent navigator panel.
 
 - The sidebar (always visible, ~212px, icon + label rows under a brand wordmark)
   holds Mission Control, Board, JIRA, PR Reviews, and Settings. The Mission
   Control row carries a badge with the cross-project needs-input count.
 - A **New task** button sits at the sidebar's foot (a muted bordered create row,
   distinct from the ghost nav rows above), so the New Task composer is reachable
-  from any view — including an open task's terminal, where the contextual project
-  panel is hidden. It opens the same composer as the board's "New Task",
-  defaulting to the selected repo (or the first repo in the active workspace's
-  scope), and is disabled until at least one project is added.
-- A **Running agents** sidebar row (sits with the primary nav group) opens a
-  quick-access popover from anywhere. It lists every in-flight agent across all
-  projects — **Needs you → Running → Review** (terminal Done/Idle are excluded) —
-  with the agent's latest line, elapsed time, and a click-to-focus on each row.
-  Its badge counts the in-flight agents (primary-hued, distinct from the Mission
-  needs badge). The list reuses the same agent-state model and `nx-` row
-  vocabulary as Mission Control.
+  from any view — including an open task's terminal, where the navigator panel is
+  hidden. It opens the same composer as the board's "New Task", defaulting to the
+  selected repo (or the first repo in the focused workspace), and is disabled
+  until at least one project is added.
+- A **persistent navigator panel** sits to the right of the icon rail whenever
+  Mission Control, the project board, or the workspace board is the active view
+  (it is hidden when a task workspace, the New Task composer, or the workspace
+  manager is open). The panel has two sections:
+  - **Projects** — one row per local git project; clicking opens that project's
+    board. Each row shows the project name, a state dot (color-coded by the most
+    urgent in-flight state: needs_you → running → review), and an agent count.
+    Each in-flight agent (Needs you / Running / Review; Done/Idle excluded) is
+    nested inline under its project row as a compact card showing the agent logo,
+    branch, latest line, elapsed time, and a click-to-focus action.
+  - **Workspaces** — one row per workspace; clicking opens an **aggregated
+    kanban** across all of that workspace's repos (the `workspace` view, reusing
+    `Workspace.tsx`). Task cards on the workspace board carry a repo-name badge so
+    cards from different repos are distinguishable. Each workspace row has an **ⓘ
+    info card** (a popover, `src/components/ui/popover.tsx`) that lists the
+    workspace's member projects; each listed project is clickable to open its
+    individual board. In-flight agents from all of the workspace's repos are
+    nested inline under the workspace row, using the same compact card.
 - Mission Control is the default home: a cross-project, attention-first triage
   inbox. Every task across every project is grouped by who needs you —
   **Needs you → Running → Review → Done → Idle** — and each row carries the
   agent's latest line, elapsed time, and an inline action (Respond / Open /
-  Review / PR). Clicking a row opens that task's terminal workspace.
-- The Board is per-project. Selecting Board (or a project in the panel) reveals
-  the contextual project panel (projects with task counts and a needs-input dot)
-  beside the workflow kanban.
+  Review / PR). Clicking a row opens that task's terminal workspace. Mission
+  Control always shows all projects; the old workspace scope-switcher has been
+  retired.
 - Opening a task replaces the current view with the focused terminal workspace;
-  the back affordance returns to Mission Control or the board.
+  the back affordance returns to Mission Control, the project board, or the
+  workspace board.
 
 Key files:
 
 - Icon rail: `src/components/IconRail.tsx`
-- Running-agents quick-access flyout: `src/components/RunningAgentsFlyout.tsx`
-  (Popover primitive: `src/components/ui/popover.tsx`)
-- Contextual project panel: `src/components/ProjectPanel.tsx`
+- Persistent navigator panel (Projects + Workspaces, nested agents, info card):
+  `src/components/ProjectPanel.tsx`
+- Compact nested agent row: `src/components/SidebarAgentRow.tsx`
+- Active-agent grouping helper (by repo and by workspace): `src/lib/sidebarAgents.ts`
 - Mission Control triage: `src/components/MissionControl.tsx`
 - Cross-project agent-state model (state, latest line, elapsed):
   `src/lib/agentState.ts`
-- App shell composition and view routing: `src/App.tsx`
+- App shell composition and view routing (`mission` | `board` | `workspace` |
+  `jira` | `reviews` | `settings`): `src/App.tsx`
+- Project board and workspace board (shared kanban, `workspaceName` + `repoNames`
+  props for the workspace mode): `src/components/Workspace.tsx`
 - Shell, Mission Control, board, and workspace styling: `src/styles/redesign.css`
 - View state and orchestration: `src/hooks/useApp.ts`
 
@@ -51,7 +66,7 @@ Key files:
 Projects are existing local git repositories. The app validates a selected
 folder with git before saving it.
 
-- Frontend entry points: `src/components/ProjectPanel.tsx`, `src/components/IconRail.tsx`, `src/hooks/useApp.ts`
+- Frontend entry points: `src/components/ProjectPanel.tsx` (navigator panel), `src/components/IconRail.tsx`, `src/hooks/useApp.ts`
 - Dialog wrapper: `src/api.ts`
 - Backend command: `add_repo`
 - Git validation: `native/src/git_ops.rs`
@@ -63,25 +78,34 @@ a duplicate.
 ## Workspaces
 
 A workspace is a durable, named group of repos (VSCode-workspace style) for when
-you work across several projects at once. The active workspace acts as a
-**repo-scope filter**: Mission Control and the board's project rail narrow to just
-that workspace's repos. "All repos" (the default) clears the filter, so nothing
-changes for users who don't define a workspace. A repo can belong to more than
-one workspace.
+you work across several projects at once. Selecting a workspace opens an
+**aggregated kanban board** (`currentView = "workspace"`) showing all tasks from
+every repo in that workspace; task cards display a repo-name badge to tell them
+apart. Mission Control always shows every project regardless of the focused
+workspace — the old workspace scope-filter and "All repos" switcher have been
+retired. A repo can belong to more than one workspace.
 
-- The workspace switcher (a pill group plus a Manage button) appears in the
-  Mission Control header and the board's project rail; both drive one shared
-  active selection.
-- The workspace manager is a de-modaled inline composer (matching New Task) to
-  create, rename, re-scope, and delete workspaces with a per-repo checklist.
-- Selection is in-memory (not persisted across launches); the workspaces and
-  their membership are persisted.
+- Workspaces appear in the **Workspaces section** of the persistent navigator
+  panel (`src/components/ProjectPanel.tsx`); clicking a row opens the aggregated
+  board and focuses that workspace (`openWorkspaceBoard` in `useApp.ts`). Each
+  workspace row shows a state dot and inline nested-agent cards covering its
+  member repos, and an ⓘ info card listing its projects.
+- The **workspace manager** is a de-modaled inline composer (matching New Task)
+  to create, rename, re-scope, and delete workspaces with a per-repo checklist;
+  opened via the "Manage" button in the panel header.
+- The focused workspace (the one whose board is open) is used to pre-populate
+  the New Task composer's cross-repo Repositories checklist; navigating away via
+  the icon rail clears the focus. Focus is in-memory (not persisted across
+  launches); the workspaces and their membership are persisted.
 
 Key files:
 
-- Switcher: `src/components/WorkspaceSwitcher.tsx`
+- Navigator panel (Workspaces section): `src/components/ProjectPanel.tsx`
 - Manager: `src/components/WorkspaceManager.tsx`
-- State, scope filter, and CRUD: `src/hooks/useApp.ts`
+- Aggregated workspace board: `src/components/Workspace.tsx` (receives
+  `workspaceName` + `repoNames` props when in workspace mode)
+- State, focused workspace, `workspaceBoardTasks`, `openWorkspaceBoard`, and
+  CRUD: `src/hooks/useApp.ts`
 - Backend commands: `list_workspaces`, `create_workspace`, `update_workspace`,
   `delete_workspace`
 - Persistence: `workspaces` + `workspace_repos` tables (`native/src/db/schema.rs`,
@@ -234,7 +258,7 @@ Current behavior:
 
 Key files:
 
-- Shell (icon rail + project panel): `src/components/IconRail.tsx`, `src/components/ProjectPanel.tsx`
+- Shell (icon rail + navigator panel): `src/components/IconRail.tsx`, `src/components/ProjectPanel.tsx`
 - Cross-project triage: `src/components/MissionControl.tsx`
 - App shell and view routing: `src/App.tsx`
 - Terminal UI: `src/TerminalPane.tsx`
