@@ -3,7 +3,7 @@
 //! the live worker PTY. The generic reviewer launcher lives in `reviewer.rs`
 //! and the PTY submission helper in `terminal_io.rs`.
 
-use super::reviewer::{run_reviewer_command, ReviewOutputSink};
+use super::reviewer::{reviewer_supports_resume, run_reviewer_command, ReviewOutputSink};
 use super::terminal_io::write_agent_submission;
 use super::RunningSession;
 use crate::db::Database;
@@ -71,16 +71,31 @@ fn run_review_round(
     };
     emit_review_loop_update(&app, &db, task_id, None);
 
-    let prompt = build_review_prompt(&task);
-    tracing::info!(task_id, reviewer = %reviewer.name, "starting review");
+    // Reuse a resolved reviewer session so repeat rounds resume the same
+    // conversation instead of booting cold and re-deriving the whole review.
+    // Only resume-capable reviewers (Claude/Codex/OpenCode) carry a session.
+    let supports_resume = reviewer_supports_resume(reviewer.agent_kind);
+    let resume_id = if supports_resume {
+        db.lock().review_loop_session_id(task_id)?
+    } else {
+        None
+    };
+    let resuming = resume_id.is_some();
+    let prompt = if resuming {
+        build_review_continuation_prompt(&task)
+    } else {
+        build_review_prompt(&task)
+    };
+    tracing::info!(task_id, reviewer = %reviewer.name, resuming, "starting review");
     // Stream the reviewer's stdout to the workspace so the user can watch the
     // review progress live (read-only); the full output is still captured below.
     let sink = ReviewOutputSink {
         app: app.clone(),
         task_id,
     };
-    let reviewer_output = match run_reviewer_command(&reviewer, cwd, &prompt, None, Some(&sink)) {
-        Ok(output) => output.text,
+    let run_output = match run_reviewer_command(&reviewer, cwd, &prompt, resume_id.as_deref(), Some(&sink))
+    {
+        Ok(output) => output,
         Err(error) => {
             let run = db.lock().record_review_run(ReviewRunInput {
                 task_id,
@@ -94,6 +109,16 @@ fn run_review_round(
             return Err(error);
         }
     };
+
+    // Capture once, keep: persist the resolved id only when we did not already
+    // have one, so the canonical thread (esp. for Codex/OpenCode) is the one we
+    // keep resuming.
+    if supports_resume && !resuming {
+        if let Some(session_id) = run_output.session_id.as_deref() {
+            db.lock().set_review_loop_session_id(task_id, Some(session_id))?;
+        }
+    }
+    let reviewer_output = run_output.text;
     let verdict = parse_review_verdict(&reviewer_output);
     let error = (verdict == ReviewVerdict::Unknown).then(|| UNCLEAR_REVIEW_ERROR.to_string());
     let run = db.lock().record_review_run(ReviewRunInput {
@@ -207,6 +232,31 @@ Do not mark style nits or minor preference differences as blockers.
 ",
         title = task.title,
         brief = task.prompt.as_deref().unwrap_or("No task brief provided.")
+    )
+}
+
+pub(super) fn build_review_continuation_prompt(task: &TaskSummary) -> String {
+    format!(
+        "\
+You have already reviewed this task earlier in this same conversation, and the author has responded to your feedback.
+
+Task title:
+{title}
+
+Re-inspect only what changed since your last review:
+- git status --short
+- git diff --no-ext-diff HEAD --
+
+You already remember your prior findings — do not re-derive the whole review. Confirm whether your earlier blockers were addressed and whether the latest changes introduced new ones.
+Return one exact verdict token on the first line:
+- NECTUS_BLOCKERS when blockers remain or new ones appeared.
+- NECTUS_FEEDBACK when there are no blockers, but there is meaningful implementation or approach feedback worth considering.
+- NECTUS_NO_BLOCKERS when there are no blockers and no material feedback.
+
+After NECTUS_BLOCKERS, list only the concise outstanding blockers with file paths when possible.
+After NECTUS_FEEDBACK, list concise non-blocking implementation or approach suggestions.
+",
+        title = task.title,
     )
 }
 
@@ -329,6 +379,19 @@ mod tests {
         assert!(prompt.contains("NECTUS_NO_BLOCKERS"));
         assert!(prompt.contains("NECTUS_BLOCKERS"));
         assert!(prompt.contains("NECTUS_FEEDBACK"));
+    }
+
+    #[test]
+    fn builds_review_continuation_prompt_for_a_resumed_reviewer() {
+        let prompt = build_review_continuation_prompt(&task());
+
+        assert!(prompt.contains("Implement settings panel"));
+        assert!(prompt.to_lowercase().contains("already reviewed"));
+        assert!(prompt.contains("git diff --no-ext-diff HEAD --"));
+        assert!(prompt.contains("NECTUS_NO_BLOCKERS"));
+        assert!(prompt.contains("NECTUS_BLOCKERS"));
+        assert!(prompt.contains("NECTUS_FEEDBACK"));
+        assert!(!prompt.contains("diff --git"));
     }
 
     #[test]
