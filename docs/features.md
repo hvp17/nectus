@@ -427,6 +427,23 @@ Current behavior:
   trailing positional argument. Bare `codex` is the interactive TUI and aborts
   with `stdin is not a terminal` when spawned without a real terminal. Custom
   reviewers receive the prompt on stdin.
+- **Session resume for reviewers.** Claude, Codex, and OpenCode reviewers resume
+  their prior conversation across rounds rather than re-reading the worktree cold:
+  - Claude: minted once with `--session-id <uuid>` and resumed with
+    `--resume <uuid>` on every subsequent pass.
+  - Codex: runs in JSON-event mode (`codex exec --json`); the session id is
+    captured from the stream on the first run and resumed with
+    `codex exec resume <id> --json`.
+  - OpenCode: runs with `--format json`; the id is captured from the stream and
+    resumed with `opencode run --session <id> --format json`.
+  - Gemini and Custom reviewers have no resume; they review fresh each time.
+  - Task-loop ids are stored in `review_loops.reviewer_session_id` (reset when
+    the loop is restarted). PR-review ids are stored in
+    `pr_reviews.reviewer_session_id` (preserved across reruns). Consensus
+    keeps per-reviewer ids in memory for the duration of one run.
+  - Side effect: a Codex or OpenCode reviewer's live "Watch reviewer" output
+    arrives as one chunk at completion rather than token-by-token, because those
+    CLIs emit the full message in a single JSON event in non-interactive mode.
 - Reviewer output is parsed as:
   - `pass` when a line is exactly `NECTUS_NO_BLOCKERS`, `PASS`, or starts with
     `PASS:`.
@@ -499,6 +516,13 @@ Current behavior:
   is the configured default agent profile. Claude and Gemini reviewers run with `-p`;
   Codex reviewers run with `codex exec`, OpenCode reviewers run with `opencode run`,
   and custom reviewers receive the prompt on stdin.
+- **Session resume for PR reviewers.** Claude, Codex, and OpenCode reviewers resume
+  their prior session across reruns of the same PR review (the stored id is in
+  `pr_reviews.reviewer_session_id`), so repeat reviews build on earlier findings
+  rather than re-reading the PR from scratch. Gemini and Custom reviewers always
+  review fresh. The live output for Codex/OpenCode PR reviewers arrives in one
+  chunk at completion (same JSON-event-mode caveat as the task review loop).
+  See the [AI Review](#ai-review) section for per-provider resume mechanics.
 
 **Consensus mode.** Selecting two or more reviewers (optionally setting a round
 count, 1–5, default 3) runs them as a consensus review:
