@@ -149,6 +149,28 @@ export function defineAppTaskBoardTests() {
     expect(screen.queryByLabelText(/task inspector/i)).not.toBeInTheDocument();
   });
 
+  it("renames a task from the inspector header title", async () => {
+    mockProjectWithTask("Rename me");
+    mockedApi.updateTaskMetadata.mockResolvedValue(
+      appTask({ title: "Renamed via header", updatedAt: "2026-05-14T00:01:00.000Z" }),
+    );
+
+    render(<App />);
+
+    fireEvent.click(await findBoardCard(/rename me/i));
+    expect(await screen.findByLabelText(/task inspector/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /rename task/i }));
+    const input = screen.getByRole("textbox", { name: /task name/i });
+    fireEvent.change(input, { target: { value: "Renamed via header" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(mockedApi.updateTaskMetadata).toHaveBeenCalledWith({ taskId: 21, title: "Renamed via header" });
+    });
+    expect(await screen.findByRole("button", { name: /rename task/i })).toHaveTextContent("Renamed via header");
+  });
+
   it("moves a task to a new status column when dropped there", async () => {
     mockProjectWithTask("Wire task drag and drop");
     mockTaskStatusUpdate("Wire task drag and drop");

@@ -185,6 +185,10 @@ Key files:
 - Selected-task workspace — horizontal workflow ribbon above the terminal, an
   inline action bar under it, and a calm sectioned facts rail (identity ·
   metadata · PR-status card · linked story · review): `src/components/TaskWorkspace.tsx`
+- Inline task rename — the workspace header title is click-to-edit (a pencil
+  appears on hover); Enter or blur saves a trimmed, changed title via
+  `update_task_metadata`, Escape reverts: `src/components/taskWorkspace/EditableTaskTitle.tsx`,
+  wired through `renameTask` in `src/hooks/useApp.ts`
 - Shared task deletion confirmation: `src/components/TaskDeleteDialog.tsx`
 - Dashboard layout and board scrolling: `src/styles.css`
 - Frontend state orchestration: `src/hooks/useApp.ts`

@@ -1,6 +1,10 @@
 [package]
 name = "nectus-desktop"
-version = "0.1.1"
+# App version is the single source of truth in /package.json, read at build time
+# via tauri.conf.json's `"version": "../package.json"`. Nothing reads
+# CARGO_PKG_VERSION, so this crate version is intentionally frozen and unused for
+# app/bundle versioning — do not bump it per release.
+version = "0.0.0"
 description = "Parallel Codex and Claude worktree manager"
 authors = ["Tomas"]
 edition = "2021"

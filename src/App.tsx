@@ -97,6 +97,7 @@ function App() {
     createTask,
     closeCreateTaskModal,
     updateStatus,
+    renameTask,
     requestDeleteTask,
     startSession,
     stopSession,
@@ -457,6 +458,7 @@ function App() {
                 onSetPullRequestReady={setPullRequestReady}
                 onClosePullRequest={closePullRequest}
                 onUpdateStatus={updateStatus}
+                onRenameTask={renameTask}
                 onDeleteTask={requestDeleteTask}
                 onSetJiraLink={setTaskJiraLink}
                 jiraSite={jiraStatus?.site}
