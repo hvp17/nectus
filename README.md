@@ -242,7 +242,10 @@ Important frontend files:
 - `src/components/MissionControl.tsx`: cross-project attention-first triage home
 - `src/lib/agentState.ts`: derives each task's cross-project state, latest line, and
   elapsed time for Mission Control and the board
-- `src/hooks/useApp.ts`: app state, project/task/settings orchestration
+- `src/queries/`: TanStack Query server-state layer (query keys, hooks, cache helpers)
+- `src/store/`: Zustand UI/runtime store (navigation, selection, session runtime, notifications)
+- `src/AppRouter.tsx`: TanStack Router shell + routed views (memory history)
+- `src/hooks/useApp.ts`: orchestration façade over the query layer and the UI store
 - `src/hooks/useTaskReviewLoop.ts`: review-loop loading and
   `review_loop_updated` event subscription
 - `src/hooks/useTaskDeletion.ts`: task deletion workflow and deletion toasts

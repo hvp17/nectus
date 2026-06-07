@@ -101,7 +101,7 @@ export function defineAppWorkspacesTests() {
 
     // Open the Platform workspace board, then its New Task composer (cross-repo context).
     fireEvent.click(await screen.findByText("Platform"));
-    fireEvent.click(await within(screen.getByTestId("workspace-board")).findByRole("button", { name: /new task/i }));
+    fireEvent.click(await within(await screen.findByTestId("workspace-board")).findByRole("button", { name: /new task/i }));
 
     // Cross-repo mode: a Repositories checklist with both repos pre-selected.
     const repoGroup = await screen.findByRole("group", { name: "Repositories" });
@@ -131,7 +131,7 @@ export function defineAppWorkspacesTests() {
     render(<App />);
     // Open the Platform workspace board, then its New Task composer (cross-repo context).
     fireEvent.click(await screen.findByText("Platform"));
-    fireEvent.click(await within(screen.getByTestId("workspace-board")).findByRole("button", { name: /new task/i }));
+    fireEvent.click(await within(await screen.findByTestId("workspace-board")).findByRole("button", { name: /new task/i }));
 
     // Deselect the primary/board repo (appRepo), leaving only the second.
     const repoGroup = await screen.findByRole("group", { name: "Repositories" });
@@ -240,7 +240,7 @@ export function defineAppWorkspacesTests() {
     render(<App />);
 
     fireEvent.click(await screen.findByText("Platform"));
-    fireEvent.click(await within(screen.getByTestId("workspace-board")).findByRole("button", { name: /new task/i }));
+    fireEvent.click(await within(await screen.findByTestId("workspace-board")).findByRole("button", { name: /new task/i }));
 
     // Opened from the board → Workspace scope is the default, checklist visible.
     expect(await screen.findByRole("radio", { name: "Workspace scope" })).toBeChecked();

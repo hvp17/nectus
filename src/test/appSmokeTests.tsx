@@ -20,6 +20,16 @@ export function defineAppSmokeTests() {
     expect(screen.getByText(/no agents yet/i)).toBeInTheDocument();
   });
 
+  it("surfaces a failed bootstrap query as a message instead of silently showing empty state", async () => {
+    // A failing read used to be swallowed (empty app, no feedback). The QueryCache
+    // error handler routes it to the message channel → a sonner toast.
+    mockedApi.listTasks.mockRejectedValueOnce(new Error("could not list tasks"));
+
+    render(<App />);
+
+    expect(await screen.findByText("could not list tasks")).toBeInTheDocument();
+  });
+
   it("shows the connect-a-project board when there are no repos", async () => {
     render(<App />);
 
@@ -70,7 +80,8 @@ export function defineAppSmokeTests() {
 
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
 
-    expect(screen.getByRole("heading", { name: "Agent Profiles" })).toBeInTheDocument();
+    // Settings is a routed view; awaiting the first heading lets the navigation land.
+    expect(await screen.findByRole("heading", { name: "Agent Profiles" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /projects & worktrees/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Appearance" })).toBeInTheDocument();
 
@@ -153,7 +164,8 @@ export function defineAppSmokeTests() {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
 
-    fireEvent.change(screen.getByLabelText("Site"), { target: { value: "team.atlassian.net" } });
+    // Settings is a routed view; await its first field so the navigation lands.
+    fireEvent.change(await screen.findByLabelText("Site"), { target: { value: "team.atlassian.net" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "me@example.com" } });
     fireEvent.change(screen.getByLabelText("API token"), { target: { value: "tok-123" } });
     fireEvent.click(screen.getByRole("button", { name: "Test & connect" }));

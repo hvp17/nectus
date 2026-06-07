@@ -1,6 +1,7 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
+import { renderWithProviders } from "../test/testUtils";
 import { useApp } from "./useApp";
 import type { SessionIdleEvent, TaskSummary } from "../types";
 
@@ -167,7 +168,7 @@ describe("useApp", () => {
   });
 
   it("clears finished attention when input is sent to that active session", async () => {
-    render(<Harness />);
+    renderWithProviders(<Harness />);
 
     await waitFor(() => {
       expect(screen.getByTestId("tasks")).toHaveTextContent("1");
@@ -195,7 +196,7 @@ describe("useApp", () => {
   });
 
   it("starts a review loop before triggering an immediate review", async () => {
-    render(<Harness />);
+    renderWithProviders(<Harness />);
 
     await waitFor(() => {
       expect(screen.getByTestId("tasks")).toHaveTextContent("1");
@@ -210,7 +211,7 @@ describe("useApp", () => {
   });
 
   it("shows an immediate review as reviewing after triggering it", async () => {
-    render(<Harness />);
+    renderWithProviders(<Harness />);
 
     await waitFor(() => {
       expect(screen.getByTestId("tasks")).toHaveTextContent("1");
@@ -225,7 +226,7 @@ describe("useApp", () => {
 
   it("submits a structured create-pr prompt to the active session", async () => {
     mockedApi.submitSessionInput.mockResolvedValue(undefined);
-    render(<Harness />);
+    renderWithProviders(<Harness />);
 
     await waitFor(() => {
       expect(screen.getByTestId("tasks")).toHaveTextContent("1");
@@ -246,7 +247,7 @@ describe("useApp", () => {
   });
 
   it("marks the selected task done when a review loop passes", async () => {
-    render(<Harness />);
+    renderWithProviders(<Harness />);
 
     await waitFor(() => {
       expect(screen.getByTestId("tasks")).toHaveTextContent("1");

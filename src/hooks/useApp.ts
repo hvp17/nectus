@@ -1,20 +1,24 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import {
+  useReposQuery,
+  useWorkspacesQuery,
+  useAgentProfilesQuery,
+  useSettingsQuery,
+  useTasksQuery,
+} from "../queries/core";
+import { queryKeys } from "../queries/keys";
+import { makeCacheSetter } from "../queries/cache";
+import { useAppStore } from "../store/appStore";
 import { replaceById, upsertById } from "../lib/listState";
 import { jiraBrowseUrl } from "../lib/jira";
 import { isReviewLoopActive } from "../statusLabels";
-import { isBrowserPreview, seedAttention, seedLiveLines } from "../lib/browserSeed";
 import { useGuardedAction } from "./useGuardedAction";
-import {
-  clearTaskAttention,
-  getAttentionCounts,
-  getTaskAttention,
-  type TaskAttention,
-} from "../sessionAttention";
+import { clearTaskAttention, getAttentionCounts, getTaskAttention } from "../sessionAttention";
 import { useCreateTaskForm } from "./useCreateTaskForm";
 import { useSessionCommands } from "./useSessionCommands";
 import { useSessionEvents } from "./useSessionEvents";
-import type { TaskToast } from "../taskNotification";
 import { useSessionAttentionControls } from "./useSessionAttentionControls";
 import { useGithub } from "./useGithub";
 import { useJiraBoardView } from "./useJiraBoardView";
@@ -35,37 +39,86 @@ import type {
 
 const CREATE_PULL_REQUEST_PROMPT = `Create a pull request for this task. Use the current project/worktree branch. Before opening the PR, verify the work as appropriate for this repo, commit relevant changes with a Conventional Commit if needed, push the branch, create the PR against the remote default branch, and report the PR URL here.`;
 
+// Stable empty fallbacks so a still-loading query yields the same array reference
+// every render (keeps the downstream `useMemo`s from recomputing during boot).
+const EMPTY_REPOS: Repo[] = [];
+const EMPTY_WORKSPACES: Workspace[] = [];
+const EMPTY_PROFILES: AgentProfile[] = [];
+const EMPTY_TASKS: TaskSummary[] = [];
+
 export function useApp() {
-  const [repos, setRepos] = useState<Repo[]>([]);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<number | undefined>();
+  const queryClient = useQueryClient();
+
+  // Server reads flow through the TanStack Query cache. The `set*` shims write
+  // straight into that cache so the existing mutation/event/refresh call sites keep
+  // their `setState`-style signature unchanged (the façade pattern). Shims are
+  // memoized on `[queryClient]` so their identity is stable for event-hook deps.
+  const reposQuery = useReposQuery();
+  const repos = reposQuery.data ?? EMPTY_REPOS;
+
+  const workspacesQuery = useWorkspacesQuery();
+  const workspaces = workspacesQuery.data ?? EMPTY_WORKSPACES;
+
+  const agentProfilesQuery = useAgentProfilesQuery();
+  const agentProfiles = agentProfilesQuery.data ?? EMPTY_PROFILES;
+  const setAgentProfiles = useMemo(
+    () => makeCacheSetter<AgentProfile[]>(queryClient, queryKeys.agentProfiles()),
+    [queryClient],
+  );
+
+  const settingsQuery = useSettingsQuery();
+  const settings = settingsQuery.data;
+  const setSettings = useMemo(
+    () => makeCacheSetter<AppSettings | undefined>(queryClient, queryKeys.settings()),
+    [queryClient],
+  );
+
+  const tasksQuery = useTasksQuery();
+  const tasks = tasksQuery.data ?? EMPTY_TASKS;
+  const setTasks = useMemo(() => makeCacheSetter<TaskSummary[]>(queryClient, queryKeys.tasks()), [queryClient]);
+
+  // ---- Shell UI state (Zustand) --------------------------------------------
+  // Navigation, selection, the transient message channel, and the global busy flag
+  // now live in the app store. The local names mirror the old `useState` bindings,
+  // so the rest of this hook (and its public return shape) is unchanged. Store
+  // setters are stable references, which keeps `run`/event-hook deps from churning.
+  const currentView = useAppStore((s) => s.currentView);
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
+  const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
+  const setActiveWorkspaceId = useAppStore((s) => s.setActiveWorkspaceId);
+  const openWorkspaceBoard = useAppStore((s) => s.openWorkspaceBoard);
+  const selectedRepoId = useAppStore((s) => s.selectedRepoId);
+  const setSelectedRepoId = useAppStore((s) => s.setSelectedRepoId);
+  const selectedTaskId = useAppStore((s) => s.selectedTaskId);
+  const setSelectedTaskId = useAppStore((s) => s.setSelectedTaskId);
+  const selectedAgentProfileId = useAppStore((s) => s.selectedAgentProfileId);
+  const setSelectedAgentProfileId = useAppStore((s) => s.setSelectedAgentProfileId);
+  const message = useAppStore((s) => s.message);
+  const setMessage = useAppStore((s) => s.setMessage);
+  const taskToast = useAppStore((s) => s.taskToast);
+  const setTaskToast = useAppStore((s) => s.setTaskToast);
+  const busy = useAppStore((s) => s.busy);
+  const setBusy = useAppStore((s) => s.setBusy);
+
+  // ---- Local runtime/composer state (migrates to the store in later phases) ---
   // Repos chosen for a cross-repo task in the composer (Increment B). Primary first.
   const [newTaskRepoIds, setNewTaskRepoIds] = useState<number[]>([]);
   // Workspace the composer is targeting. Undefined = single-repo (Project) mode;
   // a value = Workspace mode (cross-repo). Decoupled from the board's focused
   // workspace so the composer's Project/Workspace toggle can pick any workspace.
   const [newTaskWorkspaceId, setNewTaskWorkspaceId] = useState<number | undefined>();
-  const [tasks, setTasks] = useState<TaskSummary[]>([]);
-  const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
-  const [settings, setSettings] = useState<AppSettings | undefined>();
-  const [currentView, setCurrentView] = useState<
-    "mission" | "board" | "workspace" | "settings" | "reviews" | "jira"
-  >(
-    "mission",
-  );
-  const [selectedRepoId, setSelectedRepoId] = useState<number | undefined>();
-  const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>();
-  const [selectedAgentProfileId, setSelectedAgentProfileId] = useState<number | undefined>();
-  const [taskAttention, setTaskAttention] = useState<TaskAttention[]>(() =>
-    isBrowserPreview ? seedAttention : [],
-  );
-  const [liveLines, setLiveLines] = useState<Record<number, string>>(() =>
-    isBrowserPreview ? seedLiveLines : {},
-  );
-  const [message, setMessage] = useState<string | null>(null);
-  const [taskToast, setTaskToast] = useState<TaskToast | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
+  // Live session runtime (push-driven by the Tauri events) — owned by the store.
+  const taskAttention = useAppStore((s) => s.taskAttention);
+  const setTaskAttention = useAppStore((s) => s.setTaskAttention);
+  const liveLines = useAppStore((s) => s.liveLines);
+  const setLiveLines = useAppStore((s) => s.setLiveLines);
+  // Initial bootstrap loading is derived from the bootstrap queries' first fetch.
+  const loading =
+    reposQuery.isLoading ||
+    workspacesQuery.isLoading ||
+    agentProfilesQuery.isLoading ||
+    settingsQuery.isLoading ||
+    tasksQuery.isLoading;
   const [deletingTaskIds, setDeletingTaskIds] = useState<ReadonlySet<number>>(() => new Set());
   const taskForm = useCreateTaskForm(settings?.defaultAgentProfileId ?? selectedAgentProfileId);
   const {
@@ -155,14 +208,8 @@ export function useApp() {
     [tasks, selectedRepoId],
   );
 
-  // Open a workspace's aggregated board: focus it (drives the board contents and
-  // the composer's cross-repo multi-select) and route to the workspace view.
-  const openWorkspaceBoard = useCallback((workspaceId: number) => {
-    setActiveWorkspaceId(workspaceId);
-    setSelectedRepoId(undefined);
-    setSelectedTaskId(undefined);
-    setCurrentView("workspace");
-  }, []);
+  // `openWorkspaceBoard` (focus a workspace + clear selection + route to it) is
+  // now the store action of the same name, destructured above.
   const selectedTask = useMemo(() => tasks.find((task) => task.id === selectedTaskId), [tasks, selectedTaskId]);
 
   const counts = useMemo(() => {
@@ -176,53 +223,58 @@ export function useApp() {
     };
   }, [taskAttention, tasks]);
 
-  const refresh = useCallback(async (preferredRepoId?: number) => {
-    setLoading(true);
-    try {
-      const [repoResult, workspaceResult, profileResult, settingsResult] = await Promise.all([
-        api.listRepos(),
-        api.listWorkspaces(),
-        api.listAgentProfiles(),
-        api.getAppSettings(),
+  // `refresh` now just (re)validates the bootstrap query cache; the bootstrap
+  // queries refetch and the components re-render from the cache. The default-
+  // selection derivation that used to live here runs reactively in the effects
+  // below. A `preferredRepoId` still wins immediately (e.g. right after adding a
+  // project) before the refetch lands.
+  const refresh = useCallback(
+    async (preferredRepoId?: number) => {
+      if (preferredRepoId !== undefined) {
+        selectedRepoIdRef.current = preferredRepoId;
+        setSelectedRepoId(preferredRepoId);
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.repos() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.agentProfiles() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.settings() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.tasks() }),
       ]);
-      setRepos(repoResult);
-      setWorkspaces(workspaceResult);
-      setAgentProfiles(profileResult);
-      setSettings(settingsResult);
+    },
+    [queryClient],
+  );
 
-      // Drop the active-workspace filter if that workspace was deleted elsewhere,
-      // so the rail/Mission Control don't filter against a phantom id.
-      if (
-        activeWorkspaceIdRef.current &&
-        !workspaceResult.some((workspace) => workspace.id === activeWorkspaceIdRef.current)
-      ) {
-        activeWorkspaceIdRef.current = undefined;
-        setActiveWorkspaceId(undefined);
-      }
-
-      const nextAgentProfileId =
-        selectedAgentProfileIdRef.current ?? settingsResult.defaultAgentProfileId ?? profileResult[0]?.id;
-      if (!selectedAgentProfileIdRef.current && nextAgentProfileId) {
-        selectedAgentProfileIdRef.current = nextAgentProfileId;
-        setSelectedAgentProfileId(nextAgentProfileId);
-      }
-
-      const nextRepoId = preferredRepoId ?? selectedRepoIdRef.current ?? repoResult[0]?.id;
-      selectedRepoIdRef.current = nextRepoId;
-      setSelectedRepoId(nextRepoId);
-
-      const taskResult = await api.listTasks();
-      setTasks(taskResult);
-    } catch (error) {
-      setMessage(String(error));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // Pick the default agent once profiles/settings load (was refresh's job).
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (selectedAgentProfileIdRef.current) return;
+    const next = settings?.defaultAgentProfileId ?? agentProfiles[0]?.id;
+    if (next !== undefined) {
+      selectedAgentProfileIdRef.current = next;
+      setSelectedAgentProfileId(next);
+    }
+  }, [settings, agentProfiles]);
+
+  // Pick the default repo once repos load, keeping any existing selection.
+  useEffect(() => {
+    if (selectedRepoIdRef.current !== undefined) return;
+    if (repos[0]) {
+      selectedRepoIdRef.current = repos[0].id;
+      setSelectedRepoId(repos[0].id);
+    }
+  }, [repos]);
+
+  // Drop the focused workspace if it was deleted elsewhere, so the rail/Mission
+  // Control don't filter against a phantom id.
+  useEffect(() => {
+    if (
+      activeWorkspaceIdRef.current &&
+      !workspaces.some((workspace) => workspace.id === activeWorkspaceIdRef.current)
+    ) {
+      activeWorkspaceIdRef.current = undefined;
+      setActiveWorkspaceId(undefined);
+    }
+  }, [workspaces]);
 
   const applyReviewLoopToTask = useCallback((reviewLoop: ReviewLoop) => {
     setTasks((current) =>
