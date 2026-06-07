@@ -696,3 +696,59 @@ Key files:
 - Theme hook: `src/hooks/useAppTheme.ts`
 - Backend commands: `get_app_settings`, `update_app_settings`
 - Persistence: `app_settings` table
+
+## Auto-Update
+
+The app updates itself in place through the Tauri 2 updater, reading releases
+directly from the public repo (`github.com/hvp17/nectus`); no token is needed.
+Builds are Apple Silicon (`aarch64`) only. Everything below **no-ops outside
+Tauri** (browser preview and tests), so the read-path UI and the suite are
+unaffected.
+
+Current behavior:
+
+- One **silent check** runs shortly after launch. If a newer release is found, a
+  sonner toast "Update available (vX) → Install" appears; clicking **Install**
+  downloads it and, when ready, a second toast "Update installed → Relaunch"
+  offers a **Relaunch** action to restart into the new version.
+- Settings has an **About & Updates** section (section id `about`, with a nav
+  item and a Version overview item) whose card shows the current version, a
+  manual **Check for updates** button, a status badge, and the install action
+  with download progress and a relaunch action.
+- Update integrity is secured by **Tauri minisign signing** (independent of
+  Apple); the public key is committed in `native/tauri.conf.json`. The app is not
+  Apple-notarized, so the **first** download trips a Gatekeeper "cannot
+  verify"/"damaged" warning the user clears with right-click → **Open**.
+  Notarization is a future add-on, out of scope.
+
+The update lifecycle is a small state machine (`UpdateStatus`:
+`idle | checking | upToDate | available | downloading | ready | error`) exposing
+`check()`, `installUpdate()`, `relaunch()`, plus `info`, `currentVersion`,
+`progress` (0..1), `error`, and `lastCheckedAt`.
+
+Key files:
+
+- Tauri-guarded wrapper (`isUpdaterAvailable`, `getAppVersion`, `checkForUpdate`,
+  `installUpdate`, `relaunchApp`): `src/lib/update.ts`
+- Update state machine + launch check: `src/hooks/useAppUpdate.ts`
+- Toast bridge (available → Install, installed → Relaunch): `src/hooks/useAppUpdateToast.ts`
+- About & Updates card: `src/components/settings/UpdateCard.tsx`
+- Settings About section: `src/components/SettingsPage.tsx`
+- Hook mounting: `src/App.tsx` (mounts `useAppUpdate` + `useAppUpdateToast`)
+- Plugin registration (`tauri_plugin_process::init()`,
+  `tauri_plugin_updater::Builder`): `native/src/lib.rs` (`run()`)
+- Updater config (`bundle.createUpdaterArtifacts`, `plugins.updater` endpoints +
+  base64 pubkey): `native/tauri.conf.json`
+- Capabilities (`updater:default`, `process:allow-restart`): `native/capabilities/default.json`
+- Release CI (tag `v*` → `macos-latest` arm64 → `tauri-apps/tauri-action@v0` with
+  `GITHUB_TOKEN` / `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`,
+  auto-publishes a Release with `.dmg`, `.app.tar.gz`, `.sig`, `latest.json`):
+  `.github/workflows/release.yml`
+
+Releasing: bump the version to the same `X.Y.Z` in `native/tauri.conf.json`,
+`package.json`, and `native/Cargo.toml`; commit; `git tag vX.Y.Z`;
+`git push origin vX.Y.Z`. Installed copies pick it up via the launch check (or
+Settings → About → **Check for updates**). The published `latest.json` is
+`{ version, notes, pub_date, platforms: { "darwin-aarch64": { signature, url } } }`.
+Background polling beyond the launch check, Apple notarization, and
+Windows/Linux/Intel builds are out of scope.

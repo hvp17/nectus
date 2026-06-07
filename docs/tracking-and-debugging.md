@@ -594,6 +594,96 @@ Relevant code:
 - `native/src/sessions/review_loop.rs`
 - `src/components/TaskWorkspace.tsx`
 
+### Auto-Update Does Not Offer An Update
+
+Nectus ships a Tauri 2 auto-updater for the Apple Silicon (aarch64) build. The
+public repo `github.com/hvp17/nectus` hosts releases, so the updater reads them
+directly with no token. Integrity is secured by Tauri minisign signing
+(independent of Apple); the app is not yet Apple-notarized, so the **first**
+download triggers a Gatekeeper "cannot verify"/"damaged" warning the user clears
+with right-click → Open. Notarization is a future add-on, out of scope here.
+
+The update state machine lives in `src/hooks/useAppUpdate.ts`, with the
+Tauri-guarded wrapper in `src/lib/update.ts` (all no-ops outside Tauri). It runs
+one silent check shortly after launch and again on demand from
+Settings → About & Updates → "Check for updates"
+(`src/components/settings/UpdateCard.tsx`); `src/App.tsx` mounts `useAppUpdate`
+plus `useAppUpdateToast.ts` (the "Update available (vX) → Install" and "Update
+installed → Relaunch" sonner toasts).
+
+`UpdateStatus` values:
+
+| Status | Meaning |
+| --- | --- |
+| `idle` | No check run yet. |
+| `checking` | A check is in flight. |
+| `upToDate` | The endpoint reported no newer version. |
+| `available` | A newer version was found; install not yet started. |
+| `downloading` | Download in progress (`progress` runs `0..1`). |
+| `ready` | Downloaded and installed; relaunch to apply. |
+| `error` | Check or install failed (`error` holds the message). |
+
+The hook also exposes `info`, `currentVersion`, `progress`, `error`, and
+`lastCheckedAt` for the About card.
+
+The updater fetches the manifest from:
+
+```text
+https://github.com/hvp17/nectus/releases/latest/download/latest.json
+```
+
+Expected `latest.json` shape (Apple Silicon only):
+
+```json
+{
+  "version": "X.Y.Z",
+  "notes": "release notes",
+  "pub_date": "2026-01-01T00:00:00Z",
+  "platforms": {
+    "darwin-aarch64": { "signature": "<minisign>", "url": "<.app.tar.gz url>" }
+  }
+}
+```
+
+Common failure symptoms:
+
+- **Signature verification fails on install** (`error` status): a pubkey
+  mismatch — the `latest.json` `signature` was produced by a private key that
+  does not match the base64 `pubkey` in `native/tauri.conf.json`'s
+  `plugins.updater` block. The two must be from the same minisign keypair (the
+  CI signing secrets `TAURI_SIGNING_PRIVATE_KEY` /
+  `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` must match the committed public key).
+- **Check silently reports "up to date"** (`upToDate`): the release is missing,
+  draft, or unpublished, so `…/releases/latest/download/latest.json` 404s and the
+  updater treats it as no update. Confirm the GitHub Release is published and
+  carries `latest.json` (CI auto-publishes it; see below).
+- **No update offered even with a newer build out**: the published `version` is
+  not strictly higher than the installed one. Bump and re-tag.
+
+Rust wiring (`native/src/lib.rs` `run()`): registers
+`tauri_plugin_process::init()` and
+`tauri_plugin_updater::Builder::new().build()`. `native/tauri.conf.json` sets
+`bundle.createUpdaterArtifacts: true` and the `plugins.updater` block (endpoint
++ base64 `pubkey`, safe to commit). `native/capabilities/default.json` grants
+`updater:default` and `process:allow-restart` (the latter powers the relaunch).
+
+Release flow (CI in `.github/workflows/release.yml`, triggered on pushing a
+`v*` tag): bump the version in `native/tauri.conf.json`, `package.json`, and
+`native/Cargo.toml` to the same `X.Y.Z`, commit, `git tag vX.Y.Z`, then
+`git push origin vX.Y.Z`. The workflow builds aarch64 on `macos-latest`, signs
+the updater artifacts, and auto-publishes a GitHub Release containing the
+`.dmg`, `.app.tar.gz`, `.sig`, and `latest.json`. Installed copies pick it up on
+their next launch check or via the About card.
+
+Relevant code:
+
+- `src/hooks/useAppUpdate.ts`, `src/hooks/useAppUpdateToast.ts`
+- `src/lib/update.ts`
+- `src/components/settings/UpdateCard.tsx`, `src/components/SettingsPage.tsx`
+- `native/src/lib.rs`, `native/tauri.conf.json`,
+  `native/capabilities/default.json`
+- `.github/workflows/release.yml`
+
 ## Verification Commands
 
 Frontend tests:

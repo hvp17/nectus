@@ -122,6 +122,62 @@ native/target/release/bundle/macos/Nectus Desktop.app
 native/target/release/bundle/dmg/Nectus Desktop_0.1.0_aarch64.dmg
 ```
 
+## Releases & Auto-Update
+
+Nectus ships an in-app auto-updater built on the Tauri 2 updater plugin. It
+targets Apple Silicon (`aarch64`) only and reads releases directly from the
+public repository at `github.com/hvp17/nectus`, so no GitHub token is needed.
+Update integrity is secured by minisign signatures, independent of Apple
+code-signing.
+
+### One-time maintainer setup
+
+Generate a minisign updater keypair once and keep the private key out of the
+repo:
+
+```bash
+pnpm tauri signer generate
+```
+
+Add the two halves as repository secrets so CI can sign updater artifacts:
+
+- `TAURI_SIGNING_PRIVATE_KEY` — the generated private key.
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — the password set when generating it.
+
+The matching public key is safe to commit and already lives in
+`native/tauri.conf.json` under `plugins.updater.pubkey`; the updater verifies
+every download against it.
+
+### Cutting a release
+
+Bump the version to the same `X.Y.Z` in all three manifests, commit, then tag
+and push the tag:
+
+```bash
+# edit native/tauri.conf.json, package.json, and native/Cargo.toml to X.Y.Z
+git commit -am "chore(release): vX.Y.Z"
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+Pushing a `v*` tag triggers `.github/workflows/release.yml` on `macos-latest`
+(arm64). It builds the Apple-Silicon app, signs the updater artifacts, and
+auto-publishes a GitHub Release containing the `.dmg`, the `.app.tar.gz`, its
+`.sig`, and `latest.json`.
+
+### How installed copies update
+
+Installed copies run one silent update check shortly after launch, and on
+demand from Settings → About → "Check for updates". When a newer release is
+found, Nectus offers a one-click install followed by an app relaunch.
+
+### First-run Gatekeeper note
+
+Nectus is not yet Apple-notarized, so the **first** download triggers a
+Gatekeeper "cannot verify" / "damaged" warning. Clear it once by right-clicking
+the app and choosing **Open**. Notarization is a future add-on and does not
+affect update integrity, which is minisign-secured end to end.
+
 ## Verification
 
 Run the standard checks before calling a change complete:
