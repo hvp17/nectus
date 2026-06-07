@@ -58,6 +58,21 @@ export function defineAppTaskCreationTests() {
     expect(screen.getByRole("region", { name: /new task composer/i })).toBeInTheDocument();
   });
 
+  it("opens the New Task composer from the icon rail, available from any view", async () => {
+    mockProject();
+
+    render(<App />);
+
+    // The rail's create action lives outside the board, so it works from Mission
+    // Control (the boot view) and from an open task's terminal alike.
+    const createFromRail = await screen.findByRole("button", { name: "Create task" });
+    await waitFor(() => expect(createFromRail).toBeEnabled());
+    fireEvent.click(createFromRail);
+
+    expect(screen.getByRole("heading", { name: "New Task" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /new task composer/i })).toBeInTheDocument();
+  });
+
   it("renders one brand logo per agent choice", async () => {
     mockProject();
 

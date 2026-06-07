@@ -112,6 +112,11 @@
 .nx-rail-btn[data-active="true"]::before {
   content: ""; position: absolute; left: -12px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: var(--primary);
 }
+/* The global "New task" action reads as a primary create button, distinct from the ghost nav icons. */
+.nx-rail-new { background: var(--primary); color: var(--primary-foreground); margin-bottom: 6px; }
+.nx-rail-new:hover { background: color-mix(in oklch, var(--primary) 88%, black); color: var(--primary-foreground); }
+.nx-rail-new:disabled { opacity: .45; cursor: not-allowed; }
+.nx-rail-new:disabled:hover { background: var(--primary); color: var(--primary-foreground); }
 .nx-rail-badge {
   position: absolute; top: 5px; right: 5px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 999px;
   background: var(--status-warning); color: #fff; font-size: 9px; font-weight: 800; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--sidebar);
