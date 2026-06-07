@@ -3,7 +3,6 @@ import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { IconRail, type RailView } from "./components/IconRail";
-import { RunningAgentsFlyout } from "./components/RunningAgentsFlyout";
 import { ProjectPanel } from "./components/ProjectPanel";
 import { MissionControl } from "./components/MissionControl";
 import { Workspace } from "./components/Workspace";
@@ -44,9 +43,11 @@ function App() {
     workspaces,
     activeWorkspaceId,
     setActiveWorkspaceId,
+    activeWorkspace,
     activeWorkspaceRepos,
-    scopedRepos,
     missionTasks,
+    workspaceBoardTasks,
+    openWorkspaceBoard,
     newTaskRepoIds,
     setNewTaskRepoIds,
     createWorkspace,
@@ -184,9 +185,9 @@ function App() {
       }
     }
     // Reachable from the icon rail while a task or the workspace manager is open,
-    // so dismiss the manager and fall back to a scoped repo when none is selected.
+    // so dismiss the manager and fall back to the first available repo when none is selected.
     setManagingWorkspaces(false);
-    setNewTaskRepoId(selectedRepoId ?? scopedRepos[0]?.id);
+    setNewTaskRepoId(selectedRepoId ?? activeWorkspaceRepos[0]?.id ?? repos[0]?.id);
     setCreateTaskOpen(true);
   };
 
@@ -228,20 +229,29 @@ function App() {
     if (createTaskOpen) closeComposer();
     setManagingWorkspaces(false);
     setSelectedTaskId(undefined);
-    // Fall back to the first repo *in the active workspace's scope*, so the board
-    // never selects a project the rail doesn't list.
-    if (view === "board" && selectedRepoId === undefined && scopedRepos[0]) {
-      setSelectedRepoId(scopedRepos[0].id);
+    setActiveWorkspaceId(undefined);
+    // Fall back to the first available repo so the board always has a project selected.
+    if (view === "board" && selectedRepoId === undefined && repos[0]) {
+      setSelectedRepoId(repos[0].id);
     }
     setCurrentView(view);
   };
 
   // A task is opened on top of Mission Control or the board, never the secondary views.
-  const taskOpen = Boolean(selectedTask) && (currentView === "mission" || currentView === "board");
+  const taskOpen =
+    Boolean(selectedTask) &&
+    (currentView === "mission" || currentView === "board" || currentView === "workspace");
   // The New Task composer is a focused inline view reached from "New Task".
   const composing = createTaskOpen;
-  const showProjectPanel = currentView === "board" && !taskOpen && !composing && !managingWorkspaces;
-  const railActive: RailView = currentView;
+  // The merged navigator is persistent on the work views (Mission Control + both
+  // boards), and hidden when a task / composer / workspace manager takes over.
+  const showProjectPanel =
+    (currentView === "mission" || currentView === "board" || currentView === "workspace") &&
+    !taskOpen &&
+    !composing &&
+    !managingWorkspaces;
+  // The workspace board is panel-driven, not a rail destination; map it to "board".
+  const railActive: RailView = currentView === "workspace" ? "board" : currentView;
   const frame = showProjectPanel ? "railp" : "rail";
 
   return (
@@ -256,32 +266,26 @@ function App() {
           onNavigate={navigate}
           onCreateTask={openCreateTaskModal}
           canCreateTask={repos.length > 0}
-          runningAgentsSlot={
-            <RunningAgentsFlyout
-              tasks={tasks}
-              repos={repos}
-              taskAttention={taskAttention}
-              liveLines={liveLines}
-              onOpenTask={openTask}
-            />
-          }
         />
 
         {showProjectPanel && (
           <ProjectPanel
-            repos={scopedRepos}
+            repos={repos}
+            workspaces={workspaces}
             tasks={tasks}
             taskAttention={taskAttention}
-            selectedRepoId={selectedRepoId}
+            liveLines={liveLines}
+            selectedRepoId={currentView === "board" ? selectedRepoId : undefined}
+            selectedWorkspaceId={currentView === "workspace" ? activeWorkspaceId : undefined}
             onSelectRepo={(id) => {
-              setCurrentView("board");
-              setSelectedRepoId(id);
+              setActiveWorkspaceId(undefined);
               setSelectedTaskId(undefined);
+              setSelectedRepoId(id);
+              setCurrentView("board");
             }}
+            onSelectWorkspace={openWorkspaceBoard}
+            onOpenTask={openTask}
             onAddProject={addProject}
-            workspaces={workspaces}
-            activeWorkspaceId={activeWorkspaceId}
-            onSelectWorkspace={setActiveWorkspaceId}
             onManageWorkspaces={openManageWorkspaces}
             busy={busy}
             loading={loading}
@@ -419,7 +423,7 @@ function App() {
                 pullRequestLoading={pullRequestLoading}
                 creatingPullRequest={creatingPullRequest}
                 pullRequestBusy={pullRequestBusy}
-                backLabel={currentView === "mission" ? "Mission Control" : selectedRepo?.name ?? "Board"}
+                backLabel={currentView === "mission" ? "Mission Control" : currentView === "workspace" ? (activeWorkspace?.name ?? "Workspace") : selectedRepo?.name ?? "Board"}
                 repoName={repos.find((repo) => repo.id === selectedTask.repoId)?.name}
                 onClose={() => {
                   setSelectedTaskId(undefined);
@@ -443,6 +447,26 @@ function App() {
                 isDeleting={deletingTaskIds.has(selectedTask.id)}
               />
             </div>
+          ) : currentView === "workspace" ? (
+            <div className="nx-viewport-fill" data-testid="workspace-board">
+              <Workspace
+                selectedRepo={undefined}
+                workspaceName={activeWorkspace?.name}
+                visibleTasks={workspaceBoardTasks}
+                repoNames={repos}
+                selectedTaskId={selectedTaskId}
+                taskAttention={taskAttention}
+                liveLines={liveLines}
+                onSelectTask={openTask}
+                onRefresh={refresh}
+                onCreateTask={openCreateTaskModal}
+                onDeleteTask={requestDeleteTask}
+                onUpdateStatus={updateStatus}
+                deletingTaskIds={deletingTaskIds}
+                busy={busy}
+                loading={loading}
+              />
+            </div>
           ) : currentView === "mission" ? (
             <div className="nx-viewport-fill" data-testid="mission-control">
               <MissionControl
@@ -451,10 +475,6 @@ function App() {
                 taskAttention={taskAttention}
                 liveLines={liveLines}
                 loading={loading}
-                workspaces={workspaces}
-                activeWorkspaceId={activeWorkspaceId}
-                onSelectWorkspace={setActiveWorkspaceId}
-                onManageWorkspaces={openManageWorkspaces}
                 onOpenTask={openTask}
                 onOpenPr={openExternal}
                 onRefresh={() => refresh()}

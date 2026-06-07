@@ -44,7 +44,9 @@ export function useApp() {
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [settings, setSettings] = useState<AppSettings | undefined>();
-  const [currentView, setCurrentView] = useState<"mission" | "board" | "settings" | "reviews" | "jira">(
+  const [currentView, setCurrentView] = useState<
+    "mission" | "board" | "workspace" | "settings" | "reviews" | "jira"
+  >(
     "mission",
   );
   const [selectedRepoId, setSelectedRepoId] = useState<number | undefined>();
@@ -123,46 +125,40 @@ export function useApp() {
 
   const selectedRepo = useMemo(() => repos.find((repo) => repo.id === selectedRepoId), [repos, selectedRepoId]);
 
-  // The active workspace acts as a repo-scope filter (Increment A). When none is
-  // active, behavior is unchanged (all repos). `undefined` means "All repos".
+  // `activeWorkspace` is now the FOCUSED workspace (the one whose board is open),
+  // not a global scope filter. Mission Control and the project list always show
+  // every repo; per-workspace focus comes from the workspace board.
   const activeWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === activeWorkspaceId),
     [workspaces, activeWorkspaceId],
   );
-  const workspaceRepoIds = useMemo(
-    () => (activeWorkspace ? new Set(activeWorkspace.repoIds) : undefined),
-    [activeWorkspace],
-  );
-  // The repo list the rail/board shows, narrowed to the active workspace.
-  const scopedRepos = useMemo(
-    () => (workspaceRepoIds ? repos.filter((repo) => workspaceRepoIds.has(repo.id)) : repos),
-    [repos, workspaceRepoIds],
-  );
-  // The active workspace's repos, offered as a multi-select in the composer so a
-  // task can span several of them (cross-repo). Empty when no workspace is active.
+  // The focused workspace's repos, offered as a multi-select in the composer so a
+  // task can span several of them (cross-repo). Empty when no workspace board is open.
   const activeWorkspaceRepos = useMemo(
-    () => (activeWorkspace ? scopedRepos : []),
-    [activeWorkspace, scopedRepos],
+    () => (activeWorkspace ? repos.filter((repo) => activeWorkspace.repoIds.includes(repo.id)) : []),
+    [activeWorkspace, repos],
   );
-  // Cross-project (Mission Control) tasks, narrowed to the active workspace.
-  const missionTasks = useMemo(
-    () => (workspaceRepoIds ? tasks.filter((task) => workspaceRepoIds.has(task.repoId)) : tasks),
-    [tasks, workspaceRepoIds],
+  // Mission Control shows every project's tasks (scope filter retired).
+  const missionTasks = tasks;
+  // The aggregated workspace board: all tasks whose repo is in the focused workspace.
+  const workspaceBoardTasks = useMemo(
+    () => (activeWorkspace ? tasks.filter((task) => activeWorkspace.repoIds.includes(task.repoId)) : []),
+    [activeWorkspace, tasks],
   );
 
-  // Keep the board's selected repo inside the active workspace, so switching
-  // workspace can't leave a now-out-of-scope project selected.
-  useEffect(() => {
-    if (!workspaceRepoIds || (selectedRepoId && workspaceRepoIds.has(selectedRepoId))) return;
-    const nextRepoId = scopedRepos[0]?.id;
-    selectedRepoIdRef.current = nextRepoId;
-    setSelectedRepoId(nextRepoId);
-  }, [workspaceRepoIds, selectedRepoId, scopedRepos]);
+  const visibleTasks = useMemo(
+    () => (selectedRepoId ? tasks.filter((task) => task.repoId === selectedRepoId) : tasks),
+    [tasks, selectedRepoId],
+  );
 
-  const visibleTasks = useMemo(() => {
-    const scoped = workspaceRepoIds ? tasks.filter((task) => workspaceRepoIds.has(task.repoId)) : tasks;
-    return selectedRepoId ? scoped.filter((task) => task.repoId === selectedRepoId) : scoped;
-  }, [tasks, selectedRepoId, workspaceRepoIds]);
+  // Open a workspace's aggregated board: focus it (drives the board contents and
+  // the composer's cross-repo multi-select) and route to the workspace view.
+  const openWorkspaceBoard = useCallback((workspaceId: number) => {
+    setActiveWorkspaceId(workspaceId);
+    setSelectedRepoId(undefined);
+    setSelectedTaskId(undefined);
+    setCurrentView("workspace");
+  }, []);
   const selectedTask = useMemo(() => tasks.find((task) => task.id === selectedTaskId), [tasks, selectedTaskId]);
 
   const counts = useMemo(() => {
@@ -637,8 +633,9 @@ export function useApp() {
     setActiveWorkspaceId,
     activeWorkspace,
     activeWorkspaceRepos,
-    scopedRepos,
     missionTasks,
+    workspaceBoardTasks,
+    openWorkspaceBoard,
     newTaskRepoIds,
     setNewTaskRepoIds,
     createWorkspace,

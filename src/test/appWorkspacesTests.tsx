@@ -27,30 +27,26 @@ function workspace(overrides: Partial<Workspace> = {}): Workspace {
 }
 
 export function defineAppWorkspacesTests() {
-  it("scopes Mission Control to the active workspace and back to all repos", async () => {
+  it("opens a workspace board aggregating tasks from its repos, with repo badges", async () => {
     mockedApi.listRepos.mockResolvedValue([appRepo, secondRepo]);
-    mockedApi.listWorkspaces.mockResolvedValue([workspace()]);
+    mockedApi.listWorkspaces.mockResolvedValue([
+      workspace({ id: 1, name: "Platform", repoIds: [appRepo.id, secondRepo.id] }),
+    ]);
     mockedApi.listTasks.mockResolvedValue([
-      appTask({ id: 101, repoId: appRepo.id, title: "Task in first repo", activeSessionId: "s-101" }),
-      appTask({ id: 102, repoId: secondRepo.id, title: "Task in second repo", activeSessionId: "s-102" }),
+      appTask({ id: 101, repoId: appRepo.id, title: "Task in first repo" }),
+      appTask({ id: 102, repoId: secondRepo.id, title: "Task in second repo" }),
     ]);
 
     render(<App />);
 
-    // "All repos" (the default) shows tasks from every project.
-    expect(await screen.findByText("Task in first repo")).toBeInTheDocument();
-    expect(screen.getByText("Task in second repo")).toBeInTheDocument();
+    // The Workspaces section row opens the aggregated board.
+    fireEvent.click(await screen.findByText("Platform"));
 
-    // Activating the workspace narrows Mission Control to its repos only.
-    fireEvent.click(screen.getByText("First only"));
-    await waitFor(() => {
-      expect(screen.queryByText("Task in second repo")).not.toBeInTheDocument();
-    });
-    expect(screen.getByText("Task in first repo")).toBeInTheDocument();
-
-    // "All repos" clears the filter.
-    fireEvent.click(screen.getByText("All repos"));
-    expect(await screen.findByText("Task in second repo")).toBeInTheDocument();
+    const board = await screen.findByTestId("workspace-board");
+    expect(within(board).getByText("Task in first repo")).toBeInTheDocument();
+    expect(within(board).getByText("Task in second repo")).toBeInTheDocument();
+    // Cards carry their project name as a repo badge.
+    expect(within(board).getByText(secondRepo.name)).toBeInTheDocument();
   });
 
   it("creates a workspace from the manager with the chosen repos", async () => {
@@ -103,10 +99,9 @@ export function defineAppWorkspacesTests() {
 
     render(<App />);
 
-    // Activate the workspace, then open the board's New Task composer.
+    // Open the Platform workspace board, then its New Task composer (cross-repo context).
     fireEvent.click(await screen.findByText("Platform"));
-    fireEvent.click(screen.getByRole("button", { name: "Board" }));
-    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+    fireEvent.click(await within(screen.getByTestId("workspace-board")).findByRole("button", { name: /new task/i }));
 
     // Cross-repo mode: a Repositories checklist with both repos pre-selected.
     const repoGroup = await screen.findByRole("group", { name: "Repositories" });
@@ -134,9 +129,9 @@ export function defineAppWorkspacesTests() {
     mockedApi.createTask.mockResolvedValue(appTask({ id: 600, title: "Solo in workspace" }));
 
     render(<App />);
+    // Open the Platform workspace board, then its New Task composer (cross-repo context).
     fireEvent.click(await screen.findByText("Platform"));
-    fireEvent.click(screen.getByRole("button", { name: "Board" }));
-    fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+    fireEvent.click(await within(screen.getByTestId("workspace-board")).findByRole("button", { name: /new task/i }));
 
     // Deselect the primary/board repo (appRepo), leaving only the second.
     const repoGroup = await screen.findByRole("group", { name: "Repositories" });

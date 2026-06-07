@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GitBranch, Plus, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
@@ -51,6 +51,10 @@ function getStatusFromPoint(clientX: number, clientY: number): TaskStatus | unde
 
 interface WorkspaceProps {
   selectedRepo?: Repo;
+  /** When set, this board is a workspace board: header shows the name, cards show repo badges. */
+  workspaceName?: string;
+  /** All repos, used to label cards with their project name on the workspace board. */
+  repoNames?: Repo[];
   visibleTasks: TaskSummary[];
   selectedTaskId?: number;
   taskAttention: TaskAttention[];
@@ -67,6 +71,8 @@ interface WorkspaceProps {
 
 export function Workspace({
   selectedRepo,
+  workspaceName,
+  repoNames,
   visibleTasks,
   selectedTaskId,
   taskAttention,
@@ -86,6 +92,11 @@ export function Workspace({
   const busyRef = useRef(busy);
   const lastPointerStatusRef = useRef<TaskStatus | undefined>(undefined);
   const statusHitboxesRef = useRef<StatusHitbox[]>([]);
+
+  const repoNameById = useMemo(
+    () => new Map((repoNames ?? []).map((repo) => [repo.id, repo.name])),
+    [repoNames],
+  );
 
   const draggingTask = visibleTasks.find((task) => task.id === draggingTaskId);
 
@@ -150,7 +161,7 @@ export function Workspace({
       <div className="nx-head-row">
         <div>
           <h1 className="nx-h1">
-            {selectedRepo ? selectedRepo.name : loading ? "Loading projects…" : "Connect a project"}
+            {workspaceName ?? (selectedRepo ? selectedRepo.name : loading ? "Loading projects…" : "Connect a project")}
           </h1>
           <p className="nx-sub">Workflow board — Planned through Done, with live state on every card.</p>
         </div>
@@ -159,7 +170,7 @@ export function Workspace({
             <RefreshCw data-icon="inline-start" className={loading ? "animate-spin" : undefined} />
             Refresh
           </Button>
-          {selectedRepo && (
+          {(selectedRepo || workspaceName) && (
             <Button type="button" size="sm" onClick={onCreateTask} disabled={busy}>
               <Plus data-icon="inline-start" />
               New Task
@@ -170,7 +181,7 @@ export function Workspace({
 
       {loading ? (
         <BoardSkeleton />
-      ) : !selectedRepo ? (
+      ) : !selectedRepo && !workspaceName ? (
         <Empty className="min-h-[360px] border bg-muted/20">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -204,6 +215,7 @@ export function Workspace({
                         task={task}
                         attention={getTaskAttention(taskAttention, task.id)}
                         liveLine={liveLines[task.id]}
+                        repoName={workspaceName ? repoNameById.get(task.repoId) : undefined}
                         isSelected={selectedTaskId === task.id}
                         busy={busy}
                         isDeleting={deletingTaskIds.has(task.id)}

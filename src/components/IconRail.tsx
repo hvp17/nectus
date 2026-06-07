@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { FolderGit2, GitPullRequest, Plus, Radio, Settings, SquareKanban } from "lucide-react";
 
 export type RailView = "mission" | "board" | "jira" | "reviews" | "settings";
@@ -11,8 +10,6 @@ interface IconRailProps {
   onCreateTask: () => void;
   /** A task needs a project; disable the create action until one is added. */
   canCreateTask: boolean;
-  /** Quick-access running-agents trigger, rendered with the primary nav group. */
-  runningAgentsSlot?: ReactNode;
 }
 
 const NAV: Array<{ id: Exclude<RailView, "settings">; label: string; Icon: typeof Radio }> = [
@@ -28,7 +25,6 @@ export function IconRail({
   onNavigate,
   onCreateTask,
   canCreateTask,
-  runningAgentsSlot,
 }: IconRailProps) {
   return (
     <nav className="nx-rail" aria-label="Primary">
@@ -58,7 +54,6 @@ export function IconRail({
             )}
           </button>
         ))}
-        {runningAgentsSlot}
       </div>
       <span className="nx-rail-sp" />
       <button

@@ -4,6 +4,7 @@ import { defineAppSmokeTests } from "./test/appSmokeTests";
 import { defineAppTaskBoardTests } from "./test/appTaskBoardTests";
 import { defineAppTaskCreationTests } from "./test/appTaskCreationTests";
 import { defineAppWorkspacesTests } from "./test/appWorkspacesTests";
+import { defineAppSidebarTests } from "./test/appSidebarTests";
 
 vi.mock("./api", () => ({
   api: {
@@ -140,4 +141,5 @@ describe("App", () => {
   defineAppTaskCreationTests();
   defineAppTaskBoardTests();
   defineAppWorkspacesTests();
+  defineAppSidebarTests();
 });

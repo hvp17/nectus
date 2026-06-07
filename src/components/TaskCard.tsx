@@ -14,6 +14,8 @@ interface TaskCardProps {
   attention?: TaskAttention;
   /** Latest live activity line for a running session, shown under the title. */
   liveLine?: string;
+  /** Repo label shown only on the workspace board to tell cards apart. */
+  repoName?: string;
   isSelected: boolean;
   busy: boolean;
   isDeleting?: boolean;
@@ -30,6 +32,7 @@ export function TaskCard({
   task,
   attention,
   liveLine,
+  repoName,
   isSelected,
   busy,
   isDeleting = false,
@@ -150,6 +153,7 @@ export function TaskCard({
           <span className="truncate">{task.hasWorktree ? task.branchName : "No worktree"}</span>
         </span>
         <span className="nx-card-agent">
+          {repoName && <span className="nx-card-repo">{repoName}</span>}
           {task.jiraIssueKey && (
             <span className="nx-card-jira" title={task.jiraIssueSummary ?? undefined}>
               {task.jiraIssueKey}
