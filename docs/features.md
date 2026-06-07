@@ -113,10 +113,14 @@ Key files:
 
 ### Cross-repo tasks
 
-A task created while a workspace is active can span **several of the workspace's
-repos**, driven by a single agent. In the New Task composer the Project dropdown
-becomes a **Repositories checklist** (the workspace's repos, all pre-selected); the
-first selected repo is the primary. Picking two or more creates a cross-repo task.
+A task can span **several of a workspace's repos**, driven by a single agent. The
+New Task composer carries a **Project / Workspace scope toggle** (shown only when at
+least one workspace resolves to ≥2 repos). In **Project** scope it shows the single
+Project dropdown; in **Workspace** scope it shows a **Workspace dropdown** plus a
+**Repositories checklist** (the chosen workspace's repos, all pre-selected, first =
+primary). Picking two or more repos creates a cross-repo task. The toggle defaults to
+Workspace when opened from a focused workspace board and to Project everywhere else,
+so a cross-repo task can be started from any entry point — not only a workspace board.
 
 - Each repo gets its own worktree on a **shared branch**, laid out as siblings under
   one parent: `<…/.nectus/worktrees>/workspaces/<branch>/<repoName>` (sibling

@@ -50,6 +50,8 @@ function App() {
     openWorkspaceBoard,
     newTaskRepoIds,
     setNewTaskRepoIds,
+    newTaskWorkspaceId,
+    setNewTaskWorkspaceId,
     createWorkspace,
     updateWorkspace,
     deleteWorkspace,
@@ -164,7 +166,8 @@ function App() {
   const closeComposer = useCallback(() => {
     closeCreateTaskModal();
     setNewTaskRepoIds([]);
-  }, [closeCreateTaskModal, setNewTaskRepoIds]);
+    setNewTaskWorkspaceId(undefined);
+  }, [closeCreateTaskModal, setNewTaskRepoIds, setNewTaskWorkspaceId]);
 
   useEffect(() => {
     if (!message) return;
@@ -188,6 +191,9 @@ function App() {
     // so dismiss the manager and fall back to the first available repo when none is selected.
     setManagingWorkspaces(false);
     setNewTaskRepoId(selectedRepoId ?? activeWorkspaceRepos[0]?.id ?? repos[0]?.id);
+    // Default the composer's scope to the focused workspace board (Workspace mode)
+    // only when it can fan out — i.e. it resolves to ≥2 repos. Otherwise Project mode.
+    setNewTaskWorkspaceId(activeWorkspaceRepos.length >= 2 ? activeWorkspaceId : undefined);
     setCreateTaskOpen(true);
   };
 
@@ -317,7 +323,9 @@ function App() {
               newTaskRepoId={newTaskRepoId}
               setNewTaskRepoId={setNewTaskRepoId}
               linkedJiraKey={pendingJiraLink?.key ?? null}
-              workspaceRepos={activeWorkspaceRepos}
+              workspaces={workspaces}
+              newTaskWorkspaceId={newTaskWorkspaceId}
+              setNewTaskWorkspaceId={setNewTaskWorkspaceId}
               selectedRepoIds={newTaskRepoIds}
               onSetRepoIds={setNewTaskRepoIds}
             />
