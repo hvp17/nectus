@@ -279,6 +279,10 @@ impl Database {
             "INTEGER NOT NULL DEFAULT 0",
         )?;
         self.add_column_if_missing("pr_reviews", "converged", "INTEGER")?;
+        // Reviewer session resume: the resolved session id reused across a loop's
+        // idle rounds so repeat reviews continue the same conversation instead of
+        // booting cold. Reset when the loop is (re)started.
+        self.add_column_if_missing("review_loops", "reviewer_session_id", "TEXT")?;
         // Increment B: a task may belong to a workspace, and per-repo working state
         // moves into task_repos. The FK is intentionally omitted from the ALTER
         // (SQLite can't add a REFERENCES column cleanly to an existing table); the

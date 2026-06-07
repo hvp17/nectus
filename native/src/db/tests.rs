@@ -1459,6 +1459,48 @@ fn creates_a_cross_repo_task_with_a_worktree_per_repo() {
 }
 
 #[test]
+fn review_loop_tracks_and_resets_reviewer_session_id() {
+    let db = Database::open_in_memory().unwrap();
+    let repo_dir = tempdir().unwrap();
+    std::process::Command::new("git")
+        .arg("init")
+        .arg(repo_dir.path())
+        .output()
+        .unwrap();
+    let repo = db
+        .add_repo(repo_dir.path().to_string_lossy().to_string())
+        .unwrap();
+    let profiles = db.list_agent_profiles().unwrap();
+    let reviewer = profiles
+        .iter()
+        .find(|profile| profile.agent_kind == AgentKind::Claude)
+        .unwrap();
+    let task = db
+        .create_task_record(
+            repo.id,
+            "Task".to_string(),
+            None,
+            Some(profiles[0].id),
+            false,
+            None,
+        )
+        .unwrap();
+
+    db.start_review_loop(task.id, reviewer.id).unwrap();
+    assert_eq!(db.review_loop_session_id(task.id).unwrap(), None);
+
+    db.set_review_loop_session_id(task.id, Some("sid-1")).unwrap();
+    assert_eq!(
+        db.review_loop_session_id(task.id).unwrap(),
+        Some("sid-1".to_string())
+    );
+
+    // Restarting the loop begins a fresh review thread, so the id resets.
+    db.start_review_loop(task.id, reviewer.id).unwrap();
+    assert_eq!(db.review_loop_session_id(task.id).unwrap(), None);
+}
+
+#[test]
 fn rejects_a_duplicate_workspace_name() {
     let db = Database::open_in_memory().unwrap();
     let alpha = insert_workspace_test_repo(&db, "alpha");
