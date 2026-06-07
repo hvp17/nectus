@@ -112,7 +112,8 @@
 .nx-rail-btn[data-active="true"]::before {
   content: ""; position: absolute; left: -12px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: var(--primary);
 }
-/* The global "New task" action sits at the rail's foot — a quiet, bordered create button, muted next to the ghost nav icons. */
+/* The global "New task" action lives at the rail's foot: a muted bordered create button so the
+   always-available affordance stays out of the way and never competes with the ghost nav icons above. */
 .nx-rail-new { border: 1px solid var(--border); color: var(--muted-foreground); }
 .nx-rail-new:hover { background: color-mix(in srgb, var(--foreground) 6%, transparent); color: var(--foreground); }
 .nx-rail-new:disabled { opacity: .45; cursor: not-allowed; }
