@@ -25,7 +25,6 @@ import { useGithub } from "./useGithub";
 import { useJiraBoardView } from "./useJiraBoardView";
 import { useTaskDeletion } from "./useTaskDeletion";
 import { useTaskReviewLoop } from "./useTaskReviewLoop";
-import { usePrReviews } from "./usePrReviews";
 import type {
   AgentProfile,
   AppSettings,
@@ -594,18 +593,8 @@ export function useApp() {
     setMessage,
   });
 
-  const {
-    prReviews,
-    selectedPrReviewId,
-    setSelectedPrReviewId,
-    selectedPrReview,
-    selectedPrReviewRuns,
-    creatingReview,
-    createPrReview,
-    rerunPrReview,
-    deletePrReview,
-    postReviewComment,
-  } = usePrReviews({ onMessage: setMessage });
+  // PR reviews are owned by `ReviewsView`, which calls `usePrReviews` directly
+  // (the bridge keeps the list cache live, so it's safe per-component).
 
   const saveAppSettings = (input: AppSettingsInput) =>
     run(
@@ -783,15 +772,5 @@ export function useApp() {
     setSelectedAgentProfileId,
     saveAppSettings,
     saveAgentProfile,
-    prReviews,
-    selectedPrReviewId,
-    setSelectedPrReviewId,
-    selectedPrReview,
-    selectedPrReviewRuns,
-    creatingReview,
-    createPrReview,
-    rerunPrReview,
-    deletePrReview,
-    postReviewComment,
   };
 }

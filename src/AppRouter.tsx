@@ -23,6 +23,10 @@ import { ReviewsPage } from "./components/ReviewsPage";
 import { JiraBoardPage } from "./components/JiraBoardPage";
 import { useApp } from "./hooks/useApp";
 import { useEventBridge } from "./hooks/useEventBridge";
+import { usePrReviews } from "./hooks/usePrReviews";
+import { useAgentProfilesQuery, useSettingsQuery } from "./queries/core";
+import { useAppStore } from "./store/appStore";
+import type { AgentProfile } from "./types";
 import { useAppTheme } from "./hooks/useAppTheme";
 import { useAppUpdate } from "./hooks/useAppUpdate";
 import { useAppUpdateToast } from "./hooks/useAppUpdateToast";
@@ -522,23 +526,32 @@ function JiraView() {
   );
 }
 
+const EMPTY_PROFILES: AgentProfile[] = [];
+
 function ReviewsView() {
-  const { app } = useAppContext();
+  // Dissolved off `useApp`: this view owns the PR-review concern directly. The
+  // event bridge keeps the list cache live, so `usePrReviews` is safe here even
+  // though the view only mounts on the /reviews route.
+  const setMessage = useAppStore((s) => s.setMessage);
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
+  const agentProfiles = useAgentProfilesQuery().data ?? EMPTY_PROFILES;
+  const settings = useSettingsQuery().data;
+  const pr = usePrReviews({ onMessage: setMessage });
   return (
     <ReviewsPage
-      prReviews={app.prReviews}
-      selectedPrReview={app.selectedPrReview}
-      selectedPrReviewId={app.selectedPrReviewId}
-      selectedPrReviewRuns={app.selectedPrReviewRuns}
-      agentProfiles={app.agentProfiles}
-      defaultReviewerProfileId={app.settings?.defaultAgentProfileId ?? app.agentProfiles[0]?.id}
-      creatingReview={app.creatingReview}
-      onSelectReview={app.setSelectedPrReviewId}
-      onCreateReview={app.createPrReview}
-      onRerunReview={app.rerunPrReview}
-      onDeleteReview={app.deletePrReview}
-      onPostReview={app.postReviewComment}
-      onBack={() => app.setCurrentView("mission")}
+      prReviews={pr.prReviews}
+      selectedPrReview={pr.selectedPrReview}
+      selectedPrReviewId={pr.selectedPrReviewId}
+      selectedPrReviewRuns={pr.selectedPrReviewRuns}
+      agentProfiles={agentProfiles}
+      defaultReviewerProfileId={settings?.defaultAgentProfileId ?? agentProfiles[0]?.id}
+      creatingReview={pr.creatingReview}
+      onSelectReview={pr.setSelectedPrReviewId}
+      onCreateReview={pr.createPrReview}
+      onRerunReview={pr.rerunPrReview}
+      onDeleteReview={pr.deletePrReview}
+      onPostReview={pr.postReviewComment}
+      onBack={() => setCurrentView("mission")}
     />
   );
 }
