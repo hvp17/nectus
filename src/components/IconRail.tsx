@@ -36,22 +36,6 @@ export function IconRail({
       <div className="nx-brand-mark" aria-hidden="true">
         N
       </div>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            className="nx-rail-btn nx-rail-new"
-            aria-label="Create task"
-            onClick={onCreateTask}
-            disabled={!canCreateTask}
-          >
-            <Plus aria-hidden="true" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="right" className="text-xs">
-          {canCreateTask ? "New task" : "Add a project to create a task"}
-        </TooltipContent>
-      </Tooltip>
       {NAV.map(({ id, label, Icon }) => (
         <Tooltip key={id}>
           <TooltipTrigger asChild>
@@ -79,6 +63,22 @@ export function IconRail({
       ))}
       {runningAgentsSlot}
       <span className="nx-rail-sp" />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="nx-rail-btn nx-rail-new"
+            aria-label="Create task"
+            onClick={onCreateTask}
+            disabled={!canCreateTask}
+          >
+            <Plus aria-hidden="true" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right" className="text-xs">
+          {canCreateTask ? "New task" : "Add a project to create a task"}
+        </TooltipContent>
+      </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
           <button
