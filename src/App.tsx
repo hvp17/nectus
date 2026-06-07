@@ -477,10 +477,6 @@ function App() {
                 taskAttention={taskAttention}
                 liveLines={liveLines}
                 loading={loading}
-                workspaces={workspaces}
-                activeWorkspaceId={activeWorkspaceId}
-                onSelectWorkspace={setActiveWorkspaceId}
-                onManageWorkspaces={openManageWorkspaces}
                 onOpenTask={openTask}
                 onOpenPr={openExternal}
                 onRefresh={() => refresh()}
