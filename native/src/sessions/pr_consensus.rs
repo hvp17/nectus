@@ -139,7 +139,10 @@ fn run_rounds_and_synthesize(
     let mut last_round: Vec<ReviewerOutcome> = Vec::new();
     let mut converged = false;
     let mut agreed_verdict = PrReviewVerdict::Inconclusive;
-    // reviewer_profile_id -> resolved session id (capture once, keep).
+    // reviewer_profile_id -> resolved session id (capture once, keep). Scoped to
+    // this run, so per-reviewer resume spans the rounds within one run but not a
+    // rerun (a rerun re-reviews cold); single PR reviews persist + resume across
+    // reruns, consensus deliberately does not.
     let mut sessions: HashMap<i64, String> = HashMap::new();
 
     for round in 1..=max_rounds {
