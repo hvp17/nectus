@@ -15,7 +15,7 @@ import { IconRail, type RailView } from "./components/IconRail";
 import { ProjectPanel } from "./components/ProjectPanel";
 import { MissionControl } from "./components/MissionControl";
 import { Workspace } from "./components/Workspace";
-import { TaskWorkspace } from "./components/TaskWorkspace";
+import { TaskWorkspaceOverlay } from "./components/TaskWorkspaceOverlay";
 import { CreateTaskComposer } from "./components/CreateTaskModal";
 import { WorkspaceManager } from "./components/WorkspaceManager";
 import { SettingsPage } from "./components/SettingsPage";
@@ -292,19 +292,8 @@ function AppLayout() {
   } else if (taskOpen && selectedTask) {
     viewport = (
       <div className="nx-viewport-fill" data-testid="dashboard-layout" data-task-workspace="true">
-        <TaskWorkspace
-          key={selectedTask.id}
+        <TaskWorkspaceOverlay
           task={selectedTask}
-          attention={app.selectedTaskAttention}
-          agentProfiles={agentProfiles}
-          reviewLoop={app.selectedReviewLoop}
-          reviewRuns={app.selectedReviewRuns}
-          liveReviewOutput={app.liveReviewOutput}
-          githubStatus={app.githubStatus}
-          pullRequest={app.selectedPullRequest}
-          pullRequestLoading={app.pullRequestLoading}
-          creatingPullRequest={app.creatingPullRequest}
-          pullRequestBusy={app.pullRequestBusy}
           backLabel={
             currentView === "mission"
               ? "Mission Control"
@@ -314,24 +303,6 @@ function AppLayout() {
           }
           repoName={repos.find((repo) => repo.id === selectedTask.repoId)?.name}
           onClose={() => setSelectedTaskId(undefined)}
-          onStopSession={app.stopSession}
-          onResumeSession={app.resumeSession}
-          onStartSession={app.startSession}
-          onStartReview={app.startReview}
-          onCreatePullRequest={app.createPullRequest}
-          onRefreshPullRequest={app.refreshPullRequest}
-          onMergePullRequest={app.mergePullRequest}
-          onSetPullRequestReady={app.setPullRequestReady}
-          onClosePullRequest={app.closePullRequest}
-          onUpdateStatus={app.updateStatus}
-          onRenameTask={app.renameTask}
-          onDeleteTask={app.requestDeleteTask}
-          onSetJiraLink={app.setTaskJiraLink}
-          jiraSite={app.jiraStatus?.site}
-          onSessionExit={app.onSessionExit}
-          onSessionInput={app.onSessionInput}
-          busy={app.busy}
-          isDeleting={app.deletingTaskIds.has(selectedTask.id)}
         />
       </div>
     );
