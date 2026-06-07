@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Activity, GitBranch } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { AgentLogo } from "./AgentBrand";
 import {
   ACTIVE_AGENT_STATES,
@@ -99,23 +98,17 @@ export function RunningAgentsFlyout({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <button type="button" className="nx-rail-btn" data-active={open} aria-label={label}>
-              <Activity aria-hidden="true" />
-              {activeCount > 0 && (
-                <span className="nx-rail-badge" data-tone="running" aria-hidden="true">
-                  {activeCount}
-                </span>
-              )}
-            </button>
-          </PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="right" className="text-xs">
-          {label}
-        </TooltipContent>
-      </Tooltip>
+      <PopoverTrigger asChild>
+        <button type="button" className="nx-rail-btn" data-active={open} aria-label={label}>
+          <Activity aria-hidden="true" />
+          <span className="nx-rail-label">Running agents</span>
+          {activeCount > 0 && (
+            <span className="nx-rail-badge" data-tone="running" aria-hidden="true">
+              {activeCount}
+            </span>
+          )}
+        </button>
+      </PopoverTrigger>
       <PopoverContent
         side="right"
         align="start"

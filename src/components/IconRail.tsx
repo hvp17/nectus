@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { FolderGit2, GitPullRequest, Plus, Radio, Settings, SquareKanban } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 export type RailView = "mission" | "board" | "jira" | "reviews" | "settings";
 
@@ -33,69 +32,57 @@ export function IconRail({
 }: IconRailProps) {
   return (
     <nav className="nx-rail" aria-label="Primary">
-      <div className="nx-brand-mark" aria-hidden="true">
-        N
+      <div className="nx-rail-head">
+        <div className="nx-brand-mark" aria-hidden="true">
+          N
+        </div>
+        <span className="nx-brand-word">Nectus</span>
       </div>
-      {NAV.map(({ id, label, Icon }) => (
-        <Tooltip key={id}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              className="nx-rail-btn"
-              data-active={active === id}
-              aria-label={label}
-              aria-current={active === id ? "page" : undefined}
-              onClick={() => onNavigate(id)}
-            >
-              <Icon aria-hidden="true" />
-              {id === "mission" && needsCount > 0 && (
-                <span className="nx-rail-badge" aria-hidden="true">
-                  {needsCount}
-                </span>
-              )}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">
-            {label}
-            {id === "mission" && needsCount > 0 ? ` · ${needsCount} need you` : ""}
-          </TooltipContent>
-        </Tooltip>
-      ))}
-      {runningAgentsSlot}
-      <span className="nx-rail-sp" />
-      <Tooltip>
-        <TooltipTrigger asChild>
+      <div className="nx-rail-nav">
+        {NAV.map(({ id, label, Icon }) => (
           <button
-            type="button"
-            className="nx-rail-btn nx-rail-new"
-            aria-label="Create task"
-            onClick={onCreateTask}
-            disabled={!canCreateTask}
-          >
-            <Plus aria-hidden="true" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="right" className="text-xs">
-          {canCreateTask ? "New task" : "Add a project to create a task"}
-        </TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
+            key={id}
             type="button"
             className="nx-rail-btn"
-            data-active={active === "settings"}
-            aria-label="Settings"
-            aria-current={active === "settings" ? "page" : undefined}
-            onClick={() => onNavigate("settings")}
+            data-active={active === id}
+            aria-label={label}
+            aria-current={active === id ? "page" : undefined}
+            onClick={() => onNavigate(id)}
           >
-            <Settings aria-hidden="true" />
+            <Icon aria-hidden="true" />
+            <span className="nx-rail-label">{label}</span>
+            {id === "mission" && needsCount > 0 && (
+              <span className="nx-rail-badge" aria-hidden="true">
+                {needsCount}
+              </span>
+            )}
           </button>
-        </TooltipTrigger>
-        <TooltipContent side="right" className="text-xs">
-          Settings
-        </TooltipContent>
-      </Tooltip>
+        ))}
+        {runningAgentsSlot}
+      </div>
+      <span className="nx-rail-sp" />
+      <button
+        type="button"
+        className="nx-rail-btn nx-rail-new"
+        aria-label="Create task"
+        title={canCreateTask ? undefined : "Add a project to create a task"}
+        onClick={onCreateTask}
+        disabled={!canCreateTask}
+      >
+        <Plus aria-hidden="true" />
+        <span className="nx-rail-label">New task</span>
+      </button>
+      <button
+        type="button"
+        className="nx-rail-btn"
+        data-active={active === "settings"}
+        aria-label="Settings"
+        aria-current={active === "settings" ? "page" : undefined}
+        onClick={() => onNavigate("settings")}
+      >
+        <Settings aria-hidden="true" />
+        <span className="nx-rail-label">Settings</span>
+      </button>
     </nav>
   );
 }
