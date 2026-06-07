@@ -34,7 +34,7 @@ export function SidebarAgentRow({ row, onOpen }: { row: AgentRow; onOpen: () => 
         {elapsed && <span className="nx-fly-time">{elapsed}</span>}
       </div>
       <div className="nx-fly-row-title">{task.title}</div>
-      <div className="nx-fly-row-line">{state === "needs_you" ? `"${line}"` : line}</div>
+      <div className="nx-fly-row-line">{state === "needs_you" ? `“${line}”` : line}</div>
     </button>
   );
 }
