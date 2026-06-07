@@ -10,7 +10,8 @@
 
 /* ---------- App frame: icon rail + optional project panel + viewport ---------- */
 .nx-app {
-  --nx-rail-w: 212px;
+  /* The primary rail is always collapsed to an icon-only strip. */
+  --nx-rail-w: 60px;
   position: relative;
   isolation: isolate;
   display: grid;
@@ -91,14 +92,14 @@
   }
 }
 
-/* ---------- Sidebar (labeled navigation rail) ---------- */
+/* ---------- Sidebar (always-collapsed, icon-only navigation rail) ---------- */
 .nx-rail {
   display: flex; flex-direction: column; align-items: stretch; gap: 2px;
   min-height: 0; height: 100%; align-self: stretch;
   padding: 12px 10px; border-right: 1px solid var(--sidebar-border); background: var(--sidebar);
 }
 .nx-rail-head {
-  display: flex; align-items: center; gap: 9px; padding: 2px 6px; margin-bottom: 10px;
+  display: flex; align-items: center; justify-content: center; padding: 2px 0; margin-bottom: 10px;
 }
 .nx-brand-mark {
   width: 30px; height: 30px; border-radius: var(--radius-md); display: grid; place-items: center; flex: none;
@@ -106,19 +107,14 @@
   background: linear-gradient(155deg, color-mix(in oklch, var(--sidebar-primary) 88%, white), var(--sidebar-primary) 55%, color-mix(in oklch, var(--sidebar-primary) 78%, black));
   box-shadow: inset 0 1px 0 0 color-mix(in oklch, white 45%, transparent), 0 6px 16px -6px color-mix(in oklch, var(--sidebar-primary) 70%, transparent);
 }
-.nx-brand-word {
-  font-size: 15px; font-weight: 700; letter-spacing: -0.02em; color: var(--sidebar-foreground);
-}
 .nx-rail-nav { display: flex; flex-direction: column; gap: 2px; }
 .nx-rail-btn {
-  position: relative; display: flex; align-items: center; gap: 10px; width: 100%; height: 36px;
-  padding: 0 10px; border: none; background: transparent; border-radius: var(--radius-md);
-  color: var(--muted-foreground); cursor: pointer; text-align: left;
-  font-family: inherit; font-size: 13px; font-weight: 600; letter-spacing: -0.01em;
+  position: relative; display: flex; align-items: center; justify-content: center; width: 100%; height: 40px;
+  padding: 0; border: none; background: transparent; border-radius: var(--radius-md);
+  color: var(--muted-foreground); cursor: pointer;
   transition: background .15s, color .15s;
 }
 .nx-rail-btn svg { width: 18px; height: 18px; flex: none; }
-.nx-rail-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nx-rail-btn:hover { background: color-mix(in srgb, var(--foreground) 6%, transparent); color: var(--foreground); }
 .nx-rail-btn[data-active="true"] { background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--primary); }
 .nx-rail-btn[data-active="true"]::before {
@@ -131,7 +127,7 @@
 .nx-rail-new:disabled { opacity: .45; cursor: not-allowed; }
 .nx-rail-new:disabled:hover { background: transparent; color: var(--muted-foreground); }
 .nx-rail-badge {
-  flex: none; margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  position: absolute; top: 3px; right: 5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
   background: var(--status-warning); color: #fff; font-size: 10px; font-weight: 800; display: grid; place-items: center;
 }
 .nx-rail-sp { flex: 1; }

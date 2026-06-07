@@ -4,21 +4,21 @@ This document maps current Nectus Desktop behavior to the files that own it.
 
 ## Navigation And Mission Control
 
-The app shell is an always-expanded labeled sidebar plus a persistent navigator panel.
+The app shell is an always-collapsed icon rail plus a persistent navigator panel.
 
-- The sidebar (always visible, ~212px, icon + label rows under a brand wordmark)
-  holds Mission Control, Board, JIRA, PR Reviews, and Settings. The Mission
-  Control row carries a badge with the cross-project needs-input count.
-- A **New task** button sits at the sidebar's foot (a muted bordered create row,
-  distinct from the ghost nav rows above), so the New Task composer is reachable
-  from any view — including an open task's terminal, where the navigator panel is
-  hidden. It opens the same composer as the board's "New Task", defaulting to the
-  selected repo (or the first repo in the focused workspace), and is disabled
-  until at least one project is added.
+- The icon rail (always visible, a narrow ~60px icon-only strip under the brand
+  "N" mark; width is the `--nx-rail-w` token) holds Mission Control, Board, JIRA,
+  PR Reviews, and Settings. Each button is icon-only with a hover tooltip naming
+  it and keeps its `aria-label`; the Mission Control icon carries a corner badge
+  with the cross-project needs-input count.
+- A **New task** button sits at the rail's foot (a muted bordered icon button),
+  so the New Task composer is reachable from any view. It opens the same composer
+  as the board's "New Task", defaulting to the selected repo (or the first repo
+  in the focused workspace), and is disabled until at least one project is added.
 - A **persistent navigator panel** sits to the right of the icon rail whenever
-  Mission Control, the project board, or the workspace board is the active view
-  (it is hidden when a task workspace, the New Task composer, or the workspace
-  manager is open). The panel has two sections:
+  Mission Control, the project board, the workspace board, **or an open task's
+  details** is the active view (it is hidden only when the New Task composer or
+  the workspace manager is open). The panel has two sections:
   - **Projects** — one row per local git project; clicking opens that project's
     board. Each row shows the project name, a state dot (color-coded by the most
     urgent in-flight state: needs_you → running → review), and an agent count.

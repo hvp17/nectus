@@ -244,10 +244,10 @@ function App() {
   // The New Task composer is a focused inline view reached from "New Task".
   const composing = createTaskOpen;
   // The merged navigator is persistent on the work views (Mission Control + both
-  // boards), and hidden when a task / composer / workspace manager takes over.
+  // boards) AND while a task is open (task details keep the projects/workspaces
+  // sidebar), and hidden only when the composer / workspace manager takes over.
   const showProjectPanel =
     (currentView === "mission" || currentView === "board" || currentView === "workspace") &&
-    !taskOpen &&
     !composing &&
     !managingWorkspaces;
   // The workspace board is panel-driven, not a rail destination; map it to "board".
