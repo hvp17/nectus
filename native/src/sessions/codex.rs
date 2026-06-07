@@ -64,6 +64,10 @@ enum EventMsg {
     #[serde(rename = "task_started", alias = "turn_started")]
     TurnStarted(TurnStartedEvent),
     TurnAborted(TurnAbortedEvent),
+    /// Agent's text output and reasoning summary. Both are persisted by default
+    /// and carry human-readable prose, so they drive the live activity line.
+    AgentMessage(AgentMessageEvent),
+    AgentReasoning(AgentReasoningEvent),
     ExecApprovalRequest(InputRequestEvent),
     ApplyPatchApprovalRequest(InputRequestEvent),
     RequestUserInput(InputRequestEvent),
@@ -83,6 +87,21 @@ struct TurnCompleteEvent {
 #[derive(Debug, Deserialize)]
 struct TurnStartedEvent {
     turn_id: String,
+}
+
+/// Codex's `AgentMessageEvent` — the agent's textual reply (`message`).
+#[derive(Debug, Deserialize)]
+struct AgentMessageEvent {
+    #[serde(default)]
+    message: Option<String>,
+}
+
+/// Codex's `AgentReasoningEvent` — a reasoning summary (`text`), Codex narrating
+/// what it is about to do. The richest "doing now" signal in the default rollout.
+#[derive(Debug, Deserialize)]
+struct AgentReasoningEvent {
+    #[serde(default)]
+    text: Option<String>,
 }
 
 /// Codex's `TurnAbortedEvent`. Upstream `reason` is the snake_case enum
@@ -339,6 +358,7 @@ fn codex_signal_from_line(
             reason,
             prompt,
         }),
+        CodexSessionEvent::Activity { text } => Some(SessionSignal::Activity { text }),
         CodexSessionEvent::Started { .. } | CodexSessionEvent::Aborted { .. } => None,
     }
 }
@@ -361,6 +381,9 @@ pub(super) enum CodexSessionEvent {
         turn_id: Option<String>,
         reason: String,
         prompt: Option<String>,
+    },
+    Activity {
+        text: String,
     },
     Started {
         turn_id: Option<String>,
@@ -406,6 +429,8 @@ fn codex_session_event_from_event(event: EventMsg) -> Option<CodexSessionEvent> 
             turn_id: event.turn_id,
             reason: event.reason,
         }),
+        EventMsg::AgentMessage(event) => codex_activity(event.message.as_deref()),
+        EventMsg::AgentReasoning(event) => codex_activity(event.text.as_deref()),
         EventMsg::ExecApprovalRequest(event) => needs_input(event, "exec_approval_request"),
         EventMsg::ApplyPatchApprovalRequest(event) => {
             needs_input(event, "apply_patch_approval_request")
@@ -415,6 +440,12 @@ fn codex_session_event_from_event(event: EventMsg) -> Option<CodexSessionEvent> 
         EventMsg::RequestPermissions(event) => needs_input(event, "request_permissions"),
         EventMsg::Other => None,
     }
+}
+
+/// Build an `Activity` event from an agent message / reasoning summary, bounding
+/// the (potentially long) text to a preview. `None` when there is no readable text.
+fn codex_activity(text: Option<&str>) -> Option<CodexSessionEvent> {
+    prompt_preview(text?).map(|text| CodexSessionEvent::Activity { text })
 }
 
 /// Build a `NeedsInput` event from an approval / input-request event, using the

@@ -263,10 +263,14 @@ Current behavior:
 - Terminal output is streamed through the `session_output` Tauri event.
 - Recent terminal output is buffered in memory for snapshot restore.
 - A running task's card and Mission Control row show a live "what it's doing"
-  line between the title and branch: the latest readable line of the agent's
-  terminal output (ANSI-stripped, throttled, de-duplicated) carried by the
-  `session_activity` event. It falls back to "Working…" before the first line
-  and clears when the session exits.
+  line between the title and branch, carried by the `session_activity` event
+  (throttled, de-duplicated). For Codex, Claude, and OpenCode it is parsed from
+  the provider's structured event stream (Codex reasoning/messages, Claude
+  `PreToolUse` tool-use hook, OpenCode message parts), so it reads as real
+  progress ("Editing App.tsx", "Running npm test") instead of statusline chrome
+  or echoed keystrokes; Gemini and custom agents fall back to an ANSI-stripped
+  tail of the PTY output. It falls back to "Working…" before the first line and
+  clears when the session exits.
 - Closing the app stops owned sessions and clears active session ids.
 
 Key files:

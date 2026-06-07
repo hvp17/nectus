@@ -211,6 +211,12 @@ type == "event_msg" and payload.type is "task_complete" or "turn_complete"
 
 - Parses `task_started`, `turn_started`, and `turn_aborted`, but does not emit
   app-level events for them yet.
+- Emits `session_activity` (the live "doing now" line on task cards) from the
+  `agent_reasoning` (reasoning summary) and `agent_message` (assistant text)
+  `event_msg` payloads — both persisted by default. The line is normalized,
+  throttled, and de-duplicated in `mod.rs` (`emit_activity_line`). This replaces
+  the raw-PTY tail scrape for Codex, which on a full-screen TUI only surfaced
+  statusline chrome and echoed keystrokes.
 - Tries to emit `session_needs_input` for explicit input-request event names:
   `exec_approval_request`, `request_permissions`, `request_user_input`,
   `elicitation_request`, `apply_patch_approval_request`, plus the fallback names
