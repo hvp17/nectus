@@ -150,20 +150,25 @@ every download against it.
 
 ### Cutting a release
 
-Bump the version to the same `X.Y.Z` in all three manifests, commit, then tag
-and push the tag:
+`package.json` is the single source of truth for the app version: bump it, open a
+PR, and merge to `main`. That's the whole flow — no manual tagging.
 
 ```bash
-# edit native/tauri.conf.json, package.json, and native/Cargo.toml to X.Y.Z
+# bump only the "version" in package.json (e.g. via your editor), then:
 git commit -am "chore(release): vX.Y.Z"
-git tag vX.Y.Z
-git push origin vX.Y.Z
+# open a PR and merge to main
 ```
 
-Pushing a `v*` tag triggers `.github/workflows/release.yml` on `macos-latest`
-(arm64). It builds the Apple-Silicon app, signs the updater artifacts, and
-auto-publishes a GitHub Release containing the `.dmg`, the `.app.tar.gz`, its
-`.sig`, and `latest.json`.
+`native/tauri.conf.json` reads the version from `package.json`
+(`"version": "../package.json"`), and `native/Cargo.toml` is frozen at `0.0.0`
+(its crate version is unused for app versioning), so you never touch those.
+
+On every push to `main`, `.github/workflows/release.yml` reads
+`package.json`'s version and, **only if no GitHub Release exists for it yet**,
+builds the Apple-Silicon app on `macos-latest` (arm64), signs the updater
+artifacts, creates the `vX.Y.Z` tag, and publishes a GitHub Release containing
+the `.dmg`, the `.app.tar.gz`, its `.sig`, and `latest.json`. Merges that don't
+change the version are no-ops.
 
 ### How installed copies update
 

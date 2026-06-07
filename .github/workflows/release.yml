@@ -1,15 +1,52 @@
 name: Release
 
+# Releases are driven by the version in /package.json (the single source of
+# truth; tauri.conf.json reads it via "version": "../package.json"). On every
+# push to main we check whether a GitHub Release already exists for that version
+# and, if not, build + sign + publish it. So a release = bump package.json, merge
+# to main. Non-bump merges are no-ops. There is no manual tagging step.
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+# Never let two release builds run at once (e.g. rapid merges); finish the first.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Decide whether package.json's version needs a release
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "Release v$VERSION already exists; nothing to publish."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "No release for v$VERSION yet; will build and publish."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
   release:
+    needs: check
+    if: needs.check.outputs.should_release == 'true'
     runs-on: macos-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,6 +78,9 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install
 
+      # tauri-action creates the v<version> tag at this commit and publishes the
+      # GitHub Release with the signed bundle + updater artifacts. The bundle
+      # version comes from tauri.conf.json -> ../package.json.
       - name: Build, sign, and publish release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -48,8 +88,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Nectus Desktop __VERSION__"
+          tagName: v${{ needs.check.outputs.version }}
+          releaseName: "Nectus Desktop v${{ needs.check.outputs.version }}"
           releaseBody: "Download the .dmg to install, or let an installed copy auto-update."
           releaseDraft: false
           prerelease: false
