@@ -1,4 +1,3 @@
-// src/components/ProjectPanel.tsx
 import { useEffect, useMemo, useState } from "react";
 import { FolderGit2, Info, Plus, Settings2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
