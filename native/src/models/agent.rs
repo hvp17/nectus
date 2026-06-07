@@ -11,6 +11,9 @@ pub enum AgentKind {
     Codex,
     Claude,
     Gemini,
+    #[serde(rename = "opencode")]
+    #[strum(serialize = "opencode")]
+    OpenCode,
     Custom,
 }
 
@@ -40,4 +43,21 @@ pub struct AgentProfileInput {
     pub args: Vec<String>,
     #[serde(default)]
     pub env: BTreeMap<String, String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn agent_kind_serializes_opencode_as_snake_case() {
+        let serialized = serde_json::to_string(&AgentKind::OpenCode).unwrap();
+
+        assert_eq!(serialized, r#""opencode""#);
+        assert_eq!(
+            serde_json::from_str::<AgentKind>(&serialized).unwrap(),
+            AgentKind::OpenCode
+        );
+        assert_eq!(AgentKind::OpenCode.as_str(), "opencode");
+    }
 }

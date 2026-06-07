@@ -4,7 +4,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import type { TaskSummary } from "../../types";
 
 /// Empty-stage state shown when a task has no active session: resume a saved
-/// session (Codex/Claude) or start/restart the agent. Mirrors the Review pane's
+/// session (Codex/Claude/OpenCode) or start/restart the agent. Mirrors the Review pane's
 /// `Empty` treatment so the no-session stage reads as sleek as the rest of the app.
 export function TaskTerminalLauncher({
   task,

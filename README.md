@@ -17,8 +17,8 @@ git, SQLite, and PTY work lives in the Rust backend.
   across sibling worktrees (one per repo, each on its own branch).
 - Create Tasks against a project in direct-edit mode or with a new git worktree;
   blank worktree branch names become generated `task-...` branches.
-- Launch Codex, Claude, Gemini, or custom CLI agent profiles in an embedded
-  terminal.
+- Launch Codex, Claude, Gemini, OpenCode, or custom CLI agent profiles in an
+  embedded terminal.
 - Triage every agent across all projects from Mission Control, the default home:
   rows grouped by who needs you (needs-input, running, review, done) carry the
   agent's latest line and an inline action; click a row to open the task.
@@ -29,12 +29,14 @@ git, SQLite, and PTY work lives in the Rust backend.
 - Delete tasks from board cards or the selected-task inspector with background
   progress toasts.
 - Send the task prompt into a new agent session automatically.
-- Resume Codex and Claude sessions when a saved session id is available.
+- Resume Codex, Claude, and OpenCode sessions when a saved session id is
+  available.
 - Track task status across `Planned`, `In progress`, `Review`, and `Done`.
 - Drag tasks between board columns to update status.
 - Show saved review status on task cards.
 - Surface running, dirty, finished, review, and needs-input counts.
-- Watch Codex session JSONL for finished or input-needed events.
+- Watch Codex session JSONL, Claude hooks, and OpenCode local server status for
+  finished or input-needed events where each provider exposes them.
 - Send macOS notifications for session attention events.
 - Run a single AI review with another agent profile and feed blockers or
   implementation feedback back to the worker session.
@@ -143,7 +145,7 @@ The main tracking and debugging guide is
 
 - SQLite tables and task/session fields.
 - Tauri commands and emitted frontend events.
-- Codex JSONL tracking and its current limitations.
+- Codex JSONL tracking, OpenCode local server tracking, and current limitations.
 - AI review tracking.
 - macOS notification troubleshooting.
 - Common debugging commands and failure modes.
@@ -163,7 +165,7 @@ src/styles/          Focused CSS files for layout, settings, task board, detail,
 src/test/            Shared Vitest and Testing Library helpers
 native/src/          Rust Tauri commands, database, git ops, session runtime
 native/src/sessions/agents/
-                     Provider-specific Codex, Claude, and Gemini launch behavior
+                     Provider-specific Codex, Claude, Gemini, and OpenCode launch behavior
 native/capabilities/ Tauri permission capability files
 docs/                Project documentation and debugging references
 ```
@@ -205,7 +207,7 @@ Important backend files:
   modules, and persistence tests
 - `native/src/git_ops.rs`: git repository and worktree operations
 - `native/src/sessions/`: PTY lifecycle, agent command setup, Codex JSONL watcher,
-  and review-loop worker
-- `native/src/sessions/agents/`: Codex, Claude, and Gemini command argument
-  builders and provider-specific fallback locations
+  OpenCode local server watcher, and review-loop worker
+- `native/src/sessions/agents/`: Codex, Claude, Gemini, and OpenCode command
+  argument builders and provider-specific fallback locations
 - `native/src/models.rs`: serializable backend/frontend contracts

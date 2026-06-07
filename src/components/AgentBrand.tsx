@@ -2,16 +2,18 @@ import { Bot } from "lucide-react";
 import claudeLogo from "../assets/logos/claude.svg";
 import codexLogo from "../assets/logos/codex.svg";
 import geminiLogo from "../assets/logos/gemini.svg";
+import opencodeLogo from "../assets/logos/opencode.svg";
 import { cn } from "../lib/utils";
 import type { AgentKind } from "../types";
 
-type BrandKey = "codex" | "claude" | "gemini" | "custom";
+type BrandKey = "codex" | "claude" | "gemini" | "opencode" | "custom";
 type LogoSize = "xs" | "sm" | "md" | "lg";
 
 const brandLabels: Record<BrandKey, string> = {
   codex: "Codex",
   claude: "Claude",
   gemini: "Gemini",
+  opencode: "OpenCode",
   custom: "Custom model",
 };
 
@@ -19,6 +21,7 @@ const brandLogos: Partial<Record<BrandKey, string>> = {
   codex: codexLogo,
   claude: claudeLogo,
   gemini: geminiLogo,
+  opencode: opencodeLogo,
 };
 
 export function AgentLogo({
@@ -81,6 +84,8 @@ function brandForAgentKind(agentKind: AgentKind): BrandKey {
       return "claude";
     case "gemini":
       return "gemini";
+    case "opencode":
+      return "opencode";
     case "custom":
       return "custom";
   }
@@ -96,6 +101,9 @@ function brandForModel(agentKind: AgentKind, model?: string | null): BrandKey {
   }
   if (normalized.includes("gemini")) {
     return "gemini";
+  }
+  if (normalized.startsWith("opencode/") || normalized.includes("opencode")) {
+    return "opencode";
   }
   if (!normalized) {
     return brandForAgentKind(agentKind);

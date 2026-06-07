@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { AgentProfile } from "../../types";
 import {
+  agentKindLabels,
   createProfileDraft,
+  modelPresets,
   normalizeProfileKindChange,
   parseEnv,
   profileDraftToInput,
@@ -63,6 +65,14 @@ describe("profile draft helpers", () => {
 
     expect(normalized.model).toBe("__custom");
     expect(normalized.customModel).toBe("experimental-local-model");
+  });
+
+  it("exposes OpenCode labels and provider/model presets", () => {
+    expect(agentKindLabels.opencode).toBe("OpenCode");
+    expect(modelPresets.opencode).toEqual([
+      "opencode/gpt-5.1-codex",
+      "anthropic/claude-sonnet-4-5-20250929",
+    ]);
   });
 
   it("parses environment textarea lines without leaking malformed entries", () => {

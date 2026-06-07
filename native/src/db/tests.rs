@@ -64,13 +64,15 @@ fn seeds_default_agent_profiles() {
     let db = Database::open_in_memory().unwrap();
     let profiles = db.list_agent_profiles().unwrap();
 
-    assert_eq!(profiles.len(), 3);
+    assert_eq!(profiles.len(), 4);
     assert_eq!(profiles[0].command, "codex");
     assert_eq!(profiles[1].command, "claude");
     assert_eq!(profiles[2].command, "gemini");
+    assert_eq!(profiles[3].command, "opencode");
     assert_eq!(profiles[0].agent_kind, AgentKind::Codex);
     assert_eq!(profiles[1].agent_kind, AgentKind::Claude);
     assert_eq!(profiles[2].agent_kind, AgentKind::Gemini);
+    assert_eq!(profiles[3].agent_kind, AgentKind::OpenCode);
 }
 
 #[test]

@@ -118,6 +118,29 @@ are defined by Codex but are not persisted by default in the checked rollout
 policy. Treat `session_idle` as high confidence. Treat input-needed detection as
 best effort across Codex versions and launch modes.
 
+### OpenCode Local Server
+
+For OpenCode sessions, Nectus reserves a localhost port and launches the CLI with
+`opencode --hostname 127.0.0.1 --port <port>`.
+
+The watcher:
+
+- Sends new task prompts with `--prompt <task prompt>` and skips the generic
+  post-spawn PTY prompt write, so OpenCode does not receive the prompt twice.
+- Discovers the matching top-level OpenCode session from `GET /session` (skipping
+  subagent sessions, which carry a `parentID`) and saves the id and label in
+  `tasks.last_session_id` / `tasks.last_session_label` when available.
+- Subscribes to the server's `GET /event` SSE stream and translates native
+  OpenCode events into Nectus signals: `session.idle` maps to `session_idle`;
+  `permission.asked`, `permission.v2.asked`, `question.asked`, and
+  `question.v2.asked` map to `session_needs_input`. Events for other sessions
+  (e.g. subagents) are ignored. The stream is re-established while the session is
+  alive and ends when the OpenCode process exits.
+
+OpenCode authentication stays owned by OpenCode (`opencode auth login` or TUI
+`/connect`). Nectus stores only the profile command, model, args, env, and saved
+session id.
+
 ## Tauri Commands
 
 Frontend wrapper: `src/api.ts`
@@ -174,7 +197,7 @@ Current commands:
 | `rerun_pr_review` | Reset a PR review to queued and re-run it against the latest PR head (same single/consensus mode; clears prior rounds). |
 | `delete_pr_review` | Remove a PR review and any lingering ephemeral worktree. |
 | `start_session` | Start an agent in the task cwd. |
-| `resume_session` | Resume a Codex or Claude saved session. |
+| `resume_session` | Resume a Codex, Claude, or OpenCode saved session. |
 | `stop_session` | Stop a running PTY child process. |
 | `resize_session` | Resize the PTY. |
 | `send_session_input` | Write keyboard input or terminal-dropped file paths into the PTY without appending an Enter sequence. |
@@ -190,8 +213,8 @@ Backend-to-frontend events:
 | `session_output` | PTY output chunk and stream offset. | `native/src/sessions/mod.rs` |
 | `session_activity` | Task id, session id, and the agent's latest human-readable activity line (ANSI-stripped tail of PTY output, throttled and de-duplicated). | `native/src/sessions/mod.rs` |
 | `session_exited` | Session id and optional exit code. | `native/src/sessions/mod.rs`, `native/src/lib.rs` |
-| `session_idle` | Task id, session id, turn id, optional message. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL) and `claude.rs` (hooks) |
-| `session_needs_input` | Task id, session id, reason, optional prompt. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL) and `claude.rs` (hooks) |
+| `session_idle` | Task id, session id, turn id, optional message. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL), `claude.rs` (hooks), and `opencode.rs` (local server `/event` `session.idle`) |
+| `session_needs_input` | Task id, session id, reason, optional prompt. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL), `claude.rs` (hooks), and `opencode.rs` (local server `/event` permission/question asks) |
 | `review_loop_updated` | Review-loop state and optional review run. | `native/src/sessions/review_loop.rs` |
 | `review_output` | Task id, a chunk of the task reviewer's live stdout, and the chunk's byte offset (a `0` offset starts a new run). Streamed only by the task review loop, not by PR reviews. | `native/src/sessions/review_loop.rs` |
 | `pr_review_updated` | Updated external PR review (status, verdict, metadata, Markdown output), plus an optional `latest_run` carrying the consensus round output that triggered the update. | `native/src/sessions/pr_review.rs`, `native/src/sessions/pr_consensus.rs` |
@@ -229,8 +252,8 @@ Important `tasks` columns:
 - `last_session_id`: saved session id used for resume when supported.
 - `last_session_agent`: command or agent kind used for the last session.
 - `last_session_cwd`: project path or worktree path used for the last session.
-- `last_session_label`: Codex label from the latest matching JSONL metadata when
-  available.
+- `last_session_label`: Codex or OpenCode label from the latest matching provider
+  metadata when available.
 - `jira_issue_key` / `jira_issue_summary` / `jira_issue_url`: optional local-only
   link to a JIRA story, captured at attach time; null when the task is unlinked.
   Set/cleared via `set_task_jira_link`; never written back to JIRA.
@@ -339,9 +362,9 @@ Check:
 
 Symptom — `env: node: No such file or directory` with **exit status 127**: the
 agent binary was found, but a Finder/Dock-launched app has a minimal PATH so the
-node-based CLI (e.g. Codex) cannot exec `node`. Both the PTY session
+node-based CLI (e.g. Codex or OpenCode) cannot exec `node`. Both the PTY session
 (`native/src/sessions/mod.rs`) and the reviewer launch
-(`native/src/sessions/review_loop.rs`) set the spawned command's `PATH` to
+(`native/src/sessions/reviewer.rs`) set the spawned command's `PATH` to
 `process_util::augmented_path()` — the current PATH plus
 `process_util::third_party_bin_dirs` — so nested tools resolve. If `node` lives
 somewhere unusual (e.g. nvm), add that dir to `third_party_bin_dirs` or set `PATH`
@@ -416,15 +439,17 @@ Relevant code:
 
 ### Session Resume Is Disabled
 
-Resume is only supported for task agent kinds `codex` and `claude`.
+Resume is only supported for task agent kinds `codex`, `claude`, and `opencode`.
 
 Check:
 
 - The task has `last_session_id`.
 - The task has an agent profile id.
-- The agent kind is Codex or Claude.
+- The agent kind is Codex, Claude, or OpenCode.
 - For Codex, a matching JSONL `session_meta` file was found for the task cwd
   after the Nectus session start.
+- For OpenCode, the local server `/session` response exposed the running session
+  id before the task session stopped or exited.
 
 Relevant code:
 
@@ -444,6 +469,9 @@ Check:
 - The Nectus session was still active when Codex first wrote matching
   `session_meta` metadata; metadata discovery stops when the task session ends.
 - The matching `session_meta` was not a Codex subagent or auto-review session.
+- For OpenCode, the CLI was launched with the Nectus-owned localhost port and the
+  `/event` stream delivered a `session.idle` (idle) or a permission/question ask
+  (needs input) for the discovered session id.
 
 Relevant code:
 
@@ -484,7 +512,8 @@ Check:
 
 - The review loop status is `running` or `reviewing`.
 - Manual review runs have a running worker session for the task. Automatic review
-  after idle still requires a Codex session that emits `session_idle`.
+  after idle still requires a Codex, Claude, or OpenCode session that emits
+  `session_idle`.
 - Manual review runs should emit `review_loop_updated` with status
   `reviewing` before the reviewer command finishes.
 - The reviewer profile command resolves and exits successfully. An exit status
@@ -492,11 +521,11 @@ Check:
   see *Agent Command Fails To Start* above; the reviewer launch sets
   `process_util::augmented_path()` to fix it.
 - Claude and Gemini reviewer profiles run headless with `-p`; Codex reviewers run
-  non-interactively with `codex exec`; custom reviewers read the generated prompt
-  from stdin. An exit status 1 with `Error: stdin is not a terminal` means a Codex
-  reviewer was launched as the interactive TUI instead of through `codex exec` —
-  `build_reviewer_args` in `native/src/sessions/review_loop.rs` adds the `exec`
-  subcommand for `AgentKind::Codex`.
+  non-interactively with `codex exec`; OpenCode reviewers run with `opencode run`;
+  custom reviewers read the generated prompt from stdin. An exit status 1 with
+  `Error: stdin is not a terminal` means a Codex reviewer was launched as the
+  interactive TUI instead of through `codex exec` — `build_reviewer_args` in
+  `native/src/sessions/reviewer.rs` adds the provider-specific headless subcommand.
 - Reviewer output contains an exact first-line verdict token:
   `NECTUS_NO_BLOCKERS`, `NECTUS_BLOCKERS`, or `NECTUS_FEEDBACK`. Legacy `PASS`
   and blocking-review phrase parsing are still accepted.

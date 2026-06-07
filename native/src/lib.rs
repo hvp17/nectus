@@ -1044,7 +1044,7 @@ fn resume_session(
         let context = task_session_context(&db, task_id, None)?;
         if !matches!(
             context.agent.agent_kind,
-            AgentKind::Codex | AgentKind::Claude
+            AgentKind::Codex | AgentKind::Claude | AgentKind::OpenCode
         ) {
             return Err("Agent profile does not support resume".into());
         }

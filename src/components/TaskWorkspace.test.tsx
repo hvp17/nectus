@@ -72,6 +72,17 @@ const agentProfiles: AgentProfile[] = [
     createdAt: "2026-05-15T00:00:00.000Z",
     updatedAt: "2026-05-15T00:00:00.000Z",
   },
+  {
+    id: 4,
+    name: "OpenCode",
+    agentKind: "opencode",
+    command: "opencode",
+    model: null,
+    args: [],
+    env: {},
+    createdAt: "2026-05-15T00:00:00.000Z",
+    updatedAt: "2026-05-15T00:00:00.000Z",
+  },
 ];
 
 function renderTaskWorkspace(input?: {
@@ -161,6 +172,24 @@ describe("TaskWorkspace", () => {
 
     expect(onResumeSession).toHaveBeenCalledWith(resumableTask);
     expect(onStartSession).toHaveBeenCalledWith(resumableTask);
+  });
+
+  it("shows launcher controls for saved OpenCode sessions", () => {
+    const onResumeSession = vi.fn();
+    const resumableTask: TaskSummary = {
+      ...task,
+      agentProfileId: 4,
+      agentName: "OpenCode",
+      agentKind: "opencode",
+      activeSessionId: null,
+      lastSessionId: "ses_saved",
+      lastSessionAgent: "opencode",
+    };
+
+    renderTaskWorkspace({ task: resumableTask, onResumeSession });
+
+    screen.getByRole("button", { name: /resume session/i }).click();
+    expect(onResumeSession).toHaveBeenCalledWith(resumableTask);
   });
 
   it("updates status from the compact metadata strip", async () => {

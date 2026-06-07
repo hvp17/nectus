@@ -68,7 +68,11 @@ export function defineAppTaskCreationTests() {
     fireEvent.click(screen.getByRole("combobox", { name: "Agent" }));
     const options = await screen.findAllByRole("option");
     const logos = options.flatMap((option) => within(option).queryAllByRole("img", { name: /logo/i }));
-    expect(logos.map((logo) => logo.getAttribute("aria-label"))).toEqual(["Codex logo", "Claude logo"]);
+    expect(logos.map((logo) => logo.getAttribute("aria-label"))).toEqual([
+      "Codex logo",
+      "Claude logo",
+      "OpenCode logo",
+    ]);
   });
 
   it("opens a task modal and creates a task with an optional title, selected agent, prompt, and worktree choice", async () => {
