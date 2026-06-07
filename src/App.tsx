@@ -3,7 +3,6 @@ import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { IconRail, type RailView } from "./components/IconRail";
-import { RunningAgentsFlyout } from "./components/RunningAgentsFlyout";
 import { ProjectPanel } from "./components/ProjectPanel";
 import { MissionControl } from "./components/MissionControl";
 import { Workspace } from "./components/Workspace";
@@ -44,9 +43,12 @@ function App() {
     workspaces,
     activeWorkspaceId,
     setActiveWorkspaceId,
+    activeWorkspace,
     activeWorkspaceRepos,
     scopedRepos,
     missionTasks,
+    workspaceBoardTasks,
+    openWorkspaceBoard,
     newTaskRepoIds,
     setNewTaskRepoIds,
     createWorkspace,
@@ -228,6 +230,7 @@ function App() {
     if (createTaskOpen) closeComposer();
     setManagingWorkspaces(false);
     setSelectedTaskId(undefined);
+    setActiveWorkspaceId(undefined);
     // Fall back to the first repo *in the active workspace's scope*, so the board
     // never selects a project the rail doesn't list.
     if (view === "board" && selectedRepoId === undefined && scopedRepos[0]) {
@@ -237,11 +240,20 @@ function App() {
   };
 
   // A task is opened on top of Mission Control or the board, never the secondary views.
-  const taskOpen = Boolean(selectedTask) && (currentView === "mission" || currentView === "board");
+  const taskOpen =
+    Boolean(selectedTask) &&
+    (currentView === "mission" || currentView === "board" || currentView === "workspace");
   // The New Task composer is a focused inline view reached from "New Task".
   const composing = createTaskOpen;
-  const showProjectPanel = currentView === "board" && !taskOpen && !composing && !managingWorkspaces;
-  const railActive: RailView = currentView;
+  // The merged navigator is persistent on the work views (Mission Control + both
+  // boards), and hidden when a task / composer / workspace manager takes over.
+  const showProjectPanel =
+    (currentView === "mission" || currentView === "board" || currentView === "workspace") &&
+    !taskOpen &&
+    !composing &&
+    !managingWorkspaces;
+  // The workspace board is panel-driven, not a rail destination; map it to "board".
+  const railActive: RailView = currentView === "workspace" ? "board" : currentView;
   const frame = showProjectPanel ? "railp" : "rail";
 
   return (
@@ -256,32 +268,26 @@ function App() {
           onNavigate={navigate}
           onCreateTask={openCreateTaskModal}
           canCreateTask={repos.length > 0}
-          runningAgentsSlot={
-            <RunningAgentsFlyout
-              tasks={tasks}
-              repos={repos}
-              taskAttention={taskAttention}
-              liveLines={liveLines}
-              onOpenTask={openTask}
-            />
-          }
         />
 
         {showProjectPanel && (
           <ProjectPanel
-            repos={scopedRepos}
+            repos={repos}
+            workspaces={workspaces}
             tasks={tasks}
             taskAttention={taskAttention}
-            selectedRepoId={selectedRepoId}
+            liveLines={liveLines}
+            selectedRepoId={currentView === "board" ? selectedRepoId : undefined}
+            selectedWorkspaceId={currentView === "workspace" ? activeWorkspaceId : undefined}
             onSelectRepo={(id) => {
-              setCurrentView("board");
-              setSelectedRepoId(id);
+              setActiveWorkspaceId(undefined);
               setSelectedTaskId(undefined);
+              setSelectedRepoId(id);
+              setCurrentView("board");
             }}
+            onSelectWorkspace={openWorkspaceBoard}
+            onOpenTask={openTask}
             onAddProject={addProject}
-            workspaces={workspaces}
-            activeWorkspaceId={activeWorkspaceId}
-            onSelectWorkspace={setActiveWorkspaceId}
             onManageWorkspaces={openManageWorkspaces}
             busy={busy}
             loading={loading}
@@ -441,6 +447,26 @@ function App() {
                 onSessionInput={onSessionInput}
                 busy={busy}
                 isDeleting={deletingTaskIds.has(selectedTask.id)}
+              />
+            </div>
+          ) : currentView === "workspace" ? (
+            <div className="nx-viewport-fill" data-testid="workspace-board">
+              <Workspace
+                selectedRepo={undefined}
+                workspaceName={activeWorkspace?.name}
+                visibleTasks={workspaceBoardTasks}
+                repoNames={repos}
+                selectedTaskId={selectedTaskId}
+                taskAttention={taskAttention}
+                liveLines={liveLines}
+                onSelectTask={openTask}
+                onRefresh={refresh}
+                onCreateTask={openCreateTaskModal}
+                onDeleteTask={requestDeleteTask}
+                onUpdateStatus={updateStatus}
+                deletingTaskIds={deletingTaskIds}
+                busy={busy}
+                loading={loading}
               />
             </div>
           ) : currentView === "mission" ? (
