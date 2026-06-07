@@ -1065,14 +1065,23 @@ fn resume_session(
 }
 
 #[tauri::command]
-fn stop_session(
+async fn stop_session(
     session_id: String,
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> AppResult<Session> {
-    let session = state
-        .sessions
-        .stop(state.db.clone(), session_id.clone())
+    // Run the blocking teardown (kill + reap the child, DB writes, and for OpenCode
+    // a server probe) on the blocking pool, NOT the main thread. Synchronous Tauri
+    // commands share the main UI thread with the Wry event loop, so doing this work
+    // — and then emitting `session_exited` — inline froze the whole app. Off-thread,
+    // the post-`.await` emit also runs off-main, the safe pattern the reader thread
+    // already uses for the same event.
+    let sessions = state.sessions.clone();
+    let db = state.db.clone();
+    let id = session_id.clone();
+    let session = tauri::async_runtime::spawn_blocking(move || sessions.stop(db, id))
+        .await
+        .map_err(|error| AppError::from(format!("Failed to stop session: {error}")))?
         .map_err(AppError::from)?;
     let _ = app
         .emit(
