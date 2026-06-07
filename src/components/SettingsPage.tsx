@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { Bot, GitBranch, Github, KanbanSquare, Palette, Plus, Save, Terminal } from "lucide-react";
+import { Bot, GitBranch, Github, Info, KanbanSquare, Palette, Plus, Save, Terminal } from "lucide-react";
 import { AgentLogo } from "./AgentBrand";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -13,6 +13,8 @@ import { GithubConnectionCard } from "./settings/GithubConnectionCard";
 import { JiraConnectionCard } from "./settings/JiraConnectionCard";
 import { SegmentedRadioGroup } from "./settings/SegmentedRadioGroup";
 import { SettingsOverviewItem } from "./settings/SettingsOverviewItem";
+import { UpdateCard } from "./settings/UpdateCard";
+import type { AppUpdateState } from "../hooks/useAppUpdate";
 import {
   createProfileDraft,
   fallbackSettings,
@@ -31,6 +33,7 @@ interface SettingsPageProps {
   jiraRestStatus?: JiraRestStatus;
   /** Site detected from acli, used to prefill the JIRA token card. */
   jiraDetectedSite?: string | null;
+  appUpdate: AppUpdateState;
   busy: boolean;
   onBack: () => void;
   onSaveSettings: (settings: AppSettingsInput) => Promise<unknown>;
@@ -41,7 +44,7 @@ interface SettingsPageProps {
   onDisconnectJira: () => Promise<void>;
 }
 
-type SettingsSectionId = "profiles" | "projects" | "github" | "jira" | "appearance";
+type SettingsSectionId = "profiles" | "projects" | "github" | "jira" | "appearance" | "about";
 
 export function SettingsPage({
   settings,
@@ -49,6 +52,7 @@ export function SettingsPage({
   githubStatus,
   jiraRestStatus,
   jiraDetectedSite,
+  appUpdate,
   busy,
   onSaveSettings,
   onSaveAgentProfile,
@@ -86,6 +90,7 @@ export function SettingsPage({
     { id: "github", icon: <Github />, label: "GitHub" },
     { id: "jira", icon: <KanbanSquare />, label: "JIRA" },
     { id: "appearance", icon: <Palette />, label: "Appearance" },
+    { id: "about", icon: <Info />, label: "About" },
   ];
 
   const goToSection = (id: SettingsSectionId) => {
@@ -151,6 +156,11 @@ export function SettingsPage({
             mono
           />
           <SettingsOverviewItem icon={<Palette />} label="Interface" value={`${themeLabel} / ${densityLabel}`} />
+          <SettingsOverviewItem
+            icon={<Info />}
+            label="Version"
+            value={appUpdate.currentVersion ? `v${appUpdate.currentVersion}` : "—"}
+          />
         </div>
 
         <section id="settings-section-profiles" className="nx-set-section">
@@ -338,6 +348,26 @@ export function SettingsPage({
                 onChange={(density) => setSettingsDraft((current) => ({ ...current, density }))}
               />
             </FieldGroup>
+          </div>
+        </section>
+
+        <section id="settings-section-about" className="nx-set-section">
+          <div className="nx-set-sec-head">
+            <Info />
+            <h3>About &amp; Updates</h3>
+          </div>
+          <div className="nx-set-sec-body">
+            <UpdateCard
+              status={appUpdate.status}
+              info={appUpdate.info}
+              currentVersion={appUpdate.currentVersion}
+              progress={appUpdate.progress}
+              error={appUpdate.error}
+              lastCheckedAt={appUpdate.lastCheckedAt}
+              onCheck={() => appUpdate.check()}
+              onInstall={appUpdate.installUpdate}
+              onRelaunch={appUpdate.relaunch}
+            />
           </div>
         </section>
 
