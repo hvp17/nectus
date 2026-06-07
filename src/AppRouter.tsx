@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   createRootRoute,
   createRoute,
@@ -24,9 +24,19 @@ import { JiraBoardPage } from "./components/JiraBoardPage";
 import { useApp } from "./hooks/useApp";
 import { useEventBridge } from "./hooks/useEventBridge";
 import { usePrReviews } from "./hooks/usePrReviews";
-import { useAgentProfilesQuery, useSettingsQuery } from "./queries/core";
+import { useTaskActions } from "./hooks/useTaskActions";
+import { useTaskDeletion } from "./hooks/useTaskDeletion";
+import {
+  useAgentProfilesQuery,
+  useReposQuery,
+  useSettingsQuery,
+  useTasksQuery,
+  useWorkspacesQuery,
+  useBootstrapLoading,
+  useRefreshData,
+} from "./queries/core";
 import { useAppStore } from "./store/appStore";
-import type { AgentProfile } from "./types";
+import type { AgentProfile, Repo, TaskSummary, Workspace as WorkspaceModel } from "./types";
 import { useAppTheme } from "./hooks/useAppTheme";
 import { useAppUpdate } from "./hooks/useAppUpdate";
 import { useAppUpdateToast } from "./hooks/useAppUpdateToast";
@@ -392,67 +402,117 @@ function AppLayout() {
   );
 }
 
+const EMPTY_REPOS: Repo[] = [];
+const EMPTY_WORKSPACES: WorkspaceModel[] = [];
+const EMPTY_TASKS: TaskSummary[] = [];
+
 function MissionView() {
-  const { app, openTask } = useAppContext();
+  // Reads server state from queries and runtime state from the store directly —
+  // only the cross-cutting `openTask` handler comes from the layout.
+  const { openTask } = useAppContext();
+  const repos = useReposQuery().data ?? EMPTY_REPOS;
+  const tasks = useTasksQuery().data ?? EMPTY_TASKS;
+  const taskAttention = useAppStore((s) => s.taskAttention);
+  const liveLines = useAppStore((s) => s.liveLines);
+  const loading = useBootstrapLoading();
+  const refresh = useRefreshData();
   return (
     <div className="nx-viewport-fill" data-testid="mission-control">
       <MissionControl
-        repos={app.repos}
-        tasks={app.missionTasks}
-        taskAttention={app.taskAttention}
-        liveLines={app.liveLines}
-        loading={app.loading}
+        repos={repos}
+        tasks={tasks}
+        taskAttention={taskAttention}
+        liveLines={liveLines}
+        loading={loading}
         onOpenTask={openTask}
         onOpenPr={openExternal}
-        onRefresh={() => app.refresh()}
+        onRefresh={refresh}
       />
     </div>
   );
 }
 
 function BoardView() {
-  const { app, openTask, openCreateTaskModal } = useAppContext();
+  const { openTask, openCreateTaskModal } = useAppContext();
+  const repos = useReposQuery().data ?? EMPTY_REPOS;
+  const tasks = useTasksQuery().data ?? EMPTY_TASKS;
+  const selectedRepoId = useAppStore((s) => s.selectedRepoId);
+  const selectedTaskId = useAppStore((s) => s.selectedTaskId);
+  const taskAttention = useAppStore((s) => s.taskAttention);
+  const liveLines = useAppStore((s) => s.liveLines);
+  const deletingTaskIds = useAppStore((s) => s.deletingTaskIds);
+  const busy = useAppStore((s) => s.busy);
+  const loading = useBootstrapLoading();
+  const refresh = useRefreshData();
+  const { updateStatus } = useTaskActions();
+  const requestDeleteTask = useTaskDeletion();
+  const selectedRepo = useMemo(() => repos.find((repo) => repo.id === selectedRepoId), [repos, selectedRepoId]);
+  const visibleTasks = useMemo(
+    () => (selectedRepoId ? tasks.filter((task) => task.repoId === selectedRepoId) : tasks),
+    [tasks, selectedRepoId],
+  );
   return (
     <div className="nx-viewport-fill" data-testid="dashboard-layout" data-task-workspace="false">
       <Workspace
-        selectedRepo={app.selectedRepo}
-        visibleTasks={app.visibleTasks}
-        selectedTaskId={app.selectedTaskId}
-        taskAttention={app.taskAttention}
-        liveLines={app.liveLines}
+        selectedRepo={selectedRepo}
+        visibleTasks={visibleTasks}
+        selectedTaskId={selectedTaskId}
+        taskAttention={taskAttention}
+        liveLines={liveLines}
         onSelectTask={openTask}
-        onRefresh={app.refresh}
+        onRefresh={refresh}
         onCreateTask={openCreateTaskModal}
-        onDeleteTask={app.requestDeleteTask}
-        onUpdateStatus={app.updateStatus}
-        deletingTaskIds={app.deletingTaskIds}
-        busy={app.busy}
-        loading={app.loading}
+        onDeleteTask={requestDeleteTask}
+        onUpdateStatus={updateStatus}
+        deletingTaskIds={deletingTaskIds}
+        busy={busy}
+        loading={loading}
       />
     </div>
   );
 }
 
 function WorkspaceView() {
-  const { app, openTask, openCreateTaskModal } = useAppContext();
+  const { openTask, openCreateTaskModal } = useAppContext();
+  const repos = useReposQuery().data ?? EMPTY_REPOS;
+  const workspaces = useWorkspacesQuery().data ?? EMPTY_WORKSPACES;
+  const tasks = useTasksQuery().data ?? EMPTY_TASKS;
+  const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
+  const selectedTaskId = useAppStore((s) => s.selectedTaskId);
+  const taskAttention = useAppStore((s) => s.taskAttention);
+  const liveLines = useAppStore((s) => s.liveLines);
+  const deletingTaskIds = useAppStore((s) => s.deletingTaskIds);
+  const busy = useAppStore((s) => s.busy);
+  const loading = useBootstrapLoading();
+  const refresh = useRefreshData();
+  const { updateStatus } = useTaskActions();
+  const requestDeleteTask = useTaskDeletion();
+  const activeWorkspace = useMemo(
+    () => workspaces.find((workspace) => workspace.id === activeWorkspaceId),
+    [workspaces, activeWorkspaceId],
+  );
+  const workspaceBoardTasks = useMemo(
+    () => (activeWorkspace ? tasks.filter((task) => activeWorkspace.repoIds.includes(task.repoId)) : EMPTY_TASKS),
+    [activeWorkspace, tasks],
+  );
   return (
     <div className="nx-viewport-fill" data-testid="workspace-board">
       <Workspace
         selectedRepo={undefined}
-        workspaceName={app.activeWorkspace?.name}
-        visibleTasks={app.workspaceBoardTasks}
-        repoNames={app.repos}
-        selectedTaskId={app.selectedTaskId}
-        taskAttention={app.taskAttention}
-        liveLines={app.liveLines}
+        workspaceName={activeWorkspace?.name}
+        visibleTasks={workspaceBoardTasks}
+        repoNames={repos}
+        selectedTaskId={selectedTaskId}
+        taskAttention={taskAttention}
+        liveLines={liveLines}
         onSelectTask={openTask}
-        onRefresh={app.refresh}
+        onRefresh={refresh}
         onCreateTask={openCreateTaskModal}
-        onDeleteTask={app.requestDeleteTask}
-        onUpdateStatus={app.updateStatus}
-        deletingTaskIds={app.deletingTaskIds}
-        busy={app.busy}
-        loading={app.loading}
+        onDeleteTask={requestDeleteTask}
+        onUpdateStatus={updateStatus}
+        deletingTaskIds={deletingTaskIds}
+        busy={busy}
+        loading={loading}
       />
     </div>
   );

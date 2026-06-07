@@ -117,7 +117,7 @@ export function useApp() {
     agentProfilesQuery.isLoading ||
     settingsQuery.isLoading ||
     tasksQuery.isLoading;
-  const [deletingTaskIds, setDeletingTaskIds] = useState<ReadonlySet<number>>(() => new Set());
+  const deletingTaskIds = useAppStore((s) => s.deletingTaskIds);
   const taskForm = useCreateTaskForm(settings?.defaultAgentProfileId ?? selectedAgentProfileId);
   const {
     createTaskOpen,
@@ -149,7 +149,6 @@ export function useApp() {
   const selectedAgentProfileIdRef = useRef<number | undefined>(undefined);
   const activeWorkspaceIdRef = useRef<number | undefined>(undefined);
   const tasksRef = useRef<TaskSummary[]>([]);
-  const deletingTaskIdsRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     selectedRepoIdRef.current = selectedRepoId;
@@ -166,17 +165,6 @@ export function useApp() {
   useEffect(() => {
     tasksRef.current = tasks;
   }, [tasks]);
-
-  const setTaskDeleting = useCallback((taskId: number, deleting: boolean) => {
-    const next = new Set(deletingTaskIdsRef.current);
-    if (deleting) {
-      next.add(taskId);
-    } else {
-      next.delete(taskId);
-    }
-    deletingTaskIdsRef.current = next;
-    setDeletingTaskIds(next);
-  }, []);
 
   const selectedRepo = useMemo(() => repos.find((repo) => repo.id === selectedRepoId), [repos, selectedRepoId]);
 
@@ -584,14 +572,7 @@ export function useApp() {
       setMessage("Review: Stopped");
     });
 
-  const requestDeleteTask = useTaskDeletion({
-    deletingTaskIdsRef,
-    setTaskDeleting,
-    setTasks,
-    setSelectedTaskId,
-    setTaskAttention,
-    setMessage,
-  });
+  const requestDeleteTask = useTaskDeletion();
 
   // PR reviews are owned by `ReviewsView`, which calls `usePrReviews` directly
   // (the bridge keeps the list cache live, so it's safe per-component).

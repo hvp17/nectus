@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "./keys";
 
@@ -63,4 +64,30 @@ export function useTasksQuery() {
     queryFn: () => api.listTasks(),
     meta: SURFACE_ERRORS,
   });
+}
+
+/** Invalidate all bootstrap reads (the old `useApp.refresh()` with no preferred repo). */
+export function useRefreshData() {
+  const queryClient = useQueryClient();
+  return useCallback(() => {
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.repos() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.agentProfiles() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks() }),
+    ]);
+  }, [queryClient]);
+}
+
+/** True until every bootstrap read has resolved its first fetch. */
+export function useBootstrapLoading() {
+  // Call every hook unconditionally (no `||` short-circuit — that would change the
+  // number of hooks between renders), then combine the booleans.
+  const reposLoading = useReposQuery().isLoading;
+  const workspacesLoading = useWorkspacesQuery().isLoading;
+  const profilesLoading = useAgentProfilesQuery().isLoading;
+  const settingsLoading = useSettingsQuery().isLoading;
+  const tasksLoading = useTasksQuery().isLoading;
+  return reposLoading || workspacesLoading || profilesLoading || settingsLoading || tasksLoading;
 }

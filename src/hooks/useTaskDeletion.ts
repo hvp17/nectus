@@ -1,26 +1,30 @@
-import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
+import { useCallback, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "../api";
-import { clearTaskAttention, type TaskAttention } from "../sessionAttention";
+import { queryKeys } from "../queries/keys";
+import { makeCacheSetter } from "../queries/cache";
+import { useAppStore } from "../store/appStore";
+import { clearTaskAttention } from "../sessionAttention";
 import type { TaskSummary } from "../types";
 
-interface UseTaskDeletionArgs {
-  deletingTaskIdsRef: MutableRefObject<Set<number>>;
-  setTaskDeleting: (taskId: number, deleting: boolean) => void;
-  setTasks: Dispatch<SetStateAction<TaskSummary[]>>;
-  setSelectedTaskId: Dispatch<SetStateAction<number | undefined>>;
-  setTaskAttention: Dispatch<SetStateAction<TaskAttention[]>>;
-  setMessage: Dispatch<SetStateAction<string | null>>;
-}
+/**
+ * Returns a `requestDeleteTask(task)` action that reads/writes the store and the
+ * task cache directly, so any component can call it without drilled setters. The
+ * in-progress set (`deletingTaskIds`) lives in the store, keeping concurrent
+ * deletes consistent across every consumer.
+ */
+export function useTaskDeletion() {
+  const queryClient = useQueryClient();
+  const setTasks = useMemo(
+    () => makeCacheSetter<TaskSummary[]>(queryClient, queryKeys.tasks()),
+    [queryClient],
+  );
+  const setTaskDeleting = useAppStore((s) => s.setTaskDeleting);
+  const setSelectedTaskId = useAppStore((s) => s.setSelectedTaskId);
+  const setTaskAttention = useAppStore((s) => s.setTaskAttention);
+  const setMessage = useAppStore((s) => s.setMessage);
 
-export function useTaskDeletion({
-  deletingTaskIdsRef,
-  setTaskDeleting,
-  setTasks,
-  setSelectedTaskId,
-  setTaskAttention,
-  setMessage,
-}: UseTaskDeletionArgs) {
   return useCallback(
     (task: TaskSummary) => {
       setMessage(null);
@@ -31,7 +35,7 @@ export function useTaskDeletion({
         });
         return;
       }
-      if (deletingTaskIdsRef.current.has(task.id)) {
+      if (useAppStore.getState().deletingTaskIds.has(task.id)) {
         return;
       }
 
@@ -70,13 +74,6 @@ export function useTaskDeletion({
 
       void runDelete();
     },
-    [
-      deletingTaskIdsRef,
-      setMessage,
-      setSelectedTaskId,
-      setTaskAttention,
-      setTaskDeleting,
-      setTasks,
-    ],
+    [setTasks, setSelectedTaskId, setTaskAttention, setMessage, setTaskDeleting],
   );
 }
