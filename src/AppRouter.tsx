@@ -26,6 +26,7 @@ import { useEventBridge } from "./hooks/useEventBridge";
 import { usePrReviews } from "./hooks/usePrReviews";
 import { useTaskActions } from "./hooks/useTaskActions";
 import { useTaskDeletion } from "./hooks/useTaskDeletion";
+import { useWorkspaceActions } from "./hooks/useWorkspaceActions";
 import { useSettingsActions } from "./hooks/useSettingsActions";
 import { useJiraToken } from "./hooks/useJiraToken";
 import { useGithubStatusQuery } from "./queries/github";
@@ -106,6 +107,7 @@ function AppLayout() {
   // Single, mount-once subscription to all Tauri session/review/PR events.
   useEventBridge();
   const app = useApp();
+  const workspaceActions = useWorkspaceActions();
   const {
     repos,
     activeWorkspaceId,
@@ -303,9 +305,9 @@ function AppLayout() {
         repos={repos}
         busy={app.busy}
         onClose={() => setManagingWorkspaces(false)}
-        onCreate={app.createWorkspace}
-        onUpdate={app.updateWorkspace}
-        onDelete={app.deleteWorkspace}
+        onCreate={workspaceActions.createWorkspace}
+        onUpdate={workspaceActions.updateWorkspace}
+        onDelete={workspaceActions.deleteWorkspace}
       />
     );
   } else if (taskOpen && selectedTask) {

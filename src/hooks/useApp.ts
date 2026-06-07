@@ -575,43 +575,8 @@ export function useApp() {
   // Settings + agent-profile saves and the JIRA token connect/disconnect are owned
   // by `SettingsView` (via `useSettingsActions` / `useJiraToken`).
 
-  const createWorkspace = (name: string, repoIds: number[]) =>
-    run(
-      async () => {
-        const workspace = await api.createWorkspace(name, repoIds);
-        await refresh(selectedRepoIdRef.current);
-        setActiveWorkspaceId(workspace.id);
-        activeWorkspaceIdRef.current = workspace.id;
-        setMessage(`Workspace: Created ${workspace.name}`);
-        return workspace;
-      },
-      { busy: true, rethrow: true },
-    );
-
-  const updateWorkspace = (id: number, name: string, repoIds: number[]) =>
-    run(
-      async () => {
-        const workspace = await api.updateWorkspace(id, name, repoIds);
-        await refresh(selectedRepoIdRef.current);
-        setMessage(`Workspace: Saved ${workspace.name}`);
-        return workspace;
-      },
-      { busy: true, rethrow: true },
-    );
-
-  const deleteWorkspace = (id: number) =>
-    run(
-      async () => {
-        await api.deleteWorkspace(id);
-        if (activeWorkspaceIdRef.current === id) {
-          activeWorkspaceIdRef.current = undefined;
-          setActiveWorkspaceId(undefined);
-        }
-        await refresh(selectedRepoIdRef.current);
-        setMessage("Workspace: Deleted");
-      },
-      { busy: true, rethrow: true },
-    );
+  // Workspace create/update/delete are owned by `useWorkspaceActions` (used by the
+  // workspace manager overlay).
 
   return {
     repos,
@@ -627,9 +592,6 @@ export function useApp() {
     setNewTaskRepoIds,
     newTaskWorkspaceId,
     setNewTaskWorkspaceId,
-    createWorkspace,
-    updateWorkspace,
-    deleteWorkspace,
     tasks,
     agentProfiles,
     settings,
