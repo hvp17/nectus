@@ -13,19 +13,34 @@ authentication, Nectus stores no tokens and runs no OAuth flow — it shells out
 - Connection state gates the pull request UI — creation and live status only
   appear once `gh` is connected.
 
+## Write actions are agent-driven
+
+The four pull-request **write** actions — create, merge, mark-ready, close — do not
+shell out to `gh` from Rust. Each submits a prompt into the task's **running agent
+session** (`submit_session_input`), and the agent runs `git`/`gh` itself in the
+worktree: it pushes, authors the PR body, rebases/resolves conflicts, and reports
+back in the terminal. The **read** side (detection, live status, checks) stays
+deterministic `gh`-shell-out and keeps driving the panel — see the sections below.
+
+- The prompts live in `src/lib/githubAgentPrompts.ts` (the single place to tune
+  shipping behavior); the dispatch hook is `src/hooks/useGithubShipActions.ts`.
+- A write action requires a **running session** (`task.activeSessionId`). With none,
+  it declines with guidance to start or resume the agent first — there is no
+  app-driven auto-start (which would risk typing before the agent's REPL is ready).
+- The status panel is eventually-consistent: after the agent finishes (and on the
+  existing open-PR auto-refresh), the read path picks up the new/updated PR. A
+  worktree task's freshly opened PR is backfilled by the existing detection step.
+
 ## Create a pull request
 
 - Available for worktree-backed tasks once GitHub is connected, from the task
   inspector's GitHub panel (and from the workflow stepper's `Create PR` step).
-- Runs `git push --set-upstream origin HEAD` in the task worktree, then
-  `gh pr create --title <task title> --body <task prompt> [--draft]`.
-- The PR title defaults to the task title and the body to the task prompt; a
-  `Draft` toggle opens the PR as a draft.
-- The returned PR URL is captured and saved to the task automatically — no running
-  agent session is required.
-- For tasks without a worktree, the action falls back to the previous behavior:
-  submitting a structured prompt into the active agent session asking it to open
-  the PR from the terminal.
+- Submits a prompt asking the agent to commit/push the branch and open the PR with
+  `gh`, **authoring the title and description itself** from the branch's changes
+  (Nectus passes no title/body). A `Draft` toggle asks for a draft PR; if a PR
+  already exists for the branch, the prompt asks the agent to update it.
+- The opened PR's URL is backfilled to the task by the existing detection step
+  (below), which then loads live status.
 
 ## Detecting an existing pull request
 
@@ -63,23 +78,22 @@ authentication, Nectus stores no tokens and runs no OAuth flow — it shells out
 
 ## Ship a pull request
 
-Once a worktree task's PR is open and `gh` is connected, the GitHub panel can finish
-the PR from inside Nectus (the actions all `gh`-shell-out in the task worktree, where
-`gh` resolves the PR from the branch — the same resolution the status fetch uses):
+Once a task's PR is open, `gh` is connected, and the agent session is running, the
+GitHub panel can finish the PR by asking the agent (each action submits a prompt; the
+agent runs the `gh`/`git` work in the worktree):
 
-- **Merge** — a confirm dialog picks the strategy (`gh pr merge --squash` /
-  `--merge` / `--rebase`, squash default) and surfaces the current review/checks state
-  as context. GitHub branch protection is the real gate, so a merge that isn't
-  permitted (failing required checks, missing approval) surfaces `gh`'s own error.
-  The merge deliberately does **not** pass `--delete-branch`: the branch is checked
-  out in the task worktree, so deleting it would fight the worktree — task deletion
-  removes the worktree later.
-- **Mark ready** — a draft PR is promoted with `gh pr ready` (the backend also
-  supports the inverse, `gh pr ready --undo`).
-- **Close** — `gh pr close` abandons the PR without merging, behind its own confirm.
+- **Merge** — a confirm dialog picks the strategy (squash default; `--squash` /
+  `--merge` / `--rebase` is interpolated into the prompt) and surfaces the current
+  review/checks state as context. The prompt asks the agent to **rebase onto the base
+  and resolve conflicts** if the branch is behind or conflicting, then merge — work
+  the old deterministic call could not do. It asks the agent **not** to delete the
+  branch (it is checked out in the worktree; task deletion removes the worktree
+  later). GitHub branch protection remains the real gate.
+- **Mark ready** — asks the agent to promote a draft with `gh pr ready`.
+- **Close** — asks the agent to `gh pr close` without merging, behind its own confirm.
 
-Each action re-fetches and returns the refreshed `PullRequestInfo`, so the card flips
-to Merged / Ready / Closed in place.
+The card flips to Merged / Ready / Closed once the read path refreshes (agent finish
++ the open-PR auto-refresh), not synchronously from the action's return value.
 
 ## Review an external pull request
 
@@ -146,18 +160,20 @@ after a re-review) and is not persisted as "posted"; success surfaces a message.
 
 - Task inspector panel: `src/components/GitHubPanel.tsx`, composing the ship actions
   (`src/components/github/PullRequestActions.tsx`) and the CI check drill-down
-  (`src/components/github/PullRequestChecks.tsx`)
+  (`src/components/github/PullRequestChecks.tsx`) — presentational, unchanged
 - Settings connection card: `src/components/SettingsPage.tsx`
-- Connection, PR-status, ship actions, and auto-refresh: `src/hooks/useGithub.ts`
-- Create-PR orchestration (gh path plus agent fallback): `src/hooks/useApp.ts`
+- Connection + PR-status read + auto-refresh + detection (read-only): `src/hooks/useGithub.ts`
+- Agent-driven write actions (create/merge/ready/close): `src/hooks/useGithubShipActions.ts`,
+  with the prompts in `src/lib/githubAgentPrompts.ts`; wired in `src/components/TaskWorkspaceOverlay.tsx`
 - Post-review-to-PR action: `src/components/PrReviewDetail.tsx` + `src/hooks/usePrReviews.ts`
-- Frontend API: `src/api.ts`
-- gh shell-out and output parsing (incl. per-check parsing, merge/ready/close,
-  `comment_on_pull_request`): `native/src/github.rs`
-- Backend commands: `github_status`, `create_github_pull_request`,
-  `github_pull_request_status`, `detect_github_pull_request`,
-  `merge_github_pull_request`, `set_github_pull_request_ready`,
-  `close_github_pull_request`, `post_pr_review_comment` (registered in
+- Frontend API: `src/api.ts` (`submit_session_input` carries the write prompts)
+- gh shell-out and output parsing (per-check parsing, `comment_on_pull_request`, and
+  the now-**dormant** `create`/`merge`/`ready`/`close` write helpers, still compiled
+  and tested but no longer reached by the UI): `native/src/github.rs`
+- Backend commands: `github_status`, `github_pull_request_status`,
+  `detect_github_pull_request`, `post_pr_review_comment`, plus the dormant
+  `create_github_pull_request`, `merge_github_pull_request`,
+  `set_github_pull_request_ready`, `close_github_pull_request` (registered in
   `native/src/lib.rs`)
 - PR URL persistence: `pr_url` column on the `tasks` table, via
   `update_task_metadata`

@@ -11,15 +11,14 @@ import { useTaskReviewLoop } from "../hooks/useTaskReviewLoop";
 import { useTaskActions } from "../hooks/useTaskActions";
 import { useTaskDeletion } from "../hooks/useTaskDeletion";
 import { useSessionControls } from "../hooks/useSessionControls";
+import { useGithubShipActions } from "../hooks/useGithubShipActions";
 import { useGuardedAction } from "../hooks/useGuardedAction";
 import { isReviewLoopActive } from "../statusLabels";
-import { clearTaskAttention, getTaskAttention } from "../sessionAttention";
+import { getTaskAttention } from "../sessionAttention";
 import { TaskWorkspace } from "./TaskWorkspace";
 import type { AgentProfile, TaskSummary } from "../types";
 
 const EMPTY_PROFILES: AgentProfile[] = [];
-
-const CREATE_PULL_REQUEST_PROMPT = `Create a pull request for this task. Use the current project/worktree branch. Before opening the PR, verify the work as appropriate for this repo, commit relevant changes with a Conventional Commit if needed, push the branch, create the PR against the remote default branch, and report the PR URL here.`;
 
 interface TaskWorkspaceOverlayProps {
   task: TaskSummary;
@@ -55,34 +54,12 @@ export function TaskWorkspaceOverlay({ task, backLabel, repoName, onClose }: Tas
     [setTasks],
   );
 
-  const github = useGithub({ selectedTask: task, setMessage, applyTask });
+  const github = useGithub({ selectedTask: task, applyTask });
+  const ship = useGithubShipActions({ setMessage, setTaskAttention });
   const review = useTaskReviewLoop({ selectedTaskId: task.id, onMessage: setMessage });
   const { updateStatus, renameTask, setTaskJiraLink } = useTaskActions();
   const requestDeleteTask = useTaskDeletion();
   const session = useSessionControls();
-
-  // Open the PR: a deterministic gh-driven PR for a connected worktree task,
-  // otherwise ask the running agent to open one from the terminal.
-  const createPullRequest = useCallback(
-    async (t: TaskSummary, options?: { draft?: boolean }) => {
-      if (t.hasWorktree && github.ghReady) {
-        await github.createPullRequest(t, { draft: options?.draft ?? false });
-        return;
-      }
-      if (!t.activeSessionId) {
-        setMessage("Start or resume the agent to open a PR, or connect the GitHub CLI for a worktree task.");
-        return;
-      }
-      setMessage(null);
-      setTaskAttention((current) => clearTaskAttention(current, t.id));
-      try {
-        await api.submitSessionInput(t.activeSessionId, CREATE_PULL_REQUEST_PROMPT);
-      } catch (error) {
-        setMessage(String(error));
-      }
-    },
-    [github, setMessage, setTaskAttention],
-  );
 
   // Start (or resume) the review loop, then kick off an immediate review.
   const startReview = useCallback(
@@ -116,8 +93,8 @@ export function TaskWorkspaceOverlay({ task, backLabel, repoName, onClose }: Tas
       githubStatus={github.githubStatus}
       pullRequest={github.pullRequest}
       pullRequestLoading={github.pullRequestLoading}
-      creatingPullRequest={github.creatingPullRequest}
-      pullRequestBusy={github.pullRequestBusy}
+      creatingPullRequest={ship.creatingPullRequest}
+      pullRequestBusy={ship.pullRequestBusy}
       backLabel={backLabel}
       repoName={repoName}
       onClose={onClose}
@@ -125,11 +102,11 @@ export function TaskWorkspaceOverlay({ task, backLabel, repoName, onClose }: Tas
       onResumeSession={session.resumeSession}
       onStartSession={session.startSession}
       onStartReview={startReview}
-      onCreatePullRequest={createPullRequest}
+      onCreatePullRequest={ship.createPullRequest}
       onRefreshPullRequest={github.refreshPullRequest}
-      onMergePullRequest={github.mergePullRequest}
-      onSetPullRequestReady={github.setPullRequestReady}
-      onClosePullRequest={github.closePullRequest}
+      onMergePullRequest={ship.mergePullRequest}
+      onSetPullRequestReady={ship.setPullRequestReady}
+      onClosePullRequest={ship.closePullRequest}
       onUpdateStatus={updateStatus}
       onRenameTask={renameTask}
       onDeleteTask={requestDeleteTask}
