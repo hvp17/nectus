@@ -136,6 +136,9 @@ Build the Mac desktop app and DMG:
 pnpm desktop:build
 ```
 
+The `desktop:build` script sets `CARGO_INCREMENTAL=1` for faster repeat Rust
+release builds while still producing the normal app and DMG bundles.
+
 Expected release outputs:
 
 ```text

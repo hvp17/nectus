@@ -112,6 +112,9 @@ Build the Mac desktop app and DMG:
 pnpm desktop:build
 ```
 
+The desktop build script enables Rust incremental compilation for faster
+repeat release builds while still producing the normal app and DMG bundles.
+
 Expected release outputs:
 
 ```text
