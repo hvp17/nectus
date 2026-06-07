@@ -41,6 +41,11 @@ export function useAppUpdate(): AppUpdateState {
   const [error, setError] = useState<string | null>(null);
   const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null);
   const pending = useRef<Update | null>(null);
+  // Synchronous re-entrancy guard: the toast Install action and the card Install
+  // button both call installUpdate, and `disabled` only applies after a render —
+  // a ref set before the first await blocks a concurrent second download/install
+  // on the same Update resource (the plugin does not lock it).
+  const installing = useRef(false);
 
   const check = useCallback(async (_options?: { silent?: boolean }) => {
     setStatus("checking");
@@ -64,7 +69,8 @@ export function useAppUpdate(): AppUpdateState {
   }, []);
 
   const installUpdate = useCallback(async () => {
-    if (!pending.current) return;
+    if (!pending.current || installing.current) return;
+    installing.current = true;
     setStatus("downloading");
     setProgress(0);
     setError(null);
@@ -77,6 +83,8 @@ export function useAppUpdate(): AppUpdateState {
     } catch (caught) {
       setError(errorMessage(caught));
       setStatus("error");
+    } finally {
+      installing.current = false;
     }
   }, []);
 

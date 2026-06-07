@@ -67,6 +67,27 @@ describe("useAppUpdate", () => {
     expect(lib.installUpdate).toHaveBeenCalledTimes(1);
   });
 
+  it("ignores a second install while one is in flight", async () => {
+    lib.checkForUpdate.mockResolvedValue(fakeResult());
+    let resolveInstall: () => void = () => {};
+    lib.installUpdate.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveInstall = resolve;
+        }),
+    );
+    render(<Probe />);
+    await waitFor(() => expect(latest.status).toBe("available"));
+    await act(async () => {
+      const first = latest.installUpdate();
+      const second = latest.installUpdate();
+      resolveInstall();
+      await Promise.all([first, second]);
+    });
+    expect(lib.installUpdate).toHaveBeenCalledTimes(1);
+    expect(latest.status).toBe("ready");
+  });
+
   it("captures errors from a failed check", async () => {
     lib.checkForUpdate.mockRejectedValue(new Error("network down"));
     render(<Probe />);
