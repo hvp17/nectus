@@ -197,7 +197,7 @@ fn run_rounds_and_synthesize(
 
     // Merge the final round into one consensus review the human can paste.
     let synth_prompt = build_synthesis_prompt(pr_number, meta, converged, &last_round);
-    let synth_raw = run_reviewer_command(synthesizer, worktree_path, &synth_prompt, None)?;
+    let synth_raw = run_reviewer_command(synthesizer, worktree_path, &synth_prompt, None, None)?.text;
     let (synth_verdict, synth_review) = parse_pr_review_output(&synth_raw);
     // When the reviewers agreed, that shared verdict is authoritative; otherwise
     // trust the synthesizer's read of the merged review.
@@ -216,7 +216,9 @@ fn run_round_parallel(
         let handles: Vec<_> = plans
             .iter()
             .map(|(reviewer, prompt)| {
-                scope.spawn(move || run_reviewer_command(reviewer, worktree_path, prompt, None))
+                scope.spawn(move || {
+                    run_reviewer_command(reviewer, worktree_path, prompt, None, None).map(|output| output.text)
+                })
             })
             .collect();
         handles

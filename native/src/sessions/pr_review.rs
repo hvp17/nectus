@@ -65,7 +65,7 @@ fn run_pr_review(app: &AppHandle, db: &Arc<Mutex<Database>>, review_id: i64) -> 
             let prompt = build_pr_review_prompt(pr_number, &meta);
             // PR reviews surface their output through the Reviews view, not the
             // live task workspace, so they keep the captured-output path.
-            run_reviewer_command(&reviewer, worktree_path, &prompt, None)
+            run_reviewer_command(&reviewer, worktree_path, &prompt, None, None).map(|output| output.text)
         },
     )?;
 

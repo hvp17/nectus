@@ -79,8 +79,8 @@ fn run_review_round(
         app: app.clone(),
         task_id,
     };
-    let reviewer_output = match run_reviewer_command(&reviewer, cwd, &prompt, Some(&sink)) {
-        Ok(output) => output,
+    let reviewer_output = match run_reviewer_command(&reviewer, cwd, &prompt, None, Some(&sink)) {
+        Ok(output) => output.text,
         Err(error) => {
             let run = db.lock().record_review_run(ReviewRunInput {
                 task_id,
