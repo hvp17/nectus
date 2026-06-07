@@ -526,6 +526,35 @@ Relevant code:
 - `native/src/sessions/codex.rs`
 - `docs/codex-session-jsonl.md`
 
+### App Freezes / Goes Unresponsive When Stopping A Session
+
+Synchronous Tauri commands share the main UI thread with the Wry event loop, so
+any blocking work — or any `app.emit(...)` back into the webview — done inline in
+a `fn` command freezes the whole app until it returns. Stopping a session does
+blocking teardown (kill + reap the PTY child, DB writes, an OpenCode server probe)
+and then emits `session_exited`, so it must run off the main thread.
+
+Check:
+
+- `stop_session` is an `async` command that runs the teardown via
+  `tauri::async_runtime::spawn_blocking(...).await`, so the work and the
+  post-`.await` `session_exited` emit happen off the main thread (the same
+  background-emit pattern the reader thread uses on natural exit).
+- `SessionManager::stop` removes the session from the map under the lock and then
+  drops the `sessions` mutex before `child.kill()`/`child.wait()` and the metadata
+  /DB work — holding it would stall every other session command and live reader
+  thread behind the teardown.
+
+Rule: never do blocking teardown or `emit` inside a synchronous main-thread
+command. Offload to `spawn_blocking`, and never hold the global `sessions` mutex
+across `wait()`, network, or DB calls.
+
+Relevant code:
+
+- `native/src/lib.rs` (`stop_session`)
+- `native/src/sessions/mod.rs` (`SessionManager::stop`, the reader thread's
+  matching off-lock `wait()`)
+
 ### macOS Notifications Do Not Appear
 
 Current bundle identifier:

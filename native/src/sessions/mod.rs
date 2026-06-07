@@ -182,6 +182,10 @@ fn watch_event_log<F>(
     }
 }
 
+/// Cheap to clone: the only field is an `Arc`, so a clone shares the same live
+/// session map. Lets command handlers move a handle into `spawn_blocking` and run
+/// the blocking session teardown off the main UI thread.
+#[derive(Clone)]
 pub struct SessionManager {
     sessions: Arc<Mutex<HashMap<String, RunningSession>>>,
 }
@@ -588,10 +592,17 @@ impl SessionManager {
     }
 
     pub fn stop(&self, db: Arc<Mutex<Database>>, session_id: String) -> Result<Session, String> {
-        let mut sessions = self.sessions.lock();
-        let mut running = sessions
-            .remove(&session_id)
-            .ok_or_else(|| "Session is not running".to_string())?;
+        // Remove under the lock, then drop it before the blocking teardown below.
+        // Killing/reaping the child (and the Codex/OpenCode metadata probe and DB
+        // writes that follow) must NOT hold the global sessions mutex, or every
+        // other session command and the live reader threads stall behind it — the
+        // same contract the reader thread documents around its own wait().
+        let mut running = {
+            let mut sessions = self.sessions.lock();
+            sessions
+                .remove(&session_id)
+                .ok_or_else(|| "Session is not running".to_string())?
+        };
         let _ = running.child.kill();
         // Reap the just-killed child so it doesn't linger as a zombie until app exit.
         let _ = running.child.wait();
