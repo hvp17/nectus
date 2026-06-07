@@ -441,11 +441,12 @@ Current behavior:
   reviewer that fully buffers its stdout may not appear until it flushes; `codex
   exec` streams incrementally.
 - The task workflow stepper enables `Create PR` for worktree tasks once the
-  GitHub CLI is connected, or whenever a worker session is running. For worktree
-  tasks with `gh` connected it opens the pull request directly and stores the URL
-  on the task automatically; otherwise it submits a structured prompt into the
-  active PTY, including the terminal Enter sequence, asking the agent to verify,
-  commit, push, create the PR, and report the URL. See
+  GitHub CLI is connected. Creating a PR — and merge / mark-ready / close — are all
+  **agent-driven**: the action submits a prompt into the task's running agent
+  session (the agent commits/pushes, authors the PR title and description itself,
+  opens the PR, and for merge rebases/resolves conflicts as needed). A write action
+  needs a running session; with none it declines with guidance to start or resume
+  the agent. PR detection and live status stay deterministic `gh` reads. See
   [GitHub Integration](github-integration.md).
 - The task workflow stepper also shows a `Move to done` step that marks the
   task complete.
@@ -496,7 +497,8 @@ Key files:
 
 - UI controls, stage `Review` tab, and latest run summary: `src/components/TaskWorkspace.tsx`
 - Read-only live reviewer terminal: `src/components/ReviewTerminalPane.tsx`
-- Agent-driven `Create PR` prompt: `src/hooks/useApp.ts`
+- Agent-driven PR write actions (create/merge/ready/close): `src/hooks/useGithubShipActions.ts`
+  with prompts in `src/lib/githubAgentPrompts.ts`
 - Board review status label: `src/components/TaskCard.tsx`
 - Frontend review-loop loading and event subscription: `src/hooks/useTaskReviewLoop.ts`
 - Frontend API: `src/api.ts`
@@ -605,12 +607,13 @@ Emitted event:
 ## GitHub
 
 GitHub integration runs through the `gh` CLI, so Nectus stores no tokens. The app
-reports connection status, opens pull requests directly for worktree tasks
-(capturing the URL onto the task), and shows live PR state and CI checks. A
-worktree task's PR can then be **shipped from the inspector** — merge
-(squash/merge/rebase, behind a confirm), mark a draft ready, or close — and its
+reports connection status and shows live PR state and CI checks (deterministic `gh`
+reads). The four PR **write** actions are **agent-driven**: create, merge
+(squash/merge/rebase, behind a confirm), mark a draft ready, and close each submit a
+prompt into the task's running agent session, so the agent authors the PR body and
+resolves conflicts/rebases itself; a write action needs a running session.
 **GitHub Actions / CI checks expand to a per-workflow list** with links straight to
-each run. PR status **auto-refreshes** while the PR is open (interval + window
+each run, and PR status **auto-refreshes** while the PR is open (interval + window
 focus) so checks turn green on their own. A finished AI PR review can be **posted
 back to the pull request** as a comment. Full behavior lives in
 [GitHub Integration](github-integration.md).
@@ -619,14 +622,16 @@ Key files:
 
 - Task inspector panel: `src/components/GitHubPanel.tsx` (+ ship actions
   `src/components/github/PullRequestActions.tsx`, CI drill-down
-  `src/components/github/PullRequestChecks.tsx`)
+  `src/components/github/PullRequestChecks.tsx`) — presentational, unchanged
 - Settings connection card: `src/components/SettingsPage.tsx`
-- Connection, PR status, ship actions, and auto-refresh: `src/hooks/useGithub.ts`
-- gh shell-out and parsing: `native/src/github.rs`
-- Backend commands: `github_status`, `create_github_pull_request`,
-  `github_pull_request_status`, `detect_github_pull_request`,
-  `merge_github_pull_request`, `set_github_pull_request_ready`,
-  `close_github_pull_request`, `post_pr_review_comment`
+- Connection, PR status read, detection, and auto-refresh (read-only): `src/hooks/useGithub.ts`
+- Agent-driven write actions: `src/hooks/useGithubShipActions.ts` + prompts in
+  `src/lib/githubAgentPrompts.ts`, wired in `src/components/TaskWorkspaceOverlay.tsx`
+- gh shell-out and parsing (write helpers now dormant): `native/src/github.rs`
+- Backend commands (reads + comment active; the four write commands dormant):
+  `github_status`, `github_pull_request_status`, `detect_github_pull_request`,
+  `post_pr_review_comment`, `create_github_pull_request`, `merge_github_pull_request`,
+  `set_github_pull_request_ready`, `close_github_pull_request`
 
 ## JIRA
 
