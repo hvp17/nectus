@@ -1,4 +1,12 @@
 import "@testing-library/jest-dom/vitest";
+import { beforeEach } from "vitest";
+import { resetAppStore } from "./testUtils";
+
+// The Zustand UI store is a module singleton, so reset it before every test to
+// keep state from leaking across `render(<App/>)` calls within a file.
+beforeEach(() => {
+  resetAppStore();
+});
 
 Object.defineProperty(window, "matchMedia", {
   writable: true,
@@ -49,6 +57,10 @@ class ResizeObserverMock {
 }
 
 globalThis.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;
+
+// TanStack Router calls window.scrollTo for scroll restoration on navigation;
+// jsdom doesn't implement it, so stub it to keep test output clean.
+window.scrollTo = (() => undefined) as typeof window.scrollTo;
 
 Element.prototype.scrollIntoView = () => undefined;
 Element.prototype.hasPointerCapture = () => false;

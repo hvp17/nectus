@@ -1,7 +1,15 @@
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { fireEvent, render, type RenderOptions } from "@testing-library/react";
+import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { vi } from "vitest";
 import { TooltipProvider } from "../components/ui/tooltip";
+import { createQueryClient } from "../queries/queryClient";
+import { useAppStore } from "../store/appStore";
+
+/** Reset the singleton UI store to its initial state between tests (run in setup). */
+export function resetAppStore() {
+  useAppStore.setState(useAppStore.getInitialState(), true);
+}
 
 export type TestPointerEvent = Event & {
   pointerId: number;
@@ -10,8 +18,32 @@ export type TestPointerEvent = Event & {
   clientY: number;
 };
 
+/**
+ * Render under the app's full provider stack (TanStack Query + Tooltip). A fresh
+ * `QueryClient` per call keeps each test's cache isolated. Use this for anything
+ * that reads through the query layer; pass a seeded client to preload the cache.
+ */
+export function renderWithProviders(
+  ui: ReactElement,
+  { queryClient = createQueryClient(), ...options }: RenderOptions & { queryClient?: QueryClient } = {},
+) {
+  function Wrapper({ children }: { children: ReactNode }) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>{children}</TooltipProvider>
+      </QueryClientProvider>
+    );
+  }
+  return { ...render(ui, { wrapper: Wrapper, ...options }), queryClient };
+}
+
+/**
+ * Back-compat alias kept for the many component tests that predate the query
+ * layer. Now provider-complete (Query + Tooltip) so a leaf component that starts
+ * consuming a query hook keeps passing without a test edit.
+ */
 export function renderWithTooltipProvider(ui: ReactElement, options?: RenderOptions) {
-  return render(<TooltipProvider>{ui}</TooltipProvider>, options);
+  return renderWithProviders(ui, options);
 }
 
 export function mockElementsFromPoint(elements: Element[]) {

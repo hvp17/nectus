@@ -1,11 +1,18 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import { useAsyncEffect } from "./useAsyncEffect";
+import { queryKeys } from "../queries/keys";
+import {
+  useJiraStatusQuery,
+  useJiraRestStatusQuery,
+  useJiraProjectsQuery,
+  useJiraProjectStatusesQuery,
+  useJiraBoardQuery,
+} from "../queries/jira";
 import { isCliConnected } from "../lib/connection";
 import type {
   JiraProject,
   JiraRestStatus,
-  JiraStatus,
   JiraStatusCategory,
   JiraStatusDef,
   JiraWorkItem,
@@ -87,146 +94,69 @@ interface UseJiraInput {
   setMessage: (message: string | null) => void;
 }
 
+const EMPTY_PROJECTS: JiraProject[] = [];
+const EMPTY_STATUSES: JiraStatusDef[] = [];
+const EMPTY_ITEMS: JiraWorkItem[] = [];
+
 /**
- * Owns JIRA connection state, the project list, and the board work items.
- * Connection status loads once; the project list loads when the view is active and
- * `acli` is connected; the board (re)loads once a project is configured. The board
- * JQL is built backend-side from the structured config, so no JQL is typed here.
+ * Owns JIRA connection state, the project list, and the board work items — backed
+ * by TanStack Query. Connection status (acli + optional REST token) loads on mount;
+ * the project list / project status set / board load only once their `enabled` gate
+ * is met (view active, CLI connected, a project configured). The board transition
+ * is an optimistic cache write with snapshot rollback; the board JQL is built
+ * backend-side from the structured config, so no JQL is typed here.
  */
 export function useJira({ active, configured, project, statusFilter, setMessage }: UseJiraInput) {
-  const [jiraStatus, setJiraStatus] = useState<JiraStatus>();
-  const [restStatus, setRestStatus] = useState<JiraRestStatus>();
-  const [projects, setProjects] = useState<JiraProject[]>([]);
-  const [projectStatuses, setProjectStatuses] = useState<JiraStatusDef[]>([]);
-  const [items, setItems] = useState<JiraWorkItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
 
-  useAsyncEffect(async (alive) => {
-    try {
-      const status = await api.jiraStatus();
-      if (alive()) setJiraStatus(status);
-    } catch {
-      if (alive()) {
-        setJiraStatus({ installed: false, authenticated: false, account: null, site: null });
-      }
-    }
-  }, []);
-
+  const jiraStatus = useJiraStatusQuery().data;
+  const restStatus = useJiraRestStatusQuery().data;
   const ready = isCliConnected(jiraStatus);
   const restConnected = Boolean(restStatus?.connected);
 
-  // Optional REST-token status: load it once the view is active and acli is
-  // connected, and re-load after a token change.
-  const refreshRestStatus = useCallback(async () => {
-    try {
-      setRestStatus(await api.jiraRestStatus());
-    } catch {
-      setRestStatus({ connected: false, site: null, email: null, error: null });
-    }
-  }, []);
-
-  // Load once on mount, independent of the active view: Settings consumes the REST
-  // status too, and a stored Keychain token is valid even when acli is down — so
-  // gating this on the JIRA board being active would show a real token as
-  // "Not connected" when Settings is opened first.
-  useAsyncEffect(async (alive) => {
-    try {
-      const status = await api.jiraRestStatus();
-      if (alive()) setRestStatus(status);
-    } catch {
-      if (alive()) setRestStatus({ connected: false, site: null, email: null, error: null });
-    }
-  }, []);
-
-  // With a connected token, load the project's full custom-workflow status set so
-  // the board can render every column (incl. empty) and the filter can offer them.
-  useAsyncEffect(
-    async (alive) => {
-      if (!active || !ready || !restConnected || !project) {
-        if (alive()) setProjectStatuses([]);
-        return;
-      }
-      try {
-        const defs = await api.jiraProjectStatuses(project);
-        if (alive()) setProjectStatuses(defs);
-      } catch (error) {
-        if (alive()) {
-          setProjectStatuses([]);
-          setMessage(String(error));
-        }
-      }
-    },
-    [active, ready, restConnected, project, setMessage],
-  );
-
-  // Load the project picker options when the view is active and connected.
-  useAsyncEffect(
-    async (alive) => {
-      if (!active || !ready) return;
-      try {
-        const list = await api.jiraListProjects();
-        if (alive()) setProjects(list);
-      } catch {
-        // Soft-fail: the picker just stays empty; status guidance still shows.
-      }
-    },
-    [active, ready],
-  );
+  const projects = useJiraProjectsQuery(active && ready).data ?? EMPTY_PROJECTS;
+  const projectStatuses =
+    useJiraProjectStatusesQuery(project, active && ready && restConnected).data ?? EMPTY_STATUSES;
+  const boardQuery = useJiraBoardQuery(active && ready && configured);
+  const items = boardQuery.data ?? EMPTY_ITEMS;
+  const loading = boardQuery.isLoading;
 
   const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      setItems(await api.jiraSearchBoard());
-    } catch (error) {
-      setItems([]);
-      setMessage(String(error));
-    } finally {
-      setLoading(false);
-    }
-  }, [setMessage]);
-
-  // Load the board whenever the view becomes active, the CLI is connected, and a
-  // project has been chosen.
-  useAsyncEffect(
-    async (alive) => {
-      if (!active || !ready || !configured || !alive()) return;
-      await refresh();
-    },
-    [active, ready, configured, refresh],
-  );
+    await queryClient.invalidateQueries({ queryKey: queryKeys.jira.board() });
+  }, [queryClient]);
 
   const transition = useCallback(
     async (item: JiraWorkItem, statusName: string) => {
       if (item.statusName === statusName) return;
-      // Optimistic: move the card locally, then revert if JIRA rejects the move.
-      const previous = item.statusName;
-      setItems((current) =>
+      // Optimistic: snapshot the whole board, flip the card locally, then
+      // re-hydrate from JIRA on success or restore the snapshot on failure.
+      const key = queryKeys.jira.board();
+      const previous = queryClient.getQueryData<JiraWorkItem[]>(key);
+      queryClient.setQueryData<JiraWorkItem[]>(key, (current = []) =>
         current.map((it) => (it.key === item.key ? { ...it, statusName } : it)),
       );
       try {
         await api.jiraTransitionWorkItem(item.key, statusName);
-        await refresh();
+        await queryClient.invalidateQueries({ queryKey: key });
       } catch (error) {
-        setItems((current) =>
-          current.map((it) => (it.key === item.key ? { ...it, statusName: previous } : it)),
-        );
+        if (previous) queryClient.setQueryData(key, previous);
         setMessage(String(error));
       }
     },
-    [refresh, setMessage],
+    [queryClient, setMessage],
   );
 
   const assign = useCallback(
     async (key: string, assignee: string) => {
       try {
         await api.jiraAssignWorkItem(key, assignee);
-        await refresh();
+        await queryClient.invalidateQueries({ queryKey: queryKeys.jira.board() });
         setMessage(`Assigned ${key}`);
       } catch (error) {
         setMessage(String(error));
       }
     },
-    [refresh, setMessage],
+    [queryClient, setMessage],
   );
 
   const comment = useCallback(
@@ -244,8 +174,7 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
   /**
    * Create a work item in JIRA, then refresh the board. Returns the new item so the
    * caller can open it in the side panel; returns null on failure (error surfaced
-   * via `setMessage`). The board only re-shows the new item when it was created in
-   * the board's project, so opening the returned item is what guarantees it appears.
+   * via `setMessage`).
    */
   const create = useCallback(
     async (input: {
@@ -258,7 +187,7 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
     }): Promise<JiraWorkItem | null> => {
       try {
         const item = await api.jiraCreateWorkItem(input);
-        await refresh();
+        await queryClient.invalidateQueries({ queryKey: queryKeys.jira.board() });
         setMessage(`Created ${item.key}`);
         return item;
       } catch (error) {
@@ -266,27 +195,27 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
         return null;
       }
     },
-    [refresh, setMessage],
+    [queryClient, setMessage],
   );
 
   /** Verify + store a REST API token, then refresh status. Returns the new status. */
   const setApiToken = useCallback(
     async (site: string, email: string, token: string): Promise<JiraRestStatus> => {
       const status = await api.setJiraApiToken(site, email, token);
-      setRestStatus(status);
+      queryClient.setQueryData(queryKeys.jira.restStatus(), status);
       return status;
     },
-    [],
+    [queryClient],
   );
 
   const clearApiToken = useCallback(async () => {
     await api.clearJiraApiToken();
-    await refreshRestStatus();
-  }, [refreshRestStatus]);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.jira.restStatus() });
+  }, [queryClient]);
 
-  // Callers pass a fresh `statusFilter` array literal each render, so key the
-  // memo on its content to avoid rebuilding+sorting the columns every render.
-  const statusFilterKey = statusFilter.join(" ");
+  // Callers pass a fresh `statusFilter` array literal each render, so key the memo
+  // on its content to avoid rebuilding + sorting the columns every render.
+  const statusFilterKey = statusFilter.join(" ");
   const columns = useMemo(
     () => deriveColumns(items, projectStatuses, statusFilter),
     // eslint-disable-next-line react-hooks/exhaustive-deps

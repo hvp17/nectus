@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import { queryKeys } from "../queries/keys";
 import { useTauriEvent } from "./useTauriEvent";
 import type { SessionIdleEvent, TaskDiffSummary } from "../types";
 
@@ -21,33 +23,35 @@ export interface TaskDiff {
 }
 
 /**
- * Owns the task diff data: loads the changed-file summary as soon as a task is
- * selected (so the stage-header badge — file count and ±line totals — is populated
- * without opening the Diff tab first), lazy-loads per-file patches, and re-fetches
- * the summary when the task's agent finishes a turn (`session_idle`) so the diff
- * stays current while the agent works. Loading on selection plus refreshing on each
- * turn boundary keeps the badge live without any timer-based polling. The summary is
- * reset when the task changes so a stale diff never lingers across tasks.
+ * Owns the task diff data: the changed-file summary is a TanStack Query keyed on
+ * the task id, so selecting a task loads it (populating the stage-header badge) and
+ * switching tasks shows `null` immediately — the new key has no data yet — without
+ * any manual reset. The summary refetches on the task's `session_idle` so the badge
+ * stays current while the agent works, with no timer polling. Per-file patches are
+ * still lazy-loaded on demand into a local map (cleared whenever the summary
+ * (re)loads, since cached patches go stale with it).
  */
 export function useTaskDiff(taskId: number | undefined): TaskDiff {
-  const [summary, setSummary] = useState<TaskDiffSummary | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const summaryQuery = useQuery({
+    queryKey: taskId != null ? queryKeys.task.diffSummary(taskId) : ["task", "diff-summary", "none"],
+    queryFn: () => api.taskDiffSummary(taskId as number),
+    enabled: taskId != null,
+    staleTime: 0,
+  });
+  const summary = summaryQuery.data ?? null;
+  const loading = summaryQuery.isLoading;
+  const error = summaryQuery.error ? String(summaryQuery.error) : null;
+
   const [files, setFiles] = useState<Record<string, FileDiffState>>({});
 
-  const refresh = useCallback(async () => {
-    if (taskId == null) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const next = await api.taskDiffSummary(taskId);
-      setSummary(next);
-      setFiles({}); // cached patches may be stale once the summary changes
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setLoading(false);
-    }
+  // Drop cached per-file patches when the task changes (a different task's patches
+  // are meaningless). A `refresh()` also clears them since they go stale with the
+  // summary — but the initial query settle does NOT, so a patch loaded right after
+  // selection isn't wiped by the summary arriving a tick later.
+  useEffect(() => {
+    setFiles({});
   }, [taskId]);
 
   const loadFile = useCallback(
@@ -64,18 +68,13 @@ export function useTaskDiff(taskId: number | undefined): TaskDiff {
     [taskId],
   );
 
-  // Clear stale state when switching tasks, then load the new task's summary so the
-  // badge appears immediately without the user opening the Diff tab first.
-  useEffect(() => {
-    setSummary(null);
-    setFiles({});
-    setError(null);
+  const refresh = useCallback(async () => {
     if (taskId == null) return;
-    void refresh();
-  }, [taskId, refresh]);
+    setFiles({}); // cached patches go stale once the summary is refetched
+    await queryClient.invalidateQueries({ queryKey: queryKeys.task.diffSummary(taskId) });
+  }, [queryClient, taskId]);
 
-  // A finished turn likely changed the diff; refresh to keep the badge current while
-  // the agent works, whether or not the Diff tab has been opened.
+  // A finished turn likely changed the diff; refresh to keep the badge current.
   useTauriEvent<SessionIdleEvent>(
     "session_idle",
     (payload) => {

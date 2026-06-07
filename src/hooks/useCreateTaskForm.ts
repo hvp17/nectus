@@ -1,4 +1,6 @@
-import { useState } from "react";
+// Branch-name helpers + the JIRA-link type for the New Task composer. The composer
+// draft itself now lives in the Zustand `composerSlice`; `useComposer` consumes
+// these helpers. (The former `useCreateTaskForm` hook was retired with that move.)
 
 export function createBranchIdentifier() {
   if (typeof globalThis.crypto?.randomUUID === "function") {
@@ -31,77 +33,4 @@ export interface PendingJiraLink {
   key: string;
   summary: string;
   url: string | null;
-}
-
-export function useCreateTaskForm(defaultAgentProfileId?: number) {
-  const [createTaskOpen, setCreateTaskOpen] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newTaskPrompt, setNewTaskPrompt] = useState("");
-  const [newTaskBranchName, setNewTaskBranchName] = useState("");
-  const [newTaskBranchIdentifier, setNewTaskBranchIdentifier] = useState(() => createBranchIdentifier());
-  const [newTaskHasWorktree, setNewTaskHasWorktree] = useState(false);
-  const [newTaskAgentProfileId, setNewTaskAgentProfileId] = useState<number | undefined>(defaultAgentProfileId);
-  const [newTaskRepoId, setNewTaskRepoId] = useState<number | undefined>();
-  // Set when a task is created from a JIRA story; carried into create_task as a
-  // local-only link (never written back to JIRA).
-  const [pendingJiraLink, setPendingJiraLink] = useState<PendingJiraLink | null>(null);
-
-  const resetCreateTaskForm = (agentProfileId = defaultAgentProfileId) => {
-    setNewTaskTitle("");
-    setNewTaskPrompt("");
-    setNewTaskBranchName("");
-    setNewTaskBranchIdentifier(createBranchIdentifier());
-    setNewTaskHasWorktree(false);
-    setNewTaskAgentProfileId(agentProfileId);
-    setNewTaskRepoId(undefined);
-    setPendingJiraLink(null);
-  };
-
-  const closeCreateTaskModal = () => {
-    setCreateTaskOpen(false);
-    resetCreateTaskForm();
-  };
-
-  const getGeneratedTaskTitle = () => {
-    const title = newTaskTitle.trim();
-    if (title) return title;
-
-    const firstPromptLine = newTaskPrompt
-      .trim()
-      .split("\n")
-      .map((line) => line.trim())
-      .find(Boolean);
-
-    return firstPromptLine ? firstPromptLine.slice(0, 80) : "Untitled task";
-  };
-
-  const getSuggestedBranchName = (defaultBranchPrefix?: string | null) =>
-    getSuggestedWorktreeBranchName(defaultBranchPrefix, newTaskBranchIdentifier);
-
-  const resolveBranchName = (branchName: string, defaultBranchPrefix?: string | null) =>
-    resolveWorktreeBranchName(branchName, defaultBranchPrefix, newTaskBranchIdentifier);
-
-  return {
-    createTaskOpen,
-    setCreateTaskOpen,
-    newTaskTitle,
-    setNewTaskTitle,
-    newTaskPrompt,
-    setNewTaskPrompt,
-    newTaskBranchName,
-    setNewTaskBranchName,
-    newTaskHasWorktree,
-    setNewTaskHasWorktree,
-    newTaskAgentProfileId,
-    setNewTaskAgentProfileId,
-    newTaskRepoId,
-    setNewTaskRepoId,
-    pendingJiraLink,
-    setPendingJiraLink,
-    resetCreateTaskForm,
-    closeCreateTaskModal,
-    getGeneratedTaskTitle,
-    getSuggestedBranchName,
-    resolveWorktreeBranchName: resolveBranchName,
-  };
 }

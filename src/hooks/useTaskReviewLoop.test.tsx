@@ -1,8 +1,16 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { render, screen, waitFor } from "@testing-library/react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
-import type { ReviewLoop, ReviewLoopUpdatedEvent, ReviewRun } from "../types";
+import { createQueryClient } from "../queries/queryClient";
+import type { ReviewLoop, ReviewRun } from "../types";
 import { useTaskReviewLoop } from "./useTaskReviewLoop";
+
+/** Render under a fresh QueryClient (the hook now reads through the query cache). */
+function renderWithClient(ui: ReactNode) {
+  return render(<QueryClientProvider client={createQueryClient()}>{ui}</QueryClientProvider>);
+}
 
 const eventTestState = vi.hoisted(() => ({
   handlers: new Map<string, (event: { payload: unknown }) => void>(),
@@ -45,16 +53,9 @@ const firstRun: ReviewRun = {
   createdAt: "2026-05-15T00:01:00.000Z",
 };
 
-function Harness({
-  selectedTaskId,
-  onReviewLoopUpdated,
-}: {
-  selectedTaskId?: number;
-  onReviewLoopUpdated?: (reviewLoop: ReviewLoop) => void;
-}) {
+function Harness({ selectedTaskId }: { selectedTaskId?: number }) {
   const { selectedReviewLoop, selectedReviewRuns, message } = useTaskReviewLoop({
     selectedTaskId,
-    onReviewLoopUpdated,
   });
 
   return (
@@ -79,7 +80,7 @@ describe("useTaskReviewLoop", () => {
   });
 
   it("loads the selected task review loop and review runs", async () => {
-    render(<Harness selectedTaskId={21} />);
+    renderWithClient(<Harness selectedTaskId={21} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("status")).toHaveTextContent("running");
@@ -90,78 +91,11 @@ describe("useTaskReviewLoop", () => {
   });
 
   it("resets review state without a selected task", () => {
-    render(<Harness selectedTaskId={undefined} />);
+    renderWithClient(<Harness selectedTaskId={undefined} />);
 
     expect(screen.getByTestId("status")).toHaveTextContent("none");
     expect(screen.getByTestId("runs")).toHaveTextContent("0");
     expect(mockedApi.getTaskReviewLoop).not.toHaveBeenCalled();
     expect(mockedApi.listTaskReviewRuns).not.toHaveBeenCalled();
-  });
-
-  it("applies review loop events for the selected task only", async () => {
-    render(<Harness selectedTaskId={21} />);
-
-    await waitFor(() => {
-      expect(eventTestState.handlers.has("review_loop_updated")).toBe(true);
-    });
-
-    const nextRun: ReviewRun = {
-      ...firstRun,
-      id: 2,
-      output: "Passed",
-      verdict: "pass",
-      createdAt: "2026-05-15T00:02:00.000Z",
-    };
-
-    act(() => {
-      eventTestState.handlers.get("review_loop_updated")?.({
-        payload: {
-          taskId: 21,
-          reviewLoop: { ...reviewLoop, status: "passed" },
-          reviewRun: nextRun,
-        } satisfies ReviewLoopUpdatedEvent,
-      });
-    });
-
-    expect(screen.getByTestId("status")).toHaveTextContent("passed");
-    expect(screen.getByTestId("runs")).toHaveTextContent("2");
-
-    act(() => {
-      eventTestState.handlers.get("review_loop_updated")?.({
-        payload: {
-          taskId: 99,
-          reviewLoop: { ...reviewLoop, taskId: 99, status: "error" },
-          reviewRun: null,
-        } satisfies ReviewLoopUpdatedEvent,
-      });
-    });
-
-    expect(screen.getByTestId("status")).toHaveTextContent("passed");
-  });
-
-  it("publishes review loop events for task-board summaries even when another task is selected", async () => {
-    const onReviewLoopUpdated = vi.fn();
-    render(<Harness selectedTaskId={21} onReviewLoopUpdated={onReviewLoopUpdated} />);
-
-    await waitFor(() => {
-      expect(eventTestState.handlers.has("review_loop_updated")).toBe(true);
-    });
-
-    act(() => {
-      eventTestState.handlers.get("review_loop_updated")?.({
-        payload: {
-          taskId: 99,
-          reviewLoop: { ...reviewLoop, taskId: 99, status: "passed" },
-          reviewRun: null,
-        } satisfies ReviewLoopUpdatedEvent,
-      });
-    });
-
-    expect(onReviewLoopUpdated).toHaveBeenCalledWith({
-      ...reviewLoop,
-      taskId: 99,
-      status: "passed",
-    });
-    expect(screen.getByTestId("status")).toHaveTextContent("running");
   });
 });

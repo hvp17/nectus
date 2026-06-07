@@ -1,8 +1,18 @@
+import { createElement, type ReactNode } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { usePrReviews } from "./usePrReviews";
+import { createQueryClient } from "../queries/queryClient";
 import { api } from "../api";
 import type { PrReview } from "../types";
+
+/** A renderHook wrapper with its own fresh QueryClient (isolated cache per test). */
+function makeWrapper() {
+  const client = createQueryClient();
+  return ({ children }: { children: ReactNode }) =>
+    createElement(QueryClientProvider, { client }, children);
+}
 
 vi.mock("../api", () => ({
   api: {
@@ -47,7 +57,7 @@ it("queues a created review at the top of the list and selects it", async () => 
   vi.mocked(api.createPrReview).mockResolvedValue(review);
   const onMessage = vi.fn();
 
-  const { result } = renderHook(() => usePrReviews({ onMessage }));
+  const { result } = renderHook(() => usePrReviews({ onMessage }), { wrapper: makeWrapper() });
   await waitFor(() => expect(api.listPrReviews).toHaveBeenCalled());
 
   await act(async () => {
@@ -64,7 +74,7 @@ it("removes a deleted review and clears the selection", async () => {
   vi.mocked(api.deletePrReview).mockResolvedValue(undefined);
 
   const onMessage = vi.fn();
-  const { result } = renderHook(() => usePrReviews({ onMessage }));
+  const { result } = renderHook(() => usePrReviews({ onMessage }), { wrapper: makeWrapper() });
   await waitFor(() => expect(result.current.prReviews).toHaveLength(1));
 
   act(() => result.current.setSelectedPrReviewId(review.id));
