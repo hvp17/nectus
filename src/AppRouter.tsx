@@ -26,6 +26,10 @@ import { useEventBridge } from "./hooks/useEventBridge";
 import { usePrReviews } from "./hooks/usePrReviews";
 import { useTaskActions } from "./hooks/useTaskActions";
 import { useTaskDeletion } from "./hooks/useTaskDeletion";
+import { useSettingsActions } from "./hooks/useSettingsActions";
+import { useJiraToken } from "./hooks/useJiraToken";
+import { useGithubStatusQuery } from "./queries/github";
+import { useJiraStatusQuery, useJiraRestStatusQuery } from "./queries/jira";
 import {
   useAgentProfilesQuery,
   useReposQuery,
@@ -519,21 +523,30 @@ function WorkspaceView() {
 }
 
 function SettingsView() {
-  const { app, appUpdate } = useAppContext();
+  const { appUpdate } = useAppContext();
+  const settings = useSettingsQuery().data;
+  const agentProfiles = useAgentProfilesQuery().data ?? EMPTY_PROFILES;
+  const githubStatus = useGithubStatusQuery().data;
+  const jiraStatus = useJiraStatusQuery().data;
+  const jiraRestStatus = useJiraRestStatusQuery().data;
+  const busy = useAppStore((s) => s.busy);
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
+  const { saveAppSettings, saveAgentProfile } = useSettingsActions();
+  const { setApiToken, clearApiToken } = useJiraToken();
   return (
     <SettingsPage
-      settings={app.settings}
-      agentProfiles={app.agentProfiles}
-      githubStatus={app.githubStatus}
-      jiraRestStatus={app.jiraRestStatus}
-      jiraDetectedSite={app.jiraStatus?.site}
+      settings={settings}
+      agentProfiles={agentProfiles}
+      githubStatus={githubStatus}
+      jiraRestStatus={jiraRestStatus}
+      jiraDetectedSite={jiraStatus?.site}
       appUpdate={appUpdate}
-      busy={app.busy}
-      onBack={() => app.setCurrentView("mission")}
-      onSaveSettings={app.saveAppSettings}
-      onSaveAgentProfile={app.saveAgentProfile}
-      onSaveJiraToken={app.setJiraApiToken}
-      onDisconnectJira={app.clearJiraApiToken}
+      busy={busy}
+      onBack={() => setCurrentView("mission")}
+      onSaveSettings={saveAppSettings}
+      onSaveAgentProfile={saveAgentProfile}
+      onSaveJiraToken={setApiToken}
+      onDisconnectJira={clearApiToken}
     />
   );
 }

@@ -11,7 +11,7 @@ import {
 import { queryKeys } from "../queries/keys";
 import { makeCacheSetter } from "../queries/cache";
 import { useAppStore } from "../store/appStore";
-import { replaceById, upsertById } from "../lib/listState";
+import { replaceById } from "../lib/listState";
 import { jiraBrowseUrl } from "../lib/jira";
 import { isReviewLoopActive } from "../statusLabels";
 import { useGuardedAction } from "./useGuardedAction";
@@ -28,7 +28,6 @@ import { useTaskReviewLoop } from "./useTaskReviewLoop";
 import type {
   AgentProfile,
   AppSettings,
-  AppSettingsInput,
   JiraWorkItem,
   Repo,
   TaskStatus,
@@ -60,10 +59,6 @@ export function useApp() {
 
   const agentProfilesQuery = useAgentProfilesQuery();
   const agentProfiles = agentProfilesQuery.data ?? EMPTY_PROFILES;
-  const setAgentProfiles = useMemo(
-    () => makeCacheSetter<AgentProfile[]>(queryClient, queryKeys.agentProfiles()),
-    [queryClient],
-  );
 
   const settingsQuery = useSettingsQuery();
   const settings = settingsQuery.data;
@@ -577,32 +572,8 @@ export function useApp() {
   // PR reviews are owned by `ReviewsView`, which calls `usePrReviews` directly
   // (the bridge keeps the list cache live, so it's safe per-component).
 
-  const saveAppSettings = (input: AppSettingsInput) =>
-    run(
-      async () => {
-        const updated = await api.updateAppSettings(input);
-        setSettings(updated);
-        setSelectedAgentProfileId(updated.defaultAgentProfileId ?? undefined);
-        selectedAgentProfileIdRef.current = updated.defaultAgentProfileId ?? undefined;
-        setMessage("Settings saved");
-        await refresh(selectedRepoIdRef.current);
-        return updated;
-      },
-      { busy: true, rethrow: true },
-    );
-
-  const saveAgentProfile = (
-    profile: Partial<AgentProfile> & Pick<AgentProfile, "name" | "agentKind" | "command">,
-  ) =>
-    run(
-      async () => {
-        const saved = await api.upsertAgentProfile(profile);
-        setAgentProfiles((current) => upsertById(current, saved));
-        setMessage(`Saved ${saved.name}`);
-        return saved;
-      },
-      { busy: true, rethrow: true },
-    );
+  // Settings + agent-profile saves and the JIRA token connect/disconnect are owned
+  // by `SettingsView` (via `useSettingsActions` / `useJiraToken`).
 
   const createWorkspace = (name: string, repoIds: number[]) =>
     run(
@@ -734,8 +705,6 @@ export function useApp() {
     transitionJira: jira.transition,
     assignJira: jira.assign,
     commentJira: jira.comment,
-    setJiraApiToken: jiraBoard.saveToken,
-    clearJiraApiToken: jiraBoard.disconnect,
     setJiraBoardConfig: jiraBoard.setBoardConfig,
     selectedJiraItem: jiraBoard.selectedItem,
     setSelectedJiraItem,
@@ -751,7 +720,5 @@ export function useApp() {
     onSessionInput,
     selectedAgentProfileId,
     setSelectedAgentProfileId,
-    saveAppSettings,
-    saveAgentProfile,
   };
 }

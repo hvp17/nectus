@@ -69,8 +69,8 @@ export function useTasksQuery() {
 /** Invalidate all bootstrap reads (the old `useApp.refresh()` with no preferred repo). */
 export function useRefreshData() {
   const queryClient = useQueryClient();
-  return useCallback(() => {
-    void Promise.all([
+  return useCallback(async () => {
+    await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.repos() }),
       queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() }),
       queryClient.invalidateQueries({ queryKey: queryKeys.agentProfiles() }),
