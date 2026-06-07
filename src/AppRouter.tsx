@@ -203,32 +203,62 @@ function AppLayout() {
     setMessage(null);
   }, [message, setMessage]);
 
-  const openCreateTaskModal = useCallback(() => {
-    if (!newTaskAgentProfileId) {
-      const defaultAgentProfileId = settings?.defaultAgentProfileId ?? agentProfiles[0]?.id;
-      if (defaultAgentProfileId) setNewTaskAgentProfileId(defaultAgentProfileId);
-    }
-    // Reachable from the icon rail while a task or the workspace manager is open,
-    // so dismiss the manager and fall back to the first available repo when none is selected.
-    setManagingWorkspaces(false);
-    setNewTaskRepoId(selectedRepoId ?? activeWorkspaceRepos[0]?.id ?? repos[0]?.id);
-    // Default the composer's scope to the focused workspace board (Workspace mode)
-    // only when it can fan out — i.e. it resolves to ≥2 repos. Otherwise Project mode.
-    setNewTaskWorkspaceId(activeWorkspaceRepos.length >= 2 ? activeWorkspaceId : undefined);
-    setCreateTaskOpen(true);
-  }, [
-    newTaskAgentProfileId,
-    settings?.defaultAgentProfileId,
-    agentProfiles,
-    setNewTaskAgentProfileId,
-    setNewTaskRepoId,
-    selectedRepoId,
-    activeWorkspaceRepos,
-    repos,
-    setNewTaskWorkspaceId,
-    activeWorkspaceId,
-    setCreateTaskOpen,
-  ]);
+  // Open the New Task composer. With no target it inherits the focused board's scope;
+  // a `repoId`/`workspaceId` target preselects that project (Project mode) or workspace
+  // (cross-repo mode when it has ≥2 known repos, else Project mode on its sole member).
+  // The sidebar rows' per-scope "+" actions pass a target; the rail passes none.
+  const openComposer = useCallback(
+    (target?: { repoId?: number; workspaceId?: number }) => {
+      if (!newTaskAgentProfileId) {
+        const defaultAgentProfileId = settings?.defaultAgentProfileId ?? agentProfiles[0]?.id;
+        if (defaultAgentProfileId) setNewTaskAgentProfileId(defaultAgentProfileId);
+      }
+      // Reachable from the icon rail / sidebar while a task or the workspace manager is
+      // open, so dismiss the manager before the composer overlays the view.
+      setManagingWorkspaces(false);
+
+      if (target?.workspaceId != null) {
+        const workspace = workspaces.find((item) => item.id === target.workspaceId);
+        const memberRepoIds = workspace
+          ? workspace.repoIds.filter((id) => repos.some((repo) => repo.id === id))
+          : [];
+        // Only a workspace that can fan out (≥2 known repos) opens in cross-repo mode.
+        setNewTaskWorkspaceId(memberRepoIds.length >= 2 ? target.workspaceId : undefined);
+        setNewTaskRepoId(memberRepoIds[0] ?? selectedRepoId ?? repos[0]?.id);
+        setCreateTaskOpen(true);
+        return;
+      }
+
+      if (target?.repoId != null) {
+        setNewTaskWorkspaceId(undefined);
+        setNewTaskRepoId(target.repoId);
+        setCreateTaskOpen(true);
+        return;
+      }
+
+      // No target: fall back to the first available repo and default the scope to the
+      // focused workspace board (cross-repo) only when it resolves to ≥2 repos.
+      setNewTaskRepoId(selectedRepoId ?? activeWorkspaceRepos[0]?.id ?? repos[0]?.id);
+      setNewTaskWorkspaceId(activeWorkspaceRepos.length >= 2 ? activeWorkspaceId : undefined);
+      setCreateTaskOpen(true);
+    },
+    [
+      newTaskAgentProfileId,
+      settings?.defaultAgentProfileId,
+      agentProfiles,
+      setNewTaskAgentProfileId,
+      workspaces,
+      repos,
+      setNewTaskWorkspaceId,
+      setNewTaskRepoId,
+      selectedRepoId,
+      activeWorkspaceRepos,
+      activeWorkspaceId,
+      setCreateTaskOpen,
+    ],
+  );
+
+  const openCreateTaskModal = useCallback(() => openComposer(), [openComposer]);
 
   // Open the workspace manager, dismissing the New Task composer / open task that
   // would otherwise overlay it.
@@ -369,6 +399,8 @@ function AppLayout() {
             }}
             onSelectWorkspace={openWorkspaceBoard}
             onOpenTask={openTask}
+            onCreateTaskForRepo={(id) => openComposer({ repoId: id })}
+            onCreateTaskForWorkspace={(id) => openComposer({ workspaceId: id })}
             onAddProject={addProject}
             onManageWorkspaces={openManageWorkspaces}
             busy={busy}

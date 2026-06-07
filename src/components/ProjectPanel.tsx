@@ -20,6 +20,10 @@ interface ProjectPanelProps {
   onSelectRepo: (id: number) => void;
   onSelectWorkspace: (id: number) => void;
   onOpenTask: (id: number) => void;
+  /** Open the composer preselected to this project (Project mode). */
+  onCreateTaskForRepo: (repoId: number) => void;
+  /** Open the composer preselected to this workspace (cross-repo when it can fan out). */
+  onCreateTaskForWorkspace: (workspaceId: number) => void;
   onAddProject: () => void;
   onManageWorkspaces: () => void;
   busy: boolean;
@@ -42,6 +46,8 @@ export function ProjectPanel({
   onSelectRepo,
   onSelectWorkspace,
   onOpenTask,
+  onCreateTaskForRepo,
+  onCreateTaskForWorkspace,
   onAddProject,
   onManageWorkspaces,
   busy,
@@ -90,6 +96,8 @@ export function ProjectPanel({
                 rows={byRepo.get(repo.id) ?? []}
                 onSelect={() => onSelectRepo(repo.id)}
                 onOpenTask={onOpenTask}
+                onCreateTask={() => onCreateTaskForRepo(repo.id)}
+                createLabel={`Add task to ${repo.name}`}
               />
             ))
           )}
@@ -100,17 +108,23 @@ export function ProjectPanel({
             <div className="nx-panel-kick">
               <span>Workspaces</span>
             </div>
-            {workspaces.map((workspace) => (
-              <NavRow
-                key={`ws-${workspace.id}`}
-                label={workspace.name}
-                active={workspace.id === selectedWorkspaceId}
-                rows={byWorkspace.get(workspace.id) ?? []}
-                onSelect={() => onSelectWorkspace(workspace.id)}
-                onOpenTask={onOpenTask}
-                info={<WorkspaceInfo workspace={workspace} repoNames={repoNames} onSelectRepo={onSelectRepo} />}
-              />
-            ))}
+            {workspaces.map((workspace) => {
+              // No "+" for a workspace whose members are all missing — there'd be no repo to seed.
+              const hasRepos = workspace.repoIds.some((id) => repoNames.has(id));
+              return (
+                <NavRow
+                  key={`ws-${workspace.id}`}
+                  label={workspace.name}
+                  active={workspace.id === selectedWorkspaceId}
+                  rows={byWorkspace.get(workspace.id) ?? []}
+                  onSelect={() => onSelectWorkspace(workspace.id)}
+                  onOpenTask={onOpenTask}
+                  onCreateTask={hasRepos ? () => onCreateTaskForWorkspace(workspace.id) : undefined}
+                  createLabel={`Add task to ${workspace.name}`}
+                  info={<WorkspaceInfo workspace={workspace} repoNames={repoNames} onSelectRepo={onSelectRepo} />}
+                />
+              );
+            })}
           </div>
         )}
       </div>
@@ -125,6 +139,8 @@ function NavRow({
   rows,
   onSelect,
   onOpenTask,
+  onCreateTask,
+  createLabel,
   info,
 }: {
   label: string;
@@ -133,6 +149,9 @@ function NavRow({
   rows: AgentRow[];
   onSelect: () => void;
   onOpenTask: (id: number) => void;
+  /** Renders a hover-revealed "+" that opens the composer for this scope. */
+  onCreateTask?: () => void;
+  createLabel?: string;
   info?: React.ReactNode;
 }) {
   const tone = dominantState(rows);
@@ -156,6 +175,19 @@ function NavRow({
         {info}
         {tone && <span className="nx-nav-dot" style={{ background: AGENT_STATE_META[tone].dot }} aria-hidden="true" />}
         <span className="nx-proj-count">{rows.length}</span>
+        {onCreateTask && (
+          <button
+            type="button"
+            className="nx-nav-add"
+            aria-label={createLabel}
+            onClick={(event) => {
+              event.stopPropagation();
+              onCreateTask();
+            }}
+          >
+            <Plus size={13} aria-hidden="true" />
+          </button>
+        )}
       </div>
       {rows.length > 0 && (
         <div className="nx-nav-agents">

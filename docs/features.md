@@ -21,18 +21,23 @@ The app shell is an always-collapsed icon rail plus a persistent navigator panel
   the workspace manager is open). The panel has two sections:
   - **Projects** — one row per local git project; clicking opens that project's
     board. Each row shows the project name, a state dot (color-coded by the most
-    urgent in-flight state: needs_you → running → review), and an agent count.
-    Each in-flight agent (Needs you / Running / Review; Done/Idle excluded) is
-    nested inline under its project row as a compact card showing the agent logo,
-    branch, latest line, elapsed time, and a click-to-focus action.
+    urgent in-flight state: needs_you → running → review), and an agent count. A
+    hover-revealed **"+"** at the row's right edge opens the New Task composer
+    preselected to that project (Project mode). Each in-flight agent (Needs you /
+    Running / Review; Done/Idle excluded) is nested inline under its project row as
+    a compact card showing the agent logo, branch, latest line, elapsed time, and a
+    click-to-focus action.
   - **Workspaces** — one row per workspace; clicking opens an **aggregated
     kanban** across all of that workspace's repos (the `workspace` view, reusing
     `Workspace.tsx`). Task cards on the workspace board carry a repo-name badge so
     cards from different repos are distinguishable. Each workspace row has an **ⓘ
     info card** (a popover, `src/components/ui/popover.tsx`) that lists the
     workspace's member projects; each listed project is clickable to open its
-    individual board. In-flight agents from all of the workspace's repos are
-    nested inline under the workspace row, using the same compact card.
+    individual board. A hover-revealed **"+"** at the row's right edge opens the
+    New Task composer preselected to that workspace — in cross-repo (Workspace)
+    mode when it resolves to ≥2 known repos, otherwise single-repo Project mode on
+    its sole member. In-flight agents from all of the workspace's repos are nested
+    inline under the workspace row, using the same compact card.
 - Mission Control is the default home: a cross-project, attention-first triage
   inbox. Every task across every project is grouped by who needs you —
   **Needs you → Running → Review → Done → Idle** — and each row carries the

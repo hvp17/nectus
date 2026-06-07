@@ -228,6 +228,19 @@
 .nx-nav-info:hover { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); }
 /* When the info button claims margin-left:auto, the dot/count sit after it. */
 .nx-proj:has(.nx-nav-info) .nx-proj-count { margin-left: 6px; }
+/* Hover-revealed per-row "new task" action, pinned to the row's right edge. It
+   reserves its slot (opacity, not display) so the row doesn't reflow on hover, and
+   claims margin-left:auto to anchor itself right — except on workspace rows, where
+   the info button already anchors the trailing cluster (two autos would split it). */
+.nx-nav-add {
+  display: grid; place-items: center; width: 18px; height: 18px; margin-left: auto; flex: none;
+  border: none; background: transparent; color: var(--muted-foreground); border-radius: var(--radius-sm);
+  cursor: pointer; opacity: 0; transition: opacity .12s ease;
+}
+.nx-proj:has(.nx-nav-info) .nx-nav-add { margin-left: 6px; }
+.nx-proj:hover .nx-nav-add,
+.nx-nav-add:focus-visible { opacity: 1; }
+.nx-nav-add:hover { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); }
 .nx-nav-agents { display: flex; flex-direction: column; gap: 6px; padding: 4px 4px 8px 10px; }
 
 /* Workspace info card (popover). */
