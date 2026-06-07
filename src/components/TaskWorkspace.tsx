@@ -55,6 +55,7 @@ export interface TaskWorkspaceProps {
   onSetPullRequestReady: (task: TaskSummary) => void;
   onClosePullRequest: (task: TaskSummary) => void;
   onUpdateStatus: (task: TaskSummary, status: TaskStatus) => void;
+  onRenameTask: (task: TaskSummary, title: string) => void;
   onDeleteTask: (task: TaskSummary) => void;
   onSetJiraLink: (
     taskId: number,
@@ -93,6 +94,7 @@ export function TaskWorkspace({
   onSetPullRequestReady,
   onClosePullRequest,
   onUpdateStatus,
+  onRenameTask,
   onDeleteTask,
   onSetJiraLink,
   jiraSite,
@@ -314,6 +316,7 @@ export function TaskWorkspace({
         onClose={onClose}
         workflowStep={workflowStep}
         workflowSteps={workflowSteps}
+        onRenameTask={onRenameTask}
         stageTab={stageTab}
         onStageTabChange={setStageTab}
         diff={diff}

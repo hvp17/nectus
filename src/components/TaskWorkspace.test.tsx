@@ -100,6 +100,7 @@ function renderTaskWorkspace(input?: {
   onCreatePullRequest?: (task: TaskSummary, options?: { draft?: boolean }) => void;
   onRefreshPullRequest?: (task: TaskSummary) => void;
   onUpdateStatus?: (task: TaskSummary, status: TaskSummary["status"]) => void;
+  onRenameTask?: (task: TaskSummary, title: string) => void;
   onDeleteTask?: (task: TaskSummary) => void;
 }) {
   return renderWithTooltipProvider(
@@ -123,6 +124,7 @@ function renderTaskWorkspace(input?: {
       onSetPullRequestReady={vi.fn()}
       onClosePullRequest={vi.fn()}
       onUpdateStatus={input?.onUpdateStatus ?? vi.fn()}
+      onRenameTask={input?.onRenameTask ?? vi.fn()}
       onDeleteTask={input?.onDeleteTask ?? vi.fn()}
       onSetJiraLink={vi.fn()}
       onSessionExit={vi.fn()}
@@ -492,6 +494,65 @@ describe("TaskWorkspace", () => {
 
     expect(terminalPanel).not.toHaveTextContent("No active session");
     expect(screen.queryByRole("separator", { name: /resize terminal/i })).not.toBeInTheDocument();
+  });
+
+  it("renames the task from the header title on Enter", () => {
+    const onRenameTask = vi.fn();
+
+    renderTaskWorkspace({ onRenameTask });
+
+    fireEvent.click(screen.getByRole("button", { name: /rename task/i }));
+    const input = screen.getByRole("textbox", { name: /task name/i });
+    fireEvent.change(input, { target: { value: "Renamed task" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(onRenameTask).toHaveBeenCalledWith(task, "Renamed task");
+  });
+
+  it("commits a renamed task title on blur", () => {
+    const onRenameTask = vi.fn();
+
+    renderTaskWorkspace({ onRenameTask });
+
+    fireEvent.click(screen.getByRole("button", { name: /rename task/i }));
+    const input = screen.getByRole("textbox", { name: /task name/i });
+    fireEvent.change(input, { target: { value: "Blur title" } });
+    fireEvent.blur(input);
+
+    expect(onRenameTask).toHaveBeenCalledWith(task, "Blur title");
+  });
+
+  it("cancels a rename on Escape and keeps the original title", () => {
+    const onRenameTask = vi.fn();
+
+    renderTaskWorkspace({ onRenameTask });
+
+    fireEvent.click(screen.getByRole("button", { name: /rename task/i }));
+    const input = screen.getByRole("textbox", { name: /task name/i });
+    fireEvent.change(input, { target: { value: "Discarded" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+
+    expect(onRenameTask).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /rename task/i })).toHaveTextContent(
+      "Finished task with long output",
+    );
+  });
+
+  it("ignores an empty or unchanged rename", () => {
+    const onRenameTask = vi.fn();
+
+    renderTaskWorkspace({ onRenameTask });
+
+    fireEvent.click(screen.getByRole("button", { name: /rename task/i }));
+    const empty = screen.getByRole("textbox", { name: /task name/i });
+    fireEvent.change(empty, { target: { value: "   " } });
+    fireEvent.keyDown(empty, { key: "Enter" });
+    expect(onRenameTask).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /rename task/i }));
+    const unchanged = screen.getByRole("textbox", { name: /task name/i });
+    fireEvent.keyDown(unchanged, { key: "Enter" });
+    expect(onRenameTask).not.toHaveBeenCalled();
   });
 
   it("switches the workspace stage to the diff view", async () => {

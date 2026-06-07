@@ -513,6 +513,15 @@ export function useApp() {
       }
     });
 
+  const renameTask = (task: TaskSummary, title: string) => {
+    const trimmed = title.trim();
+    if (!trimmed || trimmed === task.title) return;
+    void run(async () => {
+      const updated = await api.updateTaskMetadata({ taskId: task.id, title: trimmed });
+      setTasks((current) => replaceById(current, updated));
+    });
+  };
+
   const startPairLoop = (task: TaskSummary, reviewerProfileId: number) =>
     run(async () => {
       const reviewLoop = await api.startPairLoop(task.id, reviewerProfileId);
@@ -698,6 +707,7 @@ export function useApp() {
     setTaskJiraLink,
     closeCreateTaskModal,
     updateStatus,
+    renameTask,
     requestDeleteTask,
     startSession,
     stopSession,

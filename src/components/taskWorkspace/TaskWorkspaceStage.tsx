@@ -21,6 +21,7 @@ import {
   StepperTrigger,
 } from "../reui/stepper";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
+import { Separator } from "../ui/separator";
 import { TaskDiffView } from "../TaskDiffView";
 import { ReviewTerminalPane } from "../ReviewTerminalPane";
 import { TerminalPane } from "../../TerminalPane";
@@ -29,6 +30,7 @@ import type { TaskAttention } from "../../sessionAttention";
 import type { useTaskDiff } from "../../hooks/useTaskDiff";
 import type { TaskSummary } from "../../types";
 import { ActionBar } from "./ActionBar";
+import { EditableTaskTitle } from "./EditableTaskTitle";
 import { TaskStatusBadges } from "./TaskStatusBadges";
 import { TaskTerminalLauncher } from "./TaskTerminalLauncher";
 
@@ -52,6 +54,7 @@ export interface TaskWorkspaceStageProps {
   onClose: () => void;
   workflowStep: number;
   workflowSteps: WorkflowStep[];
+  onRenameTask: (task: TaskSummary, title: string) => void;
   stageTab: StageTab;
   onStageTabChange: (tab: StageTab) => void;
   diff: TaskDiff;
@@ -80,6 +83,7 @@ export function TaskWorkspaceStage({
   onClose,
   workflowStep,
   workflowSteps,
+  onRenameTask,
   stageTab,
   onStageTabChange,
   diff,
@@ -103,16 +107,19 @@ export function TaskWorkspaceStage({
     <main className="flex min-h-0 min-w-0 flex-col gap-3 bg-gradient-to-b from-muted/25 to-transparent to-30% p-4">
       <header className="task-workspace-header">
         <div className="task-workspace-heading">
-          <button
+          <Button
             type="button"
-            className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
+            variant="ghost"
+            size="sm"
+            className="h-7 shrink-0 gap-1.5 px-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
             onClick={onClose}
             aria-label="Back to task board"
           >
             <ArrowLeft className="size-3.5" aria-hidden="true" />
             {backLabel}
-          </button>
-          <h2 className="min-w-0 truncate text-lg font-bold tracking-tight">{task.title}</h2>
+          </Button>
+          <Separator orientation="vertical" className="h-5 shrink-0" />
+          <EditableTaskTitle title={task.title} onRename={(title) => onRenameTask(task, title)} />
         </div>
         <div className="task-workspace-badges">
           <TaskStatusBadges task={task} />
