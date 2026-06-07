@@ -22,6 +22,7 @@ import { SettingsPage } from "./components/SettingsPage";
 import { ReviewsPage } from "./components/ReviewsPage";
 import { JiraBoardPage } from "./components/JiraBoardPage";
 import { useApp } from "./hooks/useApp";
+import { useEventBridge } from "./hooks/useEventBridge";
 import { useAppTheme } from "./hooks/useAppTheme";
 import { useAppUpdate } from "./hooks/useAppUpdate";
 import { useAppUpdateToast } from "./hooks/useAppUpdateToast";
@@ -84,6 +85,8 @@ function useAppContext(): AppContextValue {
  * falling back to `<Outlet/>` for the routed base view.
  */
 function AppLayout() {
+  // Single, mount-once subscription to all Tauri session/review/PR events.
+  useEventBridge();
   const app = useApp();
   const {
     repos,

@@ -2,10 +2,8 @@ import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "../queries/keys";
-import { upsertById, upsertNewestById } from "../lib/listState";
-import { useTauriEvent } from "./useTauriEvent";
-import { notifySessionEvent } from "../sessionNotifications";
-import type { PrReview, PrReviewRun, PrReviewUpdatedEvent } from "../types";
+import { upsertNewestById } from "../lib/listState";
+import type { PrReview, PrReviewRun } from "../types";
 
 interface UsePrReviewsArgs {
   onMessage: (message: string) => void;
@@ -55,34 +53,8 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
     [queryClient],
   );
 
-  useTauriEvent<PrReviewUpdatedEvent>(
-    "pr_review_updated",
-    (payload) => {
-      const review = payload.prReview;
-      const previousStatus = queryClient
-        .getQueryData<PrReview[]>(queryKeys.prReviews.list())
-        ?.find((item) => item.id === review.id)?.status;
-      setReviews((current) => upsertNewestById(current, review));
-
-      const latestRun = payload.latestRun;
-      if (latestRun) {
-        queryClient.setQueryData<PrReviewRun[]>(queryKeys.prReviews.runs(latestRun.prReviewId), (current) =>
-          upsertById(current ?? [], latestRun),
-        );
-      }
-
-      if (review.status === previousStatus) return;
-      if (review.status === "ready") {
-        onMessage(`PR review ready: ${reviewLabel(review)}`);
-        void notifySessionEvent("PR review ready", reviewLabel(review));
-      } else if (review.status === "error") {
-        const detail = review.lastError ?? "Unknown error";
-        onMessage(`PR review failed: ${detail}`);
-        void notifySessionEvent("PR review failed", detail);
-      }
-    },
-    { onError: (error) => onMessage(String(error)) },
-  );
+  // The `pr_review_updated` subscription that keeps this list live now lives in the
+  // single `useEventBridge` (it writes the same prReviews list/runs cache entries).
 
   const createPrReview = useCallback(
     async (prUrl: string, reviewerProfileIds: number[], maxRounds?: number) => {

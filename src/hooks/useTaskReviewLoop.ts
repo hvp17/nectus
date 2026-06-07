@@ -3,12 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "../queries/keys";
 import { useTauriEvent } from "./useTauriEvent";
-import type { ReviewLoop, ReviewLoopUpdatedEvent, ReviewOutputEvent, ReviewRun } from "../types";
+import type { ReviewLoop, ReviewOutputEvent, ReviewRun } from "../types";
 
 interface UseTaskReviewLoopArgs {
   selectedTaskId?: number;
   onMessage?: (message: string) => void;
-  onReviewLoopUpdated?: (reviewLoop: ReviewLoop) => void;
 }
 
 const EMPTY_RUNS: ReviewRun[] = [];
@@ -25,7 +24,7 @@ const EMPTY_RUNS: ReviewRun[] = [];
  * `setSelectedReviewLoop(...)` made while no task is selected still lands in a cell
  * the (disabled) query reads, preserving the immediate "reviewing" affordance.
  */
-export function useTaskReviewLoop({ selectedTaskId, onMessage, onReviewLoopUpdated }: UseTaskReviewLoopArgs) {
+export function useTaskReviewLoop({ selectedTaskId, onMessage }: UseTaskReviewLoopArgs) {
   const queryClient = useQueryClient();
 
   // Accumulated live stdout of the selected task's reviewer, for the read-only
@@ -86,23 +85,12 @@ export function useTaskReviewLoop({ selectedTaskId, onMessage, onReviewLoopUpdat
     [queryClient],
   );
 
-  useTauriEvent<ReviewLoopUpdatedEvent>(
-    "review_loop_updated",
-    (payload) => {
-      onReviewLoopUpdated?.(payload.reviewLoop);
-      if (selectedTaskIdRef.current !== payload.taskId) return;
-      queryClient.setQueryData(queryKeys.task.reviewLoop(payload.taskId), payload.reviewLoop);
-      // A run is starting: clear the live pane before its first chunk arrives.
-      if (payload.reviewLoop.status === "reviewing") setLiveReviewOutput("");
-      if (payload.reviewRun) {
-        queryClient.setQueryData<ReviewRun[]>(queryKeys.task.reviewRuns(payload.taskId), (current = []) => [
-          ...current,
-          payload.reviewRun!,
-        ]);
-      }
-    },
-    { onError: (error) => publishMessage(String(error)) },
-  );
+  // A run is starting (the bridge wrote the loop's status into the cache): clear the
+  // live pane before its first chunk arrives. Keyed on the status, so it fires once
+  // per entry into "reviewing".
+  useEffect(() => {
+    if (selectedReviewLoop?.status === "reviewing") setLiveReviewOutput("");
+  }, [selectedReviewLoop?.status]);
 
   // Stream the selected task's reviewer stdout into the live buffer. A chunk at
   // offset 0 starts a fresh run, so it replaces the buffer rather than appending.

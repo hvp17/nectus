@@ -18,8 +18,9 @@ import { useGuardedAction } from "./useGuardedAction";
 import { clearTaskAttention, getAttentionCounts, getTaskAttention } from "../sessionAttention";
 import { useCreateTaskForm } from "./useCreateTaskForm";
 import { useSessionCommands } from "./useSessionCommands";
-import { useSessionEvents } from "./useSessionEvents";
 import { useSessionAttentionControls } from "./useSessionAttentionControls";
+// Session/review/PR Tauri events are handled by `useEventBridge` (mounted at the
+// app root), so `useApp` no longer subscribes to them directly.
 import { useGithub } from "./useGithub";
 import { useJiraBoardView } from "./useJiraBoardView";
 import { useTaskDeletion } from "./useTaskDeletion";
@@ -31,7 +32,6 @@ import type {
   AppSettingsInput,
   JiraWorkItem,
   Repo,
-  ReviewLoop,
   TaskStatus,
   TaskSummary,
   Workspace,
@@ -111,7 +111,6 @@ export function useApp() {
   const taskAttention = useAppStore((s) => s.taskAttention);
   const setTaskAttention = useAppStore((s) => s.setTaskAttention);
   const liveLines = useAppStore((s) => s.liveLines);
-  const setLiveLines = useAppStore((s) => s.setLiveLines);
   // Initial bootstrap loading is derived from the bootstrap queries' first fetch.
   const loading =
     reposQuery.isLoading ||
@@ -276,20 +275,9 @@ export function useApp() {
     }
   }, [workspaces]);
 
-  const applyReviewLoopToTask = useCallback((reviewLoop: ReviewLoop) => {
-    setTasks((current) =>
-      current.map((task) =>
-        task.id === reviewLoop.taskId
-          ? {
-              ...task,
-              status: reviewLoop.status === "passed" ? "done" : task.status,
-              reviewLoopStatus: reviewLoop.status,
-            }
-          : task,
-      ),
-    );
-  }, []);
-
+  // The review-loop's effect on the task list (a passed loop marks the task done)
+  // and all session/review/PR event subscriptions now live in the single
+  // `useEventBridge` mounted at the app root — not here.
   const {
     selectedReviewLoop,
     setSelectedReviewLoop,
@@ -299,16 +287,7 @@ export function useApp() {
   } = useTaskReviewLoop({
     selectedTaskId,
     onMessage: setMessage,
-    onReviewLoopUpdated: applyReviewLoopToTask,
   });
-
-  useEffect(() => {
-    if (selectedReviewLoop) {
-      applyReviewLoopToTask(selectedReviewLoop);
-    }
-  }, [applyReviewLoopToTask, selectedReviewLoop]);
-
-  useSessionEvents({ tasksRef, setTasks, setMessage, setTaskToast, setTaskAttention, setLiveLines });
 
   const sessionCommands = useSessionCommands({
     agentProfiles,

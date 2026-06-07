@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
 import { renderWithProviders } from "../test/testUtils";
 import { useApp } from "./useApp";
+import { useEventBridge } from "./useEventBridge";
 import type { SessionIdleEvent, TaskSummary } from "../types";
 
 const eventTestState = vi.hoisted(() => ({
@@ -74,6 +75,9 @@ const activeTask: TaskSummary = {
 };
 
 function Harness() {
+  // The session/review events now flow through the bridge, mounted once at the app
+  // root — mount it here so the harness exercises the same end-to-end event path.
+  useEventBridge();
   const app = useApp();
 
   return (
