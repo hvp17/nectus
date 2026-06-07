@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import App from "../App";
 import { api } from "../api";
@@ -85,5 +85,78 @@ export function defineAppSidebarTests() {
     // "All repos" was the switcher's clear-filter pill; it must be gone.
     expect(screen.queryByRole("radio", { name: "All repos" })).not.toBeInTheDocument();
     expect(screen.queryByText("All repos")).not.toBeInTheDocument();
+  });
+
+  it("opens the composer preselected to a project from its sidebar + button", async () => {
+    mockedApi.listRepos.mockResolvedValue([appRepo, secondRepo]);
+    mockedApi.listWorkspaces.mockResolvedValue([]);
+    mockedApi.listTasks.mockResolvedValue([]);
+    mockedApi.createTask.mockResolvedValue(appTask({ id: 80, repoId: secondRepo.id, title: "From sidebar" }));
+
+    render(<App />);
+
+    // Each project row exposes a hover "+"; click the second repo's (not the default first).
+    fireEvent.click(await screen.findByRole("button", { name: `Add task to ${secondRepo.name}` }));
+    expect(await screen.findByRole("heading", { name: "New Task" })).toBeInTheDocument();
+
+    // The preselected project is the one whose + was clicked, so creating targets it.
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "From sidebar" } });
+    fireEvent.click(screen.getByRole("button", { name: /create & start/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.createTask).toHaveBeenCalledWith(expect.objectContaining({ repoId: secondRepo.id }));
+    });
+  });
+
+  it("opens the composer in cross-repo mode preselected to a workspace from its + button", async () => {
+    mockedApi.listRepos.mockResolvedValue([appRepo, secondRepo]);
+    mockedApi.listWorkspaces.mockResolvedValue([
+      workspace({ id: 5, name: "Platform", repoIds: [appRepo.id, secondRepo.id] }),
+    ]);
+    mockedApi.listTasks.mockResolvedValue([]);
+    mockedApi.createCrossRepoTask.mockResolvedValue(
+      appTask({ id: 500, title: "WS task", branchName: "feat/x", hasWorktree: true }),
+    );
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add task to Platform" }));
+    expect(await screen.findByRole("heading", { name: "New Task" })).toBeInTheDocument();
+
+    // A ≥2-repo workspace opens in Workspace scope with both members pre-checked.
+    expect(screen.getByRole("radio", { name: "Workspace scope" })).toBeChecked();
+    const repoSwitches = within(screen.getByRole("group", { name: "Repositories" })).getAllByRole("switch");
+    expect(repoSwitches).toHaveLength(2);
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "WS task" } });
+    fireEvent.click(screen.getByRole("button", { name: /create & start/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.createCrossRepoTask).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceId: 5, repoIds: [appRepo.id, secondRepo.id] }),
+      );
+    });
+    expect(mockedApi.createTask).not.toHaveBeenCalled();
+  });
+
+  it("falls back to Project mode preselected to a single-repo workspace's member", async () => {
+    mockedApi.listRepos.mockResolvedValue([appRepo, secondRepo]);
+    // A 1-repo workspace can't fan out, so its + opens single-repo Project mode on that member.
+    mockedApi.listWorkspaces.mockResolvedValue([workspace({ id: 6, name: "Solo", repoIds: [secondRepo.id] })]);
+    mockedApi.listTasks.mockResolvedValue([]);
+    mockedApi.createTask.mockResolvedValue(appTask({ id: 60, repoId: secondRepo.id, title: "Solo task" }));
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add task to Solo" }));
+    expect(await screen.findByRole("heading", { name: "New Task" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Repositories" })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Solo task" } });
+    fireEvent.click(screen.getByRole("button", { name: /create & start/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.createTask).toHaveBeenCalledWith(expect.objectContaining({ repoId: secondRepo.id }));
+    });
   });
 }
