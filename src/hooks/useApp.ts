@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { useCallback, useEffect, useRef, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import {
@@ -10,30 +10,20 @@ import {
 } from "../queries/core";
 import { queryKeys } from "../queries/keys";
 import { makeCacheSetter } from "../queries/cache";
+import { useJiraStatusQuery } from "../queries/jira";
 import { useAppStore } from "../store/appStore";
 import { replaceById } from "../lib/listState";
-import { jiraBrowseUrl } from "../lib/jira";
 import { isReviewLoopActive } from "../statusLabels";
 import { useGuardedAction } from "./useGuardedAction";
 import { clearTaskAttention, getAttentionCounts, getTaskAttention } from "../sessionAttention";
-import { useCreateTaskForm } from "./useCreateTaskForm";
 import { useSessionCommands } from "./useSessionCommands";
 import { useSessionAttentionControls } from "./useSessionAttentionControls";
 // Session/review/PR Tauri events are handled by `useEventBridge` (mounted at the
 // app root), so `useApp` no longer subscribes to them directly.
 import { useGithub } from "./useGithub";
-import { useJiraBoardView } from "./useJiraBoardView";
 import { useTaskDeletion } from "./useTaskDeletion";
 import { useTaskReviewLoop } from "./useTaskReviewLoop";
-import type {
-  AgentProfile,
-  AppSettings,
-  JiraWorkItem,
-  Repo,
-  TaskStatus,
-  TaskSummary,
-  Workspace,
-} from "../types";
+import type { AgentProfile, Repo, TaskStatus, TaskSummary, Workspace } from "../types";
 
 const CREATE_PULL_REQUEST_PROMPT = `Create a pull request for this task. Use the current project/worktree branch. Before opening the PR, verify the work as appropriate for this repo, commit relevant changes with a Conventional Commit if needed, push the branch, create the PR against the remote default branch, and report the PR URL here.`;
 
@@ -62,10 +52,6 @@ export function useApp() {
 
   const settingsQuery = useSettingsQuery();
   const settings = settingsQuery.data;
-  const setSettings = useMemo(
-    () => makeCacheSetter<AppSettings | undefined>(queryClient, queryKeys.settings()),
-    [queryClient],
-  );
 
   const tasksQuery = useTasksQuery();
   const tasks = tasksQuery.data ?? EMPTY_TASKS;
@@ -94,13 +80,6 @@ export function useApp() {
   const busy = useAppStore((s) => s.busy);
   const setBusy = useAppStore((s) => s.setBusy);
 
-  // ---- Local runtime/composer state (migrates to the store in later phases) ---
-  // Repos chosen for a cross-repo task in the composer (Increment B). Primary first.
-  const [newTaskRepoIds, setNewTaskRepoIds] = useState<number[]>([]);
-  // Workspace the composer is targeting. Undefined = single-repo (Project) mode;
-  // a value = Workspace mode (cross-repo). Decoupled from the board's focused
-  // workspace so the composer's Project/Workspace toggle can pick any workspace.
-  const [newTaskWorkspaceId, setNewTaskWorkspaceId] = useState<number | undefined>();
   // Live session runtime (push-driven by the Tauri events) — owned by the store.
   const taskAttention = useAppStore((s) => s.taskAttention);
   const setTaskAttention = useAppStore((s) => s.setTaskAttention);
@@ -113,30 +92,6 @@ export function useApp() {
     settingsQuery.isLoading ||
     tasksQuery.isLoading;
   const deletingTaskIds = useAppStore((s) => s.deletingTaskIds);
-  const taskForm = useCreateTaskForm(settings?.defaultAgentProfileId ?? selectedAgentProfileId);
-  const {
-    createTaskOpen,
-    setCreateTaskOpen,
-    newTaskTitle,
-    setNewTaskTitle,
-    newTaskPrompt,
-    setNewTaskPrompt,
-    newTaskBranchName,
-    setNewTaskBranchName,
-    newTaskHasWorktree,
-    setNewTaskHasWorktree,
-    newTaskAgentProfileId,
-    setNewTaskAgentProfileId,
-    newTaskRepoId,
-    setNewTaskRepoId,
-    pendingJiraLink,
-    setPendingJiraLink,
-    resetCreateTaskForm,
-    closeCreateTaskModal,
-    getGeneratedTaskTitle,
-    getSuggestedBranchName,
-    resolveWorktreeBranchName,
-  } = taskForm;
 
   const run = useGuardedAction(setMessage, setBusy);
 
@@ -304,51 +259,10 @@ export function useApp() {
     closePullRequest,
   } = useGithub({ selectedTask, setMessage, applyTask });
 
-  const jiraBoard = useJiraBoardView({
-    active: currentView === "jira",
-    settings,
-    setSettings,
-    setMessage,
-  });
-  const { jira, setSelectedItem: setSelectedJiraItem } = jiraBoard;
-
-  const createTaskFromStory = useCallback(
-    async (item: JiraWorkItem) => {
-      setNewTaskTitle(item.summary);
-      let description = item.description ?? "";
-      if (!description) {
-        try {
-          description = (await api.jiraGetWorkItem(item.key)).description ?? "";
-        } catch {
-          // Best-effort: leave the prompt blank if the description fetch fails.
-        }
-      }
-      setNewTaskPrompt(description);
-      setPendingJiraLink({
-        key: item.key,
-        summary: item.summary,
-        url: jiraBrowseUrl(jira.jiraStatus?.site, item.key),
-      });
-      setNewTaskRepoId(selectedRepoId ?? repos[0]?.id);
-      // A JIRA-seeded task is single-repo; make sure the composer opens in Project mode.
-      setNewTaskWorkspaceId(undefined);
-      setSelectedJiraItem(null);
-      setCurrentView("board");
-      setSelectedTaskId(undefined);
-      setCreateTaskOpen(true);
-    },
-    [
-      repos,
-      selectedRepoId,
-      jira.jiraStatus?.site,
-      setSelectedJiraItem,
-      setNewTaskTitle,
-      setNewTaskPrompt,
-      setPendingJiraLink,
-      setNewTaskRepoId,
-      setCreateTaskOpen,
-    ],
-  );
+  // The JIRA board view + composer "create from story" are owned by `JiraView`.
+  // `useApp` keeps only the JIRA connection status, for the open task's linked-story
+  // browse URL (the facts rail's `jiraSite`).
+  const jiraStatus = useJiraStatusQuery().data;
 
   const setTaskJiraLink = (
     taskId: number,
@@ -404,118 +318,6 @@ export function useApp() {
       },
       { busy: true },
     );
-
-  const createTask = async () => {
-    // Workspace composer (Increment B): the composer is in Workspace mode, so it
-    // offered a repo checklist. The checklist is the source of truth, and this gate
-    // keys on the SAME signal as the UI's cross-repo mode (a targeted workspace) so
-    // they can't diverge. Routes by how many repos were picked: ≥2 → cross-repo;
-    // exactly 1 → a single worktree task on that repo (never the board-selected one).
-    if (newTaskWorkspaceId != null && newTaskRepoIds.length >= 1) {
-      if (!newTaskAgentProfileId) {
-        setMessage("Select an agent before creating a task.");
-        return;
-      }
-      const agentProfileId = newTaskAgentProfileId;
-      const repoIds = newTaskRepoIds;
-      await run(
-        async () => {
-          const branchName = resolveWorktreeBranchName(
-            newTaskBranchName,
-            settings?.defaultBranchPrefix,
-          );
-          const task =
-            repoIds.length >= 2
-              ? await api.createCrossRepoTask({
-                  workspaceId: newTaskWorkspaceId,
-                  repoIds,
-                  title: getGeneratedTaskTitle(),
-                  prompt: newTaskPrompt.trim() || null,
-                  agentProfileId,
-                  branchName,
-                })
-              : await api.createTask({
-                  repoId: repoIds[0],
-                  title: getGeneratedTaskTitle(),
-                  prompt: newTaskPrompt.trim() || null,
-                  agentProfileId,
-                  hasWorktree: true,
-                  branchName,
-                });
-          resetCreateTaskForm();
-          setNewTaskRepoIds([]);
-          setNewTaskWorkspaceId(undefined);
-          setCreateTaskOpen(false);
-          setSelectedRepoId(repoIds[0]);
-          setSelectedTaskId(task.id);
-          let startError: string | null = null;
-          try {
-            await api.startSession(task.id, agentProfileId);
-          } catch (error) {
-            startError = String(error);
-          }
-          await refresh(repoIds[0]);
-          if (startError) {
-            setMessage(`Created ${task.title}, but failed to start session: ${startError}`);
-          } else if (repoIds.length >= 2) {
-            setMessage(`Created ${task.branchName} across ${repoIds.length} repos`);
-          } else {
-            setMessage(`Created ${task.branchName}`);
-          }
-        },
-        { busy: true },
-      );
-      return;
-    }
-
-    const repoId = newTaskRepoId ?? selectedRepoId;
-    if (!repoId) {
-      setMessage("Choose a project before creating a task.");
-      return;
-    }
-    if (!newTaskAgentProfileId) {
-      setMessage("Select an agent before creating a task.");
-      return;
-    }
-    const agentProfileId = newTaskAgentProfileId;
-    const jiraLink = pendingJiraLink;
-    await run(
-      async () => {
-        const branchName = newTaskHasWorktree
-          ? resolveWorktreeBranchName(newTaskBranchName, settings?.defaultBranchPrefix)
-          : null;
-        const task = await api.createTask({
-          repoId,
-          title: getGeneratedTaskTitle(),
-          prompt: newTaskPrompt.trim() || null,
-          agentProfileId,
-          hasWorktree: newTaskHasWorktree,
-          branchName,
-          jiraIssueKey: jiraLink?.key ?? null,
-          jiraIssueSummary: jiraLink?.summary ?? null,
-          jiraIssueUrl: jiraLink?.url ?? null,
-        });
-        resetCreateTaskForm();
-        setNewTaskRepoIds([]);
-        setCreateTaskOpen(false);
-        setSelectedRepoId(repoId);
-        setSelectedTaskId(task.id);
-        let startError: string | null = null;
-        try {
-          await api.startSession(task.id, agentProfileId);
-        } catch (error) {
-          startError = String(error);
-        }
-        await refresh(repoId);
-        if (startError) {
-          setMessage(`Created ${task.title}, but failed to start session: ${startError}`);
-        } else {
-          setMessage(newTaskHasWorktree ? `Created ${task.branchName}` : `Created ${task.title}`);
-        }
-      },
-      { busy: true },
-    );
-  };
 
   const updateStatus = (task: TaskSummary, status: TaskStatus) =>
     run(async () => {
@@ -588,10 +390,6 @@ export function useApp() {
     missionTasks,
     workspaceBoardTasks,
     openWorkspaceBoard,
-    newTaskRepoIds,
-    setNewTaskRepoIds,
-    newTaskWorkspaceId,
-    setNewTaskWorkspaceId,
     tasks,
     agentProfiles,
     settings,
@@ -620,26 +418,7 @@ export function useApp() {
     loading,
     refresh,
     addProject,
-    createTaskOpen,
-    setCreateTaskOpen,
-    newTaskTitle,
-    setNewTaskTitle,
-    newTaskPrompt,
-    setNewTaskPrompt,
-    newTaskBranchName,
-    setNewTaskBranchName,
-    newTaskHasWorktree,
-    setNewTaskHasWorktree,
-    newTaskAgentProfileId,
-    setNewTaskAgentProfileId,
-    newTaskRepoId,
-    setNewTaskRepoId,
-    pendingJiraLink,
-    suggestedBranchName: getSuggestedBranchName(settings?.defaultBranchPrefix),
-    createTask,
-    createTaskFromStory,
     setTaskJiraLink,
-    closeCreateTaskModal,
     updateStatus,
     renameTask,
     requestDeleteTask,
@@ -656,25 +435,7 @@ export function useApp() {
     mergePullRequest,
     setPullRequestReady,
     closePullRequest,
-    jiraStatus: jira.jiraStatus,
-    jiraRestStatus: jira.restStatus,
-    jiraRestConnected: jira.restConnected,
-    jiraProjects: jira.projects,
-    jiraProjectStatuses: jira.projectStatuses,
-    jiraColumns: jira.columns,
-    jiraLoading: jira.loading,
-    refreshJira: jira.refresh,
-    transitionJira: jira.transition,
-    assignJira: jira.assign,
-    commentJira: jira.comment,
-    setJiraBoardConfig: jiraBoard.setBoardConfig,
-    selectedJiraItem: jiraBoard.selectedItem,
-    setSelectedJiraItem,
-    openJiraItem: jiraBoard.openItem,
-    createJiraItemOpen: jiraBoard.createOpen,
-    openCreateJiraItem: jiraBoard.openCreate,
-    closeCreateJiraItem: jiraBoard.closeCreate,
-    createJiraWorkItem: jiraBoard.createWorkItem,
+    jiraStatus,
     startPairLoop,
     startReview,
     stopPairLoop,

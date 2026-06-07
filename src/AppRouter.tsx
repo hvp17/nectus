@@ -27,10 +27,16 @@ import { usePrReviews } from "./hooks/usePrReviews";
 import { useTaskActions } from "./hooks/useTaskActions";
 import { useTaskDeletion } from "./hooks/useTaskDeletion";
 import { useWorkspaceActions } from "./hooks/useWorkspaceActions";
+import { useComposer } from "./hooks/useComposer";
+import { useJiraBoardView } from "./hooks/useJiraBoardView";
 import { useSettingsActions } from "./hooks/useSettingsActions";
 import { useJiraToken } from "./hooks/useJiraToken";
+import { useQueryClient } from "@tanstack/react-query";
+import { makeCacheSetter } from "./queries/cache";
+import { queryKeys } from "./queries/keys";
 import { useGithubStatusQuery } from "./queries/github";
 import { useJiraStatusQuery, useJiraRestStatusQuery } from "./queries/jira";
+import type { AppSettings } from "./types";
 import {
   useAgentProfilesQuery,
   useReposQuery,
@@ -112,8 +118,6 @@ function AppLayout() {
     repos,
     activeWorkspaceId,
     activeWorkspaceRepos,
-    setNewTaskRepoIds,
-    setNewTaskWorkspaceId,
     tasks,
     selectedRepoId,
     setSelectedRepoId,
@@ -124,18 +128,24 @@ function AppLayout() {
     setMessage,
     taskToast,
     setTaskToast,
-    createTaskOpen,
-    setCreateTaskOpen,
-    newTaskAgentProfileId,
-    setNewTaskAgentProfileId,
-    setNewTaskRepoId,
-    closeCreateTaskModal,
     currentView,
     setCurrentView,
     setActiveWorkspaceId,
     settings,
     agentProfiles,
   } = app;
+
+  // The New Task composer draft now lives in the store; AppLayout owns only the
+  // open/close trigger (the overlay itself is self-sufficient via `ComposerOverlay`).
+  const createTaskOpen = useAppStore((s) => s.createTaskOpen);
+  const setCreateTaskOpen = useAppStore((s) => s.setCreateTaskOpen);
+  const newTaskAgentProfileId = useAppStore((s) => s.newTaskAgentProfileId);
+  const setNewTaskAgentProfileId = useAppStore((s) => s.setNewTaskAgentProfileId);
+  const setNewTaskRepoId = useAppStore((s) => s.setNewTaskRepoId);
+  const setNewTaskWorkspaceId = useAppStore((s) => s.setNewTaskWorkspaceId);
+  const closeComposerAction = useAppStore((s) => s.closeComposer);
+  const selectedAgentProfileId = useAppStore((s) => s.selectedAgentProfileId);
+  const composerDefaultAgent = settings?.defaultAgentProfileId ?? selectedAgentProfileId;
 
   useAppTheme(settings);
 
@@ -153,13 +163,12 @@ function AppLayout() {
   // The workspace manager overlays the routed view, like the New Task composer.
   const [managingWorkspaces, setManagingWorkspaces] = useState(false);
 
-  // Close the composer AND clear the cross-repo selection in one place, so the
-  // selection can't leak across opens (it owns the cross-vs-single create routing).
-  const closeComposer = useCallback(() => {
-    closeCreateTaskModal();
-    setNewTaskRepoIds([]);
-    setNewTaskWorkspaceId(undefined);
-  }, [closeCreateTaskModal, setNewTaskRepoIds, setNewTaskWorkspaceId]);
+  // Close the composer and reset the whole draft (incl. the cross-repo selection)
+  // in one store action, so a selection can't leak across opens.
+  const closeComposer = useCallback(
+    () => closeComposerAction(composerDefaultAgent),
+    [closeComposerAction, composerDefaultAgent],
+  );
 
   useEffect(() => {
     if (!message) return;
@@ -267,37 +276,7 @@ function AppLayout() {
 
   let viewport: ReactNode;
   if (composing) {
-    viewport = (
-      <CreateTaskComposer
-        onClose={closeComposer}
-        onSubmit={(e) => {
-          e.preventDefault();
-          app.createTask();
-        }}
-        agentProfiles={agentProfiles}
-        repos={repos}
-        busy={app.busy}
-        newTaskTitle={app.newTaskTitle}
-        setNewTaskTitle={app.setNewTaskTitle}
-        newTaskPrompt={app.newTaskPrompt}
-        setNewTaskPrompt={app.setNewTaskPrompt}
-        newTaskBranchName={app.newTaskBranchName}
-        setNewTaskBranchName={app.setNewTaskBranchName}
-        newTaskHasWorktree={app.newTaskHasWorktree}
-        setNewTaskHasWorktree={app.setNewTaskHasWorktree}
-        suggestedBranchName={app.suggestedBranchName}
-        newTaskAgentProfileId={newTaskAgentProfileId}
-        setNewTaskAgentProfileId={setNewTaskAgentProfileId}
-        newTaskRepoId={app.newTaskRepoId}
-        setNewTaskRepoId={setNewTaskRepoId}
-        linkedJiraKey={app.pendingJiraLink?.key ?? null}
-        workspaces={app.workspaces}
-        newTaskWorkspaceId={app.newTaskWorkspaceId}
-        setNewTaskWorkspaceId={setNewTaskWorkspaceId}
-        selectedRepoIds={app.newTaskRepoIds}
-        onSetRepoIds={setNewTaskRepoIds}
-      />
-    );
+    viewport = <ComposerOverlay onClose={closeComposer} />;
   } else if (managingWorkspaces) {
     viewport = (
       <WorkspaceManager
@@ -554,54 +533,130 @@ function SettingsView() {
 }
 
 function JiraView() {
-  const { app, openTask } = useAppContext();
+  // Owns the JIRA board directly via useJiraBoardView; "create task from story" is
+  // the composer's, and the agent pick is the store's composer-agent.
+  const { openTask } = useAppContext();
+  const composer = useComposer();
+  const queryClient = useQueryClient();
+  const setMessage = useAppStore((s) => s.setMessage);
+  const newTaskAgentProfileId = useAppStore((s) => s.newTaskAgentProfileId);
+  const setNewTaskAgentProfileId = useAppStore((s) => s.setNewTaskAgentProfileId);
+  const settings = useSettingsQuery().data;
+  const tasks = useTasksQuery().data ?? EMPTY_TASKS;
+  const agentProfiles = useAgentProfilesQuery().data ?? EMPTY_PROFILES;
+  const setSettings = useMemo(
+    () => makeCacheSetter<AppSettings | undefined>(queryClient, queryKeys.settings()),
+    [queryClient],
+  );
+  const jiraBoard = useJiraBoardView({ active: true, settings, setSettings, setMessage });
+  const jira = jiraBoard.jira;
   return (
     <JiraBoardPage
-      status={app.jiraStatus}
-      projects={app.jiraProjects}
-      tasks={app.tasks}
+      status={jira.jiraStatus}
+      projects={jira.projects}
+      tasks={tasks}
       onOpenTask={openTask}
-      project={app.settings?.jiraBoardProject ?? null}
+      project={settings?.jiraBoardProject ?? null}
       filters={{
-        myIssues: app.settings?.jiraFilterMyIssues ?? false,
-        unresolved: app.settings?.jiraFilterUnresolved ?? true,
-        currentSprint: app.settings?.jiraFilterCurrentSprint ?? false,
-        statuses: app.settings?.jiraFilterStatuses ?? [],
+        myIssues: settings?.jiraFilterMyIssues ?? false,
+        unresolved: settings?.jiraFilterUnresolved ?? true,
+        currentSprint: settings?.jiraFilterCurrentSprint ?? false,
+        statuses: settings?.jiraFilterStatuses ?? [],
       }}
-      columns={app.jiraColumns}
-      loading={app.jiraLoading}
-      onChangeConfig={app.setJiraBoardConfig}
-      onRefresh={app.refreshJira}
-      onTransition={app.transitionJira}
-      onOpenItem={app.openJiraItem}
-      onCreateTask={app.createTaskFromStory}
-      selectedItem={app.selectedJiraItem}
-      onCloseItem={() => app.setSelectedJiraItem(null)}
-      createOpen={app.createJiraItemOpen}
-      onOpenCreate={app.openCreateJiraItem}
-      onCloseCreate={app.closeCreateJiraItem}
-      onCreateWorkItem={app.createJiraWorkItem}
-      agentProfiles={app.agentProfiles}
-      selectedAgentProfileId={
-        app.newTaskAgentProfileId ?? app.settings?.defaultAgentProfileId ?? app.agentProfiles[0]?.id
-      }
-      site={app.jiraStatus?.site}
-      restConnected={app.jiraRestConnected}
+      columns={jira.columns}
+      loading={jira.loading}
+      onChangeConfig={jiraBoard.setBoardConfig}
+      onRefresh={jira.refresh}
+      onTransition={jira.transition}
+      onOpenItem={jiraBoard.openItem}
+      onCreateTask={(item) => {
+        jiraBoard.setSelectedItem(null);
+        void composer.createTaskFromStory(item);
+      }}
+      selectedItem={jiraBoard.selectedItem}
+      onCloseItem={() => jiraBoard.setSelectedItem(null)}
+      createOpen={jiraBoard.createOpen}
+      onOpenCreate={jiraBoard.openCreate}
+      onCloseCreate={jiraBoard.closeCreate}
+      onCreateWorkItem={jiraBoard.createWorkItem}
+      agentProfiles={agentProfiles}
+      selectedAgentProfileId={newTaskAgentProfileId ?? settings?.defaultAgentProfileId ?? agentProfiles[0]?.id}
+      site={jira.jiraStatus?.site}
+      restConnected={jira.restConnected}
       onListTransitions={api.jiraListTransitions}
       filterableStatuses={
-        app.jiraRestConnected
-          ? app.jiraProjectStatuses.map((status) => status.name)
-          : app.jiraColumns.map((column) => column.statusName)
+        jira.restConnected
+          ? jira.projectStatuses.map((status) => status.name)
+          : jira.columns.map((column) => column.statusName)
       }
-      onAssign={app.assignJira}
-      onComment={app.commentJira}
-      onPickAgent={app.setNewTaskAgentProfileId}
+      onAssign={jira.assign}
+      onComment={jira.comment}
+      onPickAgent={setNewTaskAgentProfileId}
       onOpenUrl={openExternal}
     />
   );
 }
 
 const EMPTY_PROFILES: AgentProfile[] = [];
+
+function ComposerOverlay({ onClose }: { onClose: () => void }) {
+  // Self-sufficient New Task composer: the draft lives in the store, the submit
+  // logic in useComposer, and the reference data in queries.
+  const composer = useComposer();
+  const agentProfiles = useAgentProfilesQuery().data ?? EMPTY_PROFILES;
+  const repos = useReposQuery().data ?? EMPTY_REPOS;
+  const workspaces = useWorkspacesQuery().data ?? EMPTY_WORKSPACES;
+  const settings = useSettingsQuery().data;
+  const busy = useAppStore((s) => s.busy);
+  const newTaskTitle = useAppStore((s) => s.newTaskTitle);
+  const setNewTaskTitle = useAppStore((s) => s.setNewTaskTitle);
+  const newTaskPrompt = useAppStore((s) => s.newTaskPrompt);
+  const setNewTaskPrompt = useAppStore((s) => s.setNewTaskPrompt);
+  const newTaskBranchName = useAppStore((s) => s.newTaskBranchName);
+  const setNewTaskBranchName = useAppStore((s) => s.setNewTaskBranchName);
+  const newTaskHasWorktree = useAppStore((s) => s.newTaskHasWorktree);
+  const setNewTaskHasWorktree = useAppStore((s) => s.setNewTaskHasWorktree);
+  const newTaskAgentProfileId = useAppStore((s) => s.newTaskAgentProfileId);
+  const setNewTaskAgentProfileId = useAppStore((s) => s.setNewTaskAgentProfileId);
+  const newTaskRepoId = useAppStore((s) => s.newTaskRepoId);
+  const setNewTaskRepoId = useAppStore((s) => s.setNewTaskRepoId);
+  const newTaskRepoIds = useAppStore((s) => s.newTaskRepoIds);
+  const setNewTaskRepoIds = useAppStore((s) => s.setNewTaskRepoIds);
+  const newTaskWorkspaceId = useAppStore((s) => s.newTaskWorkspaceId);
+  const setNewTaskWorkspaceId = useAppStore((s) => s.setNewTaskWorkspaceId);
+  const pendingJiraLink = useAppStore((s) => s.pendingJiraLink);
+  return (
+    <CreateTaskComposer
+      onClose={onClose}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void composer.createTask();
+      }}
+      agentProfiles={agentProfiles}
+      repos={repos}
+      busy={busy}
+      newTaskTitle={newTaskTitle}
+      setNewTaskTitle={setNewTaskTitle}
+      newTaskPrompt={newTaskPrompt}
+      setNewTaskPrompt={setNewTaskPrompt}
+      newTaskBranchName={newTaskBranchName}
+      setNewTaskBranchName={setNewTaskBranchName}
+      newTaskHasWorktree={newTaskHasWorktree}
+      setNewTaskHasWorktree={setNewTaskHasWorktree}
+      suggestedBranchName={composer.getSuggestedBranchName(settings?.defaultBranchPrefix)}
+      newTaskAgentProfileId={newTaskAgentProfileId}
+      setNewTaskAgentProfileId={setNewTaskAgentProfileId}
+      newTaskRepoId={newTaskRepoId}
+      setNewTaskRepoId={setNewTaskRepoId}
+      linkedJiraKey={pendingJiraLink?.key ?? null}
+      workspaces={workspaces}
+      newTaskWorkspaceId={newTaskWorkspaceId}
+      setNewTaskWorkspaceId={setNewTaskWorkspaceId}
+      selectedRepoIds={newTaskRepoIds}
+      onSetRepoIds={setNewTaskRepoIds}
+    />
+  );
+}
 
 function ReviewsView() {
   // Dissolved off `useApp`: this view owns the PR-review concern directly. The

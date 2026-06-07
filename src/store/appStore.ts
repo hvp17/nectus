@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createNavigationSlice, type NavigationSlice } from "./slices/navigationSlice";
 import { createSelectionSlice, type SelectionSlice } from "./slices/selectionSlice";
+import { createComposerSlice, type ComposerSlice } from "./slices/composerSlice";
 import { createRuntimeSlice, type RuntimeSlice } from "./slices/runtimeSlice";
 import { createSessionRuntimeSlice, type SessionRuntimeSlice } from "./slices/sessionRuntimeSlice";
 import { createNotificationSlice, type NotificationSlice } from "./slices/notificationSlice";
@@ -18,6 +19,7 @@ import { createNotificationSlice, type NotificationSlice } from "./slices/notifi
  */
 export type AppState = NavigationSlice &
   SelectionSlice &
+  ComposerSlice &
   RuntimeSlice &
   SessionRuntimeSlice &
   NotificationSlice;
@@ -25,6 +27,7 @@ export type AppState = NavigationSlice &
 export const useAppStore = create<AppState>()((...args) => ({
   ...createNavigationSlice(...args),
   ...createSelectionSlice(...args),
+  ...createComposerSlice(...args),
   ...createRuntimeSlice(...args),
   ...createSessionRuntimeSlice(...args),
   ...createNotificationSlice(...args),

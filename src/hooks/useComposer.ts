@@ -1,0 +1,172 @@
+import { useCallback } from "react";
+import { api } from "../api";
+import { useReposQuery, useSettingsQuery, useRefreshData } from "../queries/core";
+import { useJiraStatusQuery } from "../queries/jira";
+import { useGuardedAction } from "./useGuardedAction";
+import {
+  getSuggestedWorktreeBranchName,
+  resolveWorktreeBranchName as resolveBranch,
+} from "./useCreateTaskForm";
+import { useAppStore } from "../store/appStore";
+import { jiraBrowseUrl } from "../lib/jira";
+import type { JiraWorkItem, Repo } from "../types";
+
+const EMPTY_REPOS: Repo[] = [];
+
+/** Derive a task title from the draft (trimmed title, else first prompt line). */
+function generatedTitle(title: string, prompt: string): string {
+  const trimmed = title.trim();
+  if (trimmed) return trimmed;
+  const firstPromptLine = prompt
+    .trim()
+    .split("\n")
+    .map((line) => line.trim())
+    .find(Boolean);
+  return firstPromptLine ? firstPromptLine.slice(0, 80) : "Untitled task";
+}
+
+/**
+ * Owns the New Task composer: the store-backed draft, the create-task submit (single
+ * / worktree / cross-repo routing), and "create from JIRA story". Reads the draft via
+ * `getState()` at submit time so it always uses the latest form values. Self-
+ * sufficient — any component (the overlay, the JIRA board) can call it.
+ */
+export function useComposer() {
+  const settings = useSettingsQuery().data;
+  const repos = useReposQuery().data ?? EMPTY_REPOS;
+  const jiraStatus = useJiraStatusQuery().data;
+  const setMessage = useAppStore((s) => s.setMessage);
+  const setBusy = useAppStore((s) => s.setBusy);
+  const run = useGuardedAction(setMessage, setBusy);
+  const refresh = useRefreshData();
+
+  const getSuggestedBranchName = useCallback(
+    (defaultBranchPrefix?: string | null) =>
+      getSuggestedWorktreeBranchName(defaultBranchPrefix, useAppStore.getState().newTaskBranchIdentifier),
+    [],
+  );
+
+  const createTask = useCallback(async () => {
+    const store = useAppStore.getState();
+    const branchPrefix = settings?.defaultBranchPrefix;
+    const title = generatedTitle(store.newTaskTitle, store.newTaskPrompt);
+    const prompt = store.newTaskPrompt.trim() || null;
+    const resolveBranchName = (branchName: string) =>
+      resolveBranch(branchName, branchPrefix, store.newTaskBranchIdentifier);
+
+    // Workspace mode: the composer offered a repo checklist (its picks are the source
+    // of truth). ≥2 repos → cross-repo; exactly 1 → a worktree task on that repo.
+    if (store.newTaskWorkspaceId != null && store.newTaskRepoIds.length >= 1) {
+      if (!store.newTaskAgentProfileId) {
+        setMessage("Select an agent before creating a task.");
+        return;
+      }
+      const agentProfileId = store.newTaskAgentProfileId;
+      const repoIds = store.newTaskRepoIds;
+      const workspaceId = store.newTaskWorkspaceId;
+      await run(
+        async () => {
+          const branchName = resolveBranchName(store.newTaskBranchName);
+          const task =
+            repoIds.length >= 2
+              ? await api.createCrossRepoTask({ workspaceId, repoIds, title, prompt, agentProfileId, branchName })
+              : await api.createTask({
+                  repoId: repoIds[0],
+                  title,
+                  prompt,
+                  agentProfileId,
+                  hasWorktree: true,
+                  branchName,
+                });
+          store.closeComposer();
+          store.setSelectedRepoId(repoIds[0]);
+          store.setSelectedTaskId(task.id);
+          let startError: string | null = null;
+          try {
+            await api.startSession(task.id, agentProfileId);
+          } catch (error) {
+            startError = String(error);
+          }
+          await refresh();
+          if (startError) setMessage(`Created ${task.title}, but failed to start session: ${startError}`);
+          else if (repoIds.length >= 2) setMessage(`Created ${task.branchName} across ${repoIds.length} repos`);
+          else setMessage(`Created ${task.branchName}`);
+        },
+        { busy: true },
+      );
+      return;
+    }
+
+    const repoId = store.newTaskRepoId ?? store.selectedRepoId;
+    if (!repoId) {
+      setMessage("Choose a project before creating a task.");
+      return;
+    }
+    if (!store.newTaskAgentProfileId) {
+      setMessage("Select an agent before creating a task.");
+      return;
+    }
+    const agentProfileId = store.newTaskAgentProfileId;
+    const jiraLink = store.pendingJiraLink;
+    const hasWorktree = store.newTaskHasWorktree;
+    await run(
+      async () => {
+        const branchName = hasWorktree ? resolveBranchName(store.newTaskBranchName) : null;
+        const task = await api.createTask({
+          repoId,
+          title,
+          prompt,
+          agentProfileId,
+          hasWorktree,
+          branchName,
+          jiraIssueKey: jiraLink?.key ?? null,
+          jiraIssueSummary: jiraLink?.summary ?? null,
+          jiraIssueUrl: jiraLink?.url ?? null,
+        });
+        store.closeComposer();
+        store.setSelectedRepoId(repoId);
+        store.setSelectedTaskId(task.id);
+        let startError: string | null = null;
+        try {
+          await api.startSession(task.id, agentProfileId);
+        } catch (error) {
+          startError = String(error);
+        }
+        await refresh();
+        if (startError) setMessage(`Created ${task.title}, but failed to start session: ${startError}`);
+        else setMessage(hasWorktree ? `Created ${task.branchName}` : `Created ${task.title}`);
+      },
+      { busy: true },
+    );
+  }, [settings?.defaultBranchPrefix, run, refresh, setMessage]);
+
+  const createTaskFromStory = useCallback(
+    async (item: JiraWorkItem) => {
+      const store = useAppStore.getState();
+      store.setNewTaskTitle(item.summary);
+      let description = item.description ?? "";
+      if (!description) {
+        try {
+          description = (await api.jiraGetWorkItem(item.key)).description ?? "";
+        } catch {
+          // Best-effort: leave the prompt blank if the description fetch fails.
+        }
+      }
+      store.setNewTaskPrompt(description);
+      store.setPendingJiraLink({
+        key: item.key,
+        summary: item.summary,
+        url: jiraBrowseUrl(jiraStatus?.site, item.key),
+      });
+      store.setNewTaskRepoId(store.selectedRepoId ?? repos[0]?.id);
+      // A JIRA-seeded task is single-repo; open the composer in Project mode.
+      store.setNewTaskWorkspaceId(undefined);
+      store.setCurrentView("board");
+      store.setSelectedTaskId(undefined);
+      store.setCreateTaskOpen(true);
+    },
+    [jiraStatus?.site, repos],
+  );
+
+  return { createTask, createTaskFromStory, getSuggestedBranchName };
+}
