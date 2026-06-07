@@ -313,8 +313,8 @@ Keep React UI and command bindings in `src/`.
 
 Important frontend files:
 
-- `src/App.tsx`: icon-rail shell, view routing (`mission` | `board` | `jira` | `reviews` | `settings`), and top-level composition
-- `src/components/IconRail.tsx`: 58px primary navigation rail; Mission Control icon carries the cross-project needs-input badge. Hosts a top "New task" (+) primary action (`onCreateTask`/`canCreateTask`) that opens the composer from any view — including an open task's terminal where the project panel is hidden. Accepts a `runningAgentsSlot` rendered with the primary nav group
+- `src/App.tsx`: sidebar shell, view routing (`mission` | `board` | `jira` | `reviews` | `settings`), and top-level composition
+- `src/components/IconRail.tsx`: always-expanded labeled sidebar (~212px, icon + label rows under a brand wordmark; width is the `--nx-rail-w` token in `redesign.css`); Mission Control row carries the cross-project needs-input badge. Hosts a foot "New task" create row (`onCreateTask`/`canCreateTask`) that opens the composer from any view — including an open task's terminal where the project panel is hidden. Accepts a `runningAgentsSlot` rendered with the primary nav group
 - `src/components/RunningAgentsFlyout.tsx`: rail-anchored quick-access Popover listing every in-flight agent (states needs_you/running/review, terminal done/idle excluded) across all projects; reuses `buildAgentRows`/`AGENT_STATE_META` and the `nx-` row vocabulary, click-to-focus a task. Vendored Popover primitive: `src/components/ui/popover.tsx`
 - `src/components/ProjectPanel.tsx`: contextual project list (counts + needs-input dot) shown beside the board; hosts the workspace switcher and is scoped to the active workspace's repos
 - `src/components/WorkspaceSwitcher.tsx`: the active-workspace repo-scope selector (a `ToggleGroup` pill row + Manage button), reused in the Mission Control header and the project rail
@@ -334,7 +334,7 @@ Important frontend files:
 - `src/TerminalPane.tsx`: xterm.js setup, terminal event listeners, input forwarding
 - `src/api.ts`: typed Tauri command wrapper
 - `src/types.ts`: frontend data contracts matching Rust serde output
-- `src/components/`: icon rail, Mission Control, board, task workspace (workflow ribbon + facts rail), settings, GitHub panel, and the inline composer/side-panel UI (no modals/dialogs for create-task or JIRA work items)
+- `src/components/`: sidebar, Mission Control, board, task workspace (workflow ribbon + facts rail), settings, GitHub panel, and the inline composer/side-panel UI (no modals/dialogs for create-task or JIRA work items)
 - `src/components/TaskWorkspace.tsx`: selected-task workspace orchestrator — owns the derived workflow/review state and composes the stage and facts rail. The stage has a `Terminal | Diff | Review` toggle, with the diff or the read-only reviewer terminal getting the full stage when active. A starting review auto-selects the Review tab; the facts-rail review card has a `Watch live`/`View output` button that opens it too
 - `src/components/taskWorkspace/`: the workspace's presentation pieces — `TaskWorkspaceStage` (header, workflow ribbon, stage body), `TaskWorkspaceFactsRail` (inspector: metadata, GitHub/JIRA panels, review card, brief, delete), and the leaf helpers `ActionBar`, `TaskStatusBadges`, `TaskTerminalLauncher`
 - `src/components/TaskDiffView.tsx`: task diff view — changed-file list plus the lazy-loaded, line-colorized unified patch pane

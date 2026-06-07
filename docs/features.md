@@ -4,18 +4,18 @@ This document maps current Nectus Desktop behavior to the files that own it.
 
 ## Navigation And Mission Control
 
-The app shell is a slim icon rail plus a contextual panel, not a full sidebar.
+The app shell is an always-expanded labeled sidebar plus a contextual panel.
 
-- The icon rail (always visible, 58px) holds Mission Control, Board, JIRA, PR
-  Reviews, and Settings. The Mission Control icon carries a badge with the
-  cross-project needs-input count.
-- A **New task** "+" button sits at the top of the rail (a primary create action,
-  distinct from the ghost nav icons), so the New Task composer is reachable from
-  any view — including an open task's terminal, where the contextual project panel
-  is hidden. It opens the same composer as the board's "New Task", defaulting to
-  the selected repo (or the first repo in the active workspace's scope), and is
-  disabled until at least one project is added.
-- A **Running agents** rail trigger (sits with the primary nav group) opens a
+- The sidebar (always visible, ~212px, icon + label rows under a brand wordmark)
+  holds Mission Control, Board, JIRA, PR Reviews, and Settings. The Mission
+  Control row carries a badge with the cross-project needs-input count.
+- A **New task** button sits at the sidebar's foot (a muted bordered create row,
+  distinct from the ghost nav rows above), so the New Task composer is reachable
+  from any view — including an open task's terminal, where the contextual project
+  panel is hidden. It opens the same composer as the board's "New Task",
+  defaulting to the selected repo (or the first repo in the active workspace's
+  scope), and is disabled until at least one project is added.
+- A **Running agents** sidebar row (sits with the primary nav group) opens a
   quick-access popover from anywhere. It lists every in-flight agent across all
   projects — **Needs you → Running → Review** (terminal Done/Idle are excluded) —
   with the agent's latest line, elapsed time, and a click-to-focus on each row.
