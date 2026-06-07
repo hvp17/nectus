@@ -185,16 +185,12 @@
   border-right: 1px solid var(--sidebar-border); background: color-mix(in srgb, var(--sidebar) 60%, var(--background));
   display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; align-self: stretch; overflow: hidden;
 }
-.nx-panel-head { padding: 14px 14px 8px; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+.nx-panel-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 14px 14px 8px; font-size: 18px; font-weight: 700; letter-spacing: -0.02em;
+}
 .nx-panel-scroll { flex: 1; min-height: 0; overflow-y: auto; }
 .nx-panel-sect { padding: 6px 8px; }
-/* Workspace switcher inside the narrow project rail: let the pill row scroll
-   horizontally rather than overflow when several workspaces are defined. */
-.nx-panel-ws { padding: 8px; border-bottom: 1px solid var(--border); overflow-x: auto; }
-.nx-panel-ws .nx-ws-switcher { flex-wrap: wrap; }
-/* Workspace switcher: the pill group plus its Manage button, used in the Mission
-   Control header and the project rail. */
-.nx-ws-switcher { display: flex; align-items: center; gap: 8px; }
 .nx-panel-kick {
   font-size: 10px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted-foreground);
   padding: 8px 8px 4px; display: flex; justify-content: space-between; align-items: center;
@@ -216,6 +212,42 @@
 .nx-proj[data-active="true"] .nx-proj-count { color: var(--primary); }
 .nx-proj-attn { margin-left: auto; width: 7px; height: 7px; border-radius: 999px; background: var(--status-warning); flex: none; }
 .nx-panel-empty { padding: 10px 12px; color: var(--muted-foreground); font-size: 12px; }
+.nx-panel-manage {
+  display: inline-flex; align-items: center; gap: 6px; border: none; background: transparent;
+  color: var(--muted-foreground); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  padding: 4px 6px; border-radius: var(--radius-sm);
+}
+.nx-panel-manage:hover { background: color-mix(in srgb, var(--foreground) 7%, transparent); color: var(--foreground); }
+
+/* Nav row group: the project/workspace button plus its nested agent list. */
+.nx-nav-group { display: flex; flex-direction: column; }
+.nx-nav-dot { width: 7px; height: 7px; border-radius: 999px; flex: none; margin-left: 4px; }
+.nx-proj .nx-proj-count { margin-left: 6px; }
+.nx-nav-info {
+  display: grid; place-items: center; width: 18px; height: 18px; margin-left: auto; flex: none;
+  border: none; background: transparent; color: var(--muted-foreground); border-radius: var(--radius-sm); cursor: pointer;
+}
+.nx-nav-info:hover { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); }
+/* When the info button claims margin-left:auto, the dot/count sit after it. */
+.nx-proj:has(.nx-nav-info) .nx-proj-count { margin-left: 6px; }
+.nx-nav-agents { display: flex; flex-direction: column; gap: 6px; padding: 4px 4px 8px 10px; }
+
+/* Workspace info card (popover). */
+.nx-info-card { display: flex; flex-direction: column; gap: 2px; }
+.nx-info-title { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-foreground); padding: 2px 6px 4px; }
+.nx-info-empty { padding: 4px 6px; font-size: 12px; color: var(--muted-foreground); }
+.nx-info-row {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: none; background: transparent;
+  border-radius: var(--radius-sm); color: var(--foreground); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; text-align: left;
+}
+.nx-info-row:hover { background: color-mix(in srgb, var(--foreground) 6%, transparent); }
+.nx-info-row svg { opacity: .7; flex: none; }
+
+/* Repo badge on workspace-board cards. */
+.nx-card-repo {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 600; color: var(--muted-foreground);
+  padding: 1px 5px; border: 1px solid var(--border); border-radius: 999px;
+}
 
 /* ---------- Main content ---------- */
 .nx-main { flex: 1; width: 100%; min-width: 0; min-height: 0; height: 100%; overflow: hidden; padding: 22px 24px; display: flex; flex-direction: column; }
