@@ -151,10 +151,6 @@ export function useApp() {
     [tasks, selectedRepoId],
   );
 
-  // Scoping retired: "scoped" repos are now just all repos. Kept as a named alias
-  // so the composer / navigate fallbacks read clearly.
-  const scopedRepos = repos;
-
   // Open a workspace's aggregated board: focus it (drives the board contents and
   // the composer's cross-repo multi-select) and route to the workspace view.
   const openWorkspaceBoard = useCallback((workspaceId: number) => {
@@ -637,7 +633,6 @@ export function useApp() {
     setActiveWorkspaceId,
     activeWorkspace,
     activeWorkspaceRepos,
-    scopedRepos,
     missionTasks,
     workspaceBoardTasks,
     openWorkspaceBoard,

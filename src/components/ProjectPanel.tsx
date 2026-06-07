@@ -138,13 +138,25 @@ function NavRow({
   const tone = dominantState(rows);
   return (
     <div className="nx-nav-group">
-      <button type="button" className="nx-proj" data-active={active} onClick={onSelect}>
+      <div
+        className="nx-proj"
+        data-active={active}
+        role="button"
+        tabIndex={0}
+        onClick={onSelect}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onSelect();
+          }
+        }}
+      >
         {icon}
         <span className="nx-proj-name">{label}</span>
         {info}
         {tone && <span className="nx-nav-dot" style={{ background: AGENT_STATE_META[tone].dot }} aria-hidden="true" />}
         <span className="nx-proj-count">{rows.length}</span>
-      </button>
+      </div>
       {rows.length > 0 && (
         <div className="nx-nav-agents">
           {rows.map((row) => (
@@ -165,8 +177,9 @@ function WorkspaceInfo({
   repoNames: Map<number, string>;
   onSelectRepo: (id: number) => void;
 }) {
+  const [open, setOpen] = useState(false);
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -183,7 +196,15 @@ function WorkspaceInfo({
           <p className="nx-info-empty">No projects yet.</p>
         ) : (
           workspace.repoIds.map((repoId) => (
-            <button key={repoId} type="button" className="nx-info-row" onClick={() => onSelectRepo(repoId)}>
+            <button
+              key={repoId}
+              type="button"
+              className="nx-info-row"
+              onClick={() => {
+                setOpen(false);
+                onSelectRepo(repoId);
+              }}
+            >
               <FolderGit2 size={13} aria-hidden="true" />
               {repoNames.get(repoId) ?? `repo ${repoId}`}
             </button>

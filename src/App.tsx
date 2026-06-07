@@ -45,7 +45,6 @@ function App() {
     setActiveWorkspaceId,
     activeWorkspace,
     activeWorkspaceRepos,
-    scopedRepos,
     missionTasks,
     workspaceBoardTasks,
     openWorkspaceBoard,
@@ -186,9 +185,9 @@ function App() {
       }
     }
     // Reachable from the icon rail while a task or the workspace manager is open,
-    // so dismiss the manager and fall back to a scoped repo when none is selected.
+    // so dismiss the manager and fall back to the first available repo when none is selected.
     setManagingWorkspaces(false);
-    setNewTaskRepoId(selectedRepoId ?? scopedRepos[0]?.id);
+    setNewTaskRepoId(selectedRepoId ?? activeWorkspaceRepos[0]?.id ?? repos[0]?.id);
     setCreateTaskOpen(true);
   };
 
@@ -231,10 +230,9 @@ function App() {
     setManagingWorkspaces(false);
     setSelectedTaskId(undefined);
     setActiveWorkspaceId(undefined);
-    // Fall back to the first repo *in the active workspace's scope*, so the board
-    // never selects a project the rail doesn't list.
-    if (view === "board" && selectedRepoId === undefined && scopedRepos[0]) {
-      setSelectedRepoId(scopedRepos[0].id);
+    // Fall back to the first available repo so the board always has a project selected.
+    if (view === "board" && selectedRepoId === undefined && repos[0]) {
+      setSelectedRepoId(repos[0].id);
     }
     setCurrentView(view);
   };
@@ -425,7 +423,7 @@ function App() {
                 pullRequestLoading={pullRequestLoading}
                 creatingPullRequest={creatingPullRequest}
                 pullRequestBusy={pullRequestBusy}
-                backLabel={currentView === "mission" ? "Mission Control" : selectedRepo?.name ?? "Board"}
+                backLabel={currentView === "mission" ? "Mission Control" : currentView === "workspace" ? (activeWorkspace?.name ?? "Workspace") : selectedRepo?.name ?? "Board"}
                 repoName={repos.find((repo) => repo.id === selectedTask.repoId)?.name}
                 onClose={() => {
                   setSelectedTaskId(undefined);
