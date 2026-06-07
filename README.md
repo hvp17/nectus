@@ -245,7 +245,8 @@ Important frontend files:
 - `src/queries/`: TanStack Query server-state layer (query keys, hooks, cache helpers)
 - `src/store/`: Zustand UI/runtime store (navigation, selection, session runtime, notifications)
 - `src/AppRouter.tsx`: TanStack Router shell + routed views (memory history)
-- `src/hooks/useApp.ts`: orchestration façade over the query layer and the UI store
+- `src/AppRouter.tsx`: `AppLayout` composes the shell from queries + store directly (no `useApp` god-hook); views/overlays are self-sufficient
+- `src/hooks/use*Actions.ts`, `useComposer.ts`, `useSessionControls.ts`, `useShellBootstrap.ts`: focused, self-sufficient hooks that replaced the old `useApp` orchestration
 - `src/hooks/useTaskReviewLoop.ts`: review-loop loading and
   `review_loop_updated` event subscription
 - `src/hooks/useTaskDeletion.ts`: task deletion workflow and deletion toasts
