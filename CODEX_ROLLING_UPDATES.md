@@ -389,7 +389,7 @@ arrays when that is the intended dependency boundary.
 **Commit:** `94bb5b4`
 (`refactor(diff): remove file-list effect suppression`) pushed to `origin/main`.
 
-### Iteration 11 - in progress (2026-06-09)
+### Iteration 11 - done (2026-06-09)
 
 **Goal:** Remove the `useJira` columns memoization and its exhaustive-deps
 suppression.
@@ -411,12 +411,51 @@ make dependency tracking less explicit for cheap calculations.
 - Focused: `pnpm vitest run src/hooks/useJira.test.ts`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/hooks/useJira.test.ts` passed (4 tests).
 - `pnpm test` passed (49 files, 312 tests; Claude's in-progress
   `PullRequestChecks`/`collapsible` changes were present in the shared worktree).
+- `pnpm build` passed.
+
+**Commit:** `6181589` (`refactor(jira): simplify column derivation`) pushed to
+`origin/main`.
+
+### Iteration 12 - in progress (2026-06-09)
+
+**Goal:** Remove the final `react-hooks/exhaustive-deps` suppression from
+`TaskWorkspace`.
+
+**Rationale:** The Diff tab should refresh when the user opens it, while task
+switch refreshes stay owned by `useTaskDiff`. React 19.2's `useEffectEvent`
+expresses that boundary directly: the effect is reactive to `stageTab`, and the
+event reads the latest `refreshDiff` without making task switches trigger a second
+refresh.
+
+**Docs checked:** React docs for `useEffectEvent` and separating event logic from
+effect dependencies. The examples keep the Effect Event out of the dependency list
+and depend only on the value that should trigger synchronization.
+
+**Claimed files:**
+- `src/components/TaskWorkspace.tsx`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/components/TaskWorkspace.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- First attempt with the Effect Event in the dependency list failed
+  `pnpm vitest run src/components/TaskWorkspace.test.tsx` with a maximum update
+  depth error, matching the docs warning that Effect Events are not reactive
+  dependencies.
+- Green: `pnpm vitest run src/components/TaskWorkspace.test.tsx` passed (26
+  tests).
+- `rg -n "eslint-disable-next-line react-hooks/exhaustive-deps|eslint-disable-line react-hooks/exhaustive-deps" src/components src/hooks`
+  returned no matches.
+- `pnpm test` passed (49 files, 312 tests).
 - `pnpm build` passed.
 
 ---

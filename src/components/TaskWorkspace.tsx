@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, GitPullRequest, LoaderCircle } from "lucide-react";
 import { AgentLogo } from "./AgentBrand";
 import { Button } from "./ui/button";
@@ -148,12 +148,14 @@ export function TaskWorkspace({
   const diff = useTaskDiff(task?.id);
   const { refresh: refreshDiff } = diff;
   const [stageTab, setStageTab] = useState<"terminal" | "diff" | "review">("terminal");
+  const refreshDiffForOpenTab = useEffectEvent(() => {
+    void refreshDiff();
+  });
+
   // Reload the diff when the user opens the Diff tab. Task-switch reloads are
-  // owned by useTaskDiff itself, so depend on stageTab only — otherwise the
-  // refreshDiff identity change on task switch fires a second, racing fetch.
+  // owned by useTaskDiff itself, so only the tab switch is reactive here.
   useEffect(() => {
-    if (stageTab === "diff") void refreshDiff();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (stageTab === "diff") refreshDiffForOpenTab();
   }, [stageTab]);
 
   // Surface the live reviewer the moment a review starts, so "checking progress"
