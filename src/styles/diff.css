@@ -1,3 +1,4 @@
+@layer components {
 /* Task diff viewer: changed-file list (left) + unified patch pane (right).
    Colors route through theme + semantic status tokens; only layout lives here. */
 
@@ -189,4 +190,5 @@
 
 .diff-view .diff-skeleton {
   width: 100%;
+}
 }

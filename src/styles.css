@@ -8,6 +8,10 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Bridge the raw design tokens (defined in :root/.dark below) to Tailwind so they
+   generate utilities (bg-primary, rounded-lg, font-mono, shadow-md, …). Only put a
+   line here when it (a) creates a utility namespace or (b) remaps a token to a
+   derived value — never a token mapped to its own identity (that's noise). */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -46,9 +50,6 @@
   --radius-xl: calc(var(--radius) * 1.4);
   --font-heading: var(--font-sans);
   --font-sans: 'Geist Variable', system-ui, -apple-system, sans-serif;
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
   --font-mono: 'Geist Mono Variable', 'JetBrains Mono Variable', ui-monospace, monospace;
   --font-serif: 'Source Serif 4 Variable', Georgia, serif;
   --radius: 0.5rem;
@@ -57,7 +58,6 @@
   --tracking-wide: calc(var(--tracking-normal) + 0.025em);
   --tracking-wider: calc(var(--tracking-normal) + 0.05em);
   --tracking-widest: calc(var(--tracking-normal) + 0.1em);
-  --tracking-normal: var(--tracking-normal);
   --shadow-2xl: var(--shadow-2xl);
   --shadow-xl: var(--shadow-xl);
   --shadow-lg: var(--shadow-lg);
@@ -67,12 +67,6 @@
   --shadow-xs: var(--shadow-xs);
   --shadow-2xs: var(--shadow-2xs);
   --spacing: var(--spacing);
-  --letter-spacing: var(--letter-spacing);
-  --shadow-offset-y: var(--shadow-offset-y);
-  --shadow-offset-x: var(--shadow-offset-x);
-  --shadow-spread: var(--shadow-spread);
-  --shadow-blur: var(--shadow-blur);
-  --shadow-opacity: var(--shadow-opacity);
   --color-shadow-color: var(--shadow-color);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-status-success: var(--status-success);
@@ -280,27 +274,6 @@ body {
   height: 100%;
   min-height: 100dvh;
   background: var(--background);
-}
-
-/* Command is flat: elevated surfaces read via hairline borders, not a glass sheen. */
-
-@media (prefers-reduced-motion: no-preference) {
-  .content-shell [data-testid="dashboard-layout"],
-  .content-shell .task-workspace,
-  .content-shell .jira-board {
-    animation: nectus-fade-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-}
-
-@keyframes nectus-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 /* Honor reduced-motion for the inline utility animations used across the app
