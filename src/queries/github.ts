@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import type { TaskSummary } from "../types";
 import { queryKeys } from "./keys";
@@ -27,8 +27,8 @@ export function useGithubPullRequestQuery(task: TaskSummary | undefined, ghConne
   const taskId = task?.id;
   const enabled = ghConnected && taskId != null && Boolean(task?.prUrl);
   return useQuery({
-    queryKey: taskId != null ? queryKeys.github.pullRequest(taskId) : queryKeys.github.pullRequest(-1),
-    queryFn: () => api.githubPullRequestStatus(taskId as number),
+    queryKey: queryKeys.github.pullRequest(taskId),
+    queryFn: enabled ? () => api.githubPullRequestStatus(taskId) : skipToken,
     enabled,
     refetchOnWindowFocus: true,
     refetchInterval: (query) => {
@@ -49,8 +49,8 @@ export function useGithubPullRequestDetectionQuery(task: TaskSummary | undefined
   const taskId = task?.id;
   const enabled = ghConnected && taskId != null && Boolean(task?.hasWorktree) && !task?.prUrl;
   return useQuery({
-    queryKey: taskId != null ? queryKeys.github.pullRequestDetection(taskId) : queryKeys.github.pullRequestDetection(-1),
-    queryFn: () => api.detectGithubPullRequest(taskId as number),
+    queryKey: queryKeys.github.pullRequestDetection(taskId),
+    queryFn: enabled ? () => api.detectGithubPullRequest(taskId) : skipToken,
     enabled,
     refetchOnWindowFocus: false,
     retry: false,

@@ -68,7 +68,7 @@ with `enabled` and react to query data changes with a React effect.
 **Commit:** `1cb6070` (`refactor(github): query branch pr detection`) pushed to
 `origin/main`.
 
-### Iteration 2 - done (2026-06-09) - commit pending
+### Iteration 2 - done (2026-06-09)
 
 **Goal:** Remove stale router-era test/docs references after the router
 dependency cleanup.
@@ -97,6 +97,44 @@ should be removed instead of carried forward.
 **Evidence:**
 - `pnpm test` passed (46 files, 290 tests).
 - `pnpm build` passed.
+
+**Commit:** Changes landed in Claude's coalesced commit `bdccc36`
+(`refactor(settings): flatten UpdateCard detail into a readable helper`) with
+Claude's `UpdateCard` simplification.
+
+### Iteration 3 - done (2026-06-09) - commit pending
+
+**Goal:** Remove sentinel `-1` GitHub query keys and unsafe task-id casts from the
+GitHub query layer.
+
+**Rationale:** `useGithubPullRequestQuery` and
+`useGithubPullRequestDetectionQuery` currently allocate disabled cache entries
+under fake `-1` task ids, then cast possibly missing task ids in their query
+functions. TanStack Query v5 documents `skipToken` as the type-safe way to
+disable queries when TypeScript input is absent. Using real optional ids in the
+key and `skipToken` for missing inputs keeps the cache honest and removes casts.
+
+**Docs checked:** TanStack Query v5 disabling guide for `skipToken`; it is
+recommended for type-safe disabled queries when `refetch()` is not required.
+
+**Claimed files:**
+- `src/queries/github.ts`
+- `src/queries/github.test.tsx`
+- `src/queries/keys.ts`
+
+**Verification plan:**
+- Red: targeted Vitest for no `-1` sentinel cache entry.
+- Green: targeted Vitest for GitHub query tests.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- Red: `pnpm vitest run src/queries/github.test.tsx` failed because a disabled
+  no-task query allocated `["github", "pull-request", -1]`.
+- Green: `pnpm vitest run src/queries/github.test.tsx` passed (3 tests).
+- `pnpm build` passed.
+- `pnpm test` passed (46 files, 291 tests).
 
 ---
 

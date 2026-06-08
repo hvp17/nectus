@@ -18,9 +18,9 @@ export const queryKeys = {
   github: {
     status: () => ["github", "status"] as const,
     /** Best-effort branch PR detection for a worktree task with no linked PR. */
-    pullRequestDetection: (taskId: number) => ["github", "pull-request-detection", taskId] as const,
+    pullRequestDetection: (taskId: number | undefined) => ["github", "pull-request-detection", taskId] as const,
     /** Live PR status for one task (checks/review decision); polled while open. */
-    pullRequest: (taskId: number) => ["github", "pull-request", taskId] as const,
+    pullRequest: (taskId: number | undefined) => ["github", "pull-request", taskId] as const,
   },
 
   task: {

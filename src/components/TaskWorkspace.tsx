@@ -69,6 +69,23 @@ export interface TaskWorkspaceProps {
   isDeleting?: boolean;
 }
 
+/**
+ * Which workflow step is current: 1 = work with the agent, 2 = review passed
+ * (ready to ship), 3 = done. A finished task or an opened PR is the final step;
+ * an in-progress review keeps the user on step 1; a passed review advances to 2.
+ */
+function currentWorkflowStep(args: {
+  isDone: boolean;
+  hasPullRequest: boolean;
+  reviewInProgress: boolean;
+  reviewPassed: boolean;
+}): number {
+  if (args.isDone || args.hasPullRequest) return 3;
+  if (args.reviewInProgress) return 1;
+  if (args.reviewPassed) return 2;
+  return 1;
+}
+
 export function TaskWorkspace({
   task,
   attention,
@@ -178,7 +195,12 @@ export function TaskWorkspace({
         : githubReady
           ? "Add a worktree branch to open a pull request"
           : "Start the agent or connect the GitHub CLI";
-  const workflowStep = task.status === "done" || task.prUrl ? 3 : reviewInProgress ? 1 : reviewReadyForNextStep ? 2 : 1;
+  const workflowStep = currentWorkflowStep({
+    isDone: task.status === "done",
+    hasPullRequest: Boolean(task.prUrl),
+    reviewInProgress,
+    reviewPassed: reviewReadyForNextStep,
+  });
   const reviewActionLabel = selectedReviewerProfile
     ? `${reviewInProgress ? "Reviewing with" : "Review with"} ${selectedReviewerProfile.name}`
     : "Review with reviewer";

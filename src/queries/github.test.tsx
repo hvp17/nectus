@@ -4,11 +4,11 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
 import { createQueryClient } from "./queryClient";
-import { useGithubPullRequestDetectionQuery } from "./github";
-import type { TaskSummary } from "../types";
+import { queryKeys } from "./keys";
+import { useGithubPullRequestDetectionQuery, useGithubPullRequestQuery } from "./github";
+import type { PullRequestInfo, TaskSummary } from "../types";
 
-function makeWrapper() {
-  const client = createQueryClient();
+function makeWrapper(client = createQueryClient()) {
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
@@ -17,6 +17,7 @@ function makeWrapper() {
 vi.mock("../api", () => ({
   api: {
     detectGithubPullRequest: vi.fn(),
+    githubPullRequestStatus: vi.fn(),
   },
 }));
 
@@ -49,9 +50,22 @@ const detectedTask: TaskSummary = {
   prUrl: "https://github.com/hvp17/nectus/pull/123",
 };
 
+const pullRequestInfo: PullRequestInfo = {
+  number: 123,
+  url: "https://github.com/hvp17/nectus/pull/123",
+  title: "Open PR from branch",
+  state: "open",
+  isDraft: false,
+  reviewDecision: null,
+  checks: { total: 0, passed: 0, failed: 0, pending: 0 },
+  checksState: "pending",
+  checkRuns: [],
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(api.detectGithubPullRequest).mockResolvedValue(null);
+  vi.mocked(api.githubPullRequestStatus).mockResolvedValue(pullRequestInfo);
 });
 
 describe("useGithubPullRequestDetectionQuery", () => {
@@ -75,5 +89,16 @@ describe("useGithubPullRequestDetectionQuery", () => {
     });
 
     expect(api.detectGithubPullRequest).not.toHaveBeenCalled();
+  });
+
+  it("does not allocate sentinel cache entries while no task is selected", () => {
+    const client = createQueryClient();
+    const wrapper = makeWrapper(client);
+
+    renderHook(() => useGithubPullRequestQuery(undefined, true), { wrapper });
+    renderHook(() => useGithubPullRequestDetectionQuery(undefined, true), { wrapper });
+
+    expect(client.getQueryCache().find({ queryKey: queryKeys.github.pullRequest(-1) })).toBeUndefined();
+    expect(client.getQueryCache().find({ queryKey: queryKeys.github.pullRequestDetection(-1) })).toBeUndefined();
   });
 });

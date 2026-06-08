@@ -93,6 +93,29 @@ top-to-bottom. No behavior change — same strings, same order.
 - `kbd.tsx` is vendored but unused; tooltip CSS targets `data-[slot=kbd]`. Leave it
   (it composes with Tooltip; removing reduces the palette, against directive 1).
 
+### Iteration 3 — done (2026-06-09) · commit pending
+
+**Goal (directive 2 — simplicity):** Replace the dense 4-way nested ternary that
+computed `workflowStep` in `TaskWorkspace.tsx` with a named `currentWorkflowStep()`
+helper (early returns + a doc comment explaining what steps 1/2/3 mean).
+
+**Why:** `task.status === "done" || task.prUrl ? 3 : reviewInProgress ? 1 :
+reviewReadyForNextStep ? 2 : 1` is hard to parse and self-documents nothing. The
+helper reads top-to-bottom and names the conditions. No behavior change (the
+"runs task workflow actions from the sidebar stepper" test still passes).
+
+**Scope:** `src/components/TaskWorkspace.tsx` only.
+
+**Shadcn note:** Evaluated adopting the default `Collapsible` primitive for the
+`PullRequestChecks` disclosure but rejected it — the test/a11y rely on the toggling
+"Show check details" name and the chevron needs the open boolean, so Collapsible
+would keep the `useState` (no win) or force a11y/test churn. Left as-is per
+directive-1 exception ("don't force shadcn where it adds complexity").
+
+**Verification:** `pnpm test` (46 files, 291 tests), `pnpm build` (ok).
+
+**Status:** committed.
+
 ## Backlog / future work (candidate improvements, not yet started)
 
 - Audit other `package.json` deps for unused entries (e.g. confirm `cmdk`,
