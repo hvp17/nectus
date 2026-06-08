@@ -263,6 +263,30 @@ package.json/lock change since radix-ui already bundles Collapsible).
 
 **Status:** committed.
 
+### Iteration 10 — done (2026-06-09) · commit pending
+
+**Goal (best practices — coverage):** Add `src/statusLabels.test.ts` for the two
+untested functions in `statusLabels.ts`.
+
+**Why:** `isReviewLoopActive` (gates review UI in TaskWorkspace) and
+`prReviewVerdictKey` (normalizes PR-review verdicts for display/tone) had no tests.
+Covered: active while running/reviewing, false for the four terminal statuses
+(passed/feedback_sent/error/stopped); verdict key keeps passed/blockers/
+inconclusive and falls back to inconclusive for null/undefined. Pure test
+addition — no production change.
+
+**Scope:** new file `src/statusLabels.test.ts` (4 tests).
+
+**Verification:** isolation 4/4; `pnpm build` (ok).
+
+**Status:** committed.
+
+**Loop status:** Frontend readability + shadcn-alignment wins are now exhausted
+(Explore-confirmed; Collapsible adopted in iter 9). Rust backend surveyed
+(github.rs etc.) — genuinely clean, well-tested, nothing to change. Remaining value
+is incremental: targeted coverage of untested pure logic + real doc-drift fixes.
+Cadence should slow to deliberate, genuinely-valuable changes — avoid churn.
+
 ## Backlog / future work (candidate improvements, not yet started)
 
 - Audit other `package.json` deps for unused entries (e.g. confirm `cmdk`,
