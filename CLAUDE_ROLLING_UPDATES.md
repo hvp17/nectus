@@ -231,6 +231,38 @@ found/absent test. Pure test addition — **no production change**.
 
 **Status:** committed.
 
+### Iteration 9 — done (2026-06-09) · commit pending
+
+**Goal (directive 1 — shadcn alignment):** Replace the hand-rolled disclosure in
+`PullRequestChecks` with the default shadcn `Collapsible` primitive.
+
+**Why:** The PR-checks drill-down was a hand-rolled `useState` + manual
+`aria-expanded` + `{expanded && …}` disclosure — exactly what `Collapsible`
+provides. Per CLAUDE.md ("don't reimplement what shadcn provides") this is the
+canonical primitive. Installed it via the shadcn CLI (`pnpm dlx shadcn@latest add
+collapsible` → `src/components/ui/collapsible.tsx`, radix-ui unified, no
+package.json/lock change since radix-ui already bundles Collapsible).
+
+**Changes:**
+- New `src/components/ui/collapsible.tsx` (CLI-generated, matches the project's
+  `radix-ui` primitive style).
+- `PullRequestChecks.tsx`: removed `useState`; the trigger is `CollapsibleTrigger`
+  (Radix supplies `aria-expanded`), the chevron rotates via
+  `group-data-[state=open]:rotate-90`, content is `CollapsibleContent` (unmounts
+  when closed, same as the old `{expanded && …}`). Non-expandable case early-returns
+  the counts only. a11y: static `aria-label="Toggle check details"` + Radix
+  `aria-expanded` (more correct than the old label that lied once expanded).
+- `GitHubPanel.test.tsx`: trigger name `/show check details/i` → `/toggle check
+  details/i` (the only assertion affected; behavior identical).
+
+**Docs checked (step 7):** Context7 `/shadcn-ui/ui` Collapsible — confirmed the
+`group` trigger + `group-data-[state=open]` chevron pattern and uncontrolled usage.
+
+**Verification:** isolation `pnpm vitest run src/components/GitHubPanel.test.tsx`
+(10/10); full `pnpm test` (49 files, 312 tests); `pnpm build` (ok).
+
+**Status:** committed.
+
 ## Backlog / future work (candidate improvements, not yet started)
 
 - Audit other `package.json` deps for unused entries (e.g. confirm `cmdk`,

@@ -206,7 +206,7 @@ describe("GitHubPanel", () => {
   it("expands the checks drill-down to show each GitHub Actions run and its link", () => {
     render({ task: linkedTask, pullRequest: openPr });
 
-    fireEvent.click(screen.getByRole("button", { name: /show check details/i }));
+    fireEvent.click(screen.getByRole("button", { name: /toggle check details/i }));
 
     expect(screen.getByText("build")).toBeInTheDocument();
     expect(screen.getByText("lint")).toBeInTheDocument();

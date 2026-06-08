@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { CheckCircle2, ChevronRight, Clock, ExternalLink, XCircle } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
 import { openExternal } from "../../lib/openExternal";
 import type { GithubCheckRun, GithubCheckRunState, GithubCheckSummary } from "../../types";
 
@@ -22,7 +22,6 @@ function CheckStateIcon({ state }: { state: GithubCheckRunState }) {
  * exist. Renders nothing when the PR has no checks at all.
  */
 export function PullRequestChecks({ checks, checkRuns }: PullRequestChecksProps) {
-  const [expanded, setExpanded] = useState(false);
   if (checks.total === 0) return null;
   const expandable = checkRuns.length > 0;
 
@@ -43,30 +42,27 @@ export function PullRequestChecks({ checks, checkRuns }: PullRequestChecksProps)
       {expandable && (
         <ChevronRight
           size={13}
-          className={`ml-auto text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`}
+          className="ml-auto text-muted-foreground transition-transform group-data-[state=open]:rotate-90"
           aria-hidden
         />
       )}
     </div>
   );
 
-  return (
-    <div className="px-3 pb-2.5">
-      {expandable ? (
-        <button
-          type="button"
-          className="flex w-full items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-expanded={expanded}
-          aria-label={expanded ? "Hide check details" : "Show check details"}
-          onClick={() => setExpanded((value) => !value)}
-        >
-          {summary}
-        </button>
-      ) : (
-        summary
-      )}
+  // No named checks to drill into: show the counts only, no disclosure.
+  if (!expandable) {
+    return <div className="px-3 pb-2.5">{summary}</div>;
+  }
 
-      {expanded && (
+  return (
+    <Collapsible className="px-3 pb-2.5">
+      <CollapsibleTrigger
+        className="group flex w-full items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label="Toggle check details"
+      >
+        {summary}
+      </CollapsibleTrigger>
+      <CollapsibleContent>
         <ul className="mt-2 flex flex-col gap-1" aria-label="Checks">
           {checkRuns.map((check, index) => (
             <li key={`${check.workflow ?? ""}/${check.name}/${index}`} className="flex items-center gap-2 text-[11.5px]">
@@ -93,7 +89,7 @@ export function PullRequestChecks({ checks, checkRuns }: PullRequestChecksProps)
             </li>
           ))}
         </ul>
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
