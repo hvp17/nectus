@@ -462,7 +462,7 @@ and depend only on the value that should trigger synchronization.
 (`refactor(task-workspace): use effect event for diff refresh`) pushed to
 `origin/main`.
 
-### Iteration 13 - in progress (2026-06-09)
+### Iteration 13 - done (2026-06-09)
 
 **Goal:** Remove the unused `@fontsource-variable/inter` dependency.
 
@@ -483,7 +483,7 @@ rendered theme.
 - Search: confirm no `@fontsource-variable/inter` / Inter references remain.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm remove @fontsource-variable/inter` removed one package.
@@ -491,6 +491,36 @@ rendered theme.
   returned no matches.
 - `pnpm test` passed (50 files, 316 tests; Claude's in-progress
   `src/statusLabels.test.ts` was present in the shared worktree).
+- `pnpm build` passed.
+
+**Commit:** `21a1941`
+(`chore(deps): remove unused inter font package`) pushed to `origin/main`.
+
+### Iteration 14 - in progress (2026-06-09)
+
+**Goal:** Add coverage for the JIRA visual helper components.
+
+**Rationale:** `jiraVisuals.tsx` carries deterministic UI semantics for issue
+type normalization, priority labels, and assignee avatar initials/unassigned
+state. Those helpers are pure render logic used by the JIRA board, but had no
+focused tests.
+
+**Docs checked:** Testing Library docs for accessible queries. The tests use
+`getByLabelText` / title assertions instead of implementation-specific DOM
+selectors.
+
+**Claimed files:**
+- `src/components/jiraVisuals.test.tsx`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/components/jiraVisuals.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- `pnpm vitest run src/components/jiraVisuals.test.tsx` passed (4 tests).
+- `pnpm test` passed (51 files, 320 tests).
 - `pnpm build` passed.
 
 ---
