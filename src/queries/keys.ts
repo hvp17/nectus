@@ -32,7 +32,7 @@ export const queryKeys = {
 
   prReviews: {
     list: () => ["pr-reviews"] as const,
-    runs: (reviewId: number) => ["pr-reviews", reviewId, "runs"] as const,
+    runs: (reviewId: number | undefined) => ["pr-reviews", reviewId, "runs"] as const,
   },
 
   jira: {

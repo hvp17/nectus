@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "../queries/keys";
 import { upsertNewestById } from "../lib/listState";
@@ -39,9 +39,8 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
   // The selected (consensus) review's per-reviewer round outputs. Events keep them
   // live afterward via `setQueryData`; single reviews simply return no runs.
   const runsQuery = useQuery({
-    queryKey:
-      selectedPrReviewId != null ? queryKeys.prReviews.runs(selectedPrReviewId) : ["pr-reviews", "none", "runs"],
-    queryFn: () => api.listPrReviewRuns(selectedPrReviewId as number),
+    queryKey: queryKeys.prReviews.runs(selectedPrReviewId),
+    queryFn: selectedPrReviewId != null ? () => api.listPrReviewRuns(selectedPrReviewId) : skipToken,
     enabled: selectedPrReviewId != null,
     meta: { surfaceErrors: true },
   });

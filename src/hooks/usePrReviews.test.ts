@@ -4,12 +4,12 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { usePrReviews } from "./usePrReviews";
 import { createQueryClient } from "../queries/queryClient";
+import { queryKeys } from "../queries/keys";
 import { api } from "../api";
 import type { PrReview } from "../types";
 
 /** A renderHook wrapper with its own fresh QueryClient (isolated cache per test). */
-function makeWrapper() {
-  const client = createQueryClient();
+function makeWrapper(client = createQueryClient()) {
   return ({ children }: { children: ReactNode }) =>
     createElement(QueryClientProvider, { client }, children);
 }
@@ -51,6 +51,16 @@ const review: PrReview = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(api.listPrReviews).mockResolvedValue([]);
+});
+
+it("does not allocate a placeholder runs query before a review is selected", async () => {
+  const client = createQueryClient();
+  renderHook(() => usePrReviews({ onMessage: vi.fn() }), { wrapper: makeWrapper(client) });
+  await waitFor(() => expect(api.listPrReviews).toHaveBeenCalled());
+
+  expect(client.getQueryCache().find({ queryKey: ["pr-reviews", "none", "runs"] })).toBeUndefined();
+  expect(client.getQueryCache().find({ queryKey: queryKeys.prReviews.runs(undefined) })).toBeDefined();
+  expect(api.listPrReviewRuns).not.toHaveBeenCalled();
 });
 
 it("queues a created review at the top of the list and selects it", async () => {

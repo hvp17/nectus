@@ -140,7 +140,7 @@ recommended for type-safe disabled queries when `refetch()` is not required.
 (`refactor(task-workspace): extract currentWorkflowStep helper`) with Claude's
 TaskWorkspace helper extraction.
 
-### Iteration 4 - done (2026-06-09) - commit pending
+### Iteration 4 - done (2026-06-09)
 
 **Goal:** Remove the placeholder `"none"` task-diff query key and unsafe task-id
 cast from `useTaskDiff`.
@@ -170,6 +170,41 @@ iteration 3. `skipToken` can disable the query without fake ids or casts.
 - Green: `pnpm vitest run src/hooks/useTaskDiff.test.tsx` passed (7 tests).
 - `pnpm build` passed.
 - `pnpm test` passed (46 files, 292 tests).
+
+**Commit:** `720e4a8` (`refactor(diff): skip idle summary query sentinel`)
+pushed to `origin/main`.
+
+### Iteration 5 - done (2026-06-09) - commit pending
+
+**Goal:** Remove the placeholder PR-review runs query key and unsafe selected
+review id cast from `usePrReviews`.
+
+**Rationale:** `usePrReviews` still creates a disabled cache entry under
+`["pr-reviews", "none", "runs"]` when no review is selected, then casts
+`selectedPrReviewId` inside the runs query function. This is the same fake-id
+pattern removed from GitHub and task diff queries.
+
+**Docs checked:** TanStack Query v5 disabling guide for `skipToken`.
+
+**Claimed files:**
+- `src/hooks/usePrReviews.ts`
+- `src/hooks/usePrReviews.test.ts`
+- `src/queries/keys.ts`
+
+**Verification plan:**
+- Red: targeted Vitest for no `"none"` PR-review runs cache entry.
+- Green: targeted Vitest for `usePrReviews`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- Red: `pnpm vitest run src/hooks/usePrReviews.test.ts` failed because a no-review
+  hook allocated `["pr-reviews", "none", "runs"]`.
+- Green: `pnpm vitest run src/hooks/usePrReviews.test.ts` passed (3 tests).
+- `pnpm build` passed.
+- `pnpm test` passed (46 files, 295 tests; Claude's active `profileDrafts` test
+  changes were present but unstaged).
 
 ---
 
