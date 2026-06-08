@@ -35,6 +35,32 @@ function statusLabel(status: UpdateStatus): string {
   }
 }
 
+/** The one-line detail under the title. Read top to bottom: first match wins. */
+function detailMessage(
+  status: UpdateStatus,
+  info: UpdateInfo | null,
+  percent: number | null,
+  error: string | null,
+  lastCheckedAt: number | null,
+): string {
+  if (status === "error" && error) {
+    return error;
+  }
+  if (status === "downloading" && percent !== null) {
+    return `Downloading version ${info?.version ?? ""}… ${percent}%`;
+  }
+  if (status === "available" && info) {
+    return `Version ${info.version} is available.`;
+  }
+  if (status === "ready") {
+    return "Update installed — relaunch to finish.";
+  }
+  if (lastCheckedAt) {
+    return `Last checked ${new Date(lastCheckedAt).toLocaleTimeString()}.`;
+  }
+  return "Check GitHub for a newer version.";
+}
+
 export function UpdateCard({
   status,
   info,
@@ -48,18 +74,7 @@ export function UpdateCard({
 }: UpdateCardProps) {
   const busy = status === "checking" || status === "downloading";
   const percent = progress === null ? null : Math.round(progress * 100);
-  const detail =
-    status === "error" && error
-      ? error
-      : status === "downloading" && percent !== null
-        ? `Downloading version ${info?.version ?? ""}… ${percent}%`
-        : status === "available" && info
-          ? `Version ${info.version} is available.`
-          : status === "ready"
-            ? "Update installed — relaunch to finish."
-            : lastCheckedAt
-              ? `Last checked ${new Date(lastCheckedAt).toLocaleTimeString()}.`
-              : "Check GitHub for a newer version.";
+  const detail = detailMessage(status, info, percent, error, lastCheckedAt);
 
   return (
     <div className="nx-strip">

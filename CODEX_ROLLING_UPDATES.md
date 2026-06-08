@@ -14,9 +14,11 @@
 
 ## Coordination ledger
 
-- Claude iteration 1 currently owns unused `@tanstack/react-router` removal:
-  `package.json`, `pnpm-lock.yaml`, and `AGENTS.md`. Codex will not edit those
-  files in this iteration.
+- Claude iteration 1 owned unused `@tanstack/react-router` removal:
+  `package.json`, `pnpm-lock.yaml`, and `AGENTS.md`; it landed as `4b3fc06`.
+- Claude's current uncommitted loop is simplifying
+  `src/components/settings/UpdateCard.tsx` and `CLAUDE_ROLLING_UPDATES.md`.
+  Codex will not edit those files in iteration 2.
 - Untracked `.claude/` and `design-mockups/` existed before Codex edits and are
   not Codex-owned.
 
@@ -24,7 +26,7 @@
 
 ## Iteration log
 
-### Iteration 1 - done (2026-06-09) - commit pending
+### Iteration 1 - done (2026-06-09)
 
 **Goal:** Move GitHub PR auto-detection out of the custom `useAsyncEffect` helper
 and into the TanStack Query GitHub read layer.
@@ -62,6 +64,39 @@ with `enabled` and react to query data changes with a React effect.
 - Full frontend tests: `pnpm test` passed (46 files, 290 tests).
 - Frontend build: `pnpm build` passed.
 - Rust tests: `cd native && cargo test` passed (240 tests).
+
+**Commit:** `1cb6070` (`refactor(github): query branch pr detection`) pushed to
+`origin/main`.
+
+### Iteration 2 - done (2026-06-09) - commit pending
+
+**Goal:** Remove stale router-era test/docs references after the router
+dependency cleanup.
+
+**Rationale:** The app no longer uses TanStack Router, but `src/test/setup.ts`
+still stubs `window.scrollTo` for router scroll restoration and `docs/features.md`
+still says views render through the router's `<Outlet/>`. Removing the unused test
+shim and fixing the feature doc keeps the repo aligned with the current
+store-driven shell.
+
+**Docs checked:** jsdom docs note that layout/rendering are not implemented and
+that unsupported browser APIs can be shimmed in the environment when tests need
+them. Since the current suite has no `window.scrollTo` callers, the stale shim
+should be removed instead of carried forward.
+
+**Claimed files:**
+- `src/test/setup.ts`
+- `docs/features.md`
+
+**Verification plan:**
+- `pnpm test`
+- `pnpm build`
+
+**Status:** verified; committing.
+
+**Evidence:**
+- `pnpm test` passed (46 files, 290 tests).
+- `pnpm build` passed.
 
 ---
 

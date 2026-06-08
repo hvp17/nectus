@@ -58,10 +58,6 @@ class ResizeObserverMock {
 
 globalThis.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;
 
-// TanStack Router calls window.scrollTo for scroll restoration on navigation;
-// jsdom doesn't implement it, so stub it to keep test output clean.
-window.scrollTo = (() => undefined) as typeof window.scrollTo;
-
 Element.prototype.scrollIntoView = () => undefined;
 Element.prototype.hasPointerCapture = () => false;
 Element.prototype.releasePointerCapture = () => undefined;

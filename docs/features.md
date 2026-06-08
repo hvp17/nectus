@@ -59,14 +59,14 @@ The app shell is an always-collapsed icon rail plus a persistent navigator panel
   the back affordance returns to Mission Control, the project board, or the
   workspace board.
 
-The shell composes the icon rail and navigator panel around a routed leaf view; the
-active view (`mission` | `board` | `workspace` | `jira` | `reviews` | `settings`) is
-driven by the store and rendered through the router's `<Outlet/>`. The project board
-and workspace board are the same kanban component, switched into workspace mode with
-`workspaceName` + `repoNames` props.
+The shell composes the icon rail and navigator panel around a selected leaf view.
+The active view (`mission` | `board` | `workspace` | `jira` | `reviews` |
+`settings`) is driven by the store and rendered by `AppRouter`'s plain switch. The
+project board and workspace board are the same kanban component, switched into
+workspace mode with `workspaceName` + `repoNames` props.
 
 File ownership: see the maps in [AGENTS.md](../AGENTS.md); for how the shell, store,
-queries, and router connect, see [architecture.md](architecture.md).
+queries, and command boundary connect, see [architecture.md](architecture.md).
 
 ## Projects
 
