@@ -555,7 +555,7 @@ Because jsdom does not implement full layout/rendering, the test stubs
 **Commit:** `a5d9fb5` (`test(terminal): cover theme token resolution`) pushed to
 `origin/main`.
 
-### Iteration 16 - in progress (2026-06-09)
+### Iteration 16 - done (2026-06-09)
 
 **Goal:** Add focused coverage for the external-link opener helper.
 
@@ -575,11 +575,42 @@ default `http://` and `https://` URL scope.
 - Focused: `pnpm vitest run src/lib/openExternal.test.ts`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/lib/openExternal.test.ts` passed (2 tests).
 - `pnpm test` passed (53 files, 323 tests).
+- `pnpm build` passed.
+
+**Commit:** `a4bdd32` (`test(links): cover external opener helper`) pushed to
+`origin/main`.
+
+### Iteration 17 - in progress (2026-06-09)
+
+**Goal:** Cover session-notification guard and failure branches.
+
+**Rationale:** `notifySessionEvent` is the event-bridge path that turns completed
+or blocked agent activity into system notifications. Existing coverage only checks
+happy-path body truncation, leaving the non-Tauri guard, permission-denied warning,
+and send-failure logging branches untested.
+
+**Docs checked:** Tauri 2 notification plugin docs for permission checks and
+`sendNotification`; the documented frontend flow checks permission, requests it
+when needed, and skips sending when permission is not granted.
+
+**Claimed files:**
+- `src/sessionNotifications.test.ts`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/sessionNotifications.test.ts`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- `pnpm vitest run src/sessionNotifications.test.ts` passed (4 tests).
+- `pnpm test` passed (54 files, 331 tests; includes the parallel agent's
+  untracked `src/hooks/useGuardedAction.test.ts` in the shared worktree).
 - `pnpm build` passed.
 
 ---
