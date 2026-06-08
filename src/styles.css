@@ -282,27 +282,6 @@ body {
   background: var(--background);
 }
 
-/* Command is flat: elevated surfaces read via hairline borders, not a glass sheen. */
-
-@media (prefers-reduced-motion: no-preference) {
-  .content-shell [data-testid="dashboard-layout"],
-  .content-shell .task-workspace,
-  .content-shell .jira-board {
-    animation: nectus-fade-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-}
-
-@keyframes nectus-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 /* Honor reduced-motion for the inline utility animations used across the app
    (loading spinners, pulsing status dots, dialog slide-ins). The content fade
    above is gated to no-preference; this covers everything else so a
