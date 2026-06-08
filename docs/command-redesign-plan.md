@@ -50,8 +50,14 @@
   (cleaner to do while restyling the surface): `IconRail` rail buttons → shadcn,
   reviewer chips → `Toggle`, `PrReviewDetail` verdict spans → `Badge`, `SettingsPage`
   nav buttons → shadcn.
-- [ ] **Phase 2 — Per-surface fidelity** (restyle, in order): Mission Control →
-  Board → Task (stage/ribbon/facts) → Settings → PR Reviews (matrix) → JIRA → composer.
+- [~] **Phase 2 — Per-surface fidelity** *(shell-density pass done; all surfaces
+  verified live in the running app, dark + light)*: tightened the shell to Command
+  (`--nx-rail-w` 60→52, `--nx-panel-w` 16→14rem, `.nx-h1` 27→20px). Swept Mission /
+  Board / PR Reviews / Settings / Task — **all render the Command look correctly**
+  (indigo, flat, hairline, dense); the token retune carried the surfaces. Remaining
+  = polish: the deferred Phase-1 control swaps per surface (IconRail rail buttons,
+  reviewer chips → Toggle, verdict span → Badge, Settings nav), any fine spacing,
+  and (optional) deeper density toward the prototype's ~12.5px base.
 - [ ] **Phase 3 — ⌘K command palette** (new): `cmdk` + `ui/command.tsx` + `ui/kbd.tsx`,
   global keydown hook, action registry wired to store
   (`setCurrentView`/`openWorkspaceBoard`/`setSelectedTaskId`/`setCreateTaskOpen`) +
@@ -94,3 +100,10 @@
   tokenized (JIRA brand whites left as intentional). The remaining control swaps
   moved into their Phase 2 surface passes. `pnpm build` clean; **1026/1026 tests pass**.
   Next: Phase 2 — Mission Control surface pass.
+- **2026-06-08** — **Phase 2 shell-density pass + live verification.** Ran the real
+  app (`pnpm dev`, browser-preview seed) and screenshotted every surface in dark +
+  light. Confirmed Phase 0/1 live (indigo `--primary`, 0.5rem radius, flat). Tightened
+  the shell (`--nx-rail-w` 52, `--nx-panel-w` 14rem, `.nx-h1` 20px). Swept Mission /
+  Board / PR Reviews / Settings / Task — all on-brand, no breakage. `pnpm build` clean;
+  **1026/1026 tests pass**. The big visual transformation is done; remaining Phase 2 =
+  per-surface polish + control swaps. Then Phase 3 (⌘K palette) + Phase 4.

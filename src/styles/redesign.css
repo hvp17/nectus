@@ -11,9 +11,9 @@
 /* ---------- App frame: icon rail + optional project panel + viewport ---------- */
 .nx-app {
   /* The primary rail is always collapsed to an icon-only strip. */
-  --nx-rail-w: 60px;
+  --nx-rail-w: 52px;
   /* The navigator panel matches shadcn's standard sidebar width (SIDEBAR_WIDTH). */
-  --nx-panel-w: 16rem;
+  --nx-panel-w: 14rem;
   position: relative;
   isolation: isolate;
   display: grid;
@@ -263,7 +263,7 @@
 /* ---------- Main content ---------- */
 .nx-main { flex: 1; width: 100%; min-width: 0; min-height: 0; height: 100%; overflow: hidden; padding: 22px 24px; display: flex; flex-direction: column; }
 .density-compact .nx-main { padding: 18px 20px; }
-.nx-h1 { margin: 0; font-size: 27px; font-weight: 700; letter-spacing: -0.02em; }
+.nx-h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
 .nx-sub { margin: 3px 0 0; font-size: 13px; color: var(--muted-foreground); }
 .nx-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .nx-head-actions { display: flex; gap: 8px; flex: none; }
