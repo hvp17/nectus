@@ -89,13 +89,28 @@ prior redesign).
   `tracking-tight/wider/widest`, `font-heading/mono` are all used) and `--spacing`
   (removing it is risk-asymmetric — drives the whole spacing scale). Added a comment
   explaining what belongs in the block. 287/45 green; build clean.
-- [ ] **P3 — Cascade layers (the coherence fix).** Wrap each surface file in
-  `@layer components`; remove the now-unnecessary `!important` in `task-board.css`;
-  confirm utilities override. Highest-precedence-risk phase → full verify.
-- [ ] **P4 — Consolidation (scoped polish).** Migrate the one live reimplementation
-  `.nx-seg` → shadcn `ToggleGroup`; fold `TaskCard` `task-card-shell`+`nx-card` into
-  one; convert static inline styles to utilities/tokens. Do the low-risk ones; defer
-  anything behavior-touching that isn't clearly safe.
+- [x] **P3 — Cascade layers (the coherence fix).** Wrapped the three "plain-element"
+  surface files (`redesign.css`, `detail.css`, `diff.css`) in `@layer components` so
+  Tailwind utilities now win over them (the precedence fix). **Deliberately left
+  `task-board.css` and `settings.css` unlayered** — their custom classes restyle
+  shadcn primitives via unlayered precedence (`.attention-badge`/`.task-review-badge`
+  override Badge's `font-medium`/variant colors; `.profile-editor*` override Card's
+  `bg-card`/`py-3`/`gap-3` and `FieldGroup`'s flex). Layering them flips those
+  (bold→medium badge text, green "passed" badge→gray, 2-col profile grid→1-col,
+  card bg `--background`→`--card`). Migrating those overrides to utilities/cva is P4;
+  until then unlayered preserves them exactly. The `!important` in `task-board.css`
+  stays — all 6 are legitimate drag/selection runtime overrides, not the
+  unlayered-CSS symptom. **Visually verified** Mission Control, Settings, and the
+  Board in dark mode: layered surfaces render identically; unlayered badges/profile
+  grid preserved. 287/45 green; build clean.
+- [ ] **P4 — Migrate primitive-coupled classes, then finish layering.** Convert
+  `.attention-badge`/`.task-review-badge` to utilities/cva (so the passed-green comes
+  from a `success` variant, not an unlayered override) and the `.profile-editor*`
+  Card/CardHeader/FieldGroup overrides to utilities; then wrap `task-board.css` +
+  `settings.css` in `@layer components` too. Also: migrate `.nx-seg` → shadcn
+  `ToggleGroup`; fold `TaskCard`'s `task-card-shell`+`nx-card` (two rails on one
+  element) into one; convert static inline `style={{}}` to utilities/tokens. Each
+  needs per-state visual verification (light + dark).
 - [ ] **P5 — Docs + PR.** Update `CLAUDE.md` frontend map + `docs/architecture.md`
   styling section; open PR.
 

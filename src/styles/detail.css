@@ -1,3 +1,4 @@
+@layer components {
 .task-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
@@ -111,4 +112,5 @@
     margin-left: 0;
     width: 100%;
   }
+}
 }

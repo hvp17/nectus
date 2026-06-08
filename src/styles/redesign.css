@@ -1,3 +1,4 @@
+@layer components {
 /* ============================================================================
    Nectus — reimagined shell & views.
    Ported from the Claude Design handoff (nectus/project/app/{mocks,views}.css)
@@ -621,4 +622,5 @@
 }
 .cn-toast [data-button] {
   align-self: center;
+}
 }
