@@ -97,8 +97,9 @@ retired. A repo can belong to more than one workspace.
 - The focused workspace (the one whose board is open) is used to pre-populate
   the New Task composer's cross-repo Repositories checklist; navigating away via
   the icon rail clears the focus. Focus is in-memory (not persisted across
-  launches); the workspaces and their membership are persisted (`workspaces` +
-  `workspace_repos` tables).
+  launches). If the composer opens before workspace membership has hydrated, it
+  seeds the checklist once that focused workspace becomes available. The workspaces
+  and their membership are persisted (`workspaces` + `workspace_repos` tables).
 
 ### Cross-repo tasks
 

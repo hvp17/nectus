@@ -92,7 +92,7 @@ should be removed instead of carried forward.
 - `pnpm test`
 - `pnpm build`
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm test` passed (46 files, 290 tests).
@@ -127,7 +127,7 @@ recommended for type-safe disabled queries when `refetch()` is not required.
 - Green: targeted Vitest for GitHub query tests.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red: `pnpm vitest run src/queries/github.test.tsx` failed because a disabled
@@ -304,7 +304,7 @@ new local state path.
 - Green: targeted Vitest for `useJira`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red: `pnpm vitest run src/hooks/useJira.test.ts` failed because
@@ -312,6 +312,46 @@ new local state path.
 - Green: `pnpm vitest run src/hooks/useJira.test.ts` passed (4 tests).
 - `pnpm test` passed (48 files, 307 tests; includes the parallel agent's
   untracked `src/lib/composerForm.test.ts` in the shared worktree).
+- `pnpm build` passed.
+
+**Commit:** `f516e24` (`fix(jira): refresh board after comments`) pushed to
+`origin/main`.
+
+### Iteration 9 - in progress (2026-06-09)
+
+**Goal:** Remove the New Task composer's workspace-seeding effect suppression and
+cover late workspace hydration.
+
+**Rationale:** `CreateTaskComposer` seeded a focused workspace's repo checklist
+from an effect with an empty dependency list plus an `exhaustive-deps`
+suppression. If the composer opened with a workspace id before workspace data
+hydrated, the effect ran once with no selected workspace and never seeded the
+checklist. React's docs recommend ref guards over suppressing dependency lint for
+one-time effects.
+
+**Docs checked:** React docs for effect dependencies and exhaustive-deps. The
+documented pattern is to include the real dependencies and use a ref guard when
+logic must run once.
+
+**Claimed files:**
+- `src/components/CreateTaskComposer.tsx`
+- `src/components/CreateTaskComposer.test.tsx`
+- `docs/features.md`
+
+**Verification plan:**
+- Red: targeted Vitest proving late workspace hydration does not seed the repo
+  checklist.
+- Green: targeted Vitest for `CreateTaskComposer`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- Red: `pnpm vitest run src/components/CreateTaskComposer.test.tsx` failed because
+  `onSetRepoIds` was never called after workspace data arrived.
+- Green: `pnpm vitest run src/components/CreateTaskComposer.test.tsx` passed (1
+  test).
+- `pnpm test` passed (49 files, 312 tests).
 - `pnpm build` passed.
 
 ---

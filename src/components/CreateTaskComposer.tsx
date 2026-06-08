@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { ArrowLeft, GitBranch, Layers, Play, TerminalSquare } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -104,18 +104,29 @@ export function CreateTaskComposer({
     busy ||
     !newTaskAgentProfileId ||
     (crossRepoMode ? selectedRepoIds.length === 0 : !newTaskRepoId);
+  const initialWorkspaceId = useRef(newTaskWorkspaceId);
+  const seededInitialWorkspace = useRef(false);
 
   // Reset the checklist to a workspace's full membership (primary = first member).
-  const seedWorkspaceRepos = (ws: Workspace) => {
+  const seedWorkspaceRepos = useCallback((ws: Workspace) => {
     onSetRepoIds?.(ws.repoIds.filter((id) => repoById.has(id)));
-  };
+  }, [onSetRepoIds, repoById]);
 
   // Seed the checklist when the composer opens already in Workspace mode (e.g. from a
-  // focused workspace board). Runs once per open since the composer remounts each time.
+  // focused workspace board). Runs once per open, even if workspace data hydrates
+  // after the composer mounts.
   useEffect(() => {
-    if (selectedWorkspace) seedWorkspaceRepos(selectedWorkspace);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (
+      seededInitialWorkspace.current ||
+      initialWorkspaceId.current == null ||
+      selectedWorkspace?.id !== initialWorkspaceId.current
+    ) {
+      return;
+    }
+
+    seededInitialWorkspace.current = true;
+    seedWorkspaceRepos(selectedWorkspace);
+  }, [selectedWorkspace, seedWorkspaceRepos]);
 
   const selectWorkspace = (workspaceId: number) => {
     const ws = eligibleWorkspaces.find((candidate) => candidate.id === workspaceId);
