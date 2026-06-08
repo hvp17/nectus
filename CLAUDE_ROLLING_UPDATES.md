@@ -287,6 +287,24 @@ addition — no production change.
 is incremental: targeted coverage of untested pure logic + real doc-drift fixes.
 Cadence should slow to deliberate, genuinely-valuable changes — avoid churn.
 
+### Iteration 11 — done (2026-06-09) · commit pending
+
+**Goal (docs accuracy):** Fix real command-reference drift in
+`docs/tracking-and-debugging.md` (the doc that bills itself as the "authoritative,
+exhaustive command and event reference").
+
+**Method:** Extracted the 54 commands actually registered in `generate_handler!`
+(`native/src/lib.rs`) and diff'd against the doc. Two registered commands were
+undocumented: `jira_create_work_item` and `post_pr_review_comment`. Read both impls
+to write accurate descriptions, then added them to the JIRA and PR-review tables.
+Reverse check (documented-but-not-registered) found only false positives (table/
+event/update-status names in backticks) — no stale command entries. The earlier
+"eight events" claim was also re-verified as accurate.
+
+**Scope:** `docs/tracking-and-debugging.md` only (2 table rows). No code change.
+
+**Status:** committed.
+
 ## Backlog / future work (candidate improvements, not yet started)
 
 - Audit other `package.json` deps for unused entries (e.g. confirm `cmdk`,

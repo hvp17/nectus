@@ -167,6 +167,7 @@ Current commands:
 | `jira_list_projects` | List visible JIRA projects for the board's project picker (`acli jira project list --json`). |
 | `jira_search_board` | Load board work items; the JQL is built from the structured board config (project + filter flags), so no JQL is typed. |
 | `jira_get_work_item` | Fetch a single work item (e.g. to backfill a story description). |
+| `jira_create_work_item` | Create a JIRA work item from project/type/summary (+ optional description, assignee, labels) via `acli jira workitem create`; returns the new item. |
 | `jira_transition_work_item` | Transition a work item to a target status. REST-aware: with a connected token it resolves the status to a legal transition and POSTs it; otherwise falls back to optimistic `acli` transition. |
 | `jira_assign_work_item` | Assign a work item to a user. |
 | `jira_comment_work_item` | Add a comment to a work item. |
@@ -187,6 +188,7 @@ Current commands:
 | `list_pr_reviews` | Load all PR reviews, newest first. |
 | `get_pr_review` | Load a single PR review by id. |
 | `list_pr_review_runs` | Load a consensus review's per-reviewer, per-round outputs (empty for single reviews). |
+| `post_pr_review_comment` | Post a finished PR review's stored output back to its pull request as a comment (errors if the review has no output yet). |
 | `rerun_pr_review` | Reset a PR review to queued and re-run it against the latest PR head (same single/consensus mode; clears prior rounds). |
 | `delete_pr_review` | Remove a PR review and any lingering ephemeral worktree. |
 | `start_session` | Start an agent in the task cwd. |
