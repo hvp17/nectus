@@ -82,8 +82,13 @@ prior redesign).
   − the one deleted dead-CSS test). `pnpm build` clean. Kept all conditional
   *modifiers* whose base class is alive (matrix `head`, cons-banner `warn/bad`,
   jira-key `done`, java `empty`) — grep can miss template-literal modifiers.
-- [ ] **P2 — Theme hygiene.** Clean `@theme inline` (drop identity no-ops + unused
-  radius steps); tidy token ordering/comments in `styles.css`.
+- [x] **P2 — Theme hygiene.** Cleaned `@theme inline`: dropped the unused
+  `--radius-2xl/3xl/4xl`, the `--tracking-normal`/`--letter-spacing` identities, and
+  the non-namespace `--shadow-offset-*`/`--shadow-blur/spread/opacity` lines (no such
+  utilities exist); kept the load-bearing bridges (`shadow-sm/md/lg/xs`,
+  `tracking-tight/wider/widest`, `font-heading/mono` are all used) and `--spacing`
+  (removing it is risk-asymmetric — drives the whole spacing scale). Added a comment
+  explaining what belongs in the block. 287/45 green; build clean.
 - [ ] **P3 — Cascade layers (the coherence fix).** Wrap each surface file in
   `@layer components`; remove the now-unnecessary `!important` in `task-board.css`;
   confirm utilities override. Highest-precedence-risk phase → full verify.
