@@ -526,7 +526,7 @@ selectors.
 **Commit:** `a260a7b` (`test(jira): cover visual helper labels`) pushed to
 `origin/main`.
 
-### Iteration 15 - in progress (2026-06-09)
+### Iteration 15 - done (2026-06-09)
 
 **Goal:** Add coverage for terminal theme token resolution and cleanup.
 
@@ -545,11 +545,41 @@ Because jsdom does not implement full layout/rendering, the test stubs
 - Focused: `pnpm vitest run src/lib/terminalTheme.test.ts`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/lib/terminalTheme.test.ts` passed (1 test).
 - `pnpm test` passed (52 files, 321 tests).
+- `pnpm build` passed.
+
+**Commit:** `a5d9fb5` (`test(terminal): cover theme token resolution`) pushed to
+`origin/main`.
+
+### Iteration 16 - in progress (2026-06-09)
+
+**Goal:** Add focused coverage for the external-link opener helper.
+
+**Rationale:** `openExternal` is the shared path for PR, JIRA, review, and
+terminal web links. It delegates to `api.openExternalUrl` and surfaces a toast
+when the Tauri opener fails, but the helper itself has no focused test for the
+success or async failure paths.
+
+**Docs checked:** Tauri 2 opener plugin docs for `openUrl`; the plugin opens URLs
+in the default browser and `opener:default` includes `allow-open-url` plus the
+default `http://` and `https://` URL scope.
+
+**Claimed files:**
+- `src/lib/openExternal.test.ts`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/lib/openExternal.test.ts`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- `pnpm vitest run src/lib/openExternal.test.ts` passed (2 tests).
+- `pnpm test` passed (53 files, 323 tests).
 - `pnpm build` passed.
 
 ---
