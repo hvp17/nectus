@@ -213,6 +213,24 @@ pure test-file addition cannot break other suites.
 
 **Status:** committed.
 
+### Iteration 8 — done (2026-06-09) · commit pending
+
+**Goal (best practices — coverage):** Cover `formatAttentionReason` and
+`getTaskAttention` in `sessionAttention.test.ts` — the existing suite tested
+`upsertTaskAttention`/`getAttentionCounts`/`clearTaskAttention` but not these two.
+
+**Why:** `formatAttentionReason` renders the user-facing "needs you" reason
+(snake_case → Title Case, empty → "Needs input") and had no test. Added 4 cases
+(empty/null fallback, snake_case→Title Case, single word) plus a `getTaskAttention`
+found/absent test. Pure test addition — **no production change**.
+
+**Scope:** `src/sessionAttention.test.ts` only (now 6 tests).
+
+**Verification:** isolation `pnpm vitest run src/sessionAttention.test.ts` (6/6);
+`pnpm build` (tsc type-checks tests — ok).
+
+**Status:** committed.
+
 ## Backlog / future work (candidate improvements, not yet started)
 
 - Audit other `package.json` deps for unused entries (e.g. confirm `cmdk`,

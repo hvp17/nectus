@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   clearTaskAttention,
+  formatAttentionReason,
   getAttentionCounts,
+  getTaskAttention,
   upsertTaskAttention,
   type TaskAttention,
 } from "./sessionAttention";
@@ -76,5 +78,36 @@ describe("sessionAttention", () => {
 
     expect(getAttentionCounts(next)).toEqual({ needsInput: 0, finished: 1 });
     expect(clearTaskAttention(next, task.id)).toEqual([]);
+  });
+
+  it("finds attention for a task and returns undefined when absent", () => {
+    const entry: TaskAttention = {
+      taskId: task.id,
+      kind: "needs_input",
+      title: task.title,
+      agentName: "Codex",
+      updatedAt: "2026-05-14T00:01:00.000Z",
+    };
+
+    expect(getTaskAttention([entry], task.id)).toBe(entry);
+    expect(getTaskAttention([entry], 999)).toBeUndefined();
+    expect(getTaskAttention([], task.id)).toBeUndefined();
+  });
+});
+
+describe("formatAttentionReason", () => {
+  it("falls back to a generic label when no reason is given", () => {
+    expect(formatAttentionReason()).toBe("Needs input");
+    expect(formatAttentionReason(null)).toBe("Needs input");
+    expect(formatAttentionReason("")).toBe("Needs input");
+  });
+
+  it("turns a snake_case reason code into Title Case words", () => {
+    expect(formatAttentionReason("approval_request")).toBe("Approval Request");
+    expect(formatAttentionReason("tool_use")).toBe("Tool Use");
+  });
+
+  it("capitalizes a single word", () => {
+    expect(formatAttentionReason("blocked")).toBe("Blocked");
   });
 });
