@@ -1,4 +1,4 @@
-use super::{watch_event_log, RunningSession, SessionSignal};
+use super::{prompt_preview, watch_event_log, RunningSession, SessionSignal};
 use crate::db::Database;
 use parking_lot::Mutex;
 use serde::Deserialize;
@@ -12,7 +12,6 @@ use std::time::Duration;
 use tauri::AppHandle;
 
 const CLAUDE_POLL_INTERVAL: Duration = Duration::from_millis(500);
-const CLAUDE_PROMPT_PREVIEW_LIMIT: usize = 500;
 
 // ---------------------------------------------------------------------------
 // Claude Code hook event bridge
@@ -290,14 +289,6 @@ fn string_field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
         .filter(|value| !value.is_empty())
 }
 
-fn prompt_preview(value: &str) -> Option<String> {
-    let value = value.trim();
-    if value.is_empty() {
-        None
-    } else {
-        Some(value.chars().take(CLAUDE_PROMPT_PREVIEW_LIMIT).collect())
-    }
-}
 
 #[cfg(test)]
 mod tests {

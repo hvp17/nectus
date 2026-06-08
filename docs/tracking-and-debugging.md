@@ -159,7 +159,6 @@ Current commands:
 | `task_diff_summary` | List the files a task changed: a worktree task's branch vs the locally-resolved base (`origin/HEAD` merge-base, committed + uncommitted), or a direct-edit task's working tree vs `HEAD`. Returns the base label plus per-file change kind and `+/-` counts. |
 | `task_diff_file` | Return the unified patch for one file in a task's diff (lazy-loaded per file; untracked files diff against `/dev/null`). |
 | `github_status` | Report whether `gh` is installed, authenticated, and the active account. |
-| `create_github_pull_request` | Push the worktree branch and open a PR with `gh pr create`; capture and store the PR URL on the task. |
 | `github_pull_request_status` | Fetch live PR state, CI check rollup, and review decision via `gh pr view --json`. |
 | `detect_github_pull_request` | Check whether a worktree task's branch already has a PR (`gh pr view`) and backfill its URL. |
 | `jira_status` | Report whether `acli` is installed, authenticated, and the active site. |

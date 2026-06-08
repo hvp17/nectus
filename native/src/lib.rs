@@ -12,7 +12,7 @@ use crate::db::Database;
 use crate::models::{
     AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings, AppSettingsInput,
     GithubStatus, JiraProject, JiraRestStatus, JiraStatus, JiraStatusDef, JiraTransition,
-    JiraWorkItem, MergeMethod, PrReview, PrReviewMode, PrReviewRun, PullRequestInfo, Repo,
+    JiraWorkItem, PrReview, PrReviewMode, PrReviewRun, PullRequestInfo, Repo,
     ReviewLoop, ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskDiffSummary,
     TaskStatus, TaskSummary, Workspace,
 };
@@ -269,35 +269,6 @@ async fn github_status() -> AppResult<GithubStatus> {
         .map_err(|error| AppError::from(format!("Failed to query GitHub status: {error}")))
 }
 
-/// Open a pull request for the task's worktree branch and persist the PR URL.
-#[tauri::command]
-async fn create_github_pull_request(
-    task_id: i64,
-    title: String,
-    body: String,
-    draft: bool,
-    state: State<'_, AppState>,
-) -> AppResult<TaskSummary> {
-    let db = state.db.clone();
-    tauri::async_runtime::spawn_blocking(move || -> Result<TaskSummary, String> {
-        let worktree = {
-            let db = db.lock();
-            let task = db
-                .task_by_id(task_id)?
-                .ok_or_else(|| "Task not found".to_string())?;
-            task.worktree_path.ok_or_else(|| {
-                "Task has no worktree branch to open a pull request from".to_string()
-            })?
-        };
-        let url = github::create_pull_request(Path::new(&worktree), &title, &body, draft)?;
-        db.lock()
-            .update_task_metadata(task_id, None, None, Some(url))
-    })
-    .await
-    .map_err(|error| AppError::from(format!("Failed to create pull request: {error}")))?
-    .map_err(Into::into)
-}
-
 /// Fetch the live status of the pull request for the task's worktree branch.
 #[tauri::command]
 async fn github_pull_request_status(
@@ -352,68 +323,6 @@ async fn detect_github_pull_request(
     })
     .await
     .map_err(|error| AppError::from(format!("Failed to detect pull request: {error}")))?
-    .map_err(Into::into)
-}
-
-/// Resolve a task's worktree path for the gh PR actions (merge / ready / close),
-/// erroring when the task is not worktree-backed — the precondition all three share.
-fn task_worktree(db: &Database, task_id: i64) -> Result<String, String> {
-    let task = db
-        .task_by_id(task_id)?
-        .ok_or_else(|| "Task not found".to_string())?;
-    task.worktree_path
-        .ok_or_else(|| "Task has no worktree branch".to_string())
-}
-
-/// Merge the task's worktree-branch pull request with the chosen strategy and
-/// return the refreshed status. Branch protection is enforced by GitHub, so a
-/// disallowed merge surfaces `gh`'s error.
-#[tauri::command]
-async fn merge_github_pull_request(
-    task_id: i64,
-    method: MergeMethod,
-    state: State<'_, AppState>,
-) -> AppResult<PullRequestInfo> {
-    let db = state.db.clone();
-    tauri::async_runtime::spawn_blocking(move || -> Result<PullRequestInfo, String> {
-        let worktree = task_worktree(&db.lock(), task_id)?;
-        github::merge_pull_request(Path::new(&worktree), method)
-    })
-    .await
-    .map_err(|error| AppError::from(format!("Failed to merge pull request: {error}")))?
-    .map_err(Into::into)
-}
-
-/// Mark the task's pull request ready for review (or convert it back to draft).
-#[tauri::command]
-async fn set_github_pull_request_ready(
-    task_id: i64,
-    ready: bool,
-    state: State<'_, AppState>,
-) -> AppResult<PullRequestInfo> {
-    let db = state.db.clone();
-    tauri::async_runtime::spawn_blocking(move || -> Result<PullRequestInfo, String> {
-        let worktree = task_worktree(&db.lock(), task_id)?;
-        github::set_pull_request_ready(Path::new(&worktree), ready)
-    })
-    .await
-    .map_err(|error| AppError::from(format!("Failed to update pull request: {error}")))?
-    .map_err(Into::into)
-}
-
-/// Close the task's pull request without merging it, returning the refreshed status.
-#[tauri::command]
-async fn close_github_pull_request(
-    task_id: i64,
-    state: State<'_, AppState>,
-) -> AppResult<PullRequestInfo> {
-    let db = state.db.clone();
-    tauri::async_runtime::spawn_blocking(move || -> Result<PullRequestInfo, String> {
-        let worktree = task_worktree(&db.lock(), task_id)?;
-        github::close_pull_request(Path::new(&worktree))
-    })
-    .await
-    .map_err(|error| AppError::from(format!("Failed to close pull request: {error}")))?
     .map_err(Into::into)
 }
 
@@ -1180,12 +1089,8 @@ pub fn run() {
             task_diff_summary,
             task_diff_file,
             github_status,
-            create_github_pull_request,
             github_pull_request_status,
             detect_github_pull_request,
-            merge_github_pull_request,
-            set_github_pull_request_ready,
-            close_github_pull_request,
             post_pr_review_comment,
             jira_status,
             jira_list_projects,

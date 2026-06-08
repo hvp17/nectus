@@ -33,7 +33,6 @@ import type {
   JiraStatusDef,
   JiraTransition,
   JiraWorkItem,
-  MergeMethod,
   PrReview,
   PrReviewRun,
   PullRequestInfo,
@@ -186,19 +185,6 @@ export const api = {
     if (!isTauri) return { installed: false, authenticated: false, account: null };
     return invoke("github_status");
   },
-  async createGithubPullRequest(input: {
-    taskId: number;
-    title: string;
-    body: string;
-    draft: boolean;
-  }): Promise<TaskSummary> {
-    return invoke("create_github_pull_request", {
-      taskId: input.taskId,
-      title: input.title,
-      body: input.body,
-      draft: input.draft,
-    });
-  },
   async githubPullRequestStatus(taskId: number): Promise<PullRequestInfo> {
     if (isBrowserPreview) return seedPullRequest(taskId);
     if (!isTauri)
@@ -218,18 +204,6 @@ export const api = {
   async detectGithubPullRequest(taskId: number): Promise<TaskSummary | null> {
     if (!isTauri) return null;
     return invoke("detect_github_pull_request", { taskId });
-  },
-  // Merge the task's PR with the chosen strategy; returns the refreshed status.
-  async mergeGithubPullRequest(taskId: number, method: MergeMethod): Promise<PullRequestInfo> {
-    return invoke("merge_github_pull_request", { taskId, method });
-  },
-  // Mark the task's PR ready for review (or convert back to draft).
-  async setGithubPullRequestReady(taskId: number, ready: boolean): Promise<PullRequestInfo> {
-    return invoke("set_github_pull_request_ready", { taskId, ready });
-  },
-  // Close the task's PR without merging it; returns the refreshed status.
-  async closeGithubPullRequest(taskId: number): Promise<PullRequestInfo> {
-    return invoke("close_github_pull_request", { taskId });
   },
   async jiraStatus(): Promise<JiraStatus> {
     if (isBrowserPreview) return seedJiraStatus;

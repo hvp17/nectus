@@ -39,7 +39,6 @@ vi.mock("./api", () => ({
     listPrReviews: vi.fn().mockResolvedValue([]),
     listPrReviewRuns: vi.fn().mockResolvedValue([]),
     githubStatus: vi.fn().mockResolvedValue({ installed: false, authenticated: false, account: null }),
-    createGithubPullRequest: vi.fn(),
     githubPullRequestStatus: vi.fn(),
     jiraStatus: vi
       .fn()

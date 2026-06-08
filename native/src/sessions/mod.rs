@@ -862,6 +862,22 @@ fn normalize_activity(raw: &str) -> Option<String> {
     Some(line.chars().take(ACTIVITY_LINE_MAX).collect())
 }
 
+/// Longest prompt/preview snippet a provider watcher forwards as a needs-input or
+/// activity preview (e.g. the question text behind a `session_needs_input`).
+const PROMPT_PREVIEW_LIMIT: usize = 500;
+
+/// Trim `value` and bound it to [`PROMPT_PREVIEW_LIMIT`] characters, returning
+/// `None` when nothing readable remains. Shared by the Codex and Claude watchers,
+/// which both surface short previews of agent prompts/questions.
+fn prompt_preview(value: &str) -> Option<String> {
+    let value = value.trim();
+    if value.is_empty() {
+        None
+    } else {
+        Some(value.chars().take(PROMPT_PREVIEW_LIMIT).collect())
+    }
+}
+
 /// Derive the agent's latest human-readable activity line from raw PTY output.
 ///
 /// Agents render full-screen TUIs, so the raw tail is mostly ANSI escapes,

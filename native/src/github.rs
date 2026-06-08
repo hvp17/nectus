@@ -1,11 +1,11 @@
 use crate::models::{
     GithubCheckRun, GithubCheckRunState, GithubCheckState, GithubCheckSummary, GithubStatus,
-    MergeMethod, PullRequestInfo, PullRequestReviewDecision, PullRequestState,
+    PullRequestInfo, PullRequestReviewDecision, PullRequestState,
 };
 use crate::process_util::{command_error, run_cli};
 use serde::Deserialize;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::Output;
 
 /// Raw shape of a single `statusCheckRollup` entry from `gh pr view --json`.
 /// Entries are either a `CheckRun` (`status` + `conclusion`, named by `name` and
@@ -188,26 +188,6 @@ pub fn parse_login(user_json: &str) -> Option<String> {
         .filter(|login| !login.is_empty())
 }
 
-/// Extract the pull request URL printed by `gh pr create` (its last URL line).
-pub fn parse_pr_url(stdout: &str) -> Option<String> {
-    stdout
-        .lines()
-        .map(str::trim)
-        .rev()
-        .find(|line| is_pull_request_url(line))
-        .map(str::to_string)
-}
-
-/// A line is a PR URL when it is an https link whose `/pull/` segment is
-/// immediately followed by a PR number (guards against e.g. `/pull/requests`).
-fn is_pull_request_url(line: &str) -> bool {
-    line.starts_with("https://")
-        && line
-            .split_once("/pull/")
-            .and_then(|(_, rest)| rest.chars().next())
-            .is_some_and(|c| c.is_ascii_digit())
-}
-
 /// Owner, repository, and number parsed from a GitHub pull request URL.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedPrUrl {
@@ -341,44 +321,6 @@ pub fn status() -> GithubStatus {
     }
 }
 
-/// Push the worktree branch and open a pull request, returning the PR URL.
-pub fn create_pull_request(
-    worktree: &Path,
-    title: &str,
-    body: &str,
-    draft: bool,
-) -> Result<String, String> {
-    // Ensure the branch exists on the remote so `gh` can open the PR against it.
-    // Force non-interactive auth so a missing HTTPS credential or first-time SSH
-    // host-key prompt fails fast instead of hanging the (tty-less) worker thread.
-    let push = Command::new("git")
-        .arg("-C")
-        .arg(worktree)
-        .args(["push", "--set-upstream", "origin", "HEAD"])
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes")
-        .output()
-        .map_err(|error| format!("Failed to push branch: {error}"))?;
-    if !push.status.success() {
-        return Err(command_error(
-            &push,
-            "Failed to push branch before creating PR",
-        ));
-    }
-
-    let mut args = vec!["pr", "create", "--title", title, "--body", body];
-    if draft {
-        args.push("--draft");
-    }
-    let output = run_gh(Some(worktree), &args)?;
-    if !output.status.success() {
-        return Err(command_error(&output, "gh pr create failed"));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    parse_pr_url(&stdout).ok_or_else(|| "gh pr create did not return a PR URL".to_string())
-}
-
 /// JSON fields requested from `gh pr view`; shared by status and detection so the
 /// two stay in sync.
 const PR_VIEW_FIELDS: &str = "number,state,url,title,isDraft,reviewDecision,statusCheckRollup";
@@ -422,51 +364,6 @@ fn is_no_pull_request_error(stderr: &str) -> bool {
     stderr
         .to_lowercase()
         .contains("pull requests found for branch")
-}
-
-/// Merge the pull request for the worktree's branch using `method`, then return
-/// the refreshed status. We deliberately do **not** pass `--delete-branch`: the
-/// branch is checked out in this worktree, so letting `gh` delete it would fail or
-/// strand the worktree — task deletion removes the worktree later. GitHub branch
-/// protection remains the source of truth, so a merge that isn't allowed (failing
-/// required checks, missing approval) surfaces `gh`'s own error.
-pub fn merge_pull_request(
-    worktree: &Path,
-    method: MergeMethod,
-) -> Result<PullRequestInfo, String> {
-    let output = run_gh(Some(worktree), &["pr", "merge", method.flag()])?;
-    if !output.status.success() {
-        return Err(command_error(&output, "gh pr merge failed"));
-    }
-    pull_request_status(worktree)
-}
-
-/// Mark the worktree branch's pull request ready for review (`gh pr ready`), or
-/// convert it back to a draft when `ready` is false (`gh pr ready --undo`).
-/// Returns the refreshed status.
-pub fn set_pull_request_ready(
-    worktree: &Path,
-    ready: bool,
-) -> Result<PullRequestInfo, String> {
-    let mut args = vec!["pr", "ready"];
-    if !ready {
-        args.push("--undo");
-    }
-    let output = run_gh(Some(worktree), &args)?;
-    if !output.status.success() {
-        return Err(command_error(&output, "gh pr ready failed"));
-    }
-    pull_request_status(worktree)
-}
-
-/// Close the pull request for the worktree's branch without merging it
-/// (`gh pr close`). Returns the refreshed status.
-pub fn close_pull_request(worktree: &Path) -> Result<PullRequestInfo, String> {
-    let output = run_gh(Some(worktree), &["pr", "close"])?;
-    if !output.status.success() {
-        return Err(command_error(&output, "gh pr close failed"));
-    }
-    pull_request_status(worktree)
 }
 
 /// Post `body` as a comment on pull request `number`, run in the resolved repo so
@@ -589,37 +486,6 @@ mod tests {
             "could not determine current branch"
         ));
         assert!(!is_no_pull_request_error("gh: not authenticated"));
-    }
-
-    #[test]
-    fn parses_pr_url_from_create_output() {
-        let stdout = "\nhttps://github.com/hvp17/nectus/pull/42\n";
-        assert_eq!(
-            parse_pr_url(stdout),
-            Some("https://github.com/hvp17/nectus/pull/42".to_string())
-        );
-    }
-
-    #[test]
-    fn ignores_non_pull_lines_when_parsing_url() {
-        let stdout = "Warning: 3 uncommitted changes\nhttps://github.com/hvp17/nectus/pull/7";
-        assert_eq!(
-            parse_pr_url(stdout),
-            Some("https://github.com/hvp17/nectus/pull/7".to_string())
-        );
-        assert_eq!(parse_pr_url("no url here"), None);
-    }
-
-    #[test]
-    fn parses_pr_url_only_when_pull_is_followed_by_a_number() {
-        // A trailing https link that contains "/pull/" but is not a numbered PR
-        // (e.g. a "/pull/requests" path) must not be mistaken for the created PR.
-        let stdout =
-            "https://github.com/hvp17/nectus/pull/55\nhttps://github.com/hvp17/nectus/pull/requests";
-        assert_eq!(
-            parse_pr_url(stdout),
-            Some("https://github.com/hvp17/nectus/pull/55".to_string())
-        );
     }
 
     #[test]
@@ -811,12 +677,5 @@ mod tests {
         assert_eq!(pr.check_runs.len(), 1);
         assert_eq!(pr.check_runs[0].name, "Check");
         assert_eq!(pr.check_runs[0].url, None);
-    }
-
-    #[test]
-    fn merge_method_maps_to_gh_flag() {
-        assert_eq!(MergeMethod::Squash.flag(), "--squash");
-        assert_eq!(MergeMethod::Merge.flag(), "--merge");
-        assert_eq!(MergeMethod::Rebase.flag(), "--rebase");
     }
 }
