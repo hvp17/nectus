@@ -9,6 +9,7 @@ import {
 import type { VariantProps } from "class-variance-authority";
 import { Badge, badgeVariants } from "./ui/badge";
 import { cn } from "@/lib/utils";
+import { PR_REVIEW_VERDICT_LABELS, prReviewVerdictKey } from "../statusLabels";
 import type { PrReview, PrReviewVerdict } from "../types";
 
 type BadgeVariant = VariantProps<typeof badgeVariants>["variant"];
@@ -25,13 +26,15 @@ interface BadgeSpec {
 /// Map a completed verdict (passed / blocking / inconclusive) to a badge. Shared
 /// by the review badge's `ready` state and the per-reviewer consensus round cards.
 function verdictBadgeSpec(verdict: PrReviewVerdict | null | undefined): BadgeSpec {
-  switch (verdict) {
+  const key = prReviewVerdictKey(verdict);
+  const label = PR_REVIEW_VERDICT_LABELS[key].long;
+  switch (key) {
     case "passed":
-      return { label: "Passed", variant: "success", Icon: CircleCheck, tone: "passed" };
+      return { label, variant: "success", Icon: CircleCheck, tone: key };
     case "blockers":
-      return { label: "Blocking issues", variant: "destructive", Icon: TriangleAlert, tone: "blockers" };
+      return { label, variant: "destructive", Icon: TriangleAlert, tone: key };
     default:
-      return { label: "Inconclusive", variant: "outline", Icon: CircleHelp, tone: "inconclusive" };
+      return { label, variant: "outline", Icon: CircleHelp, tone: key };
   }
 }
 

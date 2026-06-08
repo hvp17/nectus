@@ -1,4 +1,4 @@
-use super::pr_verdict::{parse_pr_review_output, PR_VERDICT_MARKER};
+use super::pr_verdict::{parse_pr_review_output, VERDICT_MARKER};
 use super::pr_worktree::with_pr_worktree;
 use super::reviewer::{reviewer_supports_resume, run_reviewer_command};
 use crate::db::Database;
@@ -139,7 +139,7 @@ After the review, on the final line by itself, output a machine-readable verdict
         title = meta.title,
         author = author,
         base = base,
-        marker = PR_VERDICT_MARKER,
+        marker = VERDICT_MARKER,
     )
 }
 
@@ -164,7 +164,7 @@ On the final line by itself, output the verdict: exactly `{marker} BLOCKERS` if 
         pr_number = pr_number,
         title = meta.title,
         base = base,
-        marker = PR_VERDICT_MARKER,
+        marker = VERDICT_MARKER,
     )
 }
 
@@ -189,8 +189,8 @@ mod tests {
         assert!(prompt.to_lowercase().contains("markdown"));
         // The reviewer is asked to append a machine-readable verdict marker so
         // the Done state can distinguish passed from blocking.
-        assert!(prompt.contains("NECTUS_PR_VERDICT: BLOCKERS"));
-        assert!(prompt.contains("NECTUS_PR_VERDICT: CLEAN"));
+        assert!(prompt.contains("NECTUS_VERDICT: BLOCKERS"));
+        assert!(prompt.contains("NECTUS_VERDICT: CLEAN"));
     }
 
     #[test]
@@ -222,7 +222,7 @@ mod tests {
         assert!(prompt.contains("Add request caching"));
         assert!(prompt.to_lowercase().contains("already reviewed"));
         assert!(prompt.contains("origin/main...HEAD"));
-        assert!(prompt.contains("NECTUS_PR_VERDICT: BLOCKERS"));
-        assert!(prompt.contains("NECTUS_PR_VERDICT: CLEAN"));
+        assert!(prompt.contains("NECTUS_VERDICT: BLOCKERS"));
+        assert!(prompt.contains("NECTUS_VERDICT: CLEAN"));
     }
 }

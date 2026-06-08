@@ -66,6 +66,13 @@ export interface TaskSummary {
   lastSessionCwd?: string | null;
   lastSessionLabel?: string | null;
   reviewLoopStatus?: ReviewLoopStatus | null;
+  /**
+   * Backend-owned attention signal, persisted so it survives reload: `"needs_input"`
+   * when the agent is blocked on you, else `null`. Set/cleared by the session
+   * watcher (see `native/src/sessions`); the live in-session detail (prompt/reason)
+   * still rides the push-driven `taskAttention` store slice.
+   */
+  attention?: "needs_input" | null;
   jiraIssueKey?: string | null;
   jiraIssueSummary?: string | null;
   jiraIssueUrl?: string | null;

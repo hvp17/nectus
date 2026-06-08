@@ -1555,3 +1555,23 @@ fn rejects_a_duplicate_workspace_name() {
         .unwrap_err();
     assert!(clash.contains("already exists"));
 }
+
+#[test]
+fn task_attention_persists_and_clears() {
+    let db = Database::open_in_memory().unwrap();
+    let (_repo_dir, repo) = add_repo_with_remote(&db);
+    let task = db
+        .create_task_record(repo.id, "Blocked task".to_string(), None, None, false, None)
+        .unwrap();
+    assert_eq!(task.attention, None);
+
+    // The watcher persists "needs you" so it survives a reload.
+    db.set_task_attention(task.id, Some("needs_input")).unwrap();
+    let loaded = db.task_by_id(task.id).unwrap().unwrap();
+    assert_eq!(loaded.attention.as_deref(), Some("needs_input"));
+
+    // A session ending (set_active_session(None)) clears attention in one write.
+    db.set_active_session(task.id, None).unwrap();
+    let cleared = db.task_by_id(task.id).unwrap().unwrap();
+    assert_eq!(cleared.attention, None);
+}

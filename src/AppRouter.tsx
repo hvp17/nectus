@@ -1,14 +1,4 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import {
-  createRootRoute,
-  createRoute,
-  createRouter,
-  createMemoryHistory,
-  Outlet,
-  RouterProvider,
-  useNavigate,
-  useRouterState,
-} from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 import { IconRail, type RailView } from "./components/IconRail";
@@ -16,7 +6,7 @@ import { ProjectPanel } from "./components/ProjectPanel";
 import { MissionControl } from "./components/MissionControl";
 import { Workspace } from "./components/Workspace";
 import { TaskWorkspaceOverlay } from "./components/TaskWorkspaceOverlay";
-import { CreateTaskComposer } from "./components/CreateTaskModal";
+import { CreateTaskComposer } from "./components/CreateTaskComposer";
 import { WorkspaceManager } from "./components/WorkspaceManager";
 import { SettingsPage } from "./components/SettingsPage";
 import { ReviewsPage } from "./components/ReviewsPage";
@@ -59,21 +49,6 @@ import { planTaskFocus } from "./taskNavigation";
 import { openExternal } from "./lib/openExternal";
 import { api } from "./api";
 
-type AppView = RailView | "workspace";
-
-/** Static path per top-level view. The store's `currentView` stays the source of
- *  truth; an effect in the layout drives the router to match, so every existing
- *  `setCurrentView` call site keeps working unchanged and `<Outlet/>` renders the
- *  matching leaf. */
-const VIEW_TO_PATH: Record<AppView, string> = {
-  mission: "/",
-  board: "/board",
-  workspace: "/workspace",
-  settings: "/settings",
-  reviews: "/reviews",
-  jira: "/jira",
-};
-
 function getToastContent(message: string) {
   const separator = message.indexOf(": ");
   if (separator > 0) {
@@ -105,12 +80,12 @@ function useAppContext(): AppContextValue {
 }
 
 /**
- * The persistent shell + router layout. Owns the single `useApp()` instance and
- * the app-level handlers, drives the router from `currentView`, and renders the
- * overlays (composer / workspace manager / open task) that take over the viewport,
- * falling back to `<Outlet/>` for the routed base view.
+ * The persistent shell layout. Composes its data from queries + the store, owns the
+ * app-level handlers, and renders either an overlay (composer / workspace manager /
+ * open task) or the current view directly. `currentView` in the store is the single
+ * source of truth — there is no router (the desktop shell has no URL bar).
  */
-function AppLayout() {
+export function AppLayout() {
   // Single, mount-once subscription to all Tauri session/review/PR events, and the
   // boot-time default selection.
   useEventBridge();
@@ -175,18 +150,7 @@ function AppLayout() {
 
   useAppTheme(settings);
 
-  const navigate = useNavigate();
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
-
-  // Drive the router from the store's currentView (one-directional: the store is
-  // the source of truth, the router/Outlet render to match). No URL bar / back
-  // buttons in the desktop shell, so no route→store sync is needed.
-  useEffect(() => {
-    const target = VIEW_TO_PATH[currentView];
-    if (pathname !== target) void navigate({ to: target });
-  }, [currentView, pathname, navigate]);
-
-  // The workspace manager overlays the routed view, like the New Task composer.
+  // The workspace manager overlays the current view, like the New Task composer.
   const [managingWorkspaces, setManagingWorkspaces] = useState(false);
 
   // Close the composer and reset the whole draft (incl. the cross-repo selection)
@@ -362,8 +326,18 @@ function AppLayout() {
         />
       </div>
     );
+  } else if (currentView === "board") {
+    viewport = <BoardView />;
+  } else if (currentView === "workspace") {
+    viewport = <WorkspaceView />;
+  } else if (currentView === "settings") {
+    viewport = <SettingsView />;
+  } else if (currentView === "reviews") {
+    viewport = <ReviewsView />;
+  } else if (currentView === "jira") {
+    viewport = <JiraView />;
   } else {
-    viewport = <Outlet />;
+    viewport = <MissionView />;
   }
 
   const contextValue: AppContextValue = { openTask, openCreateTaskModal, appUpdate };
@@ -715,23 +689,3 @@ function ReviewsView() {
   );
 }
 
-/**
- * Build a fresh router (own route tree + memory history) per mount. Memory history
- * suits a desktop shell with no URL bar; a per-mount instance keeps each
- * `render(<App/>)` in the test suite isolated (a module singleton would leak the
- * current location across tests).
- */
-export function createAppRouter() {
-  const rootRoute = createRootRoute({ component: AppLayout });
-  const routeTree = rootRoute.addChildren([
-    createRoute({ getParentRoute: () => rootRoute, path: "/", component: MissionView }),
-    createRoute({ getParentRoute: () => rootRoute, path: "/board", component: BoardView }),
-    createRoute({ getParentRoute: () => rootRoute, path: "/workspace", component: WorkspaceView }),
-    createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: SettingsView }),
-    createRoute({ getParentRoute: () => rootRoute, path: "/reviews", component: ReviewsView }),
-    createRoute({ getParentRoute: () => rootRoute, path: "/jira", component: JiraView }),
-  ]);
-  return createRouter({ routeTree, history: createMemoryHistory({ initialEntries: ["/"] }) });
-}
-
-export { RouterProvider };

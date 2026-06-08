@@ -124,7 +124,8 @@ The reviewer toggles on the PR Reviews form choose how many models review:
 
 - **One reviewer → single review.** The original flow: one reviewer CLI runs once
   in the ephemeral worktree (`native/src/sessions/pr_review.rs`) and returns the
-  Markdown review plus a `NECTUS_PR_VERDICT: BLOCKERS|CLEAN` marker.
+  Markdown review plus a `NECTUS_VERDICT: BLOCKERS|CLEAN` marker (the shared
+  verdict contract in `native/src/sessions/verdict.rs`).
 - **Two or more reviewers → consensus review.** All selected reviewers review the
   same PR head in **one shared read-only worktree**, in parallel
   (`native/src/sessions/pr_consensus.rs`). After each round every reviewer is shown
@@ -167,13 +168,12 @@ after a re-review) and is not persisted as "posted"; success surfaces a message.
   with the prompts in `src/lib/githubAgentPrompts.ts`; wired in `src/components/TaskWorkspaceOverlay.tsx`
 - Post-review-to-PR action: `src/components/PrReviewDetail.tsx` + `src/hooks/usePrReviews.ts`
 - Frontend API: `src/api.ts` (`submit_session_input` carries the write prompts)
-- gh shell-out and output parsing (per-check parsing, `comment_on_pull_request`, and
-  the now-**dormant** `create`/`merge`/`ready`/`close` write helpers, still compiled
-  and tested but no longer reached by the UI): `native/src/github.rs`
+- gh shell-out and output parsing — connection status, PR status/detection parsing
+  (incl. the per-check CI drill-down), and `comment_on_pull_request`: `native/src/github.rs`.
+  PR **writes** (create/merge/mark-ready/close) are agent-driven, not `gh`-shell-out
+  from Rust — see *Write actions are agent-driven* above
 - Backend commands: `github_status`, `github_pull_request_status`,
-  `detect_github_pull_request`, `post_pr_review_comment`, plus the dormant
-  `create_github_pull_request`, `merge_github_pull_request`,
-  `set_github_pull_request_ready`, `close_github_pull_request` (registered in
+  `detect_github_pull_request`, `post_pr_review_comment` (registered in
   `native/src/lib.rs`)
 - PR URL persistence: `pr_url` column on the `tasks` table, via
   `update_task_metadata`

@@ -271,7 +271,8 @@ impl Database {
                    t.last_session_id, t.last_session_agent, t.last_session_cwd, t.last_session_label,
                    t.created_at, t.updated_at,
                    rl.status,
-                   t.jira_issue_key, t.jira_issue_summary, t.jira_issue_url, t.workspace_id
+                   t.jira_issue_key, t.jira_issue_summary, t.jira_issue_url, t.workspace_id,
+                   t.attention
             FROM tasks t
             LEFT JOIN agent_profiles a ON a.id = t.agent_profile_id
             LEFT JOIN review_loops rl ON rl.task_id = t.id
@@ -322,7 +323,8 @@ impl Database {
                        t.last_session_id, t.last_session_agent, t.last_session_cwd, t.last_session_label,
                        t.created_at, t.updated_at,
                        rl.status,
-                       t.jira_issue_key, t.jira_issue_summary, t.jira_issue_url, t.workspace_id
+                       t.jira_issue_key, t.jira_issue_summary, t.jira_issue_url, t.workspace_id,
+                       t.attention
                 FROM tasks t
                 LEFT JOIN agent_profiles a ON a.id = t.agent_profile_id
                 LEFT JOIN review_loops rl ON rl.task_id = t.id

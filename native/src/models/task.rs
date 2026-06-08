@@ -64,6 +64,9 @@ pub struct TaskSummary {
     pub last_session_cwd: Option<String>,
     pub last_session_label: Option<String>,
     pub review_loop_status: Option<ReviewLoopStatus>,
+    /// Backend-owned attention signal: `Some("needs_input")` when the agent is
+    /// blocked on the user, else `None`. Persisted so it survives reload.
+    pub attention: Option<String>,
     pub jira_issue_key: Option<String>,
     pub jira_issue_summary: Option<String>,
     pub jira_issue_url: Option<String>,

@@ -79,26 +79,6 @@ pub struct GithubCheckRun {
     pub url: Option<String>,
 }
 
-/// How to merge a pull request, mapped 1:1 to the `gh pr merge` strategy flag.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum MergeMethod {
-    Squash,
-    Merge,
-    Rebase,
-}
-
-impl MergeMethod {
-    /// The `gh pr merge` flag selecting this strategy.
-    pub fn flag(self) -> &'static str {
-        match self {
-            MergeMethod::Squash => "--squash",
-            MergeMethod::Merge => "--merge",
-            MergeMethod::Rebase => "--rebase",
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PullRequestInfo {

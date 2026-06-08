@@ -6,10 +6,10 @@ import { useGuardedAction } from "./useGuardedAction";
 import {
   getSuggestedWorktreeBranchName,
   resolveWorktreeBranchName as resolveBranch,
-} from "./useCreateTaskForm";
+} from "../lib/composerForm";
 import { useAppStore } from "../store/appStore";
 import { jiraBrowseUrl } from "../lib/jira";
-import type { JiraWorkItem, Repo } from "../types";
+import type { JiraWorkItem, Repo, TaskSummary } from "../types";
 
 const EMPTY_REPOS: Repo[] = [];
 
@@ -54,6 +54,32 @@ export function useComposer() {
     const resolveBranchName = (branchName: string) =>
       resolveBranch(branchName, branchPrefix, store.newTaskBranchIdentifier);
 
+    // Shared post-create choreography: select the new task, start its session
+    // (tolerating a start failure), refresh, and report. Both create paths differ
+    // only in which create API they call, the repo they select, and the message.
+    const finishCreate = async (
+      task: TaskSummary,
+      selectRepoId: number,
+      agentProfileId: number,
+      successMessage: string,
+    ) => {
+      store.closeComposer();
+      store.setSelectedRepoId(selectRepoId);
+      store.setSelectedTaskId(task.id);
+      let startError: string | null = null;
+      try {
+        await api.startSession(task.id, agentProfileId);
+      } catch (error) {
+        startError = String(error);
+      }
+      await refresh();
+      setMessage(
+        startError
+          ? `Created ${task.title}, but failed to start session: ${startError}`
+          : successMessage,
+      );
+    };
+
     // Workspace mode: the composer offered a repo checklist (its picks are the source
     // of truth). ≥2 repos → cross-repo; exactly 1 → a worktree task on that repo.
     if (store.newTaskWorkspaceId != null && store.newTaskRepoIds.length >= 1) {
@@ -64,33 +90,19 @@ export function useComposer() {
       const agentProfileId = store.newTaskAgentProfileId;
       const repoIds = store.newTaskRepoIds;
       const workspaceId = store.newTaskWorkspaceId;
+      const crossRepo = repoIds.length >= 2;
       await run(
         async () => {
           const branchName = resolveBranchName(store.newTaskBranchName);
-          const task =
-            repoIds.length >= 2
-              ? await api.createCrossRepoTask({ workspaceId, repoIds, title, prompt, agentProfileId, branchName })
-              : await api.createTask({
-                  repoId: repoIds[0],
-                  title,
-                  prompt,
-                  agentProfileId,
-                  hasWorktree: true,
-                  branchName,
-                });
-          store.closeComposer();
-          store.setSelectedRepoId(repoIds[0]);
-          store.setSelectedTaskId(task.id);
-          let startError: string | null = null;
-          try {
-            await api.startSession(task.id, agentProfileId);
-          } catch (error) {
-            startError = String(error);
-          }
-          await refresh();
-          if (startError) setMessage(`Created ${task.title}, but failed to start session: ${startError}`);
-          else if (repoIds.length >= 2) setMessage(`Created ${task.branchName} across ${repoIds.length} repos`);
-          else setMessage(`Created ${task.branchName}`);
+          const task = crossRepo
+            ? await api.createCrossRepoTask({ workspaceId, repoIds, title, prompt, agentProfileId, branchName })
+            : await api.createTask({ repoId: repoIds[0], title, prompt, agentProfileId, hasWorktree: true, branchName });
+          await finishCreate(
+            task,
+            repoIds[0],
+            agentProfileId,
+            crossRepo ? `Created ${task.branchName} across ${repoIds.length} repos` : `Created ${task.branchName}`,
+          );
         },
         { busy: true },
       );
@@ -123,18 +135,7 @@ export function useComposer() {
           jiraIssueSummary: jiraLink?.summary ?? null,
           jiraIssueUrl: jiraLink?.url ?? null,
         });
-        store.closeComposer();
-        store.setSelectedRepoId(repoId);
-        store.setSelectedTaskId(task.id);
-        let startError: string | null = null;
-        try {
-          await api.startSession(task.id, agentProfileId);
-        } catch (error) {
-          startError = String(error);
-        }
-        await refresh();
-        if (startError) setMessage(`Created ${task.title}, but failed to start session: ${startError}`);
-        else setMessage(hasWorktree ? `Created ${task.branchName}` : `Created ${task.title}`);
+        await finishCreate(task, repoId, agentProfileId, hasWorktree ? `Created ${task.branchName}` : `Created ${task.title}`);
       },
       { busy: true },
     );

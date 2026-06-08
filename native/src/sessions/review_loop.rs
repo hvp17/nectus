@@ -5,6 +5,7 @@
 
 use super::reviewer::{reviewer_supports_resume, run_reviewer_command, ReviewOutputSink};
 use super::terminal_io::write_agent_submission;
+use super::verdict::{parse_and_strip, VerdictToken, VERDICT_MARKER};
 use super::RunningSession;
 use crate::db::Database;
 use crate::models::{
@@ -118,8 +119,9 @@ fn run_review_round(
             db.lock().set_review_loop_session_id(task_id, Some(session_id))?;
         }
     }
-    let reviewer_output = run_output.text;
-    let verdict = parse_review_verdict(&reviewer_output);
+    // The marker line is stripped here, so the verdict noise never reaches the DB
+    // record or the worker-agent feedback prompt.
+    let (verdict, reviewer_output) = parse_review_verdict(&run_output.text);
     let error = (verdict == ReviewVerdict::Unknown).then(|| UNCLEAR_REVIEW_ERROR.to_string());
     let run = db.lock().record_review_run(ReviewRunInput {
         task_id,
@@ -175,33 +177,20 @@ fn send_worker_feedback(
         .map_err(|error| format!("Failed to send review feedback to worker agent: {error}"))
 }
 
-pub(super) fn parse_review_verdict(output: &str) -> ReviewVerdict {
-    for line in output.lines() {
-        let line = line.trim();
-        if line.eq_ignore_ascii_case("pass") || line.to_ascii_lowercase().starts_with("pass:") {
-            return ReviewVerdict::Pass;
-        }
-        if line.eq_ignore_ascii_case("NECTUS_NO_BLOCKERS") {
-            return ReviewVerdict::Pass;
-        }
-        if line.eq_ignore_ascii_case("NECTUS_BLOCKERS") {
-            return ReviewVerdict::NeedsChanges;
-        }
-        if line.eq_ignore_ascii_case("NECTUS_FEEDBACK") {
-            return ReviewVerdict::Feedback;
-        }
-    }
-
-    let normalized = output.to_ascii_lowercase();
-    if normalized.contains("blocking issue")
-        || normalized.contains("needs changes")
-        || normalized.contains("request changes")
-        || normalized.contains("must fix")
-    {
-        return ReviewVerdict::NeedsChanges;
-    }
-
-    ReviewVerdict::Unknown
+/// Parse the reviewer's verdict from its `NECTUS_VERDICT:` marker (via the shared
+/// [`super::verdict`] contract) and return it alongside the review with the marker
+/// line stripped. A missing marker yields `Unknown` — there is no natural-language
+/// fallback (it mis-classified reviews that merely quoted phrases like "blocking
+/// issue").
+pub(super) fn parse_review_verdict(output: &str) -> (ReviewVerdict, String) {
+    let (token, text) = parse_and_strip(output);
+    let verdict = match token {
+        Some(VerdictToken::Clean) => ReviewVerdict::Pass,
+        Some(VerdictToken::Blockers) => ReviewVerdict::NeedsChanges,
+        Some(VerdictToken::Feedback) => ReviewVerdict::Feedback,
+        None => ReviewVerdict::Unknown,
+    };
+    (verdict, text)
 }
 
 pub(super) fn build_review_prompt(task: &TaskSummary) -> String {
@@ -221,17 +210,19 @@ Start from:
 - git diff --no-ext-diff HEAD --
 
 Review only for blocking correctness issues, regressions, missing tests, unsafe behavior, or clear requirement misses.
-Return one exact verdict token on the first line:
-- NECTUS_BLOCKERS when there are blockers that must be fixed before this task can be accepted.
-- NECTUS_FEEDBACK when there are no blockers, but there is meaningful implementation or approach feedback worth considering.
-- NECTUS_NO_BLOCKERS when there are no blockers and no material feedback.
+On the first line by itself, output one verdict token:
+- {marker} BLOCKERS when there are blockers that must be fixed before this task can be accepted.
+- {marker} FEEDBACK when there are no blockers, but there is meaningful implementation or approach feedback worth considering.
+- {marker} CLEAN when there are no blockers and no material feedback.
+This verdict line is stripped before the review is shown.
 
-After NECTUS_BLOCKERS, list only concise blockers with file paths when possible.
-After NECTUS_FEEDBACK, list concise non-blocking implementation or approach suggestions.
+After a BLOCKERS verdict, list only concise blockers with file paths when possible.
+After a FEEDBACK verdict, list concise non-blocking implementation or approach suggestions.
 Do not mark style nits or minor preference differences as blockers.
 ",
         title = task.title,
-        brief = task.prompt.as_deref().unwrap_or("No task brief provided.")
+        brief = task.prompt.as_deref().unwrap_or("No task brief provided."),
+        marker = VERDICT_MARKER,
     )
 }
 
@@ -248,15 +239,17 @@ Re-inspect only what changed since your last review:
 - git diff --no-ext-diff HEAD --
 
 You already remember your prior findings — do not re-derive the whole review. Confirm whether your earlier blockers were addressed and whether the latest changes introduced new ones.
-Return one exact verdict token on the first line:
-- NECTUS_BLOCKERS when blockers remain or new ones appeared.
-- NECTUS_FEEDBACK when there are no blockers, but there is meaningful implementation or approach feedback worth considering.
-- NECTUS_NO_BLOCKERS when there are no blockers and no material feedback.
+On the first line by itself, output one verdict token:
+- {marker} BLOCKERS when blockers remain or new ones appeared.
+- {marker} FEEDBACK when there are no blockers, but there is meaningful implementation or approach feedback worth considering.
+- {marker} CLEAN when there are no blockers and no material feedback.
+This verdict line is stripped before the review is shown.
 
-After NECTUS_BLOCKERS, list only the concise outstanding blockers with file paths when possible.
-After NECTUS_FEEDBACK, list concise non-blocking implementation or approach suggestions.
+After a BLOCKERS verdict, list only the concise outstanding blockers with file paths when possible.
+After a FEEDBACK verdict, list concise non-blocking implementation or approach suggestions.
 ",
         title = task.title,
+        marker = VERDICT_MARKER,
     )
 }
 
@@ -310,6 +303,7 @@ mod tests {
             last_session_cwd: Some("/tmp/repo-worktrees/feat/settings".to_string()),
             last_session_label: None,
             review_loop_status: None,
+            attention: None,
             jira_issue_key: None,
             jira_issue_summary: None,
             jira_issue_url: None,
@@ -320,52 +314,48 @@ mod tests {
     }
 
     #[test]
-    fn parses_reviewer_pass_verdict() {
+    fn maps_clean_token_to_pass() {
         assert_eq!(
-            parse_review_verdict("PASS\nNo blocking issues."),
+            parse_review_verdict("NECTUS_VERDICT: CLEAN\nNo blockers found.").0,
             ReviewVerdict::Pass
         );
     }
 
     #[test]
-    fn parses_reviewer_no_blockers_sentinel_as_pass() {
-        assert_eq!(
-            parse_review_verdict("NECTUS_NO_BLOCKERS\nNo blockers found."),
-            ReviewVerdict::Pass
-        );
-    }
-
-    #[test]
-    fn parses_reviewer_blockers_sentinel_as_needs_changes() {
+    fn maps_blockers_token_to_needs_changes() {
         assert_eq!(
             parse_review_verdict(
-                "NECTUS_BLOCKERS\n- native/src/lib.rs misses the command registration."
-            ),
+                "NECTUS_VERDICT: BLOCKERS\n- native/src/lib.rs misses the command registration."
+            )
+            .0,
             ReviewVerdict::NeedsChanges
         );
     }
 
     #[test]
-    fn parses_reviewer_feedback_sentinel_as_feedback() {
+    fn maps_feedback_token_to_feedback() {
         assert_eq!(
-            parse_review_verdict("NECTUS_FEEDBACK\nConsider splitting this into a smaller helper."),
+            parse_review_verdict("NECTUS_VERDICT: FEEDBACK\nConsider a smaller helper.").0,
             ReviewVerdict::Feedback
         );
     }
 
     #[test]
-    fn parses_reviewer_blocking_issue_as_needs_changes() {
-        let output = "Blocking issue: src/App.tsx drops the saved reviewer profile.";
-
-        assert_eq!(parse_review_verdict(output), ReviewVerdict::NeedsChanges);
+    fn strips_marker_from_forwarded_review_text() {
+        let (_, text) = parse_review_verdict("NECTUS_VERDICT: BLOCKERS\n- missing test");
+        assert_eq!(text, "- missing test");
+        assert!(!text.contains("NECTUS_VERDICT"));
     }
 
     #[test]
-    fn leaves_unclear_reviewer_output_unknown() {
+    fn leaves_unmarked_reviewer_output_unknown() {
+        // No marker and no natural-language fallback: "blocking issue" in prose
+        // must NOT be classified — only the explicit token decides.
         assert_eq!(
-            parse_review_verdict("Looks reasonable overall."),
+            parse_review_verdict("Blocking issue: but this is just me explaining one.").0,
             ReviewVerdict::Unknown
         );
+        assert_eq!(parse_review_verdict("Looks reasonable overall.").0, ReviewVerdict::Unknown);
     }
 
     #[test]
@@ -376,9 +366,9 @@ mod tests {
         assert!(prompt.contains("Add project settings with tests"));
         assert!(prompt.contains("git diff --no-ext-diff HEAD --"));
         assert!(!prompt.contains("diff --git a/src/App.tsx b/src/App.tsx"));
-        assert!(prompt.contains("NECTUS_NO_BLOCKERS"));
-        assert!(prompt.contains("NECTUS_BLOCKERS"));
-        assert!(prompt.contains("NECTUS_FEEDBACK"));
+        assert!(prompt.contains("NECTUS_VERDICT: CLEAN"));
+        assert!(prompt.contains("NECTUS_VERDICT: BLOCKERS"));
+        assert!(prompt.contains("NECTUS_VERDICT: FEEDBACK"));
     }
 
     #[test]
@@ -388,9 +378,9 @@ mod tests {
         assert!(prompt.contains("Implement settings panel"));
         assert!(prompt.to_lowercase().contains("already reviewed"));
         assert!(prompt.contains("git diff --no-ext-diff HEAD --"));
-        assert!(prompt.contains("NECTUS_NO_BLOCKERS"));
-        assert!(prompt.contains("NECTUS_BLOCKERS"));
-        assert!(prompt.contains("NECTUS_FEEDBACK"));
+        assert!(prompt.contains("NECTUS_VERDICT: CLEAN"));
+        assert!(prompt.contains("NECTUS_VERDICT: BLOCKERS"));
+        assert!(prompt.contains("NECTUS_VERDICT: FEEDBACK"));
         assert!(!prompt.contains("diff --git"));
     }
 

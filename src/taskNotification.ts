@@ -12,33 +12,37 @@ export interface TaskToast {
   agentKind: AgentKind;
 }
 
-function agentName(task: TaskSummary) {
-  return task.agentName ?? "Codex";
+function agentName(task: TaskSummary | undefined) {
+  return task?.agentName ?? "Codex";
 }
 
 function agentKind(task: TaskSummary): AgentKind {
   return task.agentKind ?? "custom";
 }
 
-export function taskFinishedToast(task: TaskSummary, payload: SessionIdleEvent): TaskToast {
+/**
+ * The title + body for a session attention event. The single source of truth for
+ * this wording, shared by the in-app toast, the OS notification, and the no-task
+ * fallback message (see useEventBridge) so the three renderings never drift.
+ * `task` may be undefined when the event arrives before its task is cached.
+ */
+export function sessionIdleContent(task: TaskSummary | undefined, payload: SessionIdleEvent) {
   const detail = payload.message ? ` ${payload.message}` : "";
-  return {
-    taskId: task.id,
-    title: `${agentName(task)} finished`,
-    body: formatNotificationBody(`${task.title}${detail}`),
-    kind: "success",
-    agentKind: agentKind(task),
-  };
+  return { title: `${agentName(task)} finished`, body: `${task?.title ?? "task is waiting"}${detail}` };
+}
+
+export function sessionNeedsInputContent(task: TaskSummary | undefined, payload: SessionNeedsInputEvent) {
+  const reason = payload.reason ? ` (${payload.reason})` : "";
+  const prompt = payload.prompt ? `: ${payload.prompt}` : "";
+  return { title: `${agentName(task)} needs input`, body: `${task?.title ?? "a task"}${reason}${prompt}` };
+}
+
+export function taskFinishedToast(task: TaskSummary, payload: SessionIdleEvent): TaskToast {
+  const { title, body } = sessionIdleContent(task, payload);
+  return { taskId: task.id, title, body: formatNotificationBody(body), kind: "success", agentKind: agentKind(task) };
 }
 
 export function taskNeedsInputToast(task: TaskSummary, payload: SessionNeedsInputEvent): TaskToast {
-  const reason = payload.reason ? ` (${payload.reason})` : "";
-  const prompt = payload.prompt ? `: ${payload.prompt}` : "";
-  return {
-    taskId: task.id,
-    title: `${agentName(task)} needs input`,
-    body: formatNotificationBody(`${task.title}${reason}${prompt}`),
-    kind: "info",
-    agentKind: agentKind(task),
-  };
+  const { title, body } = sessionNeedsInputContent(task, payload);
+  return { taskId: task.id, title, body: formatNotificationBody(body), kind: "info", agentKind: agentKind(task) };
 }

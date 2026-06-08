@@ -8,7 +8,7 @@ use chrono::Utc;
 use parking_lot::Mutex;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -28,14 +28,17 @@ mod pr_verdict;
 mod pr_worktree;
 mod review_loop;
 mod reviewer;
+mod provider;
 mod reviewer_output;
 mod terminal_io;
+mod verdict;
 
-use agents::{configure_agent_command, sends_initial_prompt_in_args};
+use agents::configure_agent_command;
 use claude::{cleanup_event_sink, spawn_claude_event_watcher};
 use codex::{latest_codex_session_metadata, spawn_codex_event_watcher};
 use command::resolve_agent_command;
 use opencode::{latest_opencode_session_metadata_from_server, spawn_opencode_event_watcher};
+use provider::{provider_session, WatcherKind};
 use pr_consensus::spawn_consensus_pr_review;
 use pr_review::spawn_pr_review;
 use review_loop::spawn_review_on_session_idle;
@@ -87,6 +90,14 @@ fn emit_session_signal(
 ) {
     match signal {
         SessionSignal::Idle { turn_id, message } => {
+            // Idle is the default state, not a persisted attention — clear any prior
+            // "needs you" wait so the badge resolves when the agent finishes a turn.
+            let _ = db
+                .lock()
+                .set_task_attention(task_id, None)
+                .inspect_err(|error| {
+                    tracing::warn!(?error, task_id, "failed to clear task attention")
+                });
             let _ = app
                 .emit(
                     "session_idle",
@@ -114,6 +125,14 @@ fn emit_session_signal(
             reason,
             prompt,
         } => {
+            // Persist the "needs you" signal so it survives an app reload; the
+            // frontend reads it back off the task, not an ephemeral store.
+            let _ = db
+                .lock()
+                .set_task_attention(task_id, Some("needs_input"))
+                .inspect_err(|error| {
+                    tracing::warn!(?error, task_id, "failed to set task attention")
+                });
             let _ = app
                 .emit(
                     "session_needs_input",
@@ -138,8 +157,8 @@ fn emit_session_signal(
 /// Normalize, throttle/de-duplicate, and emit a structured activity line for a
 /// session. Shares `last_activity_line`/`last_activity_at` (and the throttle
 /// window) with the PTY scraper, which is safe because exactly one of the two
-/// paths runs per session — `agent_emits_structured_activity` gates the scraper
-/// off for the providers that feed this one.
+/// paths runs per session — `provider_session(kind).emits_structured_activity`
+/// gates the scraper off for the providers that feed this one.
 fn emit_activity_line(
     app: &AppHandle,
     sessions: &Arc<Mutex<HashMap<String, RunningSession>>>,
@@ -182,30 +201,45 @@ fn emit_activity_line(
         });
 }
 
-/// Split appended log contents into newline-terminated lines, skipping the first
-/// `processed` already-handled lines. Returns the fresh lines (with their line
-/// terminator trimmed) and the count of complete lines seen so far.
-///
-/// A trailing fragment without a `\n` is a line caught mid-write: it is excluded
-/// from both the returned lines and the count, so once its terminator arrives it
-/// is processed exactly once. Counting it (as `str::lines().count()` did) would
-/// skip the completed line and silently drop that turn's idle/needs-input event.
-fn newly_complete_lines(contents: &str, processed: usize) -> (Vec<&str>, usize) {
-    let complete: Vec<&str> = contents
-        .split_inclusive('\n')
-        .filter(|segment| segment.ends_with('\n'))
-        .map(|segment| segment.trim_end_matches('\n').trim_end_matches('\r'))
-        .collect();
-    let total = complete.len();
-    let fresh = complete.into_iter().skip(processed).collect();
-    (fresh, total)
+/// Walk back from the end of `bytes` to the last valid UTF-8 boundary, returning
+/// the valid prefix and the trailing incomplete bytes (at most 3). The event-log
+/// tail is read raw because a multi-byte character can be split across a read
+/// boundary mid-write; the incomplete tail is left for the next read. The common
+/// ASCII-dominant JSONL case returns on the first check.
+fn split_at_utf8_boundary(bytes: &[u8]) -> (&[u8], &[u8]) {
+    let mut end = bytes.len();
+    loop {
+        if std::str::from_utf8(&bytes[..end]).is_ok() {
+            return (&bytes[..end], &bytes[end..]);
+        }
+        if end == 0 {
+            return (&[], bytes);
+        }
+        end -= 1;
+    }
 }
 
-/// Tail an append-only event log, translating each newly completed line into a
-/// [`SessionSignal`] via `parse_line` and emitting it. Polls every
-/// `poll_interval` and exits once the session is no longer running. Shared by the
-/// Codex and Claude watchers so the line-tailing (and its partial-line guard via
-/// [`newly_complete_lines`]) lives in one place.
+/// Emit every complete (`\n`-terminated) line in `fragment` via `emit`, trimming a
+/// trailing `\r`, and leave `fragment` holding the trailing partial segment (which
+/// may be empty). A line caught mid-write — no terminator yet — is never emitted
+/// until its `\n` arrives, so each completed line is processed exactly once.
+/// (Counting a partial line as complete would skip the finished line and silently
+/// drop that turn's idle/needs-input event.)
+fn drain_complete_lines(fragment: &mut String, mut emit: impl FnMut(&str)) {
+    while let Some(pos) = fragment.find('\n') {
+        let line = fragment[..pos].trim_end_matches('\r').to_string();
+        emit(&line);
+        fragment.drain(..=pos);
+    }
+}
+
+/// Tail an append-only event log incrementally, translating each newly completed
+/// line into a [`SessionSignal`] via `parse_line` and emitting it. Polls every
+/// `poll_interval` and exits once the session is no longer running. Tracks a byte
+/// offset and reads only the appended tail each tick (not the whole growing file,
+/// which a long session makes increasingly expensive), carrying any partial
+/// trailing line across ticks via [`drain_complete_lines`]. Shared by the Codex
+/// and Claude watchers.
 #[allow(clippy::too_many_arguments)]
 fn watch_event_log<F>(
     app: &AppHandle,
@@ -220,22 +254,71 @@ fn watch_event_log<F>(
 ) where
     F: Fn(&str) -> Option<SessionSignal>,
 {
-    let mut processed_lines = 0_usize;
+    let mut read_offset: u64 = 0;
+    let mut fragment = String::new();
     loop {
         if !sessions.lock().contains_key(session_id) {
             return;
         }
-        let Ok(contents) = std::fs::read_to_string(log_path) else {
+
+        // The log may not exist yet (Codex races metadata discovery against the
+        // first rollout write); wait and retry, as the old full-read path did.
+        let Ok(file) = std::fs::File::open(log_path) else {
             std::thread::sleep(poll_interval);
             continue;
         };
-        let (fresh, total) = newly_complete_lines(&contents, processed_lines);
-        for line in fresh {
+
+        // The file shrank behind our offset → truncation or rotation (the Claude
+        // hook sink is truncated to empty on resume). Reset and re-read from 0.
+        let file_len = file.metadata().map(|meta| meta.len()).unwrap_or(0);
+        if file_len < read_offset {
+            read_offset = 0;
+            fragment.clear();
+        }
+        if file_len == read_offset {
+            std::thread::sleep(poll_interval);
+            continue;
+        }
+
+        let mut reader = BufReader::new(file);
+        if reader.seek(SeekFrom::Start(read_offset)).is_err() {
+            std::thread::sleep(poll_interval);
+            continue;
+        }
+        let mut raw = Vec::new();
+        match reader.read_to_end(&mut raw) {
+            Ok(0) => {
+                std::thread::sleep(poll_interval);
+                continue;
+            }
+            Ok(_) => {}
+            Err(_) => {
+                std::thread::sleep(poll_interval);
+                continue;
+            }
+        }
+
+        // A multi-byte char may be split across the read boundary mid-write; keep
+        // only the valid UTF-8 prefix and re-read the few trailing bytes next tick.
+        let (valid, _) = split_at_utf8_boundary(&raw);
+        match std::str::from_utf8(valid) {
+            Ok(text) => {
+                read_offset += valid.len() as u64;
+                fragment.push_str(text);
+            }
+            // Unreachable: split_at_utf8_boundary returns a valid prefix. Don't
+            // advance the offset, so the bytes are re-read next tick.
+            Err(_) => {
+                std::thread::sleep(poll_interval);
+                continue;
+            }
+        }
+
+        drain_complete_lines(&mut fragment, |line| {
             if let Some(signal) = parse_line(line) {
                 emit_session_signal(app, db, sessions, task_id, session_id, cwd, signal);
             }
-        }
-        processed_lines = total;
+        });
         std::thread::sleep(poll_interval);
     }
 }
@@ -339,7 +422,8 @@ impl SessionManager {
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty());
-        let opencode_port = if agent.agent_kind == AgentKind::OpenCode {
+        let ps = provider_session(agent.agent_kind);
+        let opencode_port = if ps.needs_local_server {
             Some(reserve_localhost_port()?)
         } else {
             None
@@ -399,7 +483,7 @@ impl SessionManager {
             }
         };
 
-        if !resume && !sends_initial_prompt_in_args(agent.agent_kind) {
+        if !resume && !ps.sends_prompt_in_args {
             if let Some(prompt) = initial_prompt {
                 if let Err(error) = write_agent_submission(writer.as_mut(), prompt) {
                     reap(&mut child);
@@ -463,8 +547,8 @@ impl SessionManager {
             },
         );
 
-        if agent.agent_kind == AgentKind::Codex {
-            spawn_codex_event_watcher(
+        match ps.watcher {
+            WatcherKind::Codex => spawn_codex_event_watcher(
                 app.clone(),
                 db.clone(),
                 self.sessions.clone(),
@@ -472,28 +556,29 @@ impl SessionManager {
                 session_id.clone(),
                 cwd_path.clone(),
                 started_at.clone(),
-            );
-        } else if agent.agent_kind == AgentKind::Claude {
-            spawn_claude_event_watcher(
+            ),
+            WatcherKind::Claude => spawn_claude_event_watcher(
                 app.clone(),
                 db.clone(),
                 self.sessions.clone(),
                 task.id,
                 session_id.clone(),
                 cwd_path.clone(),
-            );
-        } else if agent.agent_kind == AgentKind::OpenCode {
-            if let Some(port) = opencode_port {
-                spawn_opencode_event_watcher(
-                    app.clone(),
-                    db.clone(),
-                    self.sessions.clone(),
-                    task.id,
-                    session_id.clone(),
-                    cwd_path.clone(),
-                    port,
-                );
+            ),
+            WatcherKind::OpenCode => {
+                if let Some(port) = opencode_port {
+                    spawn_opencode_event_watcher(
+                        app.clone(),
+                        db.clone(),
+                        self.sessions.clone(),
+                        task.id,
+                        session_id.clone(),
+                        cwd_path.clone(),
+                        port,
+                    );
+                }
             }
+            WatcherKind::None => {}
         }
 
         std::thread::spawn({
@@ -507,8 +592,8 @@ impl SessionManager {
             let started_at = started_at.clone();
             // For providers with a structured event watcher, that watcher owns the
             // activity line; scraping the PTY here would only fight it with TUI
-            // chrome and echoed keystrokes (see `agent_emits_structured_activity`).
-            let scrape_activity = !agent_emits_structured_activity(agent_kind);
+            // chrome and echoed keystrokes (see `provider_session`).
+            let scrape_activity = !provider_session(agent_kind).emits_structured_activity;
             move || {
                 let mut buffer = [0_u8; 8192];
                 loop {
@@ -578,42 +663,21 @@ impl SessionManager {
                     // EOF means the child has exited; wait() reaps the zombie and
                     // yields the real status so we can report a true exit code.
                     let exit_code = running.child.wait().ok().map(|status| status.exit_code() as i32);
-                    if agent_kind == AgentKind::Codex {
-                        if let Some(metadata) = latest_codex_session_metadata(&cwd, &started_at) {
-                            let _ = db
-                                .lock()
-                                .set_last_session(task_id, &metadata.id, metadata.label.as_deref())
-                                .inspect_err(|error| {
-                                    tracing::warn!(
-                                        ?error,
-                                        task_id,
-                                        "failed to save latest Codex session"
-                                    )
-                                });
-                        }
-                    } else if agent_kind == AgentKind::Claude {
+                    if let Some((id, label)) = resolve_resumable_metadata(
+                        agent_kind,
+                        &cwd,
+                        &started_at,
+                        running.opencode_port,
+                    ) {
+                        let _ = db
+                            .lock()
+                            .set_last_session(task_id, &id, label.as_deref())
+                            .inspect_err(|error| {
+                                tracing::warn!(?error, task_id, "failed to save latest session")
+                            });
+                    }
+                    if provider_session(agent_kind).cleanup_event_sink {
                         cleanup_event_sink(&session_id);
-                    } else if agent_kind == AgentKind::OpenCode {
-                        if let Some(port) = running.opencode_port {
-                            if let Some(metadata) =
-                                latest_opencode_session_metadata_from_server(port, &cwd)
-                            {
-                                let _ = db
-                                    .lock()
-                                    .set_last_session(
-                                        task_id,
-                                        &metadata.id,
-                                        metadata.label.as_deref(),
-                                    )
-                                    .inspect_err(|error| {
-                                        tracing::warn!(
-                                            ?error,
-                                            task_id,
-                                            "failed to save latest OpenCode session"
-                                        )
-                                    });
-                            }
-                        }
                     }
                     let _ = db
                         .lock()
@@ -678,34 +742,19 @@ impl SessionManager {
         let stopped_at = Utc::now().to_rfc3339();
         running.session.state = SessionState::Stopped;
         running.session.stopped_at = Some(stopped_at);
-        if running.agent_kind == AgentKind::Codex {
-            if let Some(metadata) =
-                latest_codex_session_metadata(&running.cwd, &running.session.started_at)
-            {
-                db.lock().set_last_session(
-                    running.session.task_id,
-                    &metadata.id,
-                    metadata.label.as_deref(),
-                )?;
-                running.session.resumable_session_id = Some(metadata.id);
-                running.session.resumable_session_label = metadata.label;
-            }
-        } else if running.agent_kind == AgentKind::Claude {
+        if let Some((id, label)) = resolve_resumable_metadata(
+            running.agent_kind,
+            &running.cwd,
+            &running.session.started_at,
+            running.opencode_port,
+        ) {
+            db.lock()
+                .set_last_session(running.session.task_id, &id, label.as_deref())?;
+            running.session.resumable_session_id = Some(id);
+            running.session.resumable_session_label = label;
+        }
+        if provider_session(running.agent_kind).cleanup_event_sink {
             cleanup_event_sink(&session_id);
-        } else if running.agent_kind == AgentKind::OpenCode {
-            if let Some(port) = running.opencode_port {
-                if let Some(metadata) =
-                    latest_opencode_session_metadata_from_server(port, &running.cwd)
-                {
-                    db.lock().set_last_session(
-                        running.session.task_id,
-                        &metadata.id,
-                        metadata.label.as_deref(),
-                    )?;
-                    running.session.resumable_session_id = Some(metadata.id);
-                    running.session.resumable_session_label = metadata.label;
-                }
-            }
         }
         db.lock()
             .set_active_session(running.session.task_id, None)?;
@@ -834,16 +883,25 @@ impl SessionManager {
 /// an ellipsis, this just bounds the payload.
 const ACTIVITY_LINE_MAX: usize = 200;
 
-/// Providers whose watcher feeds [`SessionSignal::Activity`] from a structured
-/// event stream. For these we skip the raw-PTY [`latest_activity_line`] scraper:
-/// they render full-screen TUIs, so the scraper only ever surfaces statusline
-/// chrome and the user's own echoed keystrokes. Gemini and custom agents have no
-/// structured source yet, so they keep the best-effort PTY scraper.
-fn agent_emits_structured_activity(kind: AgentKind) -> bool {
-    matches!(
-        kind,
-        AgentKind::Codex | AgentKind::Claude | AgentKind::OpenCode
-    )
+/// Resolve a finished session's resumable thread id + label, provider-specific:
+/// Codex reads its rollout file, OpenCode queries its local server, and providers
+/// with no resumable thread (Claude/Gemini/Custom) return `None`. Shared by the
+/// reader-thread EOF teardown and `stop()` so the per-provider probe lives once.
+fn resolve_resumable_metadata(
+    agent_kind: AgentKind,
+    cwd: &Path,
+    started_at: &str,
+    opencode_port: Option<u16>,
+) -> Option<(String, Option<String>)> {
+    match agent_kind {
+        AgentKind::Codex => {
+            latest_codex_session_metadata(cwd, started_at).map(|meta| (meta.id, meta.label))
+        }
+        AgentKind::OpenCode => opencode_port
+            .and_then(|port| latest_opencode_session_metadata_from_server(port, cwd))
+            .map(|meta| (meta.id, meta.label)),
+        AgentKind::Claude | AgentKind::Gemini | AgentKind::Custom => None,
+    }
 }
 
 /// Reduce a structured progress string to a single short, readable line: take
@@ -860,6 +918,22 @@ fn normalize_activity(raw: &str) -> Option<String> {
         return None;
     }
     Some(line.chars().take(ACTIVITY_LINE_MAX).collect())
+}
+
+/// Longest prompt/preview snippet a provider watcher forwards as a needs-input or
+/// activity preview (e.g. the question text behind a `session_needs_input`).
+const PROMPT_PREVIEW_LIMIT: usize = 500;
+
+/// Trim `value` and bound it to [`PROMPT_PREVIEW_LIMIT`] characters, returning
+/// `None` when nothing readable remains. Shared by the Codex and Claude watchers,
+/// which both surface short previews of agent prompts/questions.
+fn prompt_preview(value: &str) -> Option<String> {
+    let value = value.trim();
+    if value.is_empty() {
+        None
+    } else {
+        Some(value.chars().take(PROMPT_PREVIEW_LIMIT).collect())
+    }
 }
 
 /// Derive the agent's latest human-readable activity line from raw PTY output.
@@ -1029,17 +1103,6 @@ mod tests {
     }
 
     #[test]
-    fn structured_activity_providers_skip_the_pty_scraper() {
-        // Providers with a structured watcher must not scrape the PTY (chrome +
-        // echoed keystrokes); Gemini/custom keep the best-effort scraper.
-        assert!(agent_emits_structured_activity(AgentKind::Codex));
-        assert!(agent_emits_structured_activity(AgentKind::Claude));
-        assert!(agent_emits_structured_activity(AgentKind::OpenCode));
-        assert!(!agent_emits_structured_activity(AgentKind::Gemini));
-        assert!(!agent_emits_structured_activity(AgentKind::Custom));
-    }
-
-    #[test]
     fn normalize_activity_strips_markdown_chrome_and_takes_first_real_line() {
         assert_eq!(
             normalize_activity("**Investigating the failing test**\n\ndetails follow"),
@@ -1153,31 +1216,55 @@ mod tests {
         assert_eq!(activity_to_emit(None, Some("Older line"), None, now), None);
     }
 
-    #[test]
-    fn newly_complete_lines_defers_a_partial_trailing_line() {
-        // First poll: two complete lines plus a fragment caught mid-write.
-        let (fresh, processed) = newly_complete_lines("a\nb\npar", 0);
-        assert_eq!(fresh, vec!["a", "b"]);
-        assert_eq!(processed, 2);
-
-        // Next poll: the fragment now has its newline; it must be emitted exactly
-        // once (the old lines().count() approach skipped it entirely).
-        let (fresh, processed) = newly_complete_lines("a\nb\npartial\n", processed);
-        assert_eq!(fresh, vec!["partial"]);
-        assert_eq!(processed, 3);
+    fn drain(fragment: &mut String) -> Vec<String> {
+        let mut emitted = Vec::new();
+        drain_complete_lines(fragment, |line| emitted.push(line.to_string()));
+        emitted
     }
 
     #[test]
-    fn newly_complete_lines_trims_crlf_and_skips_processed() {
-        let (fresh, processed) = newly_complete_lines("x\r\ny\r\n", 1);
-        assert_eq!(fresh, vec!["y"]);
-        assert_eq!(processed, 2);
+    fn drain_complete_lines_defers_partial_trailing_fragment() {
+        // First tick: two complete lines plus a fragment caught mid-write.
+        let mut fragment = "a\nb\npar".to_string();
+        assert_eq!(drain(&mut fragment), vec!["a", "b"]);
+        assert_eq!(fragment, "par");
+
+        // Next tick: the rest of the line plus its newline arrives; the line must
+        // be emitted exactly once (the partial fragment was never skipped).
+        fragment.push_str("tial\n");
+        assert_eq!(drain(&mut fragment), vec!["partial"]);
+        assert!(fragment.is_empty());
     }
 
     #[test]
-    fn newly_complete_lines_ignores_a_lone_partial_line() {
-        let (fresh, processed) = newly_complete_lines("still writing", 0);
-        assert!(fresh.is_empty());
-        assert_eq!(processed, 0);
+    fn drain_complete_lines_trims_crlf() {
+        let mut fragment = "x\r\ny\r\n".to_string();
+        assert_eq!(drain(&mut fragment), vec!["x", "y"]);
+        assert!(fragment.is_empty());
+    }
+
+    #[test]
+    fn drain_complete_lines_ignores_a_lone_partial_line() {
+        let mut fragment = "still writing".to_string();
+        assert!(drain(&mut fragment).is_empty());
+        assert_eq!(fragment, "still writing");
+    }
+
+    #[test]
+    fn split_at_utf8_boundary_passes_through_clean_ascii() {
+        let bytes = b"hello\nworld\n";
+        let (valid, leftover) = split_at_utf8_boundary(bytes);
+        assert_eq!(valid, bytes);
+        assert!(leftover.is_empty());
+    }
+
+    #[test]
+    fn split_at_utf8_boundary_backs_off_incomplete_multibyte() {
+        // U+00E9 (é) encodes as [0xC3, 0xA9]; simulate only the first byte arriving.
+        let mut bytes = b"abc\n".to_vec();
+        bytes.push(0xC3);
+        let (valid, leftover) = split_at_utf8_boundary(&bytes);
+        assert_eq!(std::str::from_utf8(valid).unwrap(), "abc\n");
+        assert_eq!(leftover, &[0xC3u8]);
     }
 }

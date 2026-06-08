@@ -170,30 +170,6 @@ describe("api", () => {
     expect(mockedInvoke).not.toHaveBeenCalled();
   });
 
-  it("creates a GitHub pull request through the native command", async () => {
-    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
-    mockedInvoke.mockResolvedValueOnce({
-      id: 5,
-      repoId: 1,
-      title: "Add GitHub panel",
-      status: "review",
-      prUrl: "https://github.com/hvp17/nectus/pull/9",
-      hasWorktree: true,
-      isDirty: false,
-      createdAt: "2026-06-02T12:00:00.000Z",
-      updatedAt: "2026-06-02T12:01:00.000Z",
-    });
-
-    await api.createGithubPullRequest({ taskId: 5, title: "Add GitHub panel", body: "Body", draft: true });
-
-    expect(mockedInvoke).toHaveBeenCalledWith("create_github_pull_request", {
-      taskId: 5,
-      title: "Add GitHub panel",
-      body: "Body",
-      draft: true,
-    });
-  });
-
   it("requests live pull request status for a task", async () => {
     // `isTauri` is captured at module load, so re-import with the flag present
     // (githubPullRequestStatus returns a disconnected fallback outside Tauri).

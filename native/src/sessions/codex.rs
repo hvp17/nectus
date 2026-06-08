@@ -1,4 +1,4 @@
-use super::{watch_event_log, RunningSession, SessionSignal};
+use super::{prompt_preview, watch_event_log, RunningSession, SessionSignal};
 use crate::db::Database;
 use parking_lot::Mutex;
 use serde::Deserialize;
@@ -15,7 +15,6 @@ use walkdir::WalkDir;
 const CODEX_METADATA_FAST_POLL_ATTEMPTS: usize = 120;
 const CODEX_METADATA_FAST_POLL_INTERVAL: Duration = Duration::from_millis(500);
 const CODEX_METADATA_IDLE_POLL_INTERVAL: Duration = Duration::from_secs(5);
-const CODEX_PROMPT_PREVIEW_LIMIT: usize = 500;
 /// How often the rollout log is polled for new turn/idle events.
 const CODEX_LOG_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
@@ -510,11 +509,3 @@ fn request_user_input_prompt_from_value(value: &serde_json::Value) -> Option<Str
     }
 }
 
-fn prompt_preview(value: &str) -> Option<String> {
-    let value = value.trim();
-    if value.is_empty() {
-        None
-    } else {
-        Some(value.chars().take(CODEX_PROMPT_PREVIEW_LIMIT).collect())
-    }
-}

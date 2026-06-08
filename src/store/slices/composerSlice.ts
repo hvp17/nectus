@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { StateCreator } from "zustand";
 import type { AppState } from "../appStore";
 import { applyUpdate } from "../setState";
-import { createBranchIdentifier, type PendingJiraLink } from "../../hooks/useCreateTaskForm";
+import { createBranchIdentifier, type PendingJiraLink } from "../../lib/composerForm";
 
 /**
  * The New Task composer draft, now store-owned so the open-trigger (rail / board),
