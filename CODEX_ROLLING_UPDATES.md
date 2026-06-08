@@ -707,7 +707,7 @@ hook callbacks that update state.
 **Commit:** `825c3b3` (`test(sessions): cover attention clearing controls`)
 pushed to `origin/main`.
 
-### Iteration 21 - in progress (2026-06-09)
+### Iteration 21 - done (2026-06-09)
 
 **Goal:** Remove the obsolete command-redesign working tracker.
 
@@ -728,12 +728,42 @@ current surface instead of carrying obsolete branch trackers beside them.
 - Search: confirm no references to `command-redesign-plan.md` remain.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - `rg -n "command-redesign-plan|Command Redesign|1026 tests|1026/1026" README.md AGENTS.md docs src native`
   returned no matches.
 - `pnpm test` passed (58 files, 350 tests).
+- `pnpm build` passed.
+
+**Commit:** `7362e81` (`docs: remove obsolete command redesign tracker`) pushed
+to `origin/main`.
+
+### Iteration 22 - in progress (2026-06-09)
+
+**Goal:** Cover the JIRA REST token cache/update hook.
+
+**Rationale:** `useJiraToken` is the Settings-side path for connecting and
+disconnecting the optional JIRA REST API token. It updates the REST status cache,
+invalidates the status after disconnect, and re-reads settings so later saves do
+not clobber the non-secret JIRA account fields. That cache contract has no focused
+test.
+
+**Docs checked:** TanStack Query v5 docs for `queryClient.setQueryData` and
+`invalidateQueries` after successful mutations.
+
+**Claimed files:**
+- `src/hooks/useJiraToken.test.tsx`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/hooks/useJiraToken.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- `pnpm vitest run src/hooks/useJiraToken.test.tsx` passed (2 tests).
+- `pnpm test` passed (59 files, 352 tests).
 - `pnpm build` passed.
 
 ---
