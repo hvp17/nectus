@@ -219,6 +219,38 @@ fn split_at_utf8_boundary(bytes: &[u8]) -> (&[u8], &[u8]) {
     }
 }
 
+/// Decode a freshly read PTY chunk to UTF-8 text, stitching it onto any trailing
+/// bytes of a multi-byte character that was split across the previous read
+/// boundary. `carry` holds those leftover bytes (at most 3) between calls; on
+/// return it holds this read's own incomplete tail, if any. Only the
+/// guaranteed-valid prefix is decoded — never `from_utf8_lossy` over a raw read —
+/// so a box-drawing/CJK glyph split by the 8 KiB read boundary stays one intact
+/// cell. The lossy path turned each split into one-to-three `�` cells, which both
+/// corrupted the glyph and (by changing the line's cell count) desynced the
+/// agent's cursor-addressed redraws into overlapping frames.
+fn decode_pty_chunk(carry: &mut Vec<u8>, read: &[u8]) -> String {
+    // Hot path: nothing carried over → decode in place, copying only the rare
+    // incomplete tail into `carry`.
+    if carry.is_empty() {
+        let (valid, rest) = split_at_utf8_boundary(read);
+        let text = std::str::from_utf8(valid).unwrap_or_default().to_string();
+        carry.extend_from_slice(rest);
+        return text;
+    }
+    // A character was split last read: complete it by prepending the carried bytes.
+    carry.extend_from_slice(read);
+    let (text, rest_len) = {
+        let (valid, rest) = split_at_utf8_boundary(carry);
+        (
+            std::str::from_utf8(valid).unwrap_or_default().to_string(),
+            rest.len(),
+        )
+    };
+    let consumed = carry.len() - rest_len;
+    carry.drain(..consumed);
+    text
+}
+
 /// Emit every complete (`\n`-terminated) line in `fragment` via `emit`, trimming a
 /// trailing `\r`, and leave `fragment` holding the trailing partial segment (which
 /// may be empty). A line caught mid-write — no terminator yet — is never emitted
@@ -596,11 +628,21 @@ impl SessionManager {
             let scrape_activity = !provider_session(agent_kind).emits_structured_activity;
             move || {
                 let mut buffer = [0_u8; 8192];
+                // Trailing bytes of a multi-byte character split across a read
+                // boundary, carried to the next read so it decodes whole instead of
+                // as `�` (see decode_pty_chunk).
+                let mut utf8_carry: Vec<u8> = Vec::new();
                 loop {
                     match reader.read(&mut buffer) {
                         Ok(0) => break,
                         Ok(count) => {
-                            let data = String::from_utf8_lossy(&buffer[..count]).to_string();
+                            let data = decode_pty_chunk(&mut utf8_carry, &buffer[..count]);
+                            // A read that delivered only the lead bytes of a
+                            // character yields no complete text yet; wait for the
+                            // rest rather than emit an empty frame.
+                            if data.is_empty() {
+                                continue;
+                            }
                             let mut start_offset = 0;
                             let mut activity_line = None;
                             if let Some(running) = sessions.lock().get_mut(&session_id) {
@@ -1266,5 +1308,53 @@ mod tests {
         let (valid, leftover) = split_at_utf8_boundary(&bytes);
         assert_eq!(std::str::from_utf8(valid).unwrap(), "abc\n");
         assert_eq!(leftover, &[0xC3u8]);
+    }
+
+    #[test]
+    fn decode_pty_chunk_passes_clean_ascii_through_without_carry() {
+        let mut carry = Vec::new();
+        assert_eq!(decode_pty_chunk(&mut carry, b"hello world"), "hello world");
+        assert!(carry.is_empty());
+    }
+
+    #[test]
+    fn decode_pty_chunk_stitches_a_box_drawing_char_split_across_two_reads() {
+        // Four U+2500 "─" (0xE2 0x94 0x80 each, 12 bytes). A read boundary can fall
+        // mid-character; splitting at byte 4 cuts the second "─" after its lead byte
+        // — exactly the case the lossy decoder turned into the screenshot's `─��─`.
+        let bytes = "────".as_bytes();
+        let mut carry = Vec::new();
+        let first = decode_pty_chunk(&mut carry, &bytes[..4]);
+        let second = decode_pty_chunk(&mut carry, &bytes[4..]);
+        let combined = format!("{first}{second}");
+        assert_eq!(combined, "────");
+        assert!(!combined.contains('\u{fffd}'), "no U+FFFD replacement chars");
+        assert!(carry.is_empty(), "carry drains once the sequence completes");
+    }
+
+    #[test]
+    fn decode_pty_chunk_completes_a_char_delivered_one_byte_per_read() {
+        // A single 3-byte "─" trickled in one byte per read: nothing renders until
+        // the final byte, then the whole glyph appears exactly once.
+        let bytes = "─".as_bytes();
+        let mut carry = Vec::new();
+        assert_eq!(decode_pty_chunk(&mut carry, &bytes[0..1]), "");
+        assert_eq!(decode_pty_chunk(&mut carry, &bytes[1..2]), "");
+        assert_eq!(decode_pty_chunk(&mut carry, &bytes[2..3]), "─");
+        assert!(carry.is_empty());
+    }
+
+    #[test]
+    fn decode_pty_chunk_preserves_total_byte_length_across_a_split() {
+        // The frontend dedupes session_output by byte offset, so emitted bytes must
+        // sum to bytes read — the lossy path inflated a 1-byte tail into a 3-byte
+        // `�`, corrupting the glyph and skewing the offset math.
+        let bytes = "a─b".as_bytes(); // 1 + 3 + 1 = 5 bytes
+        let mut carry = Vec::new();
+        let first = decode_pty_chunk(&mut carry, &bytes[..2]); // "a" + lead byte of "─"
+        let second = decode_pty_chunk(&mut carry, &bytes[2..]);
+        assert_eq!(format!("{first}{second}"), "a─b");
+        assert_eq!(first.len() + second.len(), bytes.len());
+        assert!(carry.is_empty());
     }
 }
