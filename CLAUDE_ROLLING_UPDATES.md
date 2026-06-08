@@ -190,6 +190,29 @@ non-Codex docs, or a researched shadcn enhancement) rather than mining ternaries
 
 **Status:** committed.
 
+### Iteration 7 — done (2026-06-09) · commit pending
+
+**Goal (best practices — coverage):** Add `src/lib/composerForm.test.ts` covering
+the worktree branch-name helpers, which had zero tests.
+
+**Why:** `resolveWorktreeBranchName` / `getSuggestedWorktreeBranchName` drive a
+documented Product Default (worktree branch naming) and are easy to regress. Tests
+lock in: typed name wins (trimmed); empty/whitespace falls back to the suggested
+`prefix+id`; a name equal to the bare prefix also falls back; no-prefix uses the
+typed name verbatim; `createBranchIdentifier` is `task-`-prefixed and unique.
+Pure test addition — **no production code changed** (lowest possible risk).
+
+**Scope:** new file `src/lib/composerForm.test.ts` (9 tests).
+
+**Verification:** `pnpm vitest run src/lib/composerForm.test.ts` (9/9); full
+`pnpm test` (48 files, 307 tests); `pnpm build` (ok).
+
+**Coordination note:** A full-suite run briefly showed 1 failure that was Codex's
+*in-progress* `useJira` edit, not mine — verify own changes in isolation first; a
+pure test-file addition cannot break other suites.
+
+**Status:** committed.
+
 ## Backlog / future work (candidate improvements, not yet started)
 
 - Audit other `package.json` deps for unused entries (e.g. confirm `cmdk`,
