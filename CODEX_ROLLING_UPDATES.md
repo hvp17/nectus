@@ -677,7 +677,7 @@ hook updates in `act`.
 **Commit:** `e757c9c` (`test(sessions): cover session command updates`) pushed to
 `origin/main`.
 
-### Iteration 20 - in progress (2026-06-09)
+### Iteration 20 - done (2026-06-09)
 
 **Goal:** Add focused coverage for session attention clearing wrappers.
 
@@ -696,11 +696,43 @@ hook callbacks that update state.
 - Focused: `pnpm vitest run src/hooks/useSessionAttentionControls.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/hooks/useSessionAttentionControls.test.tsx` passed (5
   tests).
+- `pnpm test` passed (58 files, 350 tests).
+- `pnpm build` passed.
+
+**Commit:** `825c3b3` (`test(sessions): cover attention clearing controls`)
+pushed to `origin/main`.
+
+### Iteration 21 - in progress (2026-06-09)
+
+**Goal:** Remove the obsolete command-redesign working tracker.
+
+**Rationale:** `docs/command-redesign-plan.md` is a branch-era rollout tracker
+that says it should be folded into permanent docs or deleted once the redesign
+lands. It is not referenced by the docs index, and it now contains stale
+historical verification counts, so keeping it in the live docs tree creates
+avoidable drift.
+
+**Docs checked:** Diataxis reference guidance for concise, orderly, current
+reference material; this reinforces keeping the indexed docs as the authoritative
+current surface instead of carrying obsolete branch trackers beside them.
+
+**Claimed files:**
+- `docs/command-redesign-plan.md`
+
+**Verification plan:**
+- Search: confirm no references to `command-redesign-plan.md` remain.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- `rg -n "command-redesign-plan|Command Redesign|1026 tests|1026/1026" README.md AGENTS.md docs src native`
+  returned no matches.
 - `pnpm test` passed (58 files, 350 tests).
 - `pnpm build` passed.
 
