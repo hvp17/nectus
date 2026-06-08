@@ -43,10 +43,6 @@ pub(super) fn fallback_agent_candidates(command: &str, home: Option<&Path>) -> V
     candidates
 }
 
-pub(super) fn sends_initial_prompt_in_args(agent_kind: AgentKind) -> bool {
-    agent_kind == AgentKind::OpenCode
-}
-
 fn add_model_arg(command: &mut CommandBuilder, agent: &AgentProfile) {
     if let Some(model) = agent
         .model

@@ -28,15 +28,17 @@ mod pr_verdict;
 mod pr_worktree;
 mod review_loop;
 mod reviewer;
+mod provider;
 mod reviewer_output;
 mod terminal_io;
 mod verdict;
 
-use agents::{configure_agent_command, sends_initial_prompt_in_args};
+use agents::configure_agent_command;
 use claude::{cleanup_event_sink, spawn_claude_event_watcher};
 use codex::{latest_codex_session_metadata, spawn_codex_event_watcher};
 use command::resolve_agent_command;
 use opencode::{latest_opencode_session_metadata_from_server, spawn_opencode_event_watcher};
+use provider::{provider_session, WatcherKind};
 use pr_consensus::spawn_consensus_pr_review;
 use pr_review::spawn_pr_review;
 use review_loop::spawn_review_on_session_idle;
@@ -139,8 +141,8 @@ fn emit_session_signal(
 /// Normalize, throttle/de-duplicate, and emit a structured activity line for a
 /// session. Shares `last_activity_line`/`last_activity_at` (and the throttle
 /// window) with the PTY scraper, which is safe because exactly one of the two
-/// paths runs per session — `agent_emits_structured_activity` gates the scraper
-/// off for the providers that feed this one.
+/// paths runs per session — `provider_session(kind).emits_structured_activity`
+/// gates the scraper off for the providers that feed this one.
 fn emit_activity_line(
     app: &AppHandle,
     sessions: &Arc<Mutex<HashMap<String, RunningSession>>>,
@@ -404,7 +406,8 @@ impl SessionManager {
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty());
-        let opencode_port = if agent.agent_kind == AgentKind::OpenCode {
+        let ps = provider_session(agent.agent_kind);
+        let opencode_port = if ps.needs_local_server {
             Some(reserve_localhost_port()?)
         } else {
             None
@@ -464,7 +467,7 @@ impl SessionManager {
             }
         };
 
-        if !resume && !sends_initial_prompt_in_args(agent.agent_kind) {
+        if !resume && !ps.sends_prompt_in_args {
             if let Some(prompt) = initial_prompt {
                 if let Err(error) = write_agent_submission(writer.as_mut(), prompt) {
                     reap(&mut child);
@@ -528,8 +531,8 @@ impl SessionManager {
             },
         );
 
-        if agent.agent_kind == AgentKind::Codex {
-            spawn_codex_event_watcher(
+        match ps.watcher {
+            WatcherKind::Codex => spawn_codex_event_watcher(
                 app.clone(),
                 db.clone(),
                 self.sessions.clone(),
@@ -537,28 +540,29 @@ impl SessionManager {
                 session_id.clone(),
                 cwd_path.clone(),
                 started_at.clone(),
-            );
-        } else if agent.agent_kind == AgentKind::Claude {
-            spawn_claude_event_watcher(
+            ),
+            WatcherKind::Claude => spawn_claude_event_watcher(
                 app.clone(),
                 db.clone(),
                 self.sessions.clone(),
                 task.id,
                 session_id.clone(),
                 cwd_path.clone(),
-            );
-        } else if agent.agent_kind == AgentKind::OpenCode {
-            if let Some(port) = opencode_port {
-                spawn_opencode_event_watcher(
-                    app.clone(),
-                    db.clone(),
-                    self.sessions.clone(),
-                    task.id,
-                    session_id.clone(),
-                    cwd_path.clone(),
-                    port,
-                );
+            ),
+            WatcherKind::OpenCode => {
+                if let Some(port) = opencode_port {
+                    spawn_opencode_event_watcher(
+                        app.clone(),
+                        db.clone(),
+                        self.sessions.clone(),
+                        task.id,
+                        session_id.clone(),
+                        cwd_path.clone(),
+                        port,
+                    );
+                }
             }
+            WatcherKind::None => {}
         }
 
         std::thread::spawn({
@@ -572,8 +576,8 @@ impl SessionManager {
             let started_at = started_at.clone();
             // For providers with a structured event watcher, that watcher owns the
             // activity line; scraping the PTY here would only fight it with TUI
-            // chrome and echoed keystrokes (see `agent_emits_structured_activity`).
-            let scrape_activity = !agent_emits_structured_activity(agent_kind);
+            // chrome and echoed keystrokes (see `provider_session`).
+            let scrape_activity = !provider_session(agent_kind).emits_structured_activity;
             move || {
                 let mut buffer = [0_u8; 8192];
                 loop {
@@ -643,42 +647,21 @@ impl SessionManager {
                     // EOF means the child has exited; wait() reaps the zombie and
                     // yields the real status so we can report a true exit code.
                     let exit_code = running.child.wait().ok().map(|status| status.exit_code() as i32);
-                    if agent_kind == AgentKind::Codex {
-                        if let Some(metadata) = latest_codex_session_metadata(&cwd, &started_at) {
-                            let _ = db
-                                .lock()
-                                .set_last_session(task_id, &metadata.id, metadata.label.as_deref())
-                                .inspect_err(|error| {
-                                    tracing::warn!(
-                                        ?error,
-                                        task_id,
-                                        "failed to save latest Codex session"
-                                    )
-                                });
-                        }
-                    } else if agent_kind == AgentKind::Claude {
+                    if let Some((id, label)) = resolve_resumable_metadata(
+                        agent_kind,
+                        &cwd,
+                        &started_at,
+                        running.opencode_port,
+                    ) {
+                        let _ = db
+                            .lock()
+                            .set_last_session(task_id, &id, label.as_deref())
+                            .inspect_err(|error| {
+                                tracing::warn!(?error, task_id, "failed to save latest session")
+                            });
+                    }
+                    if provider_session(agent_kind).cleanup_event_sink {
                         cleanup_event_sink(&session_id);
-                    } else if agent_kind == AgentKind::OpenCode {
-                        if let Some(port) = running.opencode_port {
-                            if let Some(metadata) =
-                                latest_opencode_session_metadata_from_server(port, &cwd)
-                            {
-                                let _ = db
-                                    .lock()
-                                    .set_last_session(
-                                        task_id,
-                                        &metadata.id,
-                                        metadata.label.as_deref(),
-                                    )
-                                    .inspect_err(|error| {
-                                        tracing::warn!(
-                                            ?error,
-                                            task_id,
-                                            "failed to save latest OpenCode session"
-                                        )
-                                    });
-                            }
-                        }
                     }
                     let _ = db
                         .lock()
@@ -743,34 +726,19 @@ impl SessionManager {
         let stopped_at = Utc::now().to_rfc3339();
         running.session.state = SessionState::Stopped;
         running.session.stopped_at = Some(stopped_at);
-        if running.agent_kind == AgentKind::Codex {
-            if let Some(metadata) =
-                latest_codex_session_metadata(&running.cwd, &running.session.started_at)
-            {
-                db.lock().set_last_session(
-                    running.session.task_id,
-                    &metadata.id,
-                    metadata.label.as_deref(),
-                )?;
-                running.session.resumable_session_id = Some(metadata.id);
-                running.session.resumable_session_label = metadata.label;
-            }
-        } else if running.agent_kind == AgentKind::Claude {
+        if let Some((id, label)) = resolve_resumable_metadata(
+            running.agent_kind,
+            &running.cwd,
+            &running.session.started_at,
+            running.opencode_port,
+        ) {
+            db.lock()
+                .set_last_session(running.session.task_id, &id, label.as_deref())?;
+            running.session.resumable_session_id = Some(id);
+            running.session.resumable_session_label = label;
+        }
+        if provider_session(running.agent_kind).cleanup_event_sink {
             cleanup_event_sink(&session_id);
-        } else if running.agent_kind == AgentKind::OpenCode {
-            if let Some(port) = running.opencode_port {
-                if let Some(metadata) =
-                    latest_opencode_session_metadata_from_server(port, &running.cwd)
-                {
-                    db.lock().set_last_session(
-                        running.session.task_id,
-                        &metadata.id,
-                        metadata.label.as_deref(),
-                    )?;
-                    running.session.resumable_session_id = Some(metadata.id);
-                    running.session.resumable_session_label = metadata.label;
-                }
-            }
         }
         db.lock()
             .set_active_session(running.session.task_id, None)?;
@@ -899,16 +867,25 @@ impl SessionManager {
 /// an ellipsis, this just bounds the payload.
 const ACTIVITY_LINE_MAX: usize = 200;
 
-/// Providers whose watcher feeds [`SessionSignal::Activity`] from a structured
-/// event stream. For these we skip the raw-PTY [`latest_activity_line`] scraper:
-/// they render full-screen TUIs, so the scraper only ever surfaces statusline
-/// chrome and the user's own echoed keystrokes. Gemini and custom agents have no
-/// structured source yet, so they keep the best-effort PTY scraper.
-fn agent_emits_structured_activity(kind: AgentKind) -> bool {
-    matches!(
-        kind,
-        AgentKind::Codex | AgentKind::Claude | AgentKind::OpenCode
-    )
+/// Resolve a finished session's resumable thread id + label, provider-specific:
+/// Codex reads its rollout file, OpenCode queries its local server, and providers
+/// with no resumable thread (Claude/Gemini/Custom) return `None`. Shared by the
+/// reader-thread EOF teardown and `stop()` so the per-provider probe lives once.
+fn resolve_resumable_metadata(
+    agent_kind: AgentKind,
+    cwd: &Path,
+    started_at: &str,
+    opencode_port: Option<u16>,
+) -> Option<(String, Option<String>)> {
+    match agent_kind {
+        AgentKind::Codex => {
+            latest_codex_session_metadata(cwd, started_at).map(|meta| (meta.id, meta.label))
+        }
+        AgentKind::OpenCode => opencode_port
+            .and_then(|port| latest_opencode_session_metadata_from_server(port, cwd))
+            .map(|meta| (meta.id, meta.label)),
+        AgentKind::Claude | AgentKind::Gemini | AgentKind::Custom => None,
+    }
 }
 
 /// Reduce a structured progress string to a single short, readable line: take
@@ -1107,17 +1084,6 @@ mod tests {
             latest_activity_line(buffer),
             Some("Reading TaskCard.tsx".to_string())
         );
-    }
-
-    #[test]
-    fn structured_activity_providers_skip_the_pty_scraper() {
-        // Providers with a structured watcher must not scrape the PTY (chrome +
-        // echoed keystrokes); Gemini/custom keep the best-effort scraper.
-        assert!(agent_emits_structured_activity(AgentKind::Codex));
-        assert!(agent_emits_structured_activity(AgentKind::Claude));
-        assert!(agent_emits_structured_activity(AgentKind::OpenCode));
-        assert!(!agent_emits_structured_activity(AgentKind::Gemini));
-        assert!(!agent_emits_structured_activity(AgentKind::Custom));
     }
 
     #[test]
