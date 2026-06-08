@@ -14,11 +14,10 @@
 
 ## Coordination ledger
 
+- Claude and Codex share one checkout and one index. Always commit by explicit
+  pathspec after re-reading `CLAUDE_ROLLING_UPDATES.md`.
 - Claude iteration 1 owned unused `@tanstack/react-router` removal:
   `package.json`, `pnpm-lock.yaml`, and `AGENTS.md`; it landed as `4b3fc06`.
-- Claude's current uncommitted loop is simplifying
-  `src/components/settings/UpdateCard.tsx` and `CLAUDE_ROLLING_UPDATES.md`.
-  Codex will not edit those files in iteration 2.
 - Untracked `.claude/` and `design-mockups/` existed before Codex edits and are
   not Codex-owned.
 
@@ -53,7 +52,7 @@ with `enabled` and react to query data changes with a React effect.
 - Full: `pnpm test`, `pnpm build`.
 - Rust: skip unless Rust files change.
 
-**Status:** verified; committing on top of Claude's dependency cleanup commit
+**Status:** verified and committed on top of Claude's dependency cleanup commit
 `4b3fc06`.
 
 **Evidence so far:**
@@ -162,7 +161,7 @@ iteration 3. `skipToken` can disable the query without fake ids or casts.
 - Green: targeted Vitest for `useTaskDiff`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red: `pnpm vitest run src/hooks/useTaskDiff.test.tsx` failed because a no-task
@@ -196,7 +195,7 @@ pattern removed from GitHub and task diff queries.
 - Green: targeted Vitest for `usePrReviews`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red: `pnpm vitest run src/hooks/usePrReviews.test.ts` failed because a no-review
@@ -232,7 +231,7 @@ cell while removing `?? -1` and `as number` casts.
 - Green: targeted Vitest for `useTaskReviewLoop`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red: `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx` failed because a
@@ -266,7 +265,7 @@ match the cleaned-up Query pattern used elsewhere.
 - Green: targeted Vitest for JIRA query tests.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red: `pnpm vitest run src/queries/jira.test.tsx` failed because a no-project
@@ -278,7 +277,7 @@ match the cleaned-up Query pattern used elsewhere.
 **Commit:** `7a55820`
 (`refactor(jira): skip idle project status sentinel`) pushed to `origin/main`.
 
-### Iteration 8 - in progress (2026-06-09)
+### Iteration 8 - done (2026-06-09)
 
 **Goal:** Keep the JIRA board fresh after work-item comments and centralize the
 board-refresh path for JIRA writes.
@@ -769,7 +768,7 @@ test.
 **Commit:** `055850d` (`test(jira): cover token cache updates`) pushed to
 `origin/main`.
 
-### Iteration 23 - in progress (2026-06-09)
+### Iteration 23 - done (2026-06-09)
 
 **Goal:** Remove the obsolete CSS-system rework tracker from the live docs tree.
 
@@ -791,11 +790,41 @@ indexed current docs as if they were authoritative reference pages.
 - Search: confirm no references to the CSS tracker remain.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - `rg -n "css-system-rework-plan|CSS System Rework|chore/css-coherence|287 tests|288 tests|45 files|46 files" README.md AGENTS.md docs src native package.json`
   returned no matches.
+- `pnpm test` passed (59 files, 352 tests).
+- `pnpm build` passed.
+
+**Commit:** `c9bce86` (`docs: remove obsolete css rework tracker`) pushed to
+`origin/main`.
+
+### Iteration 24 - in progress (2026-06-09)
+
+**Goal:** Clean stale coordination statuses from the Codex rolling log.
+
+**Rationale:** The rolling doc is the handoff surface for the parallel-agent loop,
+but it still described old committed work as "current", "in progress", or
+"committing". That can mislead later iterations into avoiding already-finished
+files or misreading the latest pushed state.
+
+**Docs checked:** Official Git `commit` documentation for pathspec behavior. Git
+documents that when pathnames are given, the commit records only those named
+paths, which matches the shared-checkout rule in this rolling log.
+
+**Claimed files:**
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Search: confirm old coordination/status wording is gone from completed entries.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- Search for obsolete coordination/status phrases returned no matches.
 - `pnpm test` passed (59 files, 352 tests).
 - `pnpm build` passed.
 
