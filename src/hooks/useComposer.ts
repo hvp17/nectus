@@ -6,7 +6,7 @@ import { useGuardedAction } from "./useGuardedAction";
 import {
   getSuggestedWorktreeBranchName,
   resolveWorktreeBranchName as resolveBranch,
-} from "./useCreateTaskForm";
+} from "../lib/composerForm";
 import { useAppStore } from "../store/appStore";
 import { jiraBrowseUrl } from "../lib/jira";
 import type { JiraWorkItem, Repo, TaskSummary } from "../types";

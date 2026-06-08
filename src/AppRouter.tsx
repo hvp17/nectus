@@ -6,7 +6,7 @@ import { ProjectPanel } from "./components/ProjectPanel";
 import { MissionControl } from "./components/MissionControl";
 import { Workspace } from "./components/Workspace";
 import { TaskWorkspaceOverlay } from "./components/TaskWorkspaceOverlay";
-import { CreateTaskComposer } from "./components/CreateTaskModal";
+import { CreateTaskComposer } from "./components/CreateTaskComposer";
 import { WorkspaceManager } from "./components/WorkspaceManager";
 import { SettingsPage } from "./components/SettingsPage";
 import { ReviewsPage } from "./components/ReviewsPage";
