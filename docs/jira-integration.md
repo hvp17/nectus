@@ -156,8 +156,8 @@ All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
 - Linked-story inspector panel: `src/components/JiraPanel.tsx`
 - Board + connection state, project list, auto-derived columns, optimistic
   transition, and work-item creation: `src/hooks/useJira.ts`
-- Create-from-story, create-work-item handlers, and board-config persistence:
-  `src/hooks/useApp.ts`
+- Create-from-story / create-task handlers: `src/hooks/useComposer.ts`
+  (`createTaskFromStory`, `createTask`); board-config persistence: `src/hooks/useJira.ts`
 - Frontend API: `src/api.ts`
 - `acli` shell-out, JSON parsing, the JQL builder (`build_board_jql`, incl. the
   `status in (...)` filter clause), and the create argument builder/key parser:
@@ -176,5 +176,6 @@ All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
   `jira_get_work_item`, `jira_transition_work_item`, `jira_assign_work_item`,
   `jira_comment_work_item`, `jira_create_work_item`, `set_task_jira_link`
   (registered in `native/src/lib.rs`)
-- Link persistence: `jira_issue_key/summary/url` columns on the `tasks` table; board
-  config in `jira_board_project` and the `jira_filter_*` flags on `app_settings`
+- Link persistence: the `jira_issue_key`, `jira_issue_summary`, and `jira_issue_url`
+  columns on the `tasks` table; board config in `jira_board_project` and the
+  `jira_filter_*` flags on `app_settings`

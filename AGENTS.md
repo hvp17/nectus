@@ -1,5 +1,11 @@
 # Nectus Desktop Agent Guide
 
+> `CLAUDE.md` is a symlink to this file — they are the same guide. For the
+> connected layer model (how frontend ↔ commands ↔ SQLite/PTY/CLIs ↔ events fit
+> together), a traced request lifecycle, and a **"where does X live"** table, read
+> [`docs/architecture.md`](docs/architecture.md) first. This file owns the
+> coding-session rules and the authoritative per-file **backend & frontend maps**.
+
 ## Project Shape
 
 Nectus Desktop is a Mac-first Tauri 2 desktop app for managing parallel Codex, Claude, and OpenCode work across local git projects and optional git worktrees.
@@ -143,8 +149,10 @@ Expected release outputs:
 
 ```text
 native/target/release/bundle/macos/Nectus Desktop.app
-native/target/release/bundle/dmg/Nectus Desktop_0.1.0_aarch64.dmg
+native/target/release/bundle/dmg/Nectus Desktop_<version>_aarch64.dmg
 ```
+
+The `<version>` is the current `package.json` version (the single source of truth).
 
 ## Tests
 
@@ -177,12 +185,23 @@ pnpm desktop:build
 
 ## Documentation Map
 
-- `README.md`: project overview, setup, build, verification, and repo layout.
-- `docs/features.md`: feature map and ownership references.
-- `docs/tracking-and-debugging.md`: SQLite state, Tauri commands/events, task/session tracking, logs, and troubleshooting.
+One owner per concern — don't duplicate another doc's content; point to it.
+
+- `docs/architecture.md`: **start here.** The five-layer model, the traced request
+  lifecycle, and the "where does X live" table.
+- `README.md`: project overview, setup, build, verification, the auto-update release
+  flow, and the doc index.
+- `AGENTS.md` (this file, = `CLAUDE.md`): coding-session rules, the shadcn/Context7
+  workflow, the External-CLI PATH rule, and the authoritative backend & frontend
+  **file maps** (the single source of truth for file ownership).
+- `docs/features.md`: per-feature *behavior* narrative (semantics and flows — not the
+  file map).
+- `docs/tracking-and-debugging.md`: SQLite tables, the **authoritative Tauri command +
+  event reference**, task/session fields, logs, and troubleshooting.
 - `docs/codex-session-jsonl.md`: Codex rollout JSONL reference and caveats.
-- `docs/github-integration.md`: `gh` CLI connection model and pull request create/detect/status flows.
+- `docs/github-integration.md`: `gh` CLI connection model and pull request create/detect/status/ship flows.
 - `docs/jira-integration.md`: `acli` (Atlassian CLI) connection model, JQL board, auto-derived columns, work-item management, and local task↔story links.
+- `docs/superpowers/`: dated design archive (historical intent, not current truth).
 
 ## Backend Boundaries
 
@@ -203,76 +222,17 @@ Important backend files:
 - `native/src/sessions/agents/`: provider-specific Codex, Claude, Gemini, and OpenCode command arguments and fallback locations
 - `native/src/models/`: shared serializable data types, split by domain (`error`, `task`, `review`, `agent`, `github`, `jira`, `settings`, `session`, `workspace`) and re-exported flat from `mod.rs`, so every `crate::models::Foo` path still resolves
 
-Tauri commands exposed to the frontend include:
+All Tauri commands are registered in `generate_handler!` in `native/src/lib.rs`,
+grouped by domain: repos & settings, tasks & workspaces, task diff, GitHub PRs,
+JIRA (`acli` + optional REST), agent profiles, the task AI review loop, external PR
+reviews, and PTY sessions. Rust emits eight events — `session_output`,
+`session_activity`, `session_idle`, `session_needs_input`, `session_exited`,
+`review_loop_updated`, `review_output`, `pr_review_updated`.
 
-- `add_repo`
-- `list_repos`
-- `get_app_settings`
-- `update_app_settings`
-- `create_task`
-- `create_cross_repo_task`
-- `list_tasks`
-- `update_task_metadata`
-- `delete_task`
-- `list_workspaces`
-- `create_workspace`
-- `update_workspace`
-- `delete_workspace`
-- `task_diff_summary`
-- `task_diff_file`
-- `github_status`
-- `create_github_pull_request`
-- `github_pull_request_status`
-- `detect_github_pull_request`
-- `merge_github_pull_request`
-- `set_github_pull_request_ready`
-- `close_github_pull_request`
-- `post_pr_review_comment`
-- `jira_status`
-- `jira_list_projects`
-- `jira_search_board`
-- `jira_get_work_item`
-- `jira_transition_work_item`
-- `jira_assign_work_item`
-- `jira_comment_work_item`
-- `jira_create_work_item`
-- `jira_rest_status`
-- `set_jira_api_token`
-- `clear_jira_api_token`
-- `jira_list_transitions`
-- `jira_project_statuses`
-- `set_task_jira_link`
-- `list_agent_profiles`
-- `upsert_agent_profile`
-- `start_pair_loop`
-- `run_pair_review`
-- `stop_pair_loop`
-- `get_task_review_loop`
-- `list_task_review_runs`
-- `create_pr_review`
-- `list_pr_reviews`
-- `get_pr_review`
-- `list_pr_review_runs`
-- `rerun_pr_review`
-- `delete_pr_review`
-- `start_session`
-- `resume_session`
-- `stop_session`
-- `resize_session`
-- `send_session_input`
-- `submit_session_input`
-- `session_output_snapshot`
-
-Events emitted by Rust:
-
-- `session_output`
-- `session_activity`
-- `session_exited`
-- `session_idle`
-- `session_needs_input`
-- `review_loop_updated`
-- `review_output`
-- `pr_review_updated`
+The **authoritative, exhaustive command and event reference** (with each one's
+purpose and source) lives in
+[`docs/tracking-and-debugging.md`](docs/tracking-and-debugging.md) — keep that the
+single source of truth rather than re-listing commands here.
 
 ## Spawning External CLIs (macOS GUI PATH)
 
@@ -330,7 +290,6 @@ Important frontend files:
   - `src/hooks/useTaskActions.ts` (status/rename/JIRA-link), `useTaskDeletion.ts` (delete; `deletingTaskIds` lives in the store), `useWorkspaceActions.ts` (workspace CRUD), `useSettingsActions.ts` (save settings/agent profile), `useProjectActions.ts` (add repo), `useJiraToken.ts` (JIRA REST token connect/disconnect), `useSessionControls.ts` (start/resume/stop session + attention clearing), `useShellBootstrap.ts` (boot-time default agent/repo selection + drop-deleted-workspace, via `getState()`).
   - `src/hooks/useComposer.ts`: the New Task composer — the draft lives in the store's composer slice; this owns the create-task submit (single / worktree / cross-repo routing) and "create from JIRA story". `activeWorkspaceId` is the **focused** workspace (drives the workspace board), not a global filter; the composer's cross-repo mode is the separate `newTaskWorkspaceId` toggle, switchable to any eligible workspace.
   - `src/components/TaskWorkspaceOverlay.tsx`: assembles every `TaskWorkspace` prop from per-task hooks (`useGithub`, `useTaskReviewLoop`, task/session actions, inline PR-create/start-review), keeping `TaskWorkspace` a pure presentational component.
-- `src/hooks/useSessionEvents.ts`: subscribes to Rust session events (`session_activity`, `session_exited`, `session_idle`, `session_needs_input`); keeps the per-task `liveLines` map (latest activity line) and the task attention list
 - `src/hooks/useSessionCommands.ts`: start/resume/stop/resize/input session command bindings
 - `src/hooks/useGithub.ts`: **read-only** GitHub state — `gh` connection status, the live PR-status query, existing-PR detection/backfill, and the open-PR auto-refresh (interval + window focus, off for terminal PRs). The PR **write** actions moved out (see below)
 - `src/hooks/useGithubShipActions.ts`: the four PR write actions (create/merge/mark-ready/close), now **agent-driven** — each submits a prompt (from `src/lib/githubAgentPrompts.ts`) into the task's running agent session via `submit_session_input` so the agent runs `git`/`gh`, authors the PR body, and rebases/resolves conflicts itself; declines with guidance when no session is running. Wired in `TaskWorkspaceOverlay`. `GitHubPanel`/`PullRequestActions` are presentational and unchanged
@@ -357,11 +316,11 @@ Important frontend files:
 - `src/components/settings/`: settings subcomponents (`ProfileEditor`, `GithubConnectionCard`, `JiraConnectionCard` — the optional JIRA REST API-token connect/disconnect card, `SegmentedRadioGroup`, `SettingsOverviewItem`, `UpdateCard` — the Settings "About & Updates" card: current version, "Check for updates" button, status badge, install/relaunch actions) and profile-draft helpers
 - `src/lib/update.ts`: Tauri-guarded updater wrapper (`isUpdaterAvailable`, `getAppVersion`, `checkForUpdate`, `installUpdate(update, onProgress)`, `relaunchApp`); no-ops outside Tauri
 - `src/hooks/useAppUpdate.ts`: update state machine (`UpdateStatus = "idle"|"checking"|"upToDate"|"available"|"downloading"|"ready"|"error"`); runs one silent check shortly after launch; exposes `check`/`installUpdate`/`relaunch`, plus `info`, `currentVersion`, `progress`, `error`, `lastCheckedAt`. No-op outside Tauri
-- `src/hooks/useAppUpdateToast.ts`: fires sonner launch update toasts ("Update available → Install", "Update installed → Relaunch"). Both hooks are mounted in `App.tsx`
+- `src/hooks/useAppUpdateToast.ts`: fires sonner launch update toasts ("Update available → Install", "Update installed → Relaunch"). Both hooks are mounted in `src/AppRouter.tsx` (`AppLayout`)
 - `src/test/testUtils.tsx`: shared frontend test helpers for providers, pointer events, DOM rects, and async deferrals
 - `src/test/app*Tests.tsx`: focused App test groups registered by `src/App.test.tsx`
 - `src/styles.css`: Tailwind imports, theme tokens, and global base rules
-- `src/styles/`: focused CSS files imported by `src/main.tsx` for layout, settings, task board, detail, the task diff (`diff.css`), forms, and the reimagined shell/Mission Control/board/workspace and secondary views (`redesign.css`, all `nx-` prefixed)
+- `src/styles/`: focused CSS files imported by `src/main.tsx` (`layout.css`, `settings.css`, `task-board.css`, `detail.css`, the task diff `diff.css`, and the reimagined shell/Mission Control/board/workspace and secondary views in `redesign.css`, all `nx-` prefixed)
 
 Do not call shell/git directly from the frontend. Add Rust commands instead.
 

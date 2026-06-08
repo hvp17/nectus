@@ -8,11 +8,17 @@ history, and settings are stored in the local SQLite database created by the
 desktop app. The frontend does not call git or shell commands directly; OS,
 git, SQLite, and PTY work lives in the Rust backend.
 
+> **New to the codebase? Start with [docs/architecture.md](docs/architecture.md)** —
+> the one-page model of how the five layers connect, a traced request lifecycle, and
+> a "where does X live" table. The full [documentation index](docs/architecture.md#documentation-index)
+> lists every doc and what it owns. (`CLAUDE.md` is a symlink to `AGENTS.md`, the
+> agent operating guide.)
+
 ## Features
 
 - Add existing local git repositories as Projects.
-- Group projects into named Workspaces (VSCode-workspace style) and filter Mission
-  Control and the project rail to the repos you're focused on.
+- Group projects into named Workspaces (VSCode-workspace style) and open an
+  aggregated workspace board scoped to the repos you're focused on.
 - Create cross-repo Tasks that span several of a workspace's repos: one agent runs
   across sibling worktrees (one per repo, each on its own branch).
 - Create Tasks against a project in direct-edit mode or with a new git worktree;
@@ -119,8 +125,10 @@ Expected release outputs:
 
 ```text
 native/target/release/bundle/macos/Nectus Desktop.app
-native/target/release/bundle/dmg/Nectus Desktop_0.1.0_aarch64.dmg
+native/target/release/bundle/dmg/Nectus Desktop_<version>_aarch64.dmg
 ```
+
+The `<version>` in the DMG name is the current `package.json` version.
 
 ## Releases & Auto-Update
 
@@ -220,62 +228,35 @@ The Codex JSONL protocol snapshot lives in
 ## Repository Layout
 
 ```text
-src/                 React app, UI components, typed Tauri API wrapper
-src/components/settings/
-                     Settings subcomponents and pure profile-draft helpers
-src/styles/          Focused CSS files for layout, settings, task board, detail,
-                     forms, the task diff (diff.css), and the reimagined shell
-                     (redesign.css)
+src/                 React app: components, hooks, queries/ (TanStack Query),
+                     store/ (Zustand), api.ts (typed Tauri wrapper), styles/
+src/components/      Mission Control, board, task workspace, settings, GitHub/JIRA
+                     panels, the icon rail, and the inline composer UI
 src/test/            Shared Vitest and Testing Library helpers
-native/src/          Rust Tauri commands, database, git ops, session runtime
+native/src/          Rust Tauri backend: lib.rs (commands), db/ (SQLite),
+                     git_ops/ (git + worktrees), sessions/ (PTY runtime),
+                     github.rs, jira*.rs, process_util.rs, models/
 native/src/sessions/agents/
-                     Provider-specific Codex, Claude, Gemini, and OpenCode launch behavior
+                     Provider-specific Codex, Claude, Gemini, OpenCode launch behavior
 native/capabilities/ Tauri permission capability files
-docs/                Project documentation and debugging references
+docs/                Project documentation (see the index below)
 ```
 
-Important frontend files:
+For the connected picture of how these layers talk to each other — and a
+**"where does X live"** lookup table — see
+[docs/architecture.md](docs/architecture.md). The authoritative, per-file backend
+and frontend maps live in [AGENTS.md](AGENTS.md) (the "Backend Boundaries" and
+"Frontend Boundaries" sections); they are the single source of truth for file
+ownership, so this README does not duplicate them.
 
-- `src/App.tsx`: icon-rail shell, view routing, and top-level composition
-- `src/components/IconRail.tsx`: 58px primary navigation rail with needs-input badge
-- `src/components/ProjectPanel.tsx`: contextual project list shown beside the board
-- `src/components/MissionControl.tsx`: cross-project attention-first triage home
-- `src/lib/agentState.ts`: derives each task's cross-project state, latest line, and
-  elapsed time for Mission Control and the board
-- `src/queries/`: TanStack Query server-state layer (query keys, hooks, cache helpers)
-- `src/store/`: Zustand UI/runtime store (navigation, selection, session runtime, notifications)
-- `src/AppRouter.tsx`: TanStack Router shell + routed views (memory history)
-- `src/AppRouter.tsx`: `AppLayout` composes the shell from queries + store directly (no `useApp` god-hook); views/overlays are self-sufficient
-- `src/hooks/use*Actions.ts`, `useComposer.ts`, `useSessionControls.ts`, `useShellBootstrap.ts`: focused, self-sufficient hooks that replaced the old `useApp` orchestration
-- `src/hooks/useTaskReviewLoop.ts`: review-loop loading and
-  `review_loop_updated` event subscription
-- `src/hooks/useTaskDeletion.ts`: task deletion workflow and deletion toasts
-- `src/hooks/useSessionAttentionControls.ts`: wrappers that clear attention
-  before session start/resume/stop/input events
-- `src/hooks/useTaskCardPointerDrag.ts`: task-card pointer drag tracking and
-  drag ghost lifecycle
-- `src/api.ts`: typed frontend wrapper around Tauri commands
-- `src/TerminalPane.tsx`: xterm.js lifecycle, PTY input/output, and dropped
-  file-path insertion
-- `src/components/`: icon rail, Mission Control, board, task workspace (terminal/diff/review stage), settings, GitHub/JIRA panels, and the inline composer/side-panel UI
-- `src/components/TaskDiffView.tsx`: in-app task diff viewer (changed-file list + lazy unified patch)
-- `src/components/ReviewTerminalPane.tsx`: read-only xterm.js pane for a task reviewer's live output
-- `src/components/TaskDeleteDialog.tsx`: shared task deletion confirmation UI
-- `src/styles.css`: Tailwind imports, theme tokens, and global base rules
-- `src/styles/`: focused CSS files imported by `src/main.tsx`
-- `src/test/testUtils.tsx`: shared DOM, pointer-event, tooltip-provider, and
-  async helpers for frontend tests
-- `src/test/app*Tests.tsx`: focused App test groups registered by
-  `src/App.test.tsx`
+## Documentation
 
-Important backend files:
-
-- `native/src/lib.rs`: Tauri command registration, app setup, plugins, shutdown
-- `native/src/db/`: SQLite schema, row mapping, domain persistence
-  modules, and persistence tests
-- `native/src/git_ops.rs`: git repository and worktree operations
-- `native/src/sessions/`: PTY lifecycle, agent command setup, Codex JSONL watcher,
-  OpenCode local server watcher, and review-loop worker
-- `native/src/sessions/agents/`: Codex, Claude, Gemini, and OpenCode command
-  argument builders and provider-specific fallback locations
-- `native/src/models.rs`: serializable backend/frontend contracts
+| Concern | Doc |
+|---|---|
+| **How it all connects** (start here) | [docs/architecture.md](docs/architecture.md) |
+| Agent operating rules + file maps | [AGENTS.md](AGENTS.md) (= `CLAUDE.md`) |
+| Feature behavior | [docs/features.md](docs/features.md) |
+| Persistence, commands/events, debugging | [docs/tracking-and-debugging.md](docs/tracking-and-debugging.md) |
+| Codex session JSONL | [docs/codex-session-jsonl.md](docs/codex-session-jsonl.md) |
+| GitHub integration | [docs/github-integration.md](docs/github-integration.md) |
+| JIRA integration | [docs/jira-integration.md](docs/jira-integration.md) |

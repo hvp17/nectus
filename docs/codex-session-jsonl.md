@@ -6,8 +6,10 @@ sessions directory, usually `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`.
 For the broader app-level state, event, and troubleshooting guide, see
 [tracking-and-debugging.md](tracking-and-debugging.md).
 
-Checked against the Codex source on 2026-05-16. Treat this as a snapshot;
-Codex can add or rename event types.
+Checked against the Codex source on 2026-05-16. The types Nectus actually depends
+on are vendored from `codex-protocol` `rust-v0.136.0` in
+`native/src/sessions/codex.rs`; the broader event catalog below is an external
+snapshot, so treat it as point-in-time — Codex can add or rename event types.
 
 ## Source Files
 
@@ -190,8 +192,9 @@ Current behavior:
 
 - Finds the latest Codex rollout whose `session_meta.payload.cwd` matches the
   launched task cwd.
-- Ignores Codex subagent rollouts, including auto-review or guardian sessions,
-  so approval checks do not become task-level `Finished` attention markers.
+- Ignores Codex subagent rollouts (detected via `thread_source == "subagent"`, the
+  `codex-auto-review` model, or a `source.subagent` key in `is_codex_subagent_session`),
+  so a subagent's approval checks do not become task-level `Finished` attention markers.
 - Keeps discovering the matching rollout while the Nectus task session is active.
   Discovery polls every 500 ms for the first 120 attempts, then every 5 seconds
   until Codex writes metadata or the task session stops.

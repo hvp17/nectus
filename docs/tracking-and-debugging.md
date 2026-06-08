@@ -1,7 +1,13 @@
 # Tracking And Debugging
 
 This guide documents where Nectus Desktop tracks state, which events move that
-state, and where to look when behavior is wrong.
+state, and where to look when behavior is wrong. It is the authoritative
+reference for the SQLite tables, the Tauri command and event catalog, the
+task/session fields, reviewer-session-resume, and the debugging flows.
+
+For the connected layer model and the "where does X live?" table, see
+[architecture.md](architecture.md); for the per-file maps, see
+[../AGENTS.md](../AGENTS.md).
 
 ## State Sources
 
@@ -45,41 +51,27 @@ Persistence APIs:
 
 ### Frontend State
 
-The frontend keeps transient UI state in React:
+Frontend state lives in three layers, not a single god-hook (the old
+`src/hooks/useApp.ts` was deleted). See [architecture.md](architecture.md)
+("State ownership") for the full picture; the short version:
 
-- Selected project and selected task.
-- Task attention markers.
-- Mission Control and board rows derived from the local task list, with
-  active-session rows driven by `tasks.activeSessionId` and task attention markers.
-- Create-task composer drafts.
-- Settings/profile edit drafts.
-- Review-loop detail state loaded for the selected task.
-- Review status is included in task summaries so the board can label cards
-  before a task is opened. Review is modeled as a single pass.
+- **Server state — TanStack Query (`src/queries/`).** Every saved
+  project/task/profile/settings/review-loop/PR-review/diff read goes through a
+  Query hook backed by the cache (no `useState` loading boilerplate). SQLite
+  through the Tauri commands remains the source of truth.
+- **UI/runtime state — Zustand store (`src/store/appStore.ts`).** Composed from
+  concern-split slices (`navigation`, `selection`, `composer`, `runtime`,
+  `sessionRuntime`, `notification`). Owns what is *not* server state: current
+  view / focused workspace, repo/task/agent selection, the New Task composer
+  draft (the `composer` slice — not a form hook), the push-driven `liveLines` /
+  `taskAttention` maps, `deletingTaskIds`, and toasts/messages.
+- **Events — one mount-once bridge (`src/hooks/useEventBridge.ts`).** Mounted in
+  `AppLayout`, it owns every Rust session/review/PR subscription and routes each
+  event to the Query cache or the Zustand store. Because events are centralized,
+  the domain hooks are pure cache consumers callable per component.
 
-The source of truth for saved project, task, profile, settings, and review-loop
-data remains SQLite through Tauri commands.
-
-Main owner: `src/hooks/useApp.ts`
-
-Focused state hooks:
-
-- `src/hooks/useSessionEvents.ts`: session attention events and notifications.
-- `src/hooks/useSessionAttentionControls.ts`: session controls that clear stale
-  attention before start, resume, stop, and input flows.
-- `src/components/IconRail.tsx`: 58px icon-rail navigation; the Mission Control
-  icon carries the cross-project needs-input badge.
-- `src/components/ProjectPanel.tsx`: contextual project list with task counts and
-  a needs-input dot, shown beside the board.
-- `src/components/MissionControl.tsx`: cross-project, attention-first task triage
-  (the default view).
-- `src/hooks/useTaskDeletion.ts`: task deletion workflow and deletion toasts.
-- `src/components/TaskDeleteDialog.tsx`: shared delete confirmation used by
-  task cards and the selected-task inspector.
-- `src/hooks/useTaskReviewLoop.ts`: selected-task review-loop data and
-  `review_loop_updated` events, including board-summary updates for any task.
-- `src/components/TaskCard.tsx`: board card review-loop status label.
-- `src/hooks/useCreateTaskForm.ts`: create-task composer drafts.
+Review status is included in task summaries so the board can label cards before
+a task is opened; review is modeled as a single pass.
 
 ### Codex JSONL
 
@@ -221,20 +213,28 @@ Backend-to-frontend events:
 
 Frontend event listeners:
 
-- `src/TerminalPane.tsx` listens for `session_output`, `session_exited`, and
-  Tauri v2 `getCurrentWebview().onDragDropEvent()` file-path drops for the
-  active terminal.
+- `src/hooks/useEventBridge.ts` is the single, mount-once bridge (mounted in
+  `AppLayout`). It owns every session/review/PR subscription
+  (`session_activity` / `session_idle` / `session_needs_input` /
+  `session_exited`, `review_loop_updated`, `pr_review_updated`) and routes each
+  event to the Query cache (tasks, review loop/runs, PR reviews) or the Zustand
+  store (`liveLines` / `taskAttention`, toasts/notifications). It records
+  `session_activity` into a per-task `liveLines` map (cleared on
+  `session_exited`) that drives the live "what it's doing" line on task cards and
+  Mission Control rows, and resolves `session_exited` to its task via the active
+  session id (the payload carries no task id).
+- The remaining per-component listeners are intentionally NOT in the bridge:
+  - `src/TerminalPane.tsx` listens for `session_output`, `session_exited`, and
+    Tauri v2 `getCurrentWebview().onDragDropEvent()` file-path drops for the
+    active terminal.
+  - `src/hooks/useTaskReviewLoop.ts` listens for the per-component live
+    `review_output` stream, accumulating the live reviewer stdout for the
+    selected task into the read-only Review pane
+    (`src/components/ReviewTerminalPane.tsx`).
+  - `src/hooks/useTaskDiff.ts` keeps its own (mounted-once) `session_idle`
+    listener to refresh the diff.
 - `native/tauri.conf.json` keeps `dragDropEnabled` enabled on the main window so
   Tauri emits native file-drop events instead of relying on browser-only drops.
-- `src/hooks/useSessionEvents.ts` listens for attention events and sends
-  notifications. It also records `session_activity` into a per-task `liveLines`
-  map (cleared on `session_exited`) that drives the live "what it's doing" line on
-  task cards and Mission Control rows.
-- `src/hooks/useTaskReviewLoop.ts` listens for `review_loop_updated` and
-  `review_output`, accumulating the live reviewer stdout for the selected task into
-  the read-only Review pane (`src/components/ReviewTerminalPane.tsx`).
-- `src/hooks/usePrReviews.ts` listens for `pr_review_updated` and notifies when a
-  review becomes ready or errors.
 
 ## Task Tracking Fields
 
@@ -374,7 +374,8 @@ Check:
 
 Relevant code:
 
-- `native/src/git_ops.rs`
+- `native/src/git_ops/mod.rs` (repo/branch validation, worktree lifecycle,
+  `is_dirty`)
 - `native/src/db/mod.rs`
 
 ### Worktree Task Fails To Create
@@ -392,7 +393,8 @@ Check:
 
 Relevant code:
 
-- `native/src/git_ops.rs`
+- `native/src/git_ops/mod.rs` (remote resolution, worktree create/remove/branch
+  lifecycle)
 - `native/src/db/mod.rs`
 
 ### Agent Command Fails To Start
@@ -408,13 +410,12 @@ Check:
 
 Symptom — `env: node: No such file or directory` with **exit status 127**: the
 agent binary was found, but a Finder/Dock-launched app has a minimal PATH so the
-node-based CLI (e.g. Codex or OpenCode) cannot exec `node`. Both the PTY session
-(`native/src/sessions/mod.rs`) and the reviewer launch
-(`native/src/sessions/reviewer.rs`) set the spawned command's `PATH` to
-`process_util::augmented_path()` — the current PATH plus
-`process_util::third_party_bin_dirs` — so nested tools resolve. If `node` lives
-somewhere unusual (e.g. nvm), add that dir to `third_party_bin_dirs` or set `PATH`
-on the agent profile's env. See AGENTS.md → *Spawning External CLIs*.
+node-based CLI (e.g. Codex or OpenCode) cannot exec `node`. The fix is already
+wired: both the PTY session (`native/src/sessions/mod.rs`) and the reviewer
+launch (`native/src/sessions/reviewer.rs`) set the spawned command's `PATH` to
+`process_util::augmented_path()`. If `node` still lives somewhere unusual (e.g.
+nvm), add that dir to `process_util::third_party_bin_dirs` or set `PATH` on the
+agent profile's env. See AGENTS.md → *Spawning External CLIs* for the full rule.
 
 Relevant code:
 
@@ -522,7 +523,8 @@ Check:
 Relevant code:
 
 - `src/sessionAttention.ts`
-- `src/hooks/useSessionEvents.ts`
+- `src/hooks/useEventBridge.ts` (the mount-once bridge that turns these events
+  into the Query-cache / Zustand-store attention markers)
 - `native/src/sessions/codex.rs`
 - `docs/codex-session-jsonl.md`
 
@@ -608,9 +610,12 @@ Check:
   return (`\r`), matching the terminal Enter key.
 - External PR reviews are separate: a finished one shows **Inconclusive** when the
   reviewer omitted the `NECTUS_PR_VERDICT: BLOCKERS|CLEAN` line that
-  `parse_pr_review_output` in `native/src/sessions/pr_review.rs` looks for. The
-  review text is still stored; only the verdict could not be derived. Inspect it
-  with `select status, verdict from pr_reviews order by id desc limit 10;`.
+  `parse_pr_review_output` looks for. That parser (plus the `NECTUS_PR_VERDICT:`
+  marker) is defined in `native/src/sessions/pr_verdict.rs` — the shared verdict
+  contract — and is used by both `pr_review.rs` (single) and `pr_consensus.rs`
+  (consensus). The review text is still stored; only the verdict could not be
+  derived. Inspect it with
+  `select status, verdict from pr_reviews order by id desc limit 10;`.
 - Consensus PR reviews never "converge" while any reviewer stays **Inconclusive**
   (a failed or marker-less round counts as inconclusive), so they run to the round
   cap and the synthesizer decides the verdict. Inspect a run's rounds with
@@ -636,9 +641,9 @@ The update state machine lives in `src/hooks/useAppUpdate.ts`, with the
 Tauri-guarded wrapper in `src/lib/update.ts` (all no-ops outside Tauri). It runs
 one silent check shortly after launch and again on demand from
 Settings → About & Updates → "Check for updates"
-(`src/components/settings/UpdateCard.tsx`); `src/App.tsx` mounts `useAppUpdate`
-plus `useAppUpdateToast.ts` (the "Update available (vX) → Install" and "Update
-installed → Relaunch" sonner toasts).
+(`src/components/settings/UpdateCard.tsx`); `src/AppRouter.tsx` (`AppLayout`) mounts
+`useAppUpdate` plus `useAppUpdateToast.ts` (the "Update available (vX) → Install" and
+"Update installed → Relaunch" sonner toasts).
 
 `UpdateStatus` values:
 
@@ -685,9 +690,10 @@ Common failure symptoms:
 - **Check silently reports "up to date"** (`upToDate`): the release is missing,
   draft, or unpublished, so `…/releases/latest/download/latest.json` 404s and the
   updater treats it as no update. Confirm the GitHub Release is published and
-  carries `latest.json` (CI auto-publishes it; see below).
+  carries `latest.json` (CI auto-publishes it on a version bump merged to `main`).
 - **No update offered even with a newer build out**: the published `version` is
-  not strictly higher than the installed one. Bump and re-tag.
+  not strictly higher than the installed one. The published `version` comes from
+  `package.json`; if it was not bumped, no release was cut.
 
 Rust wiring (`native/src/lib.rs` `run()`): registers
 `tauri_plugin_process::init()` and
@@ -696,13 +702,13 @@ Rust wiring (`native/src/lib.rs` `run()`): registers
 + base64 `pubkey`, safe to commit). `native/capabilities/default.json` grants
 `updater:default` and `process:allow-restart` (the latter powers the relaunch).
 
-Release flow (CI in `.github/workflows/release.yml`, triggered on pushing a
-`v*` tag): bump the version in `native/tauri.conf.json`, `package.json`, and
-`native/Cargo.toml` to the same `X.Y.Z`, commit, `git tag vX.Y.Z`, then
-`git push origin vX.Y.Z`. The workflow builds aarch64 on `macos-latest`, signs
-the updater artifacts, and auto-publishes a GitHub Release containing the
-`.dmg`, `.app.tar.gz`, `.sig`, and `latest.json`. Installed copies pick it up on
-their next launch check or via the About card.
+Release procedure: see [README](../README.md#releases--auto-update) and
+AGENTS.md → *Product Defaults*. In short, `package.json`'s `version` is the
+single source of truth (`native/tauri.conf.json` reads it; `native/Cargo.toml`
+is frozen at `0.0.0` and never bumped); `.github/workflows/release.yml` runs on
+every push to `main`, and **CI creates the `vX.Y.Z` tag itself** — there is no
+manual tag step. Installed copies pick up a published release on their next
+launch check or via the About card.
 
 Relevant code:
 

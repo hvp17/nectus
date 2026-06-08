@@ -1,6 +1,11 @@
 # Feature Map
 
-This document maps current Nectus Desktop behavior to the files that own it.
+This document describes current Nectus Desktop **feature behavior** — semantics,
+flows, and edge cases. It is deliberately not a file index: for which files own a
+feature, see the maps in [AGENTS.md](../AGENTS.md) (Backend / Frontend Boundaries);
+for how the layers connect, see [architecture.md](architecture.md); for the
+authoritative Tauri command/event reference and SQLite tables, see
+[tracking-and-debugging.md](tracking-and-debugging.md).
 
 ## Navigation And Mission Control
 
@@ -49,33 +54,20 @@ The app shell is an always-collapsed icon rail plus a persistent navigator panel
   the back affordance returns to Mission Control, the project board, or the
   workspace board.
 
-Key files:
+The shell composes the icon rail and navigator panel around a routed leaf view; the
+active view (`mission` | `board` | `workspace` | `jira` | `reviews` | `settings`) is
+driven by the store and rendered through the router's `<Outlet/>`. The project board
+and workspace board are the same kanban component, switched into workspace mode with
+`workspaceName` + `repoNames` props.
 
-- Icon rail: `src/components/IconRail.tsx`
-- Persistent navigator panel (Projects + Workspaces, nested agents, info card):
-  `src/components/ProjectPanel.tsx`
-- Compact nested agent row: `src/components/SidebarAgentRow.tsx`
-- Active-agent grouping helper (by repo and by workspace): `src/lib/sidebarAgents.ts`
-- Mission Control triage: `src/components/MissionControl.tsx`
-- Cross-project agent-state model (state, latest line, elapsed):
-  `src/lib/agentState.ts`
-- App shell composition and view routing (`mission` | `board` | `workspace` |
-  `jira` | `reviews` | `settings`): `src/App.tsx`
-- Project board and workspace board (shared kanban, `workspaceName` + `repoNames`
-  props for the workspace mode): `src/components/Workspace.tsx`
-- Shell, Mission Control, board, and workspace styling: `src/styles/redesign.css`
-- View state and orchestration: `src/hooks/useApp.ts`
+File ownership: see the maps in [AGENTS.md](../AGENTS.md); for how the shell, store,
+queries, and router connect, see [architecture.md](architecture.md).
 
 ## Projects
 
 Projects are existing local git repositories. The app validates a selected
-folder with git before saving it.
-
-- Frontend entry points: `src/components/ProjectPanel.tsx` (navigator panel), `src/components/IconRail.tsx`, `src/hooks/useApp.ts`
-- Dialog wrapper: `src/api.ts`
-- Backend command: `add_repo`
-- Git validation: `native/src/git_ops.rs`
-- Persistence: `repos` table in `native/src/db/schema.rs`
+folder with git (in `native/src/git_ops/`) before saving it through the `add_repo`
+command.
 
 Adding the same project path again updates the existing row instead of creating
 a duplicate.
@@ -91,8 +83,7 @@ workspace — the old workspace scope-filter and "All repos" switcher have been
 retired. A repo can belong to more than one workspace.
 
 - Workspaces appear in the **Workspaces section** of the persistent navigator
-  panel (`src/components/ProjectPanel.tsx`); clicking a row opens the aggregated
-  board and focuses that workspace (`openWorkspaceBoard` in `useApp.ts`). Each
+  panel; clicking a row opens the aggregated board and focuses that workspace. Each
   workspace row shows a state dot and inline nested-agent cards covering its
   member repos, and an ⓘ info card listing its projects.
 - The **workspace manager** is a de-modaled inline composer (matching New Task)
@@ -101,20 +92,8 @@ retired. A repo can belong to more than one workspace.
 - The focused workspace (the one whose board is open) is used to pre-populate
   the New Task composer's cross-repo Repositories checklist; navigating away via
   the icon rail clears the focus. Focus is in-memory (not persisted across
-  launches); the workspaces and their membership are persisted.
-
-Key files:
-
-- Navigator panel (Workspaces section): `src/components/ProjectPanel.tsx`
-- Manager: `src/components/WorkspaceManager.tsx`
-- Aggregated workspace board: `src/components/Workspace.tsx` (receives
-  `workspaceName` + `repoNames` props when in workspace mode)
-- State, focused workspace, `workspaceBoardTasks`, `openWorkspaceBoard`, and
-  CRUD: `src/hooks/useApp.ts`
-- Backend commands: `list_workspaces`, `create_workspace`, `update_workspace`,
-  `delete_workspace`
-- Persistence: `workspaces` + `workspace_repos` tables (`native/src/db/schema.rs`,
-  `native/src/db/workspaces.rs`)
+  launches); the workspaces and their membership are persisted (`workspaces` +
+  `workspace_repos` tables).
 
 ### Cross-repo tasks
 
@@ -143,11 +122,8 @@ Current scope: the Diff tab and GitHub PR panel operate on the **primary** repo'
 worktree for a cross-repo task. Per-repo diffs and per-repo PRs are a planned
 follow-up; see `docs/superpowers/specs/2026-06-06-multi-repo-workspaces-design.md`.
 
-Key files: `create_cross_repo_task` (`native/src/db/tasks.rs`, command in
-`native/src/lib.rs`), the `task_repos` table (`native/src/db/schema.rs`), the
-composer's multi-repo mode (`src/components/CreateTaskModal.tsx`), the create flow
-(`src/hooks/useApp.ts`), and the inspector repo list
-(`src/components/taskWorkspace/TaskWorkspaceFactsRail.tsx`).
+The fan-out lives in the `create_cross_repo_task` backend flow, with per-repo state
+in the `task_repos` child table. File ownership: see [AGENTS.md](../AGENTS.md).
 
 ## Tasks
 
@@ -180,26 +156,15 @@ Task status values are:
 - `review`
 - `done`
 
-Key files:
+The new-task composer is a focused inline view reached from the board's New Task
+action (not a modal). The board supports drag/drop status updates. The selected-task
+workspace shows a horizontal workflow ribbon above the terminal, an inline action bar
+under it, and a calm sectioned facts rail (identity · metadata · PR-status card ·
+linked story · review). The workspace header title is **click-to-edit** (a pencil
+appears on hover): Enter or blur saves a trimmed, changed title via
+`update_task_metadata`, Escape reverts.
 
-- New-task composer (`CreateTaskComposer`, a focused inline view reached from the
-  board's New Task action — not a modal): `src/components/CreateTaskModal.tsx`
-- Board and drag/drop status updates: `src/components/Workspace.tsx`
-- Task card: `src/components/TaskCard.tsx`
-- Task-card pointer drag tracking: `src/hooks/useTaskCardPointerDrag.ts`
-- Selected-task workspace — horizontal workflow ribbon above the terminal, an
-  inline action bar under it, and a calm sectioned facts rail (identity ·
-  metadata · PR-status card · linked story · review): `src/components/TaskWorkspace.tsx`
-- Inline task rename — the workspace header title is click-to-edit (a pencil
-  appears on hover); Enter or blur saves a trimmed, changed title via
-  `update_task_metadata`, Escape reverts: `src/components/taskWorkspace/EditableTaskTitle.tsx`,
-  wired through `renameTask` in `src/hooks/useApp.ts`
-- Shared task deletion confirmation: `src/components/TaskDeleteDialog.tsx`
-- Dashboard layout and board scrolling: `src/styles.css`
-- Frontend state orchestration: `src/hooks/useApp.ts`
-- Backend commands: `create_task`, `list_tasks`, `update_task_metadata`,
-  `delete_task`
-- Persistence: `tasks` table in `native/src/db/schema.rs`
+File ownership: see [AGENTS.md](../AGENTS.md).
 
 ## Agent Profiles
 
@@ -221,21 +186,12 @@ Profiles can also be customized with:
 - Extra args, one per line
 - Environment variables as `KEY=value`
 
-Key files:
-
-- Settings page composition: `src/components/SettingsPage.tsx`
-- Agent profile editor: `src/components/settings/ProfileEditor.tsx`
-- Profile draft parsing and normalization: `src/components/settings/profileDrafts.ts`
-- Frontend API: `src/api.ts`
-- Command resolution: `native/src/sessions/command.rs`
-- Provider-specific launch arguments: `native/src/sessions/agents/`
-- Persistence: `agent_profiles` table in `native/src/db/schema.rs`
-- Persistence API: `native/src/db/agent_profiles.rs`
-
 Command resolution checks PATH first, then common user binary locations.
 Provider modules own command arguments and app-specific fallback locations, such
 as Codex app bundle resource paths and OpenCode installs under
 `~/.opencode/bin/opencode` or `~/bin/opencode`.
+
+File ownership: see [AGENTS.md](../AGENTS.md).
 
 ## Sessions And Terminal
 
@@ -273,25 +229,13 @@ Current behavior:
   clears when the session exits.
 - Closing the app stops owned sessions and clears active session ids.
 
-Key files:
+Sessions emit these Tauri events: `session_output` (terminal stream),
+`session_activity` (the live "what it's doing" line), `session_exited`,
+`session_idle`, and `session_needs_input`. (Review-loop events are listed under
+[AI Review](#ai-review).)
 
-- Shell (icon rail + navigator panel): `src/components/IconRail.tsx`, `src/components/ProjectPanel.tsx`
-- Cross-project triage: `src/components/MissionControl.tsx`
-- App shell and view routing: `src/App.tsx`
-- Terminal UI: `src/TerminalPane.tsx`
-- Session controls: `src/hooks/useSessionCommands.ts`
-- Attention-clearing session control wrappers: `src/hooks/useSessionAttentionControls.ts`
-- Backend command registration: `native/src/lib.rs`
-- PTY lifecycle: `native/src/sessions/mod.rs`
-
-Emitted events:
-
-- `session_output`
-- `session_activity`
-- `session_exited`
-- `session_idle`
-- `session_needs_input`
-- `review_loop_updated`
+File ownership and the authoritative command/event catalog: see
+[AGENTS.md](../AGENTS.md) and [tracking-and-debugging.md](tracking-and-debugging.md).
 
 ## Task Diff
 
@@ -320,17 +264,12 @@ Current behavior:
   (`session_idle`), so the badge stays current while the agent works. Refresh is
   event-driven (selection + turn boundary), not timer-based polling; each refresh is
   a cheap local `git diff` with no network/GitHub call.
-- Rename detection is disabled, so a rename shows as a delete + add pair.
+- Rename detection is disabled (`--no-renames`), so a rename shows as a delete + add
+  pair.
 
-Key files:
-
-- Stage toggle + diff mounting: `src/components/TaskWorkspace.tsx`
-- Diff view (file list + unified patch, line colorization): `src/components/TaskDiffView.tsx`
-- Diff styling: `src/styles/diff.css`
-- Diff data hook (summary load on selection, lazy per-file patches, idle refresh): `src/hooks/useTaskDiff.ts`
-- Frontend API: `src/api.ts`
-- Backend commands: `task_diff_summary`, `task_diff_file`
-- Git diff helpers (base resolution, numstat/name-status parsing, untracked patches): `native/src/git_ops.rs`
+The diff is served by the `task_diff_summary` / `task_diff_file` commands; base
+resolution, numstat/name-status parsing, and untracked patches live in
+`native/src/git_ops/diff.rs`. File ownership: see [AGENTS.md](../AGENTS.md).
 
 ## Session Resume
 
@@ -413,20 +352,12 @@ Attention tracking is UI state derived from backend events.
   hard-cutting only a single very long token such as a bare URL. The same
   formatter cleans the macOS notification body.
 
-Key files:
-
-- Attention model: `src/sessionAttention.ts`
-- Notification wrapper: `src/sessionNotifications.ts`
-- Body cleanup + truncation: `src/notificationText.ts`
-- Task toast payload builders: `src/taskNotification.ts`
-- Clickable toast hook (provider-logo icon): `src/hooks/useTaskNotificationToast.tsx`
-- Provider logos: `src/components/AgentBrand.tsx` (`AgentLogo`)
-- Event listener hook: `src/hooks/useSessionEvents.ts`
-- Codex event source (rollout JSONL): `native/src/sessions/codex.rs`
-- Claude event source (Claude Code hook bridge): `native/src/sessions/claude.rs`
-- OpenCode event source (local server `/event` SSE stream): `native/src/sessions/opencode.rs`
-- Shared signal emission (Codex + Claude + OpenCode): `native/src/sessions/mod.rs`
-  (`emit_session_signal`)
+Session/review/PR events are subscribed once in the mount-once event bridge and
+routed to the query cache or the UI store; the per-provider event sources are the
+Codex rollout JSONL (`native/src/sessions/codex.rs`), the Claude Code hook bridge
+(`native/src/sessions/claude.rs`), and the OpenCode `/event` SSE stream
+(`native/src/sessions/opencode.rs`), all funneling through `emit_session_signal` in
+`native/src/sessions/mod.rs`. File ownership: see [AGENTS.md](../AGENTS.md).
 
 ## AI Review
 
@@ -502,20 +433,11 @@ Current behavior:
   `feedback_sent` and shown as review feedback in the UI.
 - Unknown reviewer output marks the loop `error`.
 
-Key files:
+The review-loop runtime emits two Tauri events: `review_loop_updated` (loop/run
+state changes, routed to the query cache) and `review_output` (the live reviewer
+stdout stream feeding the read-only Review pane).
 
-- UI controls, stage `Review` tab, and latest run summary: `src/components/TaskWorkspace.tsx`
-- Read-only live reviewer terminal: `src/components/ReviewTerminalPane.tsx`
-- Agent-driven PR write actions (create/merge/ready/close): `src/hooks/useGithubShipActions.ts`
-  with prompts in `src/lib/githubAgentPrompts.ts`
-- Board review status label: `src/components/TaskCard.tsx`
-- Frontend review-loop loading and event subscription: `src/hooks/useTaskReviewLoop.ts`
-- Frontend API: `src/api.ts`
-- Backend commands: `start_pair_loop`, `run_pair_review`, `stop_pair_loop`,
-  `get_task_review_loop`, `list_task_review_runs`
-- Runtime worker: `native/src/sessions/review_loop.rs`
-- Persistence: `review_loops` and `review_runs` tables
-- Persistence API: `native/src/db/review_loops.rs`
+File ownership: see [AGENTS.md](../AGENTS.md).
 
 ## PR Review
 
@@ -590,28 +512,10 @@ count, 1–5, default 3) runs them as a consensus review:
   `list_pr_review_runs` by round. Re-run clears the runs but keeps the reviewer
   roster and round budget.
 
-Key files:
-
-- Rail nav entry: `src/components/IconRail.tsx`
-- Reviews list and create form (reviewer chips + consensus rounds): `src/components/ReviewsPage.tsx`
-- Review detail, copy, and consensus banner/convergence matrix: `src/components/PrReviewDetail.tsx`
-- Frontend state, events, and notifications: `src/hooks/usePrReviews.ts`
-- Frontend API: `src/api.ts`
-- PR URL parsing and `gh pr view` metadata: `native/src/github.rs`
-- Remote `owner/repo` parsing, PR-ref fetch, worktree-at-ref: `native/src/git_ops.rs`
-- Single-review runtime worker: `native/src/sessions/pr_review.rs`
-- Consensus runtime (parallel rounds in one shared worktree, cross-pollination,
-  convergence, synthesizer): `native/src/sessions/pr_consensus.rs`
-- Backend commands: `create_pr_review` (takes `reviewerProfileIds` + `maxRounds`),
-  `list_pr_reviews`, `get_pr_review`, `list_pr_review_runs`, `rerun_pr_review`,
-  `delete_pr_review`
-- Persistence: `pr_reviews` (with `mode`, `max_rounds`, `rounds_completed`,
-  `converged`), plus `pr_review_reviewers` and `pr_review_runs`; API in
-  `native/src/db/pr_reviews.rs`
-
-Emitted event:
-
-- `pr_review_updated`
+The single-review and consensus runtimes share one ephemeral-worktree scaffold and
+the `NECTUS_PR_VERDICT` marker contract; remote `owner/repo` parsing, the PR-ref
+fetch, and worktree-at-ref live in `native/src/git_ops/mod.rs`. The runtime emits the
+`pr_review_updated` event. File ownership: see [AGENTS.md](../AGENTS.md).
 
 ## GitHub
 
@@ -625,22 +529,8 @@ resolves conflicts/rebases itself; a write action needs a running session.
 each run, and PR status **auto-refreshes** while the PR is open (interval + window
 focus) so checks turn green on their own. A finished AI PR review can be **posted
 back to the pull request** as a comment. Full behavior lives in
-[GitHub Integration](github-integration.md).
-
-Key files:
-
-- Task inspector panel: `src/components/GitHubPanel.tsx` (+ ship actions
-  `src/components/github/PullRequestActions.tsx`, CI drill-down
-  `src/components/github/PullRequestChecks.tsx`) — presentational, unchanged
-- Settings connection card: `src/components/SettingsPage.tsx`
-- Connection, PR status read, detection, and auto-refresh (read-only): `src/hooks/useGithub.ts`
-- Agent-driven write actions: `src/hooks/useGithubShipActions.ts` + prompts in
-  `src/lib/githubAgentPrompts.ts`, wired in `src/components/TaskWorkspaceOverlay.tsx`
-- gh shell-out and parsing (write helpers now dormant): `native/src/github.rs`
-- Backend commands (reads + comment active; the four write commands dormant):
-  `github_status`, `github_pull_request_status`, `detect_github_pull_request`,
-  `post_pr_review_comment`, `create_github_pull_request`, `merge_github_pull_request`,
-  `set_github_pull_request_ready`, `close_github_pull_request`
+[GitHub Integration](github-integration.md); file ownership is in
+[AGENTS.md](../AGENTS.md).
 
 ## JIRA
 
@@ -678,19 +568,8 @@ when connected: the status dropdown shows the issue's **legal transitions**, the
 board renders **every status column** (including empty ones), and a **status
 filter** in the board header narrows the board. It is additive and off by default —
 with no token, the board behaves exactly as the acli-only flow above. Full behavior
-and caveats live in [JIRA Integration](jira-integration.md).
-
-Key files:
-
-- Board view + docked work-item split: `src/components/JiraBoardPage.tsx`
-- Work-item side panel (`JiraWorkItemPanel`, de-modaled): `src/components/JiraWorkItemDialog.tsx`
-- New-work-item create panel (`JiraCreateWorkItemPanel`): `src/components/JiraCreateWorkItemPanel.tsx`
-- Linked-story inspector panel: `src/components/JiraPanel.tsx`
-- Board/connection state, columns, and create: `src/hooks/useJira.ts`
-- acli shell-out and parsing: `native/src/jira.rs`
-- Backend commands: `jira_status`, `jira_list_projects`, `jira_search_board`,
-  `jira_get_work_item`, `jira_transition_work_item`, `jira_assign_work_item`,
-  `jira_comment_work_item`, `jira_create_work_item`, `set_task_jira_link`
+and caveats live in [JIRA Integration](jira-integration.md); file ownership is in
+[AGENTS.md](../AGENTS.md).
 
 ## Settings
 
@@ -708,16 +587,10 @@ refreshed when the pattern changes. Databases created before this default shippe
 are migrated from the legacy sibling layout (`../{repoName}-worktrees`) to the
 `~/.nectus` default on open, unless the pattern was customized.
 When Theme is set to System, the UI follows OS color-scheme changes while the
-app is running.
+app is running. Settings persist through the `get_app_settings` /
+`update_app_settings` commands (the `app_settings` table).
 
-Key files:
-
-- Settings page composition: `src/components/SettingsPage.tsx`
-- Agent profile editor: `src/components/settings/ProfileEditor.tsx`
-- Settings draft helpers: `src/components/settings/profileDrafts.ts`
-- Theme hook: `src/hooks/useAppTheme.ts`
-- Backend commands: `get_app_settings`, `update_app_settings`
-- Persistence: `app_settings` table
+File ownership: see [AGENTS.md](../AGENTS.md).
 
 ## Auto-Update
 
@@ -746,31 +619,12 @@ Current behavior:
 The update lifecycle is a small state machine (`UpdateStatus`:
 `idle | checking | upToDate | available | downloading | ready | error`) exposing
 `check()`, `installUpdate()`, `relaunch()`, plus `info`, `currentVersion`,
-`progress` (0..1), `error`, and `lastCheckedAt`.
-
-Key files:
-
-- Tauri-guarded wrapper (`isUpdaterAvailable`, `getAppVersion`, `checkForUpdate`,
-  `installUpdate`, `relaunchApp`): `src/lib/update.ts`
-- Update state machine + launch check: `src/hooks/useAppUpdate.ts`
-- Toast bridge (available → Install, installed → Relaunch): `src/hooks/useAppUpdateToast.ts`
-- About & Updates card: `src/components/settings/UpdateCard.tsx`
-- Settings About section: `src/components/SettingsPage.tsx`
-- Hook mounting: `src/App.tsx` (mounts `useAppUpdate` + `useAppUpdateToast`)
-- Plugin registration (`tauri_plugin_process::init()`,
-  `tauri_plugin_updater::Builder`): `native/src/lib.rs` (`run()`)
-- Updater config (`bundle.createUpdaterArtifacts`, `plugins.updater` endpoints +
-  base64 pubkey): `native/tauri.conf.json`
-- Capabilities (`updater:default`, `process:allow-restart`): `native/capabilities/default.json`
-- Release CI (tag `v*` → `macos-latest` arm64 → `tauri-apps/tauri-action@v0` with
-  `GITHUB_TOKEN` / `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`,
-  auto-publishes a Release with `.dmg`, `.app.tar.gz`, `.sig`, `latest.json`):
-  `.github/workflows/release.yml`
-
-Releasing: bump the version to the same `X.Y.Z` in `native/tauri.conf.json`,
-`package.json`, and `native/Cargo.toml`; commit; `git tag vX.Y.Z`;
-`git push origin vX.Y.Z`. Installed copies pick it up via the launch check (or
-Settings → About → **Check for updates**). The published `latest.json` is
+`progress` (0..1), `error`, and `lastCheckedAt`. The check/toast hooks mount once in
+the app shell; the update integrity is secured by Tauri minisign signing, and the
+published `latest.json` is
 `{ version, notes, pub_date, platforms: { "darwin-aarch64": { signature, url } } }`.
 Background polling beyond the launch check, Apple notarization, and
 Windows/Linux/Intel builds are out of scope.
+
+Release flow: see [README](../README.md#releases--auto-update) and AGENTS.md
+Product Defaults. File ownership: see [AGENTS.md](../AGENTS.md).
