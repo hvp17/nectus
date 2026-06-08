@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "./api";
 import { invoke } from "@tauri-apps/api/core";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -13,10 +14,15 @@ vi.mock("@tauri-apps/plugin-notification", () => ({
   sendNotification: vi.fn(),
 }));
 
+vi.mock("@tauri-apps/plugin-opener", () => ({
+  openUrl: vi.fn(),
+}));
+
 const mockedInvoke = vi.mocked(invoke);
 const mockedIsPermissionGranted = vi.mocked(isPermissionGranted);
 const mockedRequestPermission = vi.mocked(requestPermission);
 const mockedSendNotification = vi.mocked(sendNotification);
+const mockedOpenUrl = vi.mocked(openUrl);
 
 describe("api", () => {
   beforeEach(() => {
@@ -231,6 +237,27 @@ describe("api", () => {
     expect(mockedInvoke).not.toHaveBeenCalled();
   });
 
+  it("opens external URLs in a browser tab outside Tauri", async () => {
+    const openWindow = vi.spyOn(window, "open").mockImplementation(() => null);
+
+    await api.openExternalUrl("https://example.com/docs");
+
+    expect(openWindow).toHaveBeenCalledWith("https://example.com/docs", "_blank", "noopener,noreferrer");
+    expect(mockedOpenUrl).not.toHaveBeenCalled();
+    openWindow.mockRestore();
+  });
+
+  it("opens external URLs through the Tauri opener plugin inside Tauri", async () => {
+    vi.resetModules();
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+
+    const { api: tauriApi } = await import("./api");
+
+    await tauriApi.openExternalUrl("https://example.com/docs");
+
+    expect(mockedOpenUrl).toHaveBeenCalledWith("https://example.com/docs");
+  });
+
   it("truncates long system notification bodies sent to Tauri", async () => {
     vi.resetModules();
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
@@ -248,5 +275,41 @@ describe("api", () => {
       title: "Codex finished",
       body: `${"A".repeat(179)}…`,
     });
+  });
+
+  it("requests notification permission before sending when needed", async () => {
+    vi.resetModules();
+    Object.defineProperty(window, "__TAURI_INTERNALS__", {
+      configurable: true,
+      value: {},
+    });
+    mockedIsPermissionGranted.mockResolvedValue(false);
+    mockedRequestPermission.mockResolvedValue("granted");
+
+    const { api: tauriApi } = await import("./api");
+    const sent = await tauriApi.sendSystemNotification("Codex finished", "Done");
+
+    expect(sent).toBe(true);
+    expect(mockedRequestPermission).toHaveBeenCalled();
+    expect(mockedSendNotification).toHaveBeenCalledWith({
+      title: "Codex finished",
+      body: "Done",
+    });
+  });
+
+  it("does not send a notification when permission is denied", async () => {
+    vi.resetModules();
+    Object.defineProperty(window, "__TAURI_INTERNALS__", {
+      configurable: true,
+      value: {},
+    });
+    mockedIsPermissionGranted.mockResolvedValue(false);
+    mockedRequestPermission.mockResolvedValue("denied");
+
+    const { api: tauriApi } = await import("./api");
+    const sent = await tauriApi.sendSystemNotification("Codex finished", "Done");
+
+    expect(sent).toBe(false);
+    expect(mockedSendNotification).not.toHaveBeenCalled();
   });
 });

@@ -585,7 +585,7 @@ default `http://` and `https://` URL scope.
 **Commit:** `a4bdd32` (`test(links): cover external opener helper`) pushed to
 `origin/main`.
 
-### Iteration 17 - in progress (2026-06-09)
+### Iteration 17 - done (2026-06-09)
 
 **Goal:** Cover session-notification guard and failure branches.
 
@@ -605,12 +605,43 @@ when needed, and skips sending when permission is not granted.
 - Focused: `pnpm vitest run src/sessionNotifications.test.ts`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/sessionNotifications.test.ts` passed (4 tests).
 - `pnpm test` passed (54 files, 331 tests; includes the parallel agent's
   untracked `src/hooks/useGuardedAction.test.ts` in the shared worktree).
+- `pnpm build` passed.
+
+**Commit:** `69ee1f6` (`test(notifications): cover session send fallbacks`)
+pushed to `origin/main`.
+
+### Iteration 18 - in progress (2026-06-09)
+
+**Goal:** Cover API-level opener and notification permission branches.
+
+**Rationale:** Component and utility tests cover link-opening call sites, but the
+`api` layer itself still has untested branches for browser fallback URL opening,
+Tauri opener delegation, notification permission prompting, and denied-permission
+short-circuiting.
+
+**Docs checked:** Tauri 2 plugin docs for `openUrl` and `sendNotification`.
+`opener:default` covers default `http://` and `https://` URL opening, while the
+notification flow checks permission, requests it if needed, and skips sending
+when permission is not granted.
+
+**Claimed files:**
+- `src/api.test.ts`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/api.test.ts`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- `pnpm vitest run src/api.test.ts` passed (19 tests).
+- `pnpm test` passed (55 files, 338 tests).
 - `pnpm build` passed.
 
 ---
