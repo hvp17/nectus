@@ -496,7 +496,7 @@ rendered theme.
 **Commit:** `21a1941`
 (`chore(deps): remove unused inter font package`) pushed to `origin/main`.
 
-### Iteration 14 - in progress (2026-06-09)
+### Iteration 14 - done (2026-06-09)
 
 **Goal:** Add coverage for the JIRA visual helper components.
 
@@ -516,11 +516,40 @@ selectors.
 - Focused: `pnpm vitest run src/components/jiraVisuals.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/components/jiraVisuals.test.tsx` passed (4 tests).
 - `pnpm test` passed (51 files, 320 tests).
+- `pnpm build` passed.
+
+**Commit:** `a260a7b` (`test(jira): cover visual helper labels`) pushed to
+`origin/main`.
+
+### Iteration 15 - in progress (2026-06-09)
+
+**Goal:** Add coverage for terminal theme token resolution and cleanup.
+
+**Rationale:** `readTerminalTheme` is shared by the live terminal and review
+terminal. It creates a hidden probe, resolves CSS token colors into concrete xterm
+theme strings, and removes the probe. That DOM side effect had no focused test.
+
+**Docs checked:** jsdom docs for visual-browser limitations and `getComputedStyle`.
+Because jsdom does not implement full layout/rendering, the test stubs
+`getComputedStyle` and asserts the function's token mapping and DOM cleanup.
+
+**Claimed files:**
+- `src/lib/terminalTheme.test.ts`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/lib/terminalTheme.test.ts`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- `pnpm vitest run src/lib/terminalTheme.test.ts` passed (1 test).
+- `pnpm test` passed (52 files, 321 tests).
 - `pnpm build` passed.
 
 ---
