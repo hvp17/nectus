@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { FolderGit2, Info, Plus, Settings2 } from "lucide-react";
+import { ChevronRight, FolderGit2, Info, Plus, Settings2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { SidebarAgentRow } from "./SidebarAgentRow";
 import { AGENT_STATE_META } from "../lib/agentState";
@@ -26,6 +26,10 @@ interface ProjectPanelProps {
   onCreateTaskForWorkspace: (workspaceId: number) => void;
   onAddProject: () => void;
   onManageWorkspaces: () => void;
+  /** Persist the fold state of a project's nested in-flight agent list. */
+  onToggleRepoCollapse: (id: number, collapsed: boolean) => void;
+  /** Persist the fold state of a workspace's nested in-flight agent list. */
+  onToggleWorkspaceCollapse: (id: number, collapsed: boolean) => void;
   busy: boolean;
   loading: boolean;
 }
@@ -50,6 +54,8 @@ export function ProjectPanel({
   onCreateTaskForWorkspace,
   onAddProject,
   onManageWorkspaces,
+  onToggleRepoCollapse,
+  onToggleWorkspaceCollapse,
   busy,
   loading,
 }: ProjectPanelProps) {
@@ -94,6 +100,8 @@ export function ProjectPanel({
                 icon={<FolderGit2 aria-hidden="true" />}
                 active={repo.id === selectedRepoId}
                 rows={byRepo.get(repo.id) ?? []}
+                collapsed={repo.collapsed}
+                onToggleCollapse={() => onToggleRepoCollapse(repo.id, !repo.collapsed)}
                 onSelect={() => onSelectRepo(repo.id)}
                 onOpenTask={onOpenTask}
                 onCreateTask={() => onCreateTaskForRepo(repo.id)}
@@ -117,6 +125,8 @@ export function ProjectPanel({
                   label={workspace.name}
                   active={workspace.id === selectedWorkspaceId}
                   rows={byWorkspace.get(workspace.id) ?? []}
+                  collapsed={workspace.collapsed}
+                  onToggleCollapse={() => onToggleWorkspaceCollapse(workspace.id, !workspace.collapsed)}
                   onSelect={() => onSelectWorkspace(workspace.id)}
                   onOpenTask={onOpenTask}
                   onCreateTask={hasRepos ? () => onCreateTaskForWorkspace(workspace.id) : undefined}
@@ -137,6 +147,8 @@ function NavRow({
   icon,
   active,
   rows,
+  collapsed,
+  onToggleCollapse,
   onSelect,
   onOpenTask,
   onCreateTask,
@@ -147,6 +159,9 @@ function NavRow({
   icon?: React.ReactNode;
   active: boolean;
   rows: AgentRow[];
+  /** Whether the nested agent list is folded away (persisted UI preference). */
+  collapsed: boolean;
+  onToggleCollapse: () => void;
   onSelect: () => void;
   onOpenTask: (id: number) => void;
   /** Renders a hover-revealed "+" that opens the composer for this scope. */
@@ -155,6 +170,10 @@ function NavRow({
   info?: React.ReactNode;
 }) {
   const tone = dominantState(rows);
+  // Nothing to fold when there are no nested agents — show a spacer instead of a
+  // dead chevron so rows with and without agents stay left-aligned.
+  const canCollapse = rows.length > 0;
+  const expanded = canCollapse && !collapsed;
   return (
     <div className="nx-nav-group">
       <div
@@ -170,6 +189,23 @@ function NavRow({
           }
         }}
       >
+        {canCollapse ? (
+          <button
+            type="button"
+            className="nx-nav-chevron"
+            data-expanded={expanded}
+            aria-expanded={expanded}
+            aria-label={`${expanded ? "Collapse" : "Expand"} agents in ${label}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleCollapse();
+            }}
+          >
+            <ChevronRight size={14} aria-hidden="true" />
+          </button>
+        ) : (
+          <span className="nx-nav-chevron-spacer" aria-hidden="true" />
+        )}
         {icon}
         <span className="nx-proj-name">{label}</span>
         {info}
@@ -189,7 +225,7 @@ function NavRow({
           </button>
         )}
       </div>
-      {rows.length > 0 && (
+      {expanded && (
         <div className="nx-nav-agents">
           {rows.map((row) => (
             <SidebarAgentRow key={row.task.id} row={row} onOpen={() => onOpenTask(row.task.id)} />

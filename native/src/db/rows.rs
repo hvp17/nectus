@@ -51,6 +51,7 @@ pub(super) fn repo_from_row(row: &Row<'_>) -> rusqlite::Result<Repo> {
         path: row.get(2)?,
         default_worktree_root: row.get(3)?,
         created_at: row.get(4)?,
+        collapsed: row.get(5)?,
     })
 }
 
@@ -112,6 +113,7 @@ pub(super) fn workspace_from_row(row: &Row<'_>) -> rusqlite::Result<Workspace> {
         repo_ids: Vec::new(),
         created_at: row.get(2)?,
         updated_at: row.get(3)?,
+        collapsed: row.get(4)?,
     })
 }
 

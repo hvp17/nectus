@@ -101,7 +101,7 @@ impl Database {
         let mut stmt = self
             .conn
             .prepare(
-                "SELECT id, name, path, default_worktree_root, created_at FROM repos ORDER BY name",
+                "SELECT id, name, path, default_worktree_root, created_at, collapsed FROM repos ORDER BY name",
             )
             .map_err(|error| error.to_string())?;
         let result = rows(
@@ -114,7 +114,7 @@ impl Database {
     pub fn repo_by_id(&self, id: i64) -> Result<Option<Repo>, String> {
         self.conn
             .query_row(
-                "SELECT id, name, path, default_worktree_root, created_at FROM repos WHERE id = ?1",
+                "SELECT id, name, path, default_worktree_root, created_at, collapsed FROM repos WHERE id = ?1",
                 params![id],
                 repo_from_row,
             )
@@ -125,12 +125,23 @@ impl Database {
     fn repo_by_path(&self, path: &str) -> Result<Option<Repo>, String> {
         self.conn
             .query_row(
-                "SELECT id, name, path, default_worktree_root, created_at FROM repos WHERE path = ?1",
+                "SELECT id, name, path, default_worktree_root, created_at, collapsed FROM repos WHERE path = ?1",
                 params![path],
                 repo_from_row,
             )
             .optional()
             .map_err(|error| error.to_string())
+    }
+
+    /// Persist the sidebar fold state of a project's nested agent list.
+    pub fn set_repo_collapsed(&self, id: i64, collapsed: bool) -> Result<(), String> {
+        self.conn
+            .execute(
+                "UPDATE repos SET collapsed = ?1 WHERE id = ?2",
+                params![collapsed, id],
+            )
+            .map_err(|error| format!("Failed to update project: {error}"))?;
+        Ok(())
     }
 }
 

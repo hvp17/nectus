@@ -1238,6 +1238,32 @@ fn creates_and_lists_workspaces_with_ordered_repos() {
 }
 
 #[test]
+fn toggles_and_persists_sidebar_collapse_state() {
+    let db = Database::open_in_memory().unwrap();
+    let repo_id = insert_workspace_test_repo(&db, "alpha");
+    let workspace = db
+        .create_workspace("Stack".to_string(), vec![repo_id])
+        .unwrap();
+
+    // Both default to expanded.
+    assert!(!db.repo_by_id(repo_id).unwrap().unwrap().collapsed);
+    assert!(!db.workspace_by_id(workspace.id).unwrap().unwrap().collapsed);
+
+    db.set_repo_collapsed(repo_id, true).unwrap();
+    db.set_workspace_collapsed(workspace.id, true).unwrap();
+    assert!(db.repo_by_id(repo_id).unwrap().unwrap().collapsed);
+    assert!(db.list_repos().unwrap()[0].collapsed);
+    assert!(db.workspace_by_id(workspace.id).unwrap().unwrap().collapsed);
+    assert!(db.list_workspaces().unwrap()[0].collapsed);
+
+    // Re-expanding clears it again.
+    db.set_repo_collapsed(repo_id, false).unwrap();
+    db.set_workspace_collapsed(workspace.id, false).unwrap();
+    assert!(!db.repo_by_id(repo_id).unwrap().unwrap().collapsed);
+    assert!(!db.workspace_by_id(workspace.id).unwrap().unwrap().collapsed);
+}
+
+#[test]
 fn update_workspace_replaces_members_and_reorders() {
     let db = Database::open_in_memory().unwrap();
     let alpha = insert_workspace_test_repo(&db, "alpha");

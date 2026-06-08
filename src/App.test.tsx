@@ -15,6 +15,8 @@ vi.mock("./api", () => ({
     createCrossRepoTask: vi.fn(),
     pickRepositoryFolder: vi.fn(),
     addRepo: vi.fn(),
+    setRepoCollapsed: vi.fn().mockResolvedValue(undefined),
+    setWorkspaceCollapsed: vi.fn().mockResolvedValue(undefined),
     updateTaskMetadata: vi.fn(),
     deleteTask: vi.fn(),
     listWorkspaces: vi.fn(),

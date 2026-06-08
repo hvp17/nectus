@@ -11,4 +11,7 @@ pub struct Workspace {
     pub repo_ids: Vec<i64>,
     pub created_at: String,
     pub updated_at: String,
+    /// Sidebar UI preference: when true, the navigator folds away this workspace's
+    /// nested in-flight agent list. Persisted so the fold survives reloads.
+    pub collapsed: bool,
 }

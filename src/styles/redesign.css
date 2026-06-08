@@ -202,6 +202,16 @@
 /* Nav row group: the project/workspace button plus its nested agent list. */
 .nx-nav-group { display: flex; flex-direction: column; }
 .nx-nav-dot { width: 7px; height: 7px; border-radius: 999px; flex: none; margin-left: 4px; }
+/* Leading disclosure: folds a row's nested agent list. A spacer of equal width
+   stands in when a row has no agents, so project/workspace names stay aligned. */
+.nx-nav-chevron, .nx-nav-chevron-spacer { width: 16px; height: 16px; flex: none; margin-left: -3px; }
+.nx-nav-chevron {
+  display: grid; place-items: center; padding: 0; border: none; background: transparent;
+  color: var(--muted-foreground); border-radius: var(--radius-sm); cursor: pointer;
+}
+.nx-nav-chevron > svg { transition: transform .12s ease; }
+.nx-nav-chevron[data-expanded="true"] > svg { transform: rotate(90deg); }
+.nx-nav-chevron:hover { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); }
 .nx-proj .nx-proj-count { margin-left: 6px; }
 .nx-nav-info {
   display: grid; place-items: center; width: 18px; height: 18px; margin-left: auto; flex: none;

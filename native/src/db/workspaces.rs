@@ -8,7 +8,9 @@ impl Database {
     pub fn list_workspaces(&self) -> Result<Vec<Workspace>, String> {
         let mut stmt = self
             .conn
-            .prepare("SELECT id, name, created_at, updated_at FROM workspaces ORDER BY name")
+            .prepare(
+                "SELECT id, name, created_at, updated_at, collapsed FROM workspaces ORDER BY name",
+            )
             .map_err(|error| error.to_string())?;
         let mut workspaces = rows(stmt
             .query_map([], workspace_from_row)
@@ -23,7 +25,7 @@ impl Database {
         let workspace = self
             .conn
             .query_row(
-                "SELECT id, name, created_at, updated_at FROM workspaces WHERE id = ?1",
+                "SELECT id, name, created_at, updated_at, collapsed FROM workspaces WHERE id = ?1",
                 params![id],
                 workspace_from_row,
             )
@@ -108,6 +110,18 @@ impl Database {
         self.conn
             .execute("DELETE FROM workspaces WHERE id = ?1", params![id])
             .map_err(|error| format!("Failed to delete workspace: {error}"))?;
+        Ok(())
+    }
+
+    /// Persist the sidebar fold state of a workspace's nested agent list. A pure
+    /// UI preference, so it intentionally does not bump `updated_at`.
+    pub fn set_workspace_collapsed(&self, id: i64, collapsed: bool) -> Result<(), String> {
+        self.conn
+            .execute(
+                "UPDATE workspaces SET collapsed = ?1 WHERE id = ?2",
+                params![collapsed, id],
+            )
+            .map_err(|error| format!("Failed to update workspace: {error}"))?;
         Ok(())
     }
 

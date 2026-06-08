@@ -9,11 +9,11 @@ const mockedApi = vi.mocked(api);
 
 const secondRepo: Repo = {
   id: 8, name: "second-repo", path: "/tmp/second-repo",
-  defaultWorktreeRoot: "/tmp/second-repo-worktrees", createdAt: "2026-05-14T00:00:00.000Z",
+  defaultWorktreeRoot: "/tmp/second-repo-worktrees", createdAt: "2026-05-14T00:00:00.000Z", collapsed: false,
 };
 
 function workspace(overrides: Partial<Workspace> = {}): Workspace {
-  return { id: 1, name: "Core", repoIds: [appRepo.id, secondRepo.id], createdAt: "x", updatedAt: "x", ...overrides };
+  return { id: 1, name: "Core", repoIds: [appRepo.id, secondRepo.id], createdAt: "x", updatedAt: "x", collapsed: false, ...overrides };
 }
 
 export function defineAppSidebarTests() {
@@ -33,6 +33,34 @@ export function defineAppSidebarTests() {
     expect(within(panel).getAllByRole("button", { name: /Open Running here/ }).length).toBeGreaterThan(0);
     // Workspace section lists the workspace.
     expect(within(panel).getByText("Core")).toBeInTheDocument();
+  });
+
+  it("folds a project's nested agents from the chevron and persists the preference", async () => {
+    mockedApi.listRepos.mockResolvedValue([appRepo]);
+    mockedApi.listWorkspaces.mockResolvedValue([]);
+    mockedApi.listTasks.mockResolvedValue([
+      appTask({ id: 101, repoId: appRepo.id, title: "Running here", activeSessionId: "s-101" }),
+    ]);
+
+    render(<App />);
+
+    const panel = await screen.findByRole("complementary", { name: "Projects and workspaces" });
+    // The nested agent is visible while the row is expanded.
+    expect(within(panel).getByRole("button", { name: /Open Running here/ })).toBeInTheDocument();
+
+    // Collapsing folds the agent away and persists the fold.
+    fireEvent.click(within(panel).getByRole("button", { name: `Collapse agents in ${appRepo.name}` }));
+    await waitFor(() =>
+      expect(within(panel).queryByRole("button", { name: /Open Running here/ })).not.toBeInTheDocument(),
+    );
+    expect(mockedApi.setRepoCollapsed).toHaveBeenCalledWith(appRepo.id, true);
+
+    // The control now offers to expand again, and clicking it brings the agent back.
+    fireEvent.click(within(panel).getByRole("button", { name: `Expand agents in ${appRepo.name}` }));
+    await waitFor(() =>
+      expect(within(panel).getByRole("button", { name: /Open Running here/ })).toBeInTheDocument(),
+    );
+    expect(mockedApi.setRepoCollapsed).toHaveBeenLastCalledWith(appRepo.id, false);
   });
 
   it("the workspace info card lists its projects", async () => {

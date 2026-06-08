@@ -83,6 +83,10 @@ export const api = {
   async addRepo(path: string): Promise<Repo> {
     return invoke("add_repo", { path });
   },
+  async setRepoCollapsed(id: number, collapsed: boolean): Promise<void> {
+    if (!isTauri) return;
+    return invoke("set_repo_collapsed", { id, collapsed });
+  },
   async pickRepositoryFolder(): Promise<string | null> {
     if (!isTauri) return null;
     const selected = await open({
@@ -169,6 +173,10 @@ export const api = {
   },
   async deleteWorkspace(id: number): Promise<void> {
     return invoke("delete_workspace", { id });
+  },
+  async setWorkspaceCollapsed(id: number, collapsed: boolean): Promise<void> {
+    if (!isTauri) return;
+    return invoke("set_workspace_collapsed", { id, collapsed });
   },
   async taskDiffSummary(taskId: number): Promise<TaskDiffSummary> {
     if (isBrowserPreview) return seedTaskDiffSummary(taskId);
