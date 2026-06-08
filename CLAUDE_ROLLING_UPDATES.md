@@ -305,12 +305,37 @@ event/update-status names in backticks) — no stale command entries. The earlie
 
 **Status:** committed.
 
-## Backlog / future work (candidate improvements, not yet started)
+### Iteration 12 — done (2026-06-09) · verification + audit checkpoint
 
-- Audit other `package.json` deps for unused entries (e.g. confirm `cmdk`,
-  `next-themes`, `tw-animate-css` are actually referenced).
-- Survey largest files for cohesion splits: `src/AppRouter.tsx` (729),
-  `native/src/sessions/mod.rs` (1463), `native/src/lib.rs` (1218) — only if a
-  clean seam exists; do not split for the sake of line count.
-- Look for duplicated logic that could move into a shared helper.
-- Documentation drift: verify `docs/` matches current command/event lists.
+**Goal:** With both agents rapidly changing `main`, verify the combined state and
+finish the doc-accuracy audit (loop step 2 + the CLAUDE.md verification gate).
+
+**Verification gate (green across the board):**
+- `pnpm test` — 49 files / 312 tests pass.
+- `pnpm build` — ok.
+- `cd native && cargo test` — 240 tests pass.
+
+**Doc-accuracy audit (drift-diff vs source):**
+- Events: the documented 8 match the Rust `emit` sites exactly. ✓
+- Commands: 54 in `generate_handler!`; 2 were undocumented → fixed in iter 11. ✓
+- SQLite tables: all 12 `CREATE TABLE`s appear in the doc. ✓
+
+**Dead-code sweep (no action — all false positives):** `useGuardedAction` is used
+in 9 hooks (only its unused `GuardedRun` *type* export is idle — harmless);
+`useIsMobile` belongs to the vendored `sidebar` palette primitive (kept per
+directive 1); `resolveRedirect` is preview-only seed machinery. Removing any would
+be churn against clean, intentional code.
+
+**Conclusion:** the codebase is genuinely clean and well-tested on both the
+frontend and Rust sides; the obvious wins are harvested. Remaining value is
+incremental and requires deeper investigation per pass — cadence should stay
+deliberate, not churn.
+
+## Backlog / future work (deeper investigation — no quick wins left)
+
+- Targeted coverage for any *new* untested logic as it lands (watch the diff).
+- Periodic doc-drift re-checks after feature commits (events/commands/tables).
+- Watch for hand-rolled patterns that map cleanly to shadcn primitives *without*
+  fighting the `nx-` theme (the PR-checks `Collapsible` was the clear one).
+- Large-file cohesion splits (`AppRouter.tsx`, `sessions/mod.rs`, `lib.rs`) — only
+  if a genuine seam appears; Codex's lane, so coordinate first.
