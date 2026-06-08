@@ -90,6 +90,14 @@ fn emit_session_signal(
 ) {
     match signal {
         SessionSignal::Idle { turn_id, message } => {
+            // Idle is the default state, not a persisted attention — clear any prior
+            // "needs you" wait so the badge resolves when the agent finishes a turn.
+            let _ = db
+                .lock()
+                .set_task_attention(task_id, None)
+                .inspect_err(|error| {
+                    tracing::warn!(?error, task_id, "failed to clear task attention")
+                });
             let _ = app
                 .emit(
                     "session_idle",
@@ -117,6 +125,14 @@ fn emit_session_signal(
             reason,
             prompt,
         } => {
+            // Persist the "needs you" signal so it survives an app reload; the
+            // frontend reads it back off the task, not an ephemeral store.
+            let _ = db
+                .lock()
+                .set_task_attention(task_id, Some("needs_input"))
+                .inspect_err(|error| {
+                    tracing::warn!(?error, task_id, "failed to set task attention")
+                });
             let _ = app
                 .emit(
                     "session_needs_input",

@@ -293,6 +293,11 @@ impl Database {
         // app resolves workspace_id against the loaded workspaces and tolerates a
         // dangling id (treated as "no workspace").
         self.add_column_if_missing("tasks", "workspace_id", "INTEGER")?;
+        // Backend-owned attention: `needs_input` (the agent is blocked on the user)
+        // or NULL. Persisted so the signal survives reload; set when the watcher
+        // emits `session_needs_input`, cleared on session start/idle/exit. `idle` is
+        // not stored — it is the default state when no attention and no session.
+        self.add_column_if_missing("tasks", "attention", "TEXT")?;
         self.migrate_legacy_worktree_pattern()?;
         self.backfill_task_repos()?;
         Ok(())

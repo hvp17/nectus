@@ -45,6 +45,15 @@ describe("deriveAgentState review-loop statuses", () => {
   }
 });
 
+describe("deriveAgentState persisted attention", () => {
+  it("treats a persisted needs_input attention as needs_you (survives reload)", () => {
+    // No live push attention and no active session — only the backend-persisted
+    // column. This is the reload case: the signal must still surface.
+    const t = task({ activeSessionId: null, attention: "needs_input" });
+    expect(deriveAgentState(t)).toBe("needs_you");
+  });
+});
+
 describe("buildAgentRows live line", () => {
   it("uses the live activity line for a running task", () => {
     const running = task({ id: 1, activeSessionId: "s-1" });

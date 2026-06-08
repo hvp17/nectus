@@ -26,7 +26,7 @@ Core tables:
 | `workspace_repos` | Workspace membership: `(workspace_id, repo_id, position)`. Many-to-many, so a repo can belong to several workspaces; cascade-deletes with either side. |
 | `agent_profiles` | CLI agent configuration, including command, model, args, and env. |
 | `app_settings` | Default agent, worktree pattern, branch prefix, theme, density, and the JIRA board config (selected project + filter flags + `jira_filter_statuses`; the JQL is built from these). Also the non-secret JIRA REST account email (`jira_rest_email`); the REST API token itself lives in the macOS Keychain, never here. |
-| `tasks` | Primary work item, status, prompt, optional worktree, active session, saved session, optional JIRA story link, and optional `workspace_id` (the workspace a cross-repo task was created in). For a cross-repo task the `repo_id`/`branch_name`/`worktree_path`/`pr_url` columns describe the **primary** repo. |
+| `tasks` | Primary work item, status, prompt, optional worktree, active session, saved session, the persisted `attention` signal (`needs_input`/NULL), optional JIRA story link, and optional `workspace_id` (the workspace a cross-repo task was created in). For a cross-repo task the `repo_id`/`branch_name`/`worktree_path`/`pr_url` columns describe the **primary** repo. |
 | `task_repos` | Per-repo working state for a task (Increment B): `(task_id, repo_id, branch_name, worktree_path, pr_url, position)`. The complete repo set; a single-repo task has one row mirroring `tasks`. Unique on `worktree_path` and on `(repo_id, branch_name)`. Cascade-deletes with the task or repo. |
 | `review_loops` | Current review configuration and status per task. Includes `reviewer_session_id` (the active reviewer's session id for resume; reset to `NULL` when the loop is restarted via `start_pair_loop`). |
 | `review_runs` | Reviewer prompts, outputs, verdicts, and errors by review attempt. |
@@ -248,6 +248,13 @@ Important `tasks` columns:
 - `worktree_path`: set only when `has_worktree = 1`.
 - `active_session_id`: running session lock. Cleared on app startup, session
   stop, natural exit, and app close.
+- `attention`: backend-owned attention signal — `needs_input` when the agent is
+  blocked on the user, else `NULL`. Set when the watcher emits
+  `session_needs_input`, cleared on session start / idle / exit (folded into the
+  same `UPDATE` as `active_session_id`). Persisted so the "needs you" signal
+  survives an app reload; the frontend reads it back off the task
+  (`deriveAgentState`), while the live in-session prompt/reason detail still rides
+  the push-driven `taskAttention` store slice.
 - `last_session_id`: saved session id used for resume when supported.
 - `last_session_agent`: command or agent kind used for the last session.
 - `last_session_cwd`: project path or worktree path used for the last session.
