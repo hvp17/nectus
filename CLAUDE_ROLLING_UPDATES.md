@@ -146,6 +146,26 @@ directive-1 exception ("don't force shadcn where it adds complexity").
 
 **Status:** committed.
 
+### Iteration 5 — done (2026-06-09) · commit pending
+
+**Goal (directive 2 — simplicity):** Replace the 5-branch nested ternary that built
+`createPullRequestDescription` in `TaskWorkspace.tsx` with a named
+`pullRequestActionHint()` helper (early returns), mirroring `currentWorkflowStep()`.
+
+**Why:** Same nested-ternary smell as iteration 3, in a user-facing hint string. The
+helper reads top-to-bottom and names each branch's condition. Same strings, same
+order — no behavior change.
+
+**Scope:** `src/components/TaskWorkspace.tsx` only.
+
+**Verification:** `pnpm test` (46 files, 296 tests), `pnpm build` (ok).
+
+**Status:** committed.
+
+**Note:** shadcn alignment is already strong — no native `<select>`, checkbox,
+radio, or `<input>` outside `components/ui` (all form controls use shadcn). Future
+shadcn work needs careful per-surface theme judgment, not blanket swaps.
+
 ## Backlog / future work (candidate improvements, not yet started)
 
 - Audit other `package.json` deps for unused entries (e.g. confirm `cmdk`,

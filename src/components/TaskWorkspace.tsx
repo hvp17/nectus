@@ -86,6 +86,20 @@ function currentWorkflowStep(args: {
   return 1;
 }
 
+/** The hint shown under the "Create pull request" action, naming the current path. */
+function pullRequestActionHint(args: {
+  hasPullRequest: boolean;
+  canCreateViaGithub: boolean;
+  hasActiveSession: boolean;
+  githubReady: boolean;
+}): string {
+  if (args.hasPullRequest) return "Pull request linked";
+  if (args.canCreateViaGithub) return "Open a pull request with the GitHub CLI";
+  if (args.hasActiveSession) return "Ask the running agent to open a pull request";
+  if (args.githubReady) return "Add a worktree branch to open a pull request";
+  return "Start the agent or connect the GitHub CLI";
+}
+
 export function TaskWorkspace({
   task,
   attention,
@@ -186,15 +200,12 @@ export function TaskWorkspace({
   const githubReady = isCliConnected(githubStatus);
   const canCreateViaGithub = Boolean(githubReady && task.hasWorktree && !task.prUrl);
   const canCreatePullRequest = Boolean(!task.prUrl && (canCreateViaGithub || task.activeSessionId));
-  const createPullRequestDescription = task.prUrl
-    ? "Pull request linked"
-    : canCreateViaGithub
-      ? "Open a pull request with the GitHub CLI"
-      : task.activeSessionId
-        ? "Ask the running agent to open a pull request"
-        : githubReady
-          ? "Add a worktree branch to open a pull request"
-          : "Start the agent or connect the GitHub CLI";
+  const createPullRequestDescription = pullRequestActionHint({
+    hasPullRequest: Boolean(task.prUrl),
+    canCreateViaGithub,
+    hasActiveSession: Boolean(task.activeSessionId),
+    githubReady,
+  });
   const workflowStep = currentWorkflowStep({
     isDone: task.status === "done",
     hasPullRequest: Boolean(task.prUrl),
