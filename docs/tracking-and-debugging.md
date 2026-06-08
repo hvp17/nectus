@@ -602,17 +602,18 @@ Check:
   `Error: stdin is not a terminal` means a Codex reviewer was launched as the
   interactive TUI instead of through `codex exec` — `build_reviewer_args` in
   `native/src/sessions/reviewer.rs` adds the provider-specific headless subcommand.
-- Reviewer output contains an exact first-line verdict token:
-  `NECTUS_NO_BLOCKERS`, `NECTUS_BLOCKERS`, or `NECTUS_FEEDBACK`. Legacy `PASS`
-  and blocking-review phrase parsing are still accepted.
+- Reviewer output carries one `NECTUS_VERDICT:` marker line: `CLEAN`, `BLOCKERS`,
+  or `FEEDBACK` (the loop maps these to `pass`/`needs_changes`/`feedback`). No
+  marker → `unknown`; there is no natural-language fallback. The marker line is
+  stripped before the review is stored or forwarded to the worker.
 - Worker feedback is written to the active worker PTY and submitted with carriage
   return (`\r`), matching the terminal Enter key.
-- External PR reviews are separate: a finished one shows **Inconclusive** when the
-  reviewer omitted the `NECTUS_PR_VERDICT: BLOCKERS|CLEAN` line that
-  `parse_pr_review_output` looks for. That parser (plus the `NECTUS_PR_VERDICT:`
-  marker) is defined in `native/src/sessions/pr_verdict.rs` — the shared verdict
-  contract — and is used by both `pr_review.rs` (single) and `pr_consensus.rs`
-  (consensus). The review text is still stored; only the verdict could not be
+- External PR reviews share the same marker: a finished one shows **Inconclusive**
+  when the reviewer omitted the `NECTUS_VERDICT: BLOCKERS|CLEAN` line that
+  `parse_pr_review_output` looks for. The shared marker, token enum, and
+  parse/strip helper live in `native/src/sessions/verdict.rs`; `pr_verdict.rs`
+  (single/consensus) and `review_loop.rs` (task loop) are thin adapters mapping the
+  token to their domain enums. The review text is still stored; only the verdict could not be
   derived. Inspect it with
   `select status, verdict from pr_reviews order by id desc limit 10;`.
 - Consensus PR reviews never "converge" while any reviewer stays **Inconclusive**

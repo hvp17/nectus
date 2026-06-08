@@ -417,14 +417,14 @@ Current behavior:
   - Side effect: a Codex or OpenCode reviewer's live "Watch reviewer" output
     arrives as one chunk at completion rather than token-by-token, because those
     CLIs emit the full message in a single JSON event in non-interactive mode.
-- Reviewer output is parsed as:
-  - `pass` when a line is exactly `NECTUS_NO_BLOCKERS`, `PASS`, or starts with
-    `PASS:`.
-  - `needs_changes` when a line is exactly `NECTUS_BLOCKERS`, or the output
-    contains blocking-review phrases such as `Blocking issue`, `needs changes`,
-    `request changes`, or `must fix`.
-  - `feedback` when a line is exactly `NECTUS_FEEDBACK`.
-  - `unknown` otherwise.
+- Reviewer output is parsed from the shared `NECTUS_VERDICT:` marker line (the same
+  contract the PR reviews use, in `native/src/sessions/verdict.rs`); the marker line
+  is stripped from what is stored and forwarded to the worker:
+  - `pass` ← `NECTUS_VERDICT: CLEAN`
+  - `needs_changes` ← `NECTUS_VERDICT: BLOCKERS`
+  - `feedback` ← `NECTUS_VERDICT: FEEDBACK`
+  - `unknown` when no marker is present (there is no natural-language fallback — a
+    review that merely quotes a phrase like "blocking issue" is not classified).
 - Passing review marks the loop `passed` and moves the task to `done`.
 - Task cards show the saved review status once a review exists, including
   completed `Review passed` state.
@@ -469,11 +469,13 @@ Current behavior:
   **Passed** (no blockers), **Blocking issues**, or **Inconclusive** (the reviewer
   finished without a recognizable verdict). An `error` review shows **Error**
   instead and has no verdict. The verdict comes from a machine-readable
-  `NECTUS_PR_VERDICT: BLOCKERS|CLEAN` line the reviewer appends; the backend parses
+  `NECTUS_VERDICT: BLOCKERS|CLEAN` line the reviewer appends; the backend parses
   it and strips that line before storing the review, so the copied Markdown stays
   clean. The verdict is the only structured signal — the review body itself is
-  free-form GitHub-flavored Markdown, not the `pass`/`needs_changes` markers the
-  task [AI Review](#ai-review) loop parses.
+  free-form GitHub-flavored Markdown. This is the same `NECTUS_VERDICT:` marker
+  contract the task [AI Review](#ai-review) loop uses (PR reviews map the token to
+  `passed`/`blockers`/`inconclusive`; the loop maps it to `pass`/`needs_changes`/
+  `feedback`).
 - The detail view shows the PR metadata and verdict badge, the review text in a
   scrollable pane, a Copy button, a Re-run action (re-fetches the PR head to pick up
   new commits and clears the prior verdict), and Delete.
@@ -513,7 +515,8 @@ count, 1–5, default 3) runs them as a consensus review:
   roster and round budget.
 
 The single-review and consensus runtimes share one ephemeral-worktree scaffold and
-the `NECTUS_PR_VERDICT` marker contract; remote `owner/repo` parsing, the PR-ref
+the shared `NECTUS_VERDICT` marker contract (`native/src/sessions/verdict.rs`);
+remote `owner/repo` parsing, the PR-ref
 fetch, and worktree-at-ref live in `native/src/git_ops/mod.rs`. The runtime emits the
 `pr_review_updated` event. File ownership: see [AGENTS.md](../AGENTS.md).
 

@@ -1,35 +1,26 @@
-//! The PR-review verdict contract shared by the single (`pr_review.rs`) and
-//! consensus (`pr_consensus.rs`) runtimes: the marker reviewers append and the
-//! parser that splits it back out. Kept in a neutral module so consensus doesn't
-//! depend upward on the single-review module for this cross-cutting contract.
+//! The PR-review verdict adapter: maps the shared `NECTUS_VERDICT` token contract
+//! (see [`super::verdict`]) to the PR-review domain enum. Kept in a neutral module
+//! so the single (`pr_review.rs`) and consensus (`pr_consensus.rs`) runtimes share
+//! it without depending upward on each other.
 
+use super::verdict::{parse_and_strip, VerdictToken};
 use crate::models::PrReviewVerdict;
 
-/// Marker the reviewer appends so the review's outcome can be tracked without
-/// parsing prose. Kept out of the human-facing review by [`parse_pr_review_output`].
-pub(super) const PR_VERDICT_MARKER: &str = "NECTUS_PR_VERDICT:";
+/// Re-export of the shared marker so the PR prompt builders interpolate the exact
+/// token the parser expects.
+pub(super) use super::verdict::VERDICT_MARKER;
 
 /// Split a raw reviewer response into its verdict and the human-facing Markdown.
-/// The reviewer appends a `NECTUS_PR_VERDICT:` line; it is parsed into a verdict
-/// and removed from the returned review. A missing or unrecognized marker yields
-/// `Inconclusive` and leaves the text otherwise untouched.
+/// A missing or unrecognized marker — or a `FEEDBACK` token, which PR reviews do
+/// not use — yields `Inconclusive`; the marker line is always stripped.
 pub(super) fn parse_pr_review_output(raw: &str) -> (PrReviewVerdict, String) {
-    let mut verdict = PrReviewVerdict::Inconclusive;
-    let mut kept = Vec::new();
-    for line in raw.lines() {
-        if let Some(value) = line.trim().to_ascii_uppercase().strip_prefix(PR_VERDICT_MARKER) {
-            match value.trim() {
-                "BLOCKERS" => verdict = PrReviewVerdict::Blockers,
-                "CLEAN" => verdict = PrReviewVerdict::Passed,
-                _ => {}
-            }
-            // Drop the marker line from the human-facing review regardless of
-            // whether its value parsed, so it never leaks into the output.
-            continue;
-        }
-        kept.push(line);
-    }
-    (verdict, kept.join("\n").trim().to_string())
+    let (token, text) = parse_and_strip(raw);
+    let verdict = match token {
+        Some(VerdictToken::Clean) => PrReviewVerdict::Passed,
+        Some(VerdictToken::Blockers) => PrReviewVerdict::Blockers,
+        _ => PrReviewVerdict::Inconclusive,
+    };
+    (verdict, text)
 }
 
 #[cfg(test)]
@@ -38,18 +29,18 @@ mod tests {
 
     #[test]
     fn parses_blockers_verdict_and_strips_marker() {
-        let raw = "## Review\nBlocking: missing test.\n\nNECTUS_PR_VERDICT: BLOCKERS";
+        let raw = "## Review\nBlocking: missing test.\n\nNECTUS_VERDICT: BLOCKERS";
 
         let (verdict, review) = parse_pr_review_output(raw);
 
         assert_eq!(verdict, PrReviewVerdict::Blockers);
         assert_eq!(review, "## Review\nBlocking: missing test.");
-        assert!(!review.contains("NECTUS_PR_VERDICT"));
+        assert!(!review.contains("NECTUS_VERDICT"));
     }
 
     #[test]
     fn parses_clean_verdict_as_passed() {
-        let raw = "Looks solid.\nnectus_pr_verdict: clean\n";
+        let raw = "Looks solid.\nnectus_verdict: clean\n";
 
         let (verdict, review) = parse_pr_review_output(raw);
 

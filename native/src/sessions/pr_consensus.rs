@@ -1,5 +1,5 @@
 use super::pr_review::build_pr_review_prompt;
-use super::pr_verdict::{parse_pr_review_output, PR_VERDICT_MARKER};
+use super::pr_verdict::{parse_pr_review_output, VERDICT_MARKER};
 use super::pr_worktree::with_pr_worktree;
 use super::reviewer::{reviewer_supports_resume, run_reviewer_command, ReviewerRunOutput};
 use crate::db::Database;
@@ -339,7 +339,7 @@ Reconsider your own review in light of theirs. Adopt points they got right that 
 Output your updated review in GitHub-flavored Markdown (summary, blocking issues with file paths, non-blocking suggestions, what's done well), then on the final line by itself the verdict: exactly `{marker} BLOCKERS` if any blocking issue remains, or `{marker} CLEAN` if there are none.",
         base = meta.base_branch.as_deref().unwrap_or("main"),
         context = pr_context(pr_number, meta),
-        marker = PR_VERDICT_MARKER,
+        marker = VERDICT_MARKER,
     )
 }
 
@@ -389,7 +389,7 @@ Produce ONE consolidated review in GitHub-flavored Markdown that a human can pas
 Do not invent issues beyond what the reviewers raised. On the final line by itself, output the verdict: exactly `{marker} BLOCKERS` if the consolidated review contains any blocking issue, or `{marker} CLEAN` if it does not.",
         count = reviews.len(),
         context = pr_context(pr_number, meta),
-        marker = PR_VERDICT_MARKER,
+        marker = VERDICT_MARKER,
     )
 }
 
@@ -451,8 +451,8 @@ mod tests {
         assert!(prompt.contains("Claude"));
         assert!(prompt.contains("Claude says it looks fine."));
         assert!(!prompt.contains("Codex found a null deref."));
-        assert!(prompt.contains("NECTUS_PR_VERDICT: BLOCKERS"));
-        assert!(prompt.contains("NECTUS_PR_VERDICT: CLEAN"));
+        assert!(prompt.contains("NECTUS_VERDICT: BLOCKERS"));
+        assert!(prompt.contains("NECTUS_VERDICT: CLEAN"));
     }
 
     #[test]
@@ -466,7 +466,7 @@ mod tests {
         assert!(converged.contains("reached the same verdict"));
         assert!(converged.contains("Blocking: missing test."));
         assert!(converged.contains("No blockers found."));
-        assert!(converged.contains("NECTUS_PR_VERDICT: BLOCKERS"));
+        assert!(converged.contains("NECTUS_VERDICT: BLOCKERS"));
 
         let split = build_synthesis_prompt(7, &meta(), false, &reviews);
         assert!(split.contains("did NOT reach the same verdict"));

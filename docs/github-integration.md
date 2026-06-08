@@ -124,7 +124,8 @@ The reviewer toggles on the PR Reviews form choose how many models review:
 
 - **One reviewer → single review.** The original flow: one reviewer CLI runs once
   in the ephemeral worktree (`native/src/sessions/pr_review.rs`) and returns the
-  Markdown review plus a `NECTUS_PR_VERDICT: BLOCKERS|CLEAN` marker.
+  Markdown review plus a `NECTUS_VERDICT: BLOCKERS|CLEAN` marker (the shared
+  verdict contract in `native/src/sessions/verdict.rs`).
 - **Two or more reviewers → consensus review.** All selected reviewers review the
   same PR head in **one shared read-only worktree**, in parallel
   (`native/src/sessions/pr_consensus.rs`). After each round every reviewer is shown

@@ -30,6 +30,7 @@ mod review_loop;
 mod reviewer;
 mod reviewer_output;
 mod terminal_io;
+mod verdict;
 
 use agents::{configure_agent_command, sends_initial_prompt_in_args};
 use claude::{cleanup_event_sink, spawn_claude_event_watcher};
