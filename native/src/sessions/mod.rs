@@ -219,34 +219,69 @@ fn split_at_utf8_boundary(bytes: &[u8]) -> (&[u8], &[u8]) {
     }
 }
 
+/// Decode `bytes` to text, substituting `�` for genuinely invalid sequences (as
+/// [`String::from_utf8_lossy`] does) but *deferring* a final incomplete multi-byte
+/// sequence: the returned count is how many trailing bytes form a valid-but-
+/// unfinished character that needs more input. Distinguishing the two via
+/// [`std::str::Utf8Error::error_len`] (`None` = unexpected end of input vs
+/// `Some(n)` = an invalid sequence) is what keeps a glyph split across a read
+/// boundary intact (carry it) without letting one stray invalid byte from an
+/// arbitrary program stall the stream forever (replace it and keep decoding).
+fn decode_utf8_deferring_tail(bytes: &[u8]) -> (String, usize) {
+    let mut text = String::new();
+    let mut index = 0;
+    while index < bytes.len() {
+        match std::str::from_utf8(&bytes[index..]) {
+            Ok(valid) => {
+                text.push_str(valid);
+                return (text, 0);
+            }
+            Err(error) => {
+                let valid_up_to = error.valid_up_to();
+                // valid_up_to marks a guaranteed-valid prefix, so this never panics.
+                if let Ok(valid) = std::str::from_utf8(&bytes[index..index + valid_up_to]) {
+                    text.push_str(valid);
+                }
+                match error.error_len() {
+                    // Unexpected end of input: a real char split mid-sequence. Stop
+                    // and report the trailing bytes so the next read completes it.
+                    None => return (text, bytes.len() - (index + valid_up_to)),
+                    // A sequence that can never complete: replace it and keep
+                    // decoding past it, so later valid output still flows.
+                    Some(invalid_len) => {
+                        text.push('\u{fffd}');
+                        index += valid_up_to + invalid_len;
+                    }
+                }
+            }
+        }
+    }
+    (text, 0)
+}
+
 /// Decode a freshly read PTY chunk to UTF-8 text, stitching it onto any trailing
 /// bytes of a multi-byte character that was split across the previous read
 /// boundary. `carry` holds those leftover bytes (at most 3) between calls; on
-/// return it holds this read's own incomplete tail, if any. Only the
-/// guaranteed-valid prefix is decoded — never `from_utf8_lossy` over a raw read —
-/// so a box-drawing/CJK glyph split by the 8 KiB read boundary stays one intact
-/// cell. The lossy path turned each split into one-to-three `�` cells, which both
-/// corrupted the glyph and (by changing the line's cell count) desynced the
-/// agent's cursor-addressed redraws into overlapping frames.
+/// return it holds this read's own incomplete tail, if any. PTY output comes from
+/// arbitrary programs, so genuinely invalid bytes become `�` and never block the
+/// stream (matching the old `from_utf8_lossy`), while a character split by the
+/// 8 KiB read boundary stays one intact cell instead of corrupting into `�` —
+/// which both mangled box-drawing/CJK glyphs and desynced the agent's
+/// cursor-addressed redraws into overlapping frames.
 fn decode_pty_chunk(carry: &mut Vec<u8>, read: &[u8]) -> String {
     // Hot path: nothing carried over → decode in place, copying only the rare
     // incomplete tail into `carry`.
     if carry.is_empty() {
-        let (valid, rest) = split_at_utf8_boundary(read);
-        let text = std::str::from_utf8(valid).unwrap_or_default().to_string();
-        carry.extend_from_slice(rest);
+        let (text, tail) = decode_utf8_deferring_tail(read);
+        if tail > 0 {
+            carry.extend_from_slice(&read[read.len() - tail..]);
+        }
         return text;
     }
     // A character was split last read: complete it by prepending the carried bytes.
     carry.extend_from_slice(read);
-    let (text, rest_len) = {
-        let (valid, rest) = split_at_utf8_boundary(carry);
-        (
-            std::str::from_utf8(valid).unwrap_or_default().to_string(),
-            rest.len(),
-        )
-    };
-    let consumed = carry.len() - rest_len;
+    let (text, tail) = decode_utf8_deferring_tail(carry);
+    let consumed = carry.len() - tail;
     carry.drain(..consumed);
     text
 }
@@ -634,7 +669,28 @@ impl SessionManager {
                 let mut utf8_carry: Vec<u8> = Vec::new();
                 loop {
                     match reader.read(&mut buffer) {
-                        Ok(0) => break,
+                        Ok(0) => {
+                            // EOF with a half-written multi-byte char still buffered:
+                            // surface it as a replacement rather than dropping the
+                            // bytes (matches from_utf8_lossy on a truncated tail).
+                            if !utf8_carry.is_empty() {
+                                let data = String::from_utf8_lossy(&utf8_carry).to_string();
+                                utf8_carry.clear();
+                                let start_offset = sessions
+                                    .lock()
+                                    .get_mut(&session_id)
+                                    .map_or(0, |running| append_output_buffer(running, &data));
+                                let _ = app.emit(
+                                    "session_output",
+                                    SessionOutputEvent {
+                                        session_id: session_id.clone(),
+                                        data,
+                                        start_offset,
+                                    },
+                                );
+                            }
+                            break;
+                        }
                         Ok(count) => {
                             let data = decode_pty_chunk(&mut utf8_carry, &buffer[..count]);
                             // A read that delivered only the lead bytes of a
@@ -1342,6 +1398,53 @@ mod tests {
         assert_eq!(decode_pty_chunk(&mut carry, &bytes[1..2]), "");
         assert_eq!(decode_pty_chunk(&mut carry, &bytes[2..3]), "─");
         assert!(carry.is_empty());
+    }
+
+    #[test]
+    fn decode_pty_chunk_replaces_an_invalid_byte_and_keeps_the_stream_moving() {
+        // PTY output is arbitrary bytes. A stray 0xFF must not stall later output:
+        // it becomes `�` and decoding continues (the lossy path's one redeeming
+        // trait, which the carry decoder must preserve).
+        let mut carry = Vec::new();
+        assert_eq!(decode_pty_chunk(&mut carry, &[0xff]), "\u{fffd}");
+        assert!(carry.is_empty(), "an invalid byte is never carried");
+        assert_eq!(decode_pty_chunk(&mut carry, b"ok\n"), "ok\n");
+    }
+
+    #[test]
+    fn decode_pty_chunk_replaces_invalid_bytes_amid_valid_text() {
+        // "a" 0xFF "b": the invalid byte is replaced, the surrounding text survives.
+        let mut carry = Vec::new();
+        assert_eq!(decode_pty_chunk(&mut carry, b"a\xffb"), "a\u{fffd}b");
+        assert!(carry.is_empty());
+    }
+
+    #[test]
+    fn decode_pty_chunk_keeps_carry_bounded_for_an_incomplete_4_byte_char() {
+        // U+1F600 😀 is 0xF0 0x9F 0x98 0x80 delivered one byte per read: the carry
+        // holds the growing prefix (never more than 3 bytes) until the glyph
+        // completes — an invalid byte could never inflate it without bound.
+        let bytes = "\u{1f600}".as_bytes();
+        let mut carry = Vec::new();
+        for byte in &bytes[..3] {
+            assert_eq!(decode_pty_chunk(&mut carry, &[*byte]), "");
+            assert!(carry.len() <= 3, "carry stays bounded at the max UTF-8 tail");
+        }
+        assert_eq!(decode_pty_chunk(&mut carry, &[bytes[3]]), "\u{1f600}");
+        assert!(carry.is_empty());
+    }
+
+    #[test]
+    fn decode_pty_chunk_replaces_an_incomplete_char_killed_by_an_invalid_byte() {
+        // 0xE2 (lead byte of "─") then 0xFF (not a continuation): the partial char
+        // can never complete, so it's replaced and the stream keeps flowing instead
+        // of carrying 0xE2 forever.
+        let mut carry = Vec::new();
+        assert_eq!(decode_pty_chunk(&mut carry, &[0xe2]), "");
+        assert_eq!(carry, vec![0xe2]);
+        assert!(decode_pty_chunk(&mut carry, &[0xff]).contains('\u{fffd}'));
+        assert!(carry.is_empty());
+        assert_eq!(decode_pty_chunk(&mut carry, b"next"), "next");
     }
 
     #[test]
