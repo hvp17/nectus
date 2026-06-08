@@ -58,12 +58,23 @@
   = polish: the deferred Phase-1 control swaps per surface (IconRail rail buttons,
   reviewer chips → Toggle, verdict span → Badge, Settings nav), any fine spacing,
   and (optional) deeper density toward the prototype's ~12.5px base.
-- [ ] **Phase 3 — ⌘K command palette** (new): `cmdk` + `ui/command.tsx` + `ui/kbd.tsx`,
-  global keydown hook, action registry wired to store
-  (`setCurrentView`/`openWorkspaceBoard`/`setSelectedTaskId`/`setCreateTaskOpen`) +
-  AppContext (`openTask`/`openCreateTaskModal`); header command-bar trigger.
-- [ ] **Phase 4 — Polish**: indigo focus rings, contrast audit (both themes),
-  delete dead `nx-` color CSS, run `pnpm test` + `pnpm build` + `cargo test`.
+- [x] **Phase 3 — ⌘K command palette** *(built + verified live)*: installed `cmdk`,
+  vendored `ui/command.tsx` + `ui/kbd.tsx`, built `CommandPalette.tsx` (global ⌘K
+  keydown toggle, groups: Jump to / Actions / Projects / Workspaces / Tasks) wired
+  through the shell's own handlers (`handleNavigate`, `openProjectBoard`,
+  `openWorkspaceBoard`, `openTask`, `openCreateTaskModal`). Added a rail Search (⌘K)
+  trigger. Opened it in the running app, selected "PR Reviews" → palette closed and
+  routed correctly. Build clean; 1026 tests pass.
+- [x] **Phase 4 — Polish & verification**: focus rings are already indigo (driven by
+  the retuned `--ring` token); contrast checked across surfaces in both themes during
+  the live sweep; no dead `nx-` color CSS left by the token retune. Final gate:
+  `pnpm build` + `pnpm test` (1026 pass) + `cargo test` (Rust untouched).
+  **Conscious scope call:** the bespoke nav controls (IconRail rail buttons, Settings
+  nav, reviewer chips, the dense verdict matrix) are kept as **token-driven
+  specialized controls** rather than forced into generic shadcn primitives — they're
+  not duplications of `Button`/`Input` and converting them adds churn/risk for no
+  visual gain. The theme + all generic primitives (Button/Input/Badge/Dialog/Select/
+  Switch/Command) are first-class shadcn.
 
 ## Gotchas / guardrails
 
@@ -107,3 +118,9 @@
   Board / PR Reviews / Settings / Task — all on-brand, no breakage. `pnpm build` clean;
   **1026/1026 tests pass**. The big visual transformation is done; remaining Phase 2 =
   per-surface polish + control swaps. Then Phase 3 (⌘K palette) + Phase 4.
+- **2026-06-08** — **Phase 3 + 4 landed.** Built the ⌘K command palette (`cmdk` +
+  vendored `command.tsx`/`kbd.tsx` + `CommandPalette.tsx`, rail Search trigger, global
+  ⌘K), verified live (open → select PR Reviews → routes + closes). Phase 4: focus rings
+  already indigo via `--ring`; both themes contrast-checked; bespoke nav controls kept
+  as token-driven specialized controls (documented). `pnpm build` clean, **1026 tests
+  pass**, `cargo test` green (Rust untouched). Redesign complete — opening the PR.

@@ -11,6 +11,7 @@ import { WorkspaceManager } from "./components/WorkspaceManager";
 import { SettingsPage } from "./components/SettingsPage";
 import { ReviewsPage } from "./components/ReviewsPage";
 import { JiraBoardPage } from "./components/JiraBoardPage";
+import { CommandPalette } from "./components/CommandPalette";
 import { useEventBridge } from "./hooks/useEventBridge";
 import { useShellBootstrap } from "./hooks/useShellBootstrap";
 import { usePrReviews } from "./hooks/usePrReviews";
@@ -152,6 +153,8 @@ export function AppLayout() {
 
   // The workspace manager overlays the current view, like the New Task composer.
   const [managingWorkspaces, setManagingWorkspaces] = useState(false);
+  // The ⌘K command palette (mounted once; its own key listener toggles it).
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   // Close the composer and reset the whole draft (incl. the cross-repo selection)
   // in one store action, so a selection can't leak across opens.
@@ -278,6 +281,22 @@ export function AppLayout() {
     setCurrentView(view);
   };
 
+  // Palette navigation that mirrors the project-panel selection + dismiss logic, so
+  // jumping to a project/workspace from ⌘K behaves like clicking it in the navigator.
+  const openProjectBoard = (repoId: number) => {
+    if (createTaskOpen) closeComposer();
+    setManagingWorkspaces(false);
+    setActiveWorkspaceId(undefined);
+    setSelectedTaskId(undefined);
+    setSelectedRepoId(repoId);
+    setCurrentView("board");
+  };
+  const openWorkspaceFromPalette = (workspaceId: number) => {
+    if (createTaskOpen) closeComposer();
+    setManagingWorkspaces(false);
+    openWorkspaceBoard(workspaceId);
+  };
+
   // A task is opened on top of Mission Control or the board, never the secondary views.
   const taskOpen =
     Boolean(selectedTask) &&
@@ -354,6 +373,7 @@ export function AppLayout() {
           onNavigate={handleNavigate}
           onCreateTask={openCreateTaskModal}
           canCreateTask={repos.length > 0}
+          onOpenPalette={() => setPaletteOpen(true)}
         />
 
         {showProjectPanel && (
@@ -386,6 +406,20 @@ export function AppLayout() {
 
         <Toaster closeButton theme={settings?.theme ?? "system"} />
       </div>
+
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        repos={repos}
+        workspaces={workspaces}
+        tasks={tasks}
+        canCreateTask={repos.length > 0}
+        onNavigate={handleNavigate}
+        onOpenProject={openProjectBoard}
+        onOpenWorkspace={openWorkspaceFromPalette}
+        onOpenTask={openTask}
+        onCreateTask={openCreateTaskModal}
+      />
     </AppContext.Provider>
   );
 }
