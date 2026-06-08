@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "../queries/keys";
 import { useTauriEvent } from "./useTauriEvent";
@@ -35,8 +35,8 @@ export function useTaskDiff(taskId: number | undefined): TaskDiff {
   const queryClient = useQueryClient();
 
   const summaryQuery = useQuery({
-    queryKey: taskId != null ? queryKeys.task.diffSummary(taskId) : ["task", "diff-summary", "none"],
-    queryFn: () => api.taskDiffSummary(taskId as number),
+    queryKey: queryKeys.task.diffSummary(taskId),
+    queryFn: taskId != null ? () => api.taskDiffSummary(taskId) : skipToken,
     enabled: taskId != null,
     staleTime: 0,
   });

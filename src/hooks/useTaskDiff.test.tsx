@@ -4,13 +4,13 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
 import { createQueryClient } from "../queries/queryClient";
+import { queryKeys } from "../queries/keys";
 import { deferred } from "../test/testUtils";
 import { useTaskDiff } from "./useTaskDiff";
 import type { TaskDiffSummary } from "../types";
 
 /** A renderHook wrapper with its own fresh QueryClient (isolated cache per test). */
-function makeWrapper() {
-  const client = createQueryClient();
+function makeWrapper(client = createQueryClient()) {
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
@@ -53,6 +53,15 @@ beforeEach(() => {
 });
 
 describe("useTaskDiff", () => {
+  it("does not allocate a placeholder summary query while no task is selected", () => {
+    const client = createQueryClient();
+    renderHook(() => useTaskDiff(undefined), { wrapper: makeWrapper(client) });
+
+    expect(client.getQueryCache().find({ queryKey: ["task", "diff-summary", "none"] })).toBeUndefined();
+    expect(client.getQueryCache().find({ queryKey: queryKeys.task.diffSummary(undefined) })).toBeDefined();
+    expect(mockedApi.taskDiffSummary).not.toHaveBeenCalled();
+  });
+
   it("loads the changed-file summary as soon as a task is selected", async () => {
     mockedApi.taskDiffSummary.mockResolvedValue(summary);
     const { result } = renderHook(() => useTaskDiff(1), { wrapper: makeWrapper() });

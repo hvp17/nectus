@@ -102,7 +102,7 @@ should be removed instead of carried forward.
 (`refactor(settings): flatten UpdateCard detail into a readable helper`) with
 Claude's `UpdateCard` simplification.
 
-### Iteration 3 - done (2026-06-09) - commit pending
+### Iteration 3 - done (2026-06-09)
 
 **Goal:** Remove sentinel `-1` GitHub query keys and unsafe task-id casts from the
 GitHub query layer.
@@ -135,6 +135,41 @@ recommended for type-safe disabled queries when `refetch()` is not required.
 - Green: `pnpm vitest run src/queries/github.test.tsx` passed (3 tests).
 - `pnpm build` passed.
 - `pnpm test` passed (46 files, 291 tests).
+
+**Commit:** Changes landed in Claude's coalesced commit `ba2c20f`
+(`refactor(task-workspace): extract currentWorkflowStep helper`) with Claude's
+TaskWorkspace helper extraction.
+
+### Iteration 4 - done (2026-06-09) - commit pending
+
+**Goal:** Remove the placeholder `"none"` task-diff query key and unsafe task-id
+cast from `useTaskDiff`.
+
+**Rationale:** `useTaskDiff` is Query-backed but still allocates an idle cache
+entry under `["task", "diff-summary", "none"]` when no task is selected, then
+casts `taskId` in the query function. This mirrors the GitHub pattern removed in
+iteration 3. `skipToken` can disable the query without fake ids or casts.
+
+**Docs checked:** TanStack Query v5 disabling guide for `skipToken`.
+
+**Claimed files:**
+- `src/hooks/useTaskDiff.ts`
+- `src/hooks/useTaskDiff.test.tsx`
+- `src/queries/keys.ts`
+
+**Verification plan:**
+- Red: targeted Vitest for no `"none"` placeholder diff-summary cache entry.
+- Green: targeted Vitest for `useTaskDiff`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- Red: `pnpm vitest run src/hooks/useTaskDiff.test.tsx` failed because a no-task
+  diff hook allocated `["task", "diff-summary", "none"]`.
+- Green: `pnpm vitest run src/hooks/useTaskDiff.test.tsx` passed (7 tests).
+- `pnpm build` passed.
+- `pnpm test` passed (46 files, 292 tests).
 
 ---
 
