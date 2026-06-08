@@ -317,7 +317,7 @@ new local state path.
 **Commit:** `f516e24` (`fix(jira): refresh board after comments`) pushed to
 `origin/main`.
 
-### Iteration 9 - in progress (2026-06-09)
+### Iteration 9 - done (2026-06-09)
 
 **Goal:** Remove the New Task composer's workspace-seeding effect suppression and
 cover late workspace hydration.
@@ -344,13 +344,45 @@ logic must run once.
 - Green: targeted Vitest for `CreateTaskComposer`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red: `pnpm vitest run src/components/CreateTaskComposer.test.tsx` failed because
   `onSetRepoIds` was never called after workspace data arrived.
 - Green: `pnpm vitest run src/components/CreateTaskComposer.test.tsx` passed (1
   test).
+- `pnpm test` passed (49 files, 312 tests).
+- `pnpm build` passed.
+
+**Commit:** `075a393`
+(`fix(composer): seed focused workspace after hydration`) pushed to `origin/main`.
+
+### Iteration 10 - in progress (2026-06-09)
+
+**Goal:** Remove the `TaskDiffView` exhaustive-deps suppression by making the
+derived file list stable.
+
+**Rationale:** `TaskDiffView` intentionally re-anchors the selected diff file only
+when the summary changes, but it expressed that by depending on `summary` while
+using `fileList` and suppressing `react-hooks/exhaustive-deps`. Memoizing
+`summary?.files` by `summary` preserves the same re-anchor semantics and lets the
+effect list its actual dependency.
+
+**Docs checked:** React docs for effect dependencies and `useMemo` dependencies.
+They recommend declaring every reactive value, and memoizing derived objects or
+arrays when that is the intended dependency boundary.
+
+**Claimed files:**
+- `src/components/TaskDiffView.tsx`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/components/TaskDiffView.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- `pnpm vitest run src/components/TaskDiffView.test.tsx` passed (6 tests).
 - `pnpm test` passed (49 files, 312 tests).
 - `pnpm build` passed.
 

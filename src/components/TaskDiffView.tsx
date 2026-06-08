@@ -24,6 +24,8 @@ const CHANGE_META: Record<DiffChangeKind, { glyph: string; label: string; classN
   untracked: { glyph: "U", label: "New file", className: "diff-glyph--added" },
 };
 
+const EMPTY_FILES: DiffFileEntry[] = [];
+
 type DiffLineKind = "add" | "del" | "hunk" | "meta" | "context";
 
 function classifyLine(line: string): DiffLineKind {
@@ -47,7 +49,7 @@ function classifyLine(line: string): DiffLineKind {
 }
 
 export function TaskDiffView({ summary, loading, error, files, onSelectFile }: TaskDiffViewProps) {
-  const fileList = summary?.files ?? [];
+  const fileList = useMemo(() => summary?.files ?? EMPTY_FILES, [summary]);
   const [selected, setSelected] = useState<string | null>(null);
 
   // Keep a valid selection: default to the first file, and re-anchor if the
@@ -60,7 +62,7 @@ export function TaskDiffView({ summary, loading, error, files, onSelectFile }: T
     setSelected((current) =>
       current && fileList.some((file) => file.path === current) ? current : fileList[0].path,
     );
-  }, [summary]); // eslint-disable-line react-hooks/exhaustive-deps -- re-anchor only when the summary changes
+  }, [fileList]);
 
   const selectedMeta = useMemo(
     () => fileList.find((file) => file.path === selected),
