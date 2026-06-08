@@ -647,7 +647,7 @@ when permission is not granted.
 **Commit:** `fbd1f61` (`test(api): cover opener and notification permissions`)
 pushed to `origin/main`.
 
-### Iteration 19 - in progress (2026-06-09)
+### Iteration 19 - done (2026-06-09)
 
 **Goal:** Add focused coverage for session command task-state updates.
 
@@ -666,12 +666,42 @@ hook updates in `act`.
 - Focused: `pnpm vitest run src/hooks/useSessionCommands.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/hooks/useSessionCommands.test.tsx` passed (4 tests).
 - `pnpm test` passed (57 files, 345 tests; includes the parallel agent's
   untracked `src/hooks/useTaskDeletion.test.tsx` in the shared worktree).
+- `pnpm build` passed.
+
+**Commit:** `e757c9c` (`test(sessions): cover session command updates`) pushed to
+`origin/main`.
+
+### Iteration 20 - in progress (2026-06-09)
+
+**Goal:** Add focused coverage for session attention clearing wrappers.
+
+**Rationale:** `useSessionAttentionControls` is the bridge between session
+commands and the attention store. It clears stale `needs_input` / idle attention
+when the user starts, resumes, stops, exits, or types into a matching session, but
+that wrapper behavior has no focused tests.
+
+**Docs checked:** Testing Library React docs for `renderHook` and `act` around
+hook callbacks that update state.
+
+**Claimed files:**
+- `src/hooks/useSessionAttentionControls.test.tsx`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/hooks/useSessionAttentionControls.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- `pnpm vitest run src/hooks/useSessionAttentionControls.test.tsx` passed (5
+  tests).
+- `pnpm test` passed (58 files, 350 tests).
 - `pnpm build` passed.
 
 ---
