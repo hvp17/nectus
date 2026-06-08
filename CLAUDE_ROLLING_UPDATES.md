@@ -373,6 +373,31 @@ project's `createQueryClient` + `QueryClientProvider` + mocked `api` pattern.
 
 **Status:** committed.
 
+### Iteration 15 — done (2026-06-09) · commit pending
+
+**Goal (best practices — safety-path coverage):** Add
+`src/hooks/useTaskDeletion.test.tsx` for the deletion *safety* logic the happy-path
+integration test (`appTaskBoardTests`) doesn't cover.
+
+**Why:** `useTaskDeletion` refuses to delete a task with a running session (a real
+footgun guard) and force-discards a worktree's changes only when
+`hasWorktree && isDirty`. Neither was tested. Covered: blocked-with-session shows the
+error toast and never calls `api.deleteTask`; a dirty worktree task calls
+`deleteTask(id, true)`; a clean task calls `deleteTask(id, false)`. The `deleteTask`
+call is synchronous (before the first `await`), so the asserts need no async/store
+setup.
+
+**Scope:** new file `src/hooks/useTaskDeletion.test.tsx` (3 tests).
+
+**Verification:** isolation 3/3; full `pnpm test` (57 files, 345 tests); `pnpm build`.
+
+**Status:** committed.
+
+**Plateau note:** remaining untested hooks are thin api-wrappers (low value — would
+only assert wiring) or Codex-adjacent/complex (`useComposer`, `useJiraBoardView`).
+The high-value, collision-free coverage is now done. Further iterations shift to
+monitoring new code as it lands rather than mining the (clean) existing code.
+
 ## Backlog / future work (deeper investigation — no quick wins left)
 
 - Targeted coverage for any *new* untested logic as it lands (watch the diff).
