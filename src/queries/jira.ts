@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "./keys";
 
@@ -35,10 +35,11 @@ export function useJiraProjectsQuery(enabled: boolean) {
 }
 
 export function useJiraProjectStatusesQuery(project: string | null, enabled: boolean) {
+  const shouldLoad = enabled && project != null;
   return useQuery({
-    queryKey: queryKeys.jira.projectStatuses(project ?? ""),
-    queryFn: () => api.jiraProjectStatuses(project as string),
-    enabled: enabled && project != null,
+    queryKey: queryKeys.jira.projectStatuses(project),
+    queryFn: shouldLoad ? () => api.jiraProjectStatuses(project) : skipToken,
+    enabled: shouldLoad,
     staleTime: 15 * 60_000,
   });
 }

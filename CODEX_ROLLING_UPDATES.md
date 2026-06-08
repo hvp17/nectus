@@ -210,7 +210,7 @@ pattern removed from GitHub and task diff queries.
 (`refactor(pr-reviews): skip idle runs query sentinel`) pushed to `origin/main`.
 The same push also carried Claude's already-committed `ed756b8`.
 
-### Iteration 6 - done (2026-06-09) - commit pending
+### Iteration 6 - done (2026-06-09)
 
 **Goal:** Replace review-loop `-1` query sentinels with optional-id keys and
 `skipToken`.
@@ -240,6 +240,40 @@ cell while removing `?? -1` and `as number` casts.
 - Green: `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx` passed (3 tests).
 - `pnpm build` passed.
 - `pnpm test` passed (46 files, 296 tests).
+
+**Commit:** `c13f4e2`
+(`refactor(review): skip idle task review sentinels`) pushed to `origin/main`.
+
+### Iteration 7 - done (2026-06-09) - commit pending
+
+**Goal:** Remove the empty-string JIRA project-status query sentinel and unsafe
+project cast.
+
+**Rationale:** `useJiraProjectStatusesQuery` currently creates an idle cache entry
+under `["jira", "project-statuses", ""]` when no project is configured, then
+casts `project` in the query function. Optional project keys plus `skipToken`
+match the cleaned-up Query pattern used elsewhere.
+
+**Docs checked:** TanStack Query v5 disabling guide for `skipToken`.
+
+**Claimed files:**
+- `src/queries/jira.ts`
+- `src/queries/jira.test.tsx`
+- `src/queries/keys.ts`
+
+**Verification plan:**
+- Red: targeted Vitest for no empty-string JIRA project-status cache entry.
+- Green: targeted Vitest for JIRA query tests.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- Red: `pnpm vitest run src/queries/jira.test.tsx` failed because a no-project
+  query allocated `["jira", "project-statuses", ""]`.
+- Green: `pnpm vitest run src/queries/jira.test.tsx` passed (1 test).
+- `pnpm build` passed.
+- `pnpm test` passed (47 files, 297 tests).
 
 ---
 
