@@ -69,6 +69,14 @@ interface WorkspaceProps {
   loading: boolean;
 }
 
+/** The board heading: a workspace name, else the selected repo, else a loading/empty hint. */
+function boardHeaderTitle(workspaceName: string | undefined, selectedRepo: Repo | undefined, loading: boolean): string {
+  if (workspaceName !== undefined) return workspaceName;
+  if (selectedRepo) return selectedRepo.name;
+  if (loading) return "Loading projects…";
+  return "Connect a project";
+}
+
 export function Workspace({
   selectedRepo,
   workspaceName,
@@ -161,7 +169,7 @@ export function Workspace({
       <div className="nx-head-row">
         <div>
           <h1 className="nx-h1">
-            {workspaceName ?? (selectedRepo ? selectedRepo.name : loading ? "Loading projects…" : "Connect a project")}
+            {boardHeaderTitle(workspaceName, selectedRepo, loading)}
           </h1>
           <p className="nx-sub">Workflow board — Planned through Done, with live state on every card.</p>
         </div>

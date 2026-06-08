@@ -166,6 +166,30 @@ order — no behavior change.
 radio, or `<input>` outside `components/ui` (all form controls use shadcn). Future
 shadcn work needs careful per-surface theme judgment, not blanket swaps.
 
+### Iteration 6 — done (2026-06-09) · commit pending
+
+**Goal (directive 2 — simplicity):** Replace the nested ternary that built the board
+heading in `Workspace.tsx` with a named `boardHeaderTitle()` helper (early returns).
+
+**Why:** `workspaceName ?? (selectedRepo ? selectedRepo.name : loading ? "Loading
+projects…" : "Connect a project")` requires parsing three conditions at once. The
+helper reads top-to-bottom. Behavior preserved exactly — `!== undefined` matches the
+original `??` (nullish) semantics for the `string | undefined` type.
+
+**Scope:** `src/components/Workspace.tsx` only.
+
+**Provenance:** confirmed by a read-only Explore sweep of `src/components/**` +
+`src/lib/**` (excluding Codex-owned `queries/`, `useGithub/useTaskDiff/usePrReviews`,
+`docs/`, and the `ui/` palette) — this was the *only* high-bar readability win the
+sweep surfaced. The codebase is otherwise clean. **Loop note:** the easy
+readability fruit is now exhausted; future iterations should shift to other value
+sources (test-coverage gaps for untested `lib/` pure functions, doc accuracy in
+non-Codex docs, or a researched shadcn enhancement) rather than mining ternaries.
+
+**Verification:** `pnpm test` (47 files, 297 tests), `pnpm build` (ok).
+
+**Status:** committed.
+
 ## Backlog / future work (candidate improvements, not yet started)
 
 - Audit other `package.json` deps for unused entries (e.g. confirm `cmdk`,
