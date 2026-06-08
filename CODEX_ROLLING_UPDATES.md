@@ -174,7 +174,7 @@ iteration 3. `skipToken` can disable the query without fake ids or casts.
 **Commit:** `720e4a8` (`refactor(diff): skip idle summary query sentinel`)
 pushed to `origin/main`.
 
-### Iteration 5 - done (2026-06-09) - commit pending
+### Iteration 5 - done (2026-06-09)
 
 **Goal:** Remove the placeholder PR-review runs query key and unsafe selected
 review id cast from `usePrReviews`.
@@ -205,6 +205,41 @@ pattern removed from GitHub and task diff queries.
 - `pnpm build` passed.
 - `pnpm test` passed (46 files, 295 tests; Claude's active `profileDrafts` test
   changes were present but unstaged).
+
+**Commit:** `c53b5ad`
+(`refactor(pr-reviews): skip idle runs query sentinel`) pushed to `origin/main`.
+The same push also carried Claude's already-committed `ed756b8`.
+
+### Iteration 6 - done (2026-06-09) - commit pending
+
+**Goal:** Replace review-loop `-1` query sentinels with optional-id keys and
+`skipToken`.
+
+**Rationale:** `useTaskReviewLoop` intentionally keeps a disabled cache cell when
+no task is selected so imperative setters still have somewhere to write. That
+does not require a fake numeric task id; an optional-id key preserves the cache
+cell while removing `?? -1` and `as number` casts.
+
+**Docs checked:** TanStack Query v5 disabling guide for `skipToken`.
+
+**Claimed files:**
+- `src/hooks/useTaskReviewLoop.ts`
+- `src/hooks/useTaskReviewLoop.test.tsx`
+- `src/queries/keys.ts`
+
+**Verification plan:**
+- Red: targeted Vitest for no `-1` review-loop cache entries.
+- Green: targeted Vitest for `useTaskReviewLoop`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- Red: `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx` failed because a
+  no-task hook allocated `["task", "review-loop", -1]`.
+- Green: `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx` passed (3 tests).
+- `pnpm build` passed.
+- `pnpm test` passed (46 files, 296 tests).
 
 ---
 

@@ -26,8 +26,8 @@ export const queryKeys = {
   task: {
     /** Changed-file summary for a task's diff; refetched on the task's `session_idle`. */
     diffSummary: (taskId: number | undefined) => ["task", "diff-summary", taskId] as const,
-    reviewLoop: (taskId: number) => ["task", "review-loop", taskId] as const,
-    reviewRuns: (taskId: number) => ["task", "review-runs", taskId] as const,
+    reviewLoop: (taskId: number | undefined) => ["task", "review-loop", taskId] as const,
+    reviewRuns: (taskId: number | undefined) => ["task", "review-runs", taskId] as const,
   },
 
   prReviews: {

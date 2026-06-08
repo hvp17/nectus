@@ -4,12 +4,13 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
 import { createQueryClient } from "../queries/queryClient";
+import { queryKeys } from "../queries/keys";
 import type { ReviewLoop, ReviewRun } from "../types";
 import { useTaskReviewLoop } from "./useTaskReviewLoop";
 
 /** Render under a fresh QueryClient (the hook now reads through the query cache). */
-function renderWithClient(ui: ReactNode) {
-  return render(<QueryClientProvider client={createQueryClient()}>{ui}</QueryClientProvider>);
+function renderWithClient(ui: ReactNode, client = createQueryClient()) {
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
 const eventTestState = vi.hoisted(() => ({
@@ -97,5 +98,15 @@ describe("useTaskReviewLoop", () => {
     expect(screen.getByTestId("runs")).toHaveTextContent("0");
     expect(mockedApi.getTaskReviewLoop).not.toHaveBeenCalled();
     expect(mockedApi.listTaskReviewRuns).not.toHaveBeenCalled();
+  });
+
+  it("does not allocate -1 review cache entries without a selected task", () => {
+    const client = createQueryClient();
+    renderWithClient(<Harness selectedTaskId={undefined} />, client);
+
+    expect(client.getQueryCache().find({ queryKey: queryKeys.task.reviewLoop(-1) })).toBeUndefined();
+    expect(client.getQueryCache().find({ queryKey: queryKeys.task.reviewRuns(-1) })).toBeUndefined();
+    expect(client.getQueryCache().find({ queryKey: queryKeys.task.reviewLoop(undefined) })).toBeDefined();
+    expect(client.getQueryCache().find({ queryKey: queryKeys.task.reviewRuns(undefined) })).toBeDefined();
   });
 });

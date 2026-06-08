@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "../queries/keys";
 import { useTauriEvent } from "./useTauriEvent";
@@ -20,9 +20,9 @@ const EMPTY_RUNS: ReviewRun[] = [];
  * keeps the cache + the task-board summary live; `review_output` streams the
  * reviewer's stdout into the ephemeral `liveReviewOutput` buffer (never cached).
  *
- * The `?? -1` key shared by the queries and the setters means an imperative
- * `setSelectedReviewLoop(...)` made while no task is selected still lands in a cell
- * the (disabled) query reads, preserving the immediate "reviewing" affordance.
+ * The optional-id key shared by the queries and the setters means an imperative
+ * `setSelectedReviewLoop(...)` made while no task is selected still lands in the
+ * same disabled cache cell, preserving the immediate "reviewing" affordance.
  */
 export function useTaskReviewLoop({ selectedTaskId, onMessage }: UseTaskReviewLoopArgs) {
   const queryClient = useQueryClient();
@@ -51,14 +51,14 @@ export function useTaskReviewLoop({ selectedTaskId, onMessage }: UseTaskReviewLo
   );
 
   const loopQuery = useQuery({
-    queryKey: queryKeys.task.reviewLoop(selectedTaskId ?? -1),
-    queryFn: () => api.getTaskReviewLoop(selectedTaskId as number),
+    queryKey: queryKeys.task.reviewLoop(selectedTaskId),
+    queryFn: selectedTaskId !== undefined ? () => api.getTaskReviewLoop(selectedTaskId) : skipToken,
     enabled: selectedTaskId !== undefined,
     staleTime: 0,
   });
   const runsQuery = useQuery({
-    queryKey: queryKeys.task.reviewRuns(selectedTaskId ?? -1),
-    queryFn: () => api.listTaskReviewRuns(selectedTaskId as number),
+    queryKey: queryKeys.task.reviewRuns(selectedTaskId),
+    queryFn: selectedTaskId !== undefined ? () => api.listTaskReviewRuns(selectedTaskId) : skipToken,
     enabled: selectedTaskId !== undefined,
     staleTime: 0,
   });
@@ -74,13 +74,13 @@ export function useTaskReviewLoop({ selectedTaskId, onMessage }: UseTaskReviewLo
 
   const setSelectedReviewLoop = useCallback(
     (loop: ReviewLoop | null) => {
-      queryClient.setQueryData(queryKeys.task.reviewLoop(selectedTaskIdRef.current ?? -1), loop);
+      queryClient.setQueryData(queryKeys.task.reviewLoop(selectedTaskIdRef.current), loop);
     },
     [queryClient],
   );
   const setSelectedReviewRuns = useCallback(
     (runs: ReviewRun[]) => {
-      queryClient.setQueryData(queryKeys.task.reviewRuns(selectedTaskIdRef.current ?? -1), runs);
+      queryClient.setQueryData(queryKeys.task.reviewRuns(selectedTaskIdRef.current), runs);
     },
     [queryClient],
   );
