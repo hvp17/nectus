@@ -2,8 +2,8 @@ use super::rows::{rows, task_from_row, task_repo_from_row};
 use super::{generated_branch_name, now, Database};
 use crate::git_ops;
 use crate::models::{Repo, TaskRepo, TaskStatus, TaskSummary};
-use rusqlite::{params, OptionalExtension};
-use std::collections::HashSet;
+use rusqlite::{params, params_from_iter, OptionalExtension};
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
 impl Database {
@@ -93,11 +93,18 @@ impl Database {
                 // every retry with "Worktree path already exists". Compensate by
                 // removing it — it is a freshly created, app-owned worktree, so the
                 // force removal discards no user work.
+                let mut cleanup_errors = Vec::new();
                 if let Some(path) = &worktree_path {
-                    let _ =
-                        git_ops::remove_worktree(PathBuf::from(&repo.path).as_path(), path, true);
+                    if let Err(cleanup_error) =
+                        git_ops::remove_worktree(PathBuf::from(&repo.path).as_path(), path, true)
+                    {
+                        cleanup_errors.push(format!(
+                            "failed to remove orphan worktree {}: {cleanup_error}",
+                            path.display()
+                        ));
+                    }
                 }
-                return Err(error);
+                return Err(with_cleanup_errors(error, cleanup_errors));
             }
         };
 
@@ -161,16 +168,23 @@ impl Database {
             if let Err(error) =
                 git_ops::create_worktree(Path::new(&repo.path), &worktree_path, &branch_name)
             {
+                let mut cleanup_errors = Vec::new();
                 for created_index in &created {
-                    let _ = git_ops::remove_worktree(
+                    let cleanup = git_ops::remove_worktree(
                         Path::new(&repos[*created_index].path),
                         &parent.join(&folders[*created_index]),
                         true,
                     );
+                    if let Err(cleanup_error) = cleanup {
+                        cleanup_errors.push(format!(
+                            "failed to remove orphan worktree {}: {cleanup_error}",
+                            parent.join(&folders[*created_index]).display()
+                        ));
+                    }
                 }
-                return Err(format!(
-                    "Failed to create worktree for {}: {error}",
-                    repo.name
+                return Err(with_cleanup_errors(
+                    format!("Failed to create worktree for {}: {error}", repo.name),
+                    cleanup_errors,
                 ));
             }
             created.push(index);
@@ -228,14 +242,21 @@ impl Database {
         let task_id = match inserted {
             Ok(task_id) => task_id,
             Err(error) => {
+                let mut cleanup_errors = Vec::new();
                 for (index, repo) in repos.iter().enumerate() {
-                    let _ = git_ops::remove_worktree(
+                    let cleanup = git_ops::remove_worktree(
                         Path::new(&repo.path),
                         &parent.join(&folders[index]),
                         true,
                     );
+                    if let Err(cleanup_error) = cleanup {
+                        cleanup_errors.push(format!(
+                            "failed to remove orphan worktree {}: {cleanup_error}",
+                            parent.join(&folders[index]).display()
+                        ));
+                    }
                 }
-                return Err(error);
+                return Err(with_cleanup_errors(error, cleanup_errors));
             }
         };
 
@@ -258,10 +279,57 @@ impl Database {
                 ",
             )
             .map_err(|error| error.to_string())?;
-        let result = rows(stmt
-            .query_map(params![task_id], task_repo_from_row)
-            .map_err(|error| error.to_string())?);
+        let result = rows(
+            stmt.query_map(params![task_id], task_repo_from_row)
+                .map_err(|error| error.to_string())?,
+        );
         result
+    }
+
+    pub fn task_repos_for_tasks(
+        &self,
+        task_ids: &[i64],
+    ) -> Result<BTreeMap<i64, Vec<TaskRepo>>, String> {
+        if task_ids.is_empty() {
+            return Ok(BTreeMap::new());
+        }
+        let placeholders = std::iter::repeat_n("?", task_ids.len())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut stmt = self
+            .conn
+            .prepare(&format!(
+                "
+                SELECT tr.task_id, tr.repo_id, r.name, tr.branch_name, tr.worktree_path, tr.pr_url, tr.position
+                FROM task_repos tr
+                JOIN repos r ON r.id = tr.repo_id
+                WHERE tr.task_id IN ({placeholders})
+                ORDER BY tr.task_id, tr.position
+                "
+            ))
+            .map_err(|error| error.to_string())?;
+        let mut grouped = BTreeMap::<i64, Vec<TaskRepo>>::new();
+        let rows = stmt
+            .query_map(params_from_iter(task_ids.iter().copied()), |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    TaskRepo {
+                        repo_id: row.get(1)?,
+                        repo_name: row.get(2)?,
+                        branch_name: row.get(3)?,
+                        worktree_path: row.get(4)?,
+                        pr_url: row.get(5)?,
+                        is_dirty: false,
+                        position: row.get(6)?,
+                    },
+                ))
+            })
+            .map_err(|error| error.to_string())?;
+        for row in rows {
+            let (task_id, task_repo) = row.map_err(|error| error.to_string())?;
+            grouped.entry(task_id).or_default().push(task_repo);
+        }
+        Ok(grouped)
     }
 
     pub fn list_tasks(&self, repo_id: Option<i64>) -> Result<Vec<TaskSummary>, String> {
@@ -293,22 +361,29 @@ impl Database {
                     "{sql} WHERE EXISTS (SELECT 1 FROM task_repos tr WHERE tr.task_id = t.id AND tr.repo_id = ?1) ORDER BY t.updated_at DESC"
                 ))
                 .map_err(|error| error.to_string())?;
-            let mapped = rows(stmt
-                .query_map(params![repo_id], task_from_row)
-                .map_err(|error| error.to_string())?);
+            let mapped = rows(
+                stmt.query_map(params![repo_id], task_from_row)
+                    .map_err(|error| error.to_string())?,
+            );
             mapped?
         } else {
             let mut stmt = self
                 .conn
                 .prepare(&format!("{sql} ORDER BY t.updated_at DESC"))
                 .map_err(|error| error.to_string())?;
-            let mapped = rows(stmt
-                .query_map([], task_from_row)
-                .map_err(|error| error.to_string())?);
+            let mapped = rows(
+                stmt.query_map([], task_from_row)
+                    .map_err(|error| error.to_string())?,
+            );
             mapped?
         };
+        let task_ids = tasks.iter().map(|task| task.id).collect::<Vec<_>>();
+        let grouped_task_repos = self.task_repos_for_tasks(&task_ids)?;
         for task in tasks.iter_mut() {
-            task.task_repos = self.task_repos_for(task.id)?;
+            task.task_repos = grouped_task_repos
+                .get(&task.id)
+                .cloned()
+                .unwrap_or_default();
         }
         Ok(tasks)
     }
@@ -340,16 +415,16 @@ impl Database {
         };
         // A single task read tolerates the per-worktree `git status` cost inline
         // (the bulk list defers it off-lock); compute it for the task and each repo.
-        task.is_dirty = task
-            .worktree_path
-            .as_ref()
-            .is_some_and(|path| git_ops::is_dirty(Path::new(path)));
+        task.is_dirty = match task.worktree_path.as_ref() {
+            Some(path) => git_ops::is_dirty(Path::new(path))?,
+            None => false,
+        };
         task.task_repos = self.task_repos_for(id)?;
         for task_repo in task.task_repos.iter_mut() {
-            task_repo.is_dirty = task_repo
-                .worktree_path
-                .as_ref()
-                .is_some_and(|path| git_ops::is_dirty(Path::new(path)));
+            task_repo.is_dirty = match task_repo.worktree_path.as_ref() {
+                Some(path) => git_ops::is_dirty(Path::new(path))?,
+                None => false,
+            };
         }
         Ok(Some(task))
     }
@@ -438,7 +513,7 @@ impl Database {
         // with force (mirroring the single-repo dialog).
         if !force {
             for (_, worktree_path) in &worktrees {
-                if git_ops::is_dirty(Path::new(worktree_path)) {
+                if git_ops::is_dirty(Path::new(worktree_path))? {
                     return Err(git_ops::WORKTREE_HAS_CHANGES.to_string());
                 }
             }
@@ -485,6 +560,17 @@ fn unique_worktree_folders(repos: &[Repo]) -> Vec<String> {
         .collect()
 }
 
+fn with_cleanup_errors(error: String, cleanup_errors: Vec<String>) -> String {
+    if cleanup_errors.is_empty() {
+        error
+    } else {
+        format!(
+            "{error}; cleanup also failed: {}",
+            cleanup_errors.join("; ")
+        )
+    }
+}
+
 /// Prepend cross-repo context to the user's prompt so the single agent knows the
 /// task spans several repos and where the siblings are checked out relative to its
 /// working directory (the primary repo's worktree). `folders` are the per-repo
@@ -527,7 +613,11 @@ mod folder_tests {
         // id 6) would make the `{name}-{id}` fallback collide; the counter resolves it.
         let folders = unique_worktree_folders(&[repo("api-6", 8), repo("api", 5), repo("api", 6)]);
         let distinct: std::collections::HashSet<_> = folders.iter().collect();
-        assert_eq!(distinct.len(), 3, "all folders must be distinct: {folders:?}");
+        assert_eq!(
+            distinct.len(),
+            3,
+            "all folders must be distinct: {folders:?}"
+        );
         assert_eq!(folders[0], "api-6");
         assert_eq!(folders[1], "api");
     }

@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Circle, Folder, FolderGit2, GitPullRequest, Layers, Plus, Radio, Settings, SquareKanban } from "lucide-react";
 import {
   CommandDialog,
@@ -29,8 +28,8 @@ const MAX_TASKS = 40;
 
 /**
  * The ⌘K command palette — jump to any view / project / workspace / task and run
- * the New Task action. Mounted once in the shell; its own key listener toggles it
- * so ⌘K works from anywhere. Selecting an item routes through the shell's existing
+ * the New Task action. The shell owns the global shortcut and lazy-loads this
+ * component when opened. Selecting an item routes through the shell's existing
  * handlers (which own the dismiss-overlay logic), so navigation stays consistent.
  */
 export function CommandPalette({
@@ -46,17 +45,6 @@ export function CommandPalette({
   onOpenTask,
   onCreateTask,
 }: CommandPaletteProps) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && (event.key === "k" || event.key === "K")) {
-        event.preventDefault();
-        onOpenChange(!open);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onOpenChange]);
-
   // Close first, then act, so the routed view isn't rendered behind the closing dialog.
   const run = (action: () => void) => {
     onOpenChange(false);

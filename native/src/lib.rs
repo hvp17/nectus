@@ -12,9 +12,9 @@ use crate::db::Database;
 use crate::models::{
     AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings, AppSettingsInput,
     GithubStatus, JiraProject, JiraRestStatus, JiraStatus, JiraStatusDef, JiraTransition,
-    JiraWorkItem, PrReview, PrReviewMode, PrReviewRun, PullRequestInfo, Repo,
-    ReviewLoop, ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskDiffSummary,
-    TaskStatus, TaskSummary, Workspace,
+    JiraWorkItem, PrReview, PrReviewMode, PrReviewRun, PullRequestInfo, Repo, ReviewLoop,
+    ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskDiffSummary, TaskStatus,
+    TaskSummary, Workspace,
 };
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
@@ -187,11 +187,11 @@ async fn list_tasks(
         // cross-repo task this checks each repo's worktree.
         for task in tasks.iter_mut() {
             if let Some(path) = task.worktree_path.as_deref() {
-                task.is_dirty = git_ops::is_dirty(Path::new(path));
+                task.is_dirty = git_ops::is_dirty(Path::new(path))?;
             }
             for task_repo in task.task_repos.iter_mut() {
                 if let Some(path) = task_repo.worktree_path.as_deref() {
-                    task_repo.is_dirty = git_ops::is_dirty(Path::new(path));
+                    task_repo.is_dirty = git_ops::is_dirty(Path::new(path))?;
                 }
             }
         }
@@ -765,10 +765,14 @@ fn create_pr_review(
 /// dispatch lives here once, shared by `create_pr_review` and `rerun_pr_review`.
 fn start_pr_review(state: &AppState, app: tauri::AppHandle, mode: PrReviewMode, review_id: i64) {
     match mode {
-        PrReviewMode::Consensus => state
+        PrReviewMode::Consensus => {
+            state
+                .sessions
+                .run_consensus_pr_review(app, state.db.clone(), review_id)
+        }
+        PrReviewMode::Single => state
             .sessions
-            .run_consensus_pr_review(app, state.db.clone(), review_id),
-        PrReviewMode::Single => state.sessions.run_pr_review(app, state.db.clone(), review_id),
+            .run_pr_review(app, state.db.clone(), review_id),
     }
 }
 
@@ -785,10 +789,7 @@ fn get_pr_review(review_id: i64, state: State<'_, AppState>) -> AppResult<Option
 /// The per-reviewer, per-round outputs of a consensus review (empty for a
 /// single-reviewer review).
 #[tauri::command]
-fn list_pr_review_runs(
-    review_id: i64,
-    state: State<'_, AppState>,
-) -> AppResult<Vec<PrReviewRun>> {
+fn list_pr_review_runs(review_id: i64, state: State<'_, AppState>) -> AppResult<Vec<PrReviewRun>> {
     app_result(state.db.lock().list_pr_review_runs(review_id))
 }
 
@@ -829,7 +830,11 @@ async fn delete_pr_review(review_id: i64, state: State<'_, AppState>) -> AppResu
             if let Err(error) =
                 git_ops::remove_worktree(Path::new(&repo_path), Path::new(&worktree), true)
             {
-                tracing::warn!(?error, review_id, "failed to remove PR review worktree on delete");
+                tracing::warn!(
+                    ?error,
+                    review_id,
+                    "failed to remove PR review worktree on delete"
+                );
             }
         }
         db.lock().delete_pr_review(review_id)

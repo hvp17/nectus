@@ -146,7 +146,9 @@ Worktree-backed tasks:
 - Remove the git worktree when the task is deleted. A worktree with uncommitted
   changes is not silently discarded: the delete dialog warns that the changes
   will be lost and only then force-removes it; a clean worktree is removed
-  normally.
+  normally. If Git cannot determine whether a worktree is dirty, the non-forced
+  delete is blocked and the Git error is surfaced instead of treating the
+  worktree as clean.
 - Can be deleted from the board card or the selected-task inspector.
 
 Task status values are:
@@ -256,8 +258,8 @@ Current behavior:
 - The view is master-detail: a left list of changed files (status glyph · path ·
   `+a −d`), and a right unified-diff pane for the selected file. The first file is
   auto-selected; patch bodies are lazy-loaded per file so a large refactor diff
-  stays cheap. Untracked files appear as new files; binary files show
-  "Binary file" instead of a patch.
+  stays cheap. Very large patch previews are capped in the UI; untracked files
+  appear as new files, and binary files show "Binary file" instead of a patch.
 - The summary loads as soon as a task is selected, so the count/line-total badge is
   populated without opening the Diff tab first. It also reloads on the Diff tab's
   refresh control and automatically when the task's agent finishes a turn

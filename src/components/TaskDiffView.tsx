@@ -26,6 +26,8 @@ const CHANGE_META: Record<DiffChangeKind, { glyph: string; label: string; classN
 
 type DiffLineKind = "add" | "del" | "hunk" | "meta" | "context";
 
+const DIFF_PATCH_LINE_LIMIT = 5_000;
+
 function classifyLine(line: string): DiffLineKind {
   if (line.startsWith("@@")) return "hunk";
   if (
@@ -203,15 +205,18 @@ function DiffPatch({ patch }: { patch: string }) {
     return <p className="diff-patch-empty">No textual changes to show.</p>;
   }
   const lines = patch.replace(/\n$/, "").split("\n");
+  const visibleLines = lines.slice(0, DIFF_PATCH_LINE_LIMIT);
+  const truncated = lines.length > visibleLines.length;
   return (
     <ScrollArea className="h-full">
       <pre className="diff-lines">
         <code>
-          {lines.map((line, index) => (
+          {visibleLines.map((line, index) => (
             <span key={index} className={`diff-line diff-line--${classifyLine(line)}`}>
               {line || " "}
             </span>
           ))}
+          {truncated && <span className="diff-line diff-line--meta">Patch preview truncated at 5000 lines.</span>}
         </code>
       </pre>
     </ScrollArea>

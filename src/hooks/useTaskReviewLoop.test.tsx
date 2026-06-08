@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
@@ -54,7 +54,7 @@ const firstRun: ReviewRun = {
 };
 
 function Harness({ selectedTaskId }: { selectedTaskId?: number }) {
-  const { selectedReviewLoop, selectedReviewRuns, message } = useTaskReviewLoop({
+  const { selectedReviewLoop, selectedReviewRuns, liveReviewOutput, message } = useTaskReviewLoop({
     selectedTaskId,
   });
 
@@ -62,6 +62,7 @@ function Harness({ selectedTaskId }: { selectedTaskId?: number }) {
     <>
       <output data-testid="status">{selectedReviewLoop?.status ?? "none"}</output>
       <output data-testid="runs">{selectedReviewRuns.length}</output>
+      <output data-testid="live-length">{liveReviewOutput.length}</output>
       <output data-testid="message">{message ?? ""}</output>
     </>
   );
@@ -97,5 +98,18 @@ describe("useTaskReviewLoop", () => {
     expect(screen.getByTestId("runs")).toHaveTextContent("0");
     expect(mockedApi.getTaskReviewLoop).not.toHaveBeenCalled();
     expect(mockedApi.listTaskReviewRuns).not.toHaveBeenCalled();
+  });
+
+  it("caps live review output", async () => {
+    renderWithClient(<Harness selectedTaskId={21} />);
+    await waitFor(() => expect(eventTestState.handlers.has("review_output")).toBe(true));
+
+    act(() => {
+      eventTestState.handlers.get("review_output")?.({
+        payload: { taskId: 21, data: "x".repeat(200_010), startOffset: 0 },
+      });
+    });
+
+    expect(screen.getByTestId("live-length")).toHaveTextContent("200000");
   });
 });

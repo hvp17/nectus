@@ -11,6 +11,12 @@ interface UseTaskReviewLoopArgs {
 }
 
 const EMPTY_RUNS: ReviewRun[] = [];
+const LIVE_REVIEW_OUTPUT_LIMIT = 200_000;
+
+function capLiveReviewOutput(output: string): string {
+  if (output.length <= LIVE_REVIEW_OUTPUT_LIMIT) return output;
+  return output.slice(output.length - LIVE_REVIEW_OUTPUT_LIMIT);
+}
 
 /**
  * Owns the selected task's review loop + runs, backed by TanStack Query (keyed per
@@ -99,7 +105,7 @@ export function useTaskReviewLoop({ selectedTaskId, onMessage }: UseTaskReviewLo
     (payload) => {
       if (selectedTaskIdRef.current !== payload.taskId) return;
       setLiveReviewOutput((current) =>
-        payload.startOffset === 0 ? payload.data : current + payload.data,
+        capLiveReviewOutput(payload.startOffset === 0 ? payload.data : current + payload.data),
       );
     },
     { onError: (error) => publishMessage(String(error)) },

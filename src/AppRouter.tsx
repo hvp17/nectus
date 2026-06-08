@@ -1,17 +1,20 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  lazy,
+  Suspense,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 import { IconRail, type RailView } from "./components/IconRail";
 import { ProjectPanel } from "./components/ProjectPanel";
 import { MissionControl } from "./components/MissionControl";
 import { Workspace } from "./components/Workspace";
-import { TaskWorkspaceOverlay } from "./components/TaskWorkspaceOverlay";
-import { CreateTaskComposer } from "./components/CreateTaskComposer";
-import { WorkspaceManager } from "./components/WorkspaceManager";
-import { SettingsPage } from "./components/SettingsPage";
-import { ReviewsPage } from "./components/ReviewsPage";
-import { JiraBoardPage } from "./components/JiraBoardPage";
-import { CommandPalette } from "./components/CommandPalette";
 import { useEventBridge } from "./hooks/useEventBridge";
 import { useShellBootstrap } from "./hooks/useShellBootstrap";
 import { usePrReviews } from "./hooks/usePrReviews";
@@ -49,6 +52,24 @@ import { formatNotificationBody } from "./notificationText";
 import { planTaskFocus } from "./taskNavigation";
 import { openExternal } from "./lib/openExternal";
 import { api } from "./api";
+
+const TaskWorkspaceOverlay = lazy(() =>
+  import("./components/TaskWorkspaceOverlay").then((module) => ({ default: module.TaskWorkspaceOverlay })),
+);
+const CreateTaskComposer = lazy(() =>
+  import("./components/CreateTaskComposer").then((module) => ({ default: module.CreateTaskComposer })),
+);
+const WorkspaceManager = lazy(() =>
+  import("./components/WorkspaceManager").then((module) => ({ default: module.WorkspaceManager })),
+);
+const SettingsPage = lazy(() => import("./components/SettingsPage").then((module) => ({ default: module.SettingsPage })));
+const ReviewsPage = lazy(() => import("./components/ReviewsPage").then((module) => ({ default: module.ReviewsPage })));
+const JiraBoardPage = lazy(() =>
+  import("./components/JiraBoardPage").then((module) => ({ default: module.JiraBoardPage })),
+);
+const CommandPalette = lazy(() =>
+  import("./components/CommandPalette").then((module) => ({ default: module.CommandPalette })),
+);
 
 function getToastContent(message: string) {
   const separator = message.indexOf(": ");
@@ -153,8 +174,20 @@ export function AppLayout() {
 
   // The workspace manager overlays the current view, like the New Task composer.
   const [managingWorkspaces, setManagingWorkspaces] = useState(false);
-  // The ⌘K command palette (mounted once; its own key listener toggles it).
+  // The ⌘K command palette stays lazy-loaded until opened; the shell owns the
+  // global shortcut so the component itself does not have to be eagerly mounted.
   const [paletteOpen, setPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && (event.key === "k" || event.key === "K")) {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Close the composer and reset the whole draft (incl. the cross-repo selection)
   // in one store action, so a selection can't leak across opens.
@@ -402,26 +435,36 @@ export function AppLayout() {
           />
         )}
 
-        <div className="nx-viewport">{viewport}</div>
+        <div className="nx-viewport">
+          <Suspense fallback={<ViewLoading />}>{viewport}</Suspense>
+        </div>
 
         <Toaster closeButton theme={settings?.theme ?? "system"} />
       </div>
 
-      <CommandPalette
-        open={paletteOpen}
-        onOpenChange={setPaletteOpen}
-        repos={repos}
-        workspaces={workspaces}
-        tasks={tasks}
-        canCreateTask={repos.length > 0}
-        onNavigate={handleNavigate}
-        onOpenProject={openProjectBoard}
-        onOpenWorkspace={openWorkspaceFromPalette}
-        onOpenTask={openTask}
-        onCreateTask={openCreateTaskModal}
-      />
+      {paletteOpen && (
+        <Suspense fallback={null}>
+          <CommandPalette
+            open={paletteOpen}
+            onOpenChange={setPaletteOpen}
+            repos={repos}
+            workspaces={workspaces}
+            tasks={tasks}
+            canCreateTask={repos.length > 0}
+            onNavigate={handleNavigate}
+            onOpenProject={openProjectBoard}
+            onOpenWorkspace={openWorkspaceFromPalette}
+            onOpenTask={openTask}
+            onCreateTask={openCreateTaskModal}
+          />
+        </Suspense>
+      )}
     </AppContext.Provider>
   );
+}
+
+function ViewLoading() {
+  return <div className="nx-viewport-fill" aria-busy="true" />;
 }
 
 const EMPTY_REPOS: Repo[] = [];
@@ -722,4 +765,3 @@ function ReviewsView() {
     />
   );
 }
-

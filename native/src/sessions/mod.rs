@@ -26,9 +26,9 @@ mod pr_consensus;
 mod pr_review;
 mod pr_verdict;
 mod pr_worktree;
+mod provider;
 mod review_loop;
 mod reviewer;
-mod provider;
 mod reviewer_output;
 mod terminal_io;
 mod verdict;
@@ -38,9 +38,9 @@ use claude::{cleanup_event_sink, spawn_claude_event_watcher};
 use codex::{latest_codex_session_metadata, spawn_codex_event_watcher};
 use command::resolve_agent_command;
 use opencode::{latest_opencode_session_metadata_from_server, spawn_opencode_event_watcher};
-use provider::{provider_session, WatcherKind};
 use pr_consensus::spawn_consensus_pr_review;
 use pr_review::spawn_pr_review;
+use provider::{provider_session, WatcherKind};
 use review_loop::spawn_review_on_session_idle;
 use terminal_io::write_agent_submission;
 
@@ -72,9 +72,7 @@ enum SessionSignal {
     /// tool-use hooks, OpenCode message parts). Replaces the raw-PTY scraper for
     /// those providers, which on a full-screen TUI only surfaced statusline
     /// chrome and echoed keystrokes.
-    Activity {
-        text: String,
-    },
+    Activity { text: String },
 }
 
 /// Emit the frontend event for a session signal and, on idle, spawn any pending
@@ -606,7 +604,7 @@ impl SessionManager {
                             if let Some(running) = sessions.lock().get_mut(&session_id) {
                                 start_offset = append_output_buffer(running, &data);
                                 if scrape_activity {
-                                    activity_line = next_activity_line(running);
+                                    activity_line = next_activity_line(running, &data);
                                 }
                             }
                             let _ = app
@@ -662,7 +660,11 @@ impl SessionManager {
                 if let Some(mut running) = removed {
                     // EOF means the child has exited; wait() reaps the zombie and
                     // yields the real status so we can report a true exit code.
-                    let exit_code = running.child.wait().ok().map(|status| status.exit_code() as i32);
+                    let exit_code = running
+                        .child
+                        .wait()
+                        .ok()
+                        .map(|status| status.exit_code() as i32);
                     if let Some((id, label)) = resolve_resumable_metadata(
                         agent_kind,
                         &cwd,
@@ -1003,9 +1005,9 @@ fn strip_ansi(input: &str) -> String {
 
 /// Compute the activity line to emit for a session after new output, applying
 /// de-duplication and throttling, and record what was emitted on the session.
-fn next_activity_line(running: &mut RunningSession) -> Option<String> {
+fn next_activity_line(running: &mut RunningSession, data: &str) -> Option<String> {
     let now = Instant::now();
-    let candidate = latest_activity_line(&running.output_buffer);
+    let candidate = latest_activity_line(data);
     let line = activity_to_emit(
         candidate,
         running.last_activity_line.as_deref(),
@@ -1120,14 +1122,18 @@ mod tests {
 
     #[test]
     fn normalize_activity_skips_blank_and_symbol_only_lines() {
-        assert_eq!(normalize_activity("\n\n   \n---\nRunning tests"), Some("Running tests".to_string()));
+        assert_eq!(
+            normalize_activity("\n\n   \n---\nRunning tests"),
+            Some("Running tests".to_string())
+        );
         assert_eq!(normalize_activity("   \n***\n"), None);
         assert_eq!(normalize_activity(""), None);
     }
 
     #[test]
     fn normalize_activity_truncates_to_payload_cap() {
-        let line = normalize_activity(&"x".repeat(ACTIVITY_LINE_MAX + 50)).expect("a long line survives");
+        let line =
+            normalize_activity(&"x".repeat(ACTIVITY_LINE_MAX + 50)).expect("a long line survives");
         assert_eq!(line.chars().count(), ACTIVITY_LINE_MAX);
     }
 
@@ -1185,7 +1191,12 @@ mod tests {
         let now = Instant::now();
         let earlier = now - ACTIVITY_THROTTLE - Duration::from_millis(10);
         assert_eq!(
-            activity_to_emit(Some("Reading file".to_string()), Some("Reading file"), Some(earlier), now),
+            activity_to_emit(
+                Some("Reading file".to_string()),
+                Some("Reading file"),
+                Some(earlier),
+                now
+            ),
             None
         );
     }
@@ -1195,7 +1206,12 @@ mod tests {
         let now = Instant::now();
         let just_now = now - Duration::from_millis(50);
         assert_eq!(
-            activity_to_emit(Some("Newer line".to_string()), Some("Older line"), Some(just_now), now),
+            activity_to_emit(
+                Some("Newer line".to_string()),
+                Some("Older line"),
+                Some(just_now),
+                now
+            ),
             None
         );
     }
@@ -1205,7 +1221,12 @@ mod tests {
         let now = Instant::now();
         let earlier = now - ACTIVITY_THROTTLE - Duration::from_millis(10);
         assert_eq!(
-            activity_to_emit(Some("Newer line".to_string()), Some("Older line"), Some(earlier), now),
+            activity_to_emit(
+                Some("Newer line".to_string()),
+                Some("Older line"),
+                Some(earlier),
+                now
+            ),
             Some("Newer line".to_string())
         );
     }

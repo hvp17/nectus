@@ -6,6 +6,7 @@
 use super::{default_remote, git_output, git_output_allowing_codes};
 use crate::models::{DiffChangeKind, DiffFileEntry};
 use std::collections::HashMap;
+use std::io::Read;
 use std::path::Path;
 
 /// The base a worktree task is diffed against: a display label (e.g. `origin/main`)
@@ -174,18 +175,31 @@ fn untracked_files(path: &Path) -> Result<Vec<String>, String> {
 /// Count the added lines of a new (untracked) file, returning `(lines, binary)`.
 /// A file is treated as binary when its bytes contain a NUL.
 fn count_added_lines(path: &Path) -> (u32, bool) {
-    let Ok(bytes) = std::fs::read(path) else {
+    let Ok(mut file) = std::fs::File::open(path) else {
         return (0, false);
     };
-    if bytes.contains(&0) {
-        return (0, true);
+    let mut buffer = [0_u8; 8192];
+    let mut newlines = 0_u32;
+    let mut saw_any = false;
+    let mut last = None;
+    loop {
+        let Ok(count) = file.read(&mut buffer) else {
+            return (0, false);
+        };
+        if count == 0 {
+            break;
+        }
+        saw_any = true;
+        let bytes = &buffer[..count];
+        if bytes.contains(&0) {
+            return (0, true);
+        }
+        newlines =
+            newlines.saturating_add(bytes.iter().filter(|&&byte| byte == b'\n').count() as u32);
+        last = bytes.last().copied();
     }
-    if bytes.is_empty() {
-        return (0, false);
-    }
-    let newlines = bytes.iter().filter(|&&byte| byte == b'\n').count();
-    let trailing = usize::from(bytes.last() != Some(&b'\n'));
-    ((newlines + trailing) as u32, false)
+    let trailing = u32::from(saw_any && last != Some(b'\n'));
+    (newlines.saturating_add(trailing), false)
 }
 
 /// Whether `file` is untracked (and not ignored) in the repo at `path`. Returns

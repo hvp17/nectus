@@ -51,6 +51,17 @@ describe("TaskDiffView", () => {
     expect(screen.getByText("@@ -1,2 +1,2 @@")).toHaveClass("diff-line--hunk");
   });
 
+  it("caps very large patch previews", () => {
+    const patch = Array.from({ length: 5_010 }, (_, index) => `+line ${index}`).join("\n");
+    const files: Record<string, FileDiffState> = {
+      "src/a.ts": { loading: false, patch },
+    };
+    renderView({ files });
+
+    expect(screen.getByText("Patch preview truncated at 5000 lines.")).toBeInTheDocument();
+    expect(screen.queryByText("+line 5009")).not.toBeInTheDocument();
+  });
+
   it("requests another file's patch when it is selected", () => {
     const { onSelectFile } = renderView();
     onSelectFile.mockClear();
