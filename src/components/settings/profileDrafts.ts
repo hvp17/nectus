@@ -81,13 +81,17 @@ export function toSettingsInput(settings: AppSettings): AppSettingsInput {
 export function toProfileDraft(profile: AgentProfile): ProfileDraft {
   const presets = modelPresets[profile.agentKind];
   const model = profile.model ?? "";
+  // A saved model is either a known preset (shown in the dropdown), a free-text
+  // custom value (dropdown shows "Custom", text kept in `customModel`), or empty.
+  const isPreset = presets.includes(model);
+  const isCustomModel = model !== "" && !isPreset;
   return {
     id: profile.id,
     name: profile.name,
     agentKind: profile.agentKind,
     command: profile.command,
-    model: model && presets.includes(model) ? model : model ? customModelValue : "",
-    customModel: model && presets.includes(model) ? "" : model,
+    model: isPreset ? model : isCustomModel ? customModelValue : "",
+    customModel: isCustomModel ? model : "",
     argsText: profile.args.join("\n"),
     envText: Object.entries(profile.env)
       .map(([key, value]) => `${key}=${value}`)

@@ -25,6 +25,19 @@
 - Always `git pull --rebase origin main` before pushing; resolve in Claude's favor
   only for files Claude owns this iteration, otherwise keep Codex's version.
 
+## ⚠️ Shared working tree (critical)
+
+Claude and Codex operate in the **same checkout and the same git index**. A plain
+`git add` + `git commit` will sweep up whatever the *other* agent has staged
+(this already produced "coalesced" commits `bdccc36`/`ba2c20f`). To commit only
+your own files and never capture the other agent's in-progress work:
+
+- **Always commit by explicit pathspec:** `git commit -- <my files…>` (this
+  disregards staged content of other paths). **Never `git add -A` / `git add .`.**
+- Touch only `CLAUDE_ROLLING_UPDATES.md` (never edit `CODEX_ROLLING_UPDATES.md`).
+- Re-read `CODEX_ROLLING_UPDATES.md` + `git status` before each commit; skip any
+  file the other agent currently has modified.
+
 ## Coordination ledger
 
 - Files Claude is likely to touch: `package.json`, `pnpm-lock.yaml`, `CLAUDE.md`,
@@ -113,6 +126,23 @@ would keep the `useState` (no win) or force a11y/test churn. Left as-is per
 directive-1 exception ("don't force shadcn where it adds complexity").
 
 **Verification:** `pnpm test` (46 files, 291 tests), `pnpm build` (ok).
+
+**Status:** committed.
+
+### Iteration 4 — done (2026-06-09) · commit pending
+
+**Goal (directive 2 + best practices):** Clarify the model-mapping logic in
+`toProfileDraft` and cover its untested branches.
+
+**Changes:**
+- `profileDrafts.ts`: replaced the line that computed `presets.includes(model)`
+  twice and nested a bare-truthy ternary with two named booleans (`isPreset`,
+  `isCustomModel`) and a comment. Behavior-identical for all three cases (preset /
+  free-text custom / empty).
+- `profileDrafts.test.ts`: added two tests — free-text model → `__custom` sentinel
+  + kept text; null model → both fields empty. These branches had no coverage.
+
+**Verification:** `pnpm test` (46 files, 294 tests), `pnpm build` (ok).
 
 **Status:** committed.
 

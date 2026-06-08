@@ -54,6 +54,20 @@ describe("profile draft helpers", () => {
     });
   });
 
+  it("maps a free-text model to the custom sentinel and keeps the text", () => {
+    const draft = toProfileDraft({ ...codexProfile, model: "my-local-model" });
+
+    expect(draft.model).toBe("__custom");
+    expect(draft.customModel).toBe("my-local-model");
+  });
+
+  it("leaves both model fields empty when no model is saved", () => {
+    const draft = toProfileDraft({ ...codexProfile, model: null });
+
+    expect(draft.model).toBe("");
+    expect(draft.customModel).toBe("");
+  });
+
   it("preserves custom model text when switching between non-custom agent kinds", () => {
     const draft = createProfileDraft();
 
