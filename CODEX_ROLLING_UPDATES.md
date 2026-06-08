@@ -244,7 +244,7 @@ cell while removing `?? -1` and `as number` casts.
 **Commit:** `c13f4e2`
 (`refactor(review): skip idle task review sentinels`) pushed to `origin/main`.
 
-### Iteration 7 - done (2026-06-09) - commit pending
+### Iteration 7 - done (2026-06-09)
 
 **Goal:** Remove the empty-string JIRA project-status query sentinel and unsafe
 project cast.
@@ -275,12 +275,49 @@ match the cleaned-up Query pattern used elsewhere.
 - `pnpm build` passed.
 - `pnpm test` passed (47 files, 297 tests).
 
+**Commit:** `7a55820`
+(`refactor(jira): skip idle project status sentinel`) pushed to `origin/main`.
+
+### Iteration 8 - in progress (2026-06-09)
+
+**Goal:** Keep the JIRA board fresh after work-item comments and centralize the
+board-refresh path for JIRA writes.
+
+**Rationale:** `assign` and `create` already invalidate the board query after a
+successful JIRA write, while `comment` only shows a message. Comments can update
+server-side issue activity and should leave the board cache in the same refreshed
+state as the other JIRA write actions.
+
+**Docs checked:** TanStack Query v5 docs for query invalidation/disabling and
+typed query hooks. The existing hook already uses query invalidation for active
+board refreshes, so this iteration keeps that architecture instead of adding a
+new local state path.
+
+**Claimed files:**
+- `src/hooks/useJira.ts`
+- `src/hooks/useJira.test.ts`
+- `docs/jira-integration.md`
+- `docs/features.md`
+
+**Verification plan:**
+- Red: targeted Vitest proving comments do not currently refresh the board.
+- Green: targeted Vitest for `useJira`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- Red: `pnpm vitest run src/hooks/useJira.test.ts` failed because
+  `jiraSearchBoard` was called once after adding a comment.
+- Green: `pnpm vitest run src/hooks/useJira.test.ts` passed (4 tests).
+- `pnpm test` passed (48 files, 307 tests; includes the parallel agent's
+  untracked `src/lib/composerForm.test.ts` in the shared worktree).
+- `pnpm build` passed.
+
 ---
 
 ## Backlog / future work
 
-- After Claude finishes package cleanup, re-check stale router comments in
-  `src/test/setup.ts` and `docs/features.md`.
 - Audit remaining custom async/loading hooks against the Query/Zustand ownership
   boundary.
 - Inspect large files only where a real cohesion split is visible:

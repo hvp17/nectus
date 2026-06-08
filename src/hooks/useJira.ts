@@ -137,38 +137,39 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
       );
       try {
         await api.jiraTransitionWorkItem(item.key, statusName);
-        await queryClient.invalidateQueries({ queryKey: key });
+        await refresh();
       } catch (error) {
         if (previous) queryClient.setQueryData(key, previous);
         setMessage(String(error));
       }
     },
-    [queryClient, setMessage],
+    [queryClient, refresh, setMessage],
   );
 
   const assign = useCallback(
     async (key: string, assignee: string) => {
       try {
         await api.jiraAssignWorkItem(key, assignee);
-        await queryClient.invalidateQueries({ queryKey: queryKeys.jira.board() });
+        await refresh();
         setMessage(`Assigned ${key}`);
       } catch (error) {
         setMessage(String(error));
       }
     },
-    [queryClient, setMessage],
+    [refresh, setMessage],
   );
 
   const comment = useCallback(
     async (key: string, body: string) => {
       try {
         await api.jiraCommentWorkItem(key, body);
+        await refresh();
         setMessage(`Comment added to ${key}`);
       } catch (error) {
         setMessage(String(error));
       }
     },
-    [setMessage],
+    [refresh, setMessage],
   );
 
   /**
@@ -187,7 +188,7 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
     }): Promise<JiraWorkItem | null> => {
       try {
         const item = await api.jiraCreateWorkItem(input);
-        await queryClient.invalidateQueries({ queryKey: queryKeys.jira.board() });
+        await refresh();
         setMessage(`Created ${item.key}`);
         return item;
       } catch (error) {
@@ -195,7 +196,7 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
         return null;
       }
     },
-    [queryClient, setMessage],
+    [refresh, setMessage],
   );
 
   /** Verify + store a REST API token, then refresh status. Returns the new status. */

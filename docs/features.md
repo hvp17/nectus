@@ -555,7 +555,8 @@ It is a full management surface: create a new work item, drag a card between
 columns to transition it (optimistic — reverted if JIRA's workflow rejects the
 move), and open a card to dock an **inline side panel** beside the board (the
 board stays in context as a 2-column split; it is no longer a modal dialog) to
-change status, assign, or comment. **New work item** in the toolbar opens an
+change status, assign, or comment. Successful JIRA writes refresh the board in
+place. **New work item** in the toolbar opens an
 inline create form in that same dock slot (project defaulting to the board's,
 type Task/Bug/Story/Epic, summary, description, assignee, labels); on submit
 Nectus runs `acli jira workitem create`, refreshes the board, and auto-opens the

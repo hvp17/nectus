@@ -66,7 +66,8 @@ The board is entirely UI-driven; no JQL is ever typed.
   no command to enumerate a project's status set, so a status with zero matching
   items produces no column by design.
 - The board refreshes when the view becomes active, when the project/filters change,
-  and via the `Refresh` button. There is no background polling or webhook.
+  when create/transition/assign/comment actions succeed, and via the `Refresh`
+  button. There is no background polling or webhook.
 
 ## Creating a work item
 
