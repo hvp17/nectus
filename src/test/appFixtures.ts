@@ -6,6 +6,7 @@ export const appRepo: Repo = {
   path: "/tmp/nectus-desktop",
   defaultWorktreeRoot: "/tmp/nectus-desktop-worktrees",
   createdAt: "2026-05-14T00:00:00.000Z",
+  collapsed: false,
 };
 
 export function appTask(overrides: Partial<TaskSummary> = {}): TaskSummary {

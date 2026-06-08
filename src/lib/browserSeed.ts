@@ -40,15 +40,15 @@ export const seedProfiles: AgentProfile[] = [
 ];
 
 export const seedRepos: Repo[] = [
-  { id: 1, name: "web-app", path: "/Users/you/dev/web-app", defaultWorktreeRoot: "/Users/you/dev/web-app-worktrees", createdAt: ago(20000) },
-  { id: 2, name: "cli-tools", path: "/Users/you/dev/cli-tools", defaultWorktreeRoot: "/Users/you/dev/cli-tools-worktrees", createdAt: ago(20000) },
-  { id: 3, name: "design-system", path: "/Users/you/dev/design-system", defaultWorktreeRoot: "/Users/you/dev/design-system-worktrees", createdAt: ago(20000) },
+  { id: 1, name: "web-app", path: "/Users/you/dev/web-app", defaultWorktreeRoot: "/Users/you/dev/web-app-worktrees", createdAt: ago(20000), collapsed: false },
+  { id: 2, name: "cli-tools", path: "/Users/you/dev/cli-tools", defaultWorktreeRoot: "/Users/you/dev/cli-tools-worktrees", createdAt: ago(20000), collapsed: false },
+  { id: 3, name: "design-system", path: "/Users/you/dev/design-system", defaultWorktreeRoot: "/Users/you/dev/design-system-worktrees", createdAt: ago(20000), collapsed: false },
 ];
 
 // A sample workspace grouping the front-end stack (web-app + design-system), so
 // the workspace switcher and its filter are previewable in `pnpm dev`.
 export const seedWorkspaces: Workspace[] = [
-  { id: 1, name: "Web platform", repoIds: [1, 3], createdAt: ago(18000), updatedAt: ago(1200) },
+  { id: 1, name: "Web platform", repoIds: [1, 3], createdAt: ago(18000), updatedAt: ago(1200), collapsed: false },
 ];
 
 function task(partial: Partial<TaskSummary> & Pick<TaskSummary, "id" | "repoId" | "title">): TaskSummary {

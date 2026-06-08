@@ -13,6 +13,7 @@ const secondRepo: Repo = {
   path: "/tmp/second-repo",
   defaultWorktreeRoot: "/tmp/second-repo-worktrees",
   createdAt: "2026-05-14T00:00:00.000Z",
+  collapsed: false,
 };
 
 function workspace(overrides: Partial<Workspace> = {}): Workspace {
@@ -22,6 +23,7 @@ function workspace(overrides: Partial<Workspace> = {}): Workspace {
     repoIds: [appRepo.id],
     createdAt: "2026-05-14T00:00:00.000Z",
     updatedAt: "2026-05-14T00:00:00.000Z",
+    collapsed: false,
     ...overrides,
   };
 }

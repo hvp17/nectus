@@ -21,8 +21,8 @@ Core tables:
 
 | Table | Purpose |
 | --- | --- |
-| `repos` | Saved project repositories and each project's default worktree root. |
-| `workspaces` | Durable, named groups of repos (VSCode-workspace style). |
+| `repos` | Saved project repositories and each project's default worktree root. `collapsed` is the sidebar fold state of the project's nested agent list (UI preference). |
+| `workspaces` | Durable, named groups of repos (VSCode-workspace style). `collapsed` is the sidebar fold state of the workspace's nested agent list (UI preference). |
 | `workspace_repos` | Workspace membership: `(workspace_id, repo_id, position)`. Many-to-many, so a repo can belong to several workspaces; cascade-deletes with either side. |
 | `agent_profiles` | CLI agent configuration, including command, model, args, and env. |
 | `app_settings` | Default agent, worktree pattern, branch prefix, theme, density, and the JIRA board config (selected project + filter flags + `jira_filter_statuses`; the JQL is built from these). Also the non-secret JIRA REST account email (`jira_rest_email`); the REST API token itself lives in the macOS Keychain, never here. |
@@ -145,6 +145,7 @@ Current commands:
 | --- | --- |
 | `add_repo` | Validate and save a local git project. |
 | `list_repos` | Load saved projects. |
+| `set_repo_collapsed` | Persist the sidebar fold state of a project's nested agent list (`repos.collapsed`). |
 | `get_app_settings` | Load global settings. |
 | `update_app_settings` | Save settings and refresh project worktree roots. |
 | `create_task` | Create a direct-edit task or create a git worktree-backed task (single repo). |
@@ -156,6 +157,7 @@ Current commands:
 | `create_workspace` | Create a named workspace from `name` + `repoIds` (membership written transactionally; duplicate ids dropped). |
 | `update_workspace` | Rename a workspace and replace its membership/order. |
 | `delete_workspace` | Delete a workspace (membership cascade-deletes). |
+| `set_workspace_collapsed` | Persist the sidebar fold state of a workspace's nested agent list (`workspaces.collapsed`; does not bump `updated_at`). |
 | `task_diff_summary` | List the files a task changed: a worktree task's branch vs the locally-resolved base (`origin/HEAD` merge-base, committed + uncommitted), or a direct-edit task's working tree vs `HEAD`. Returns the base label plus per-file change kind and `+/-` counts. |
 | `task_diff_file` | Return the unified patch for one file in a task's diff (lazy-loaded per file; untracked files diff against `/dev/null`). |
 | `github_status` | Report whether `gh` is installed, authenticated, and the active account. |

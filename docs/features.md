@@ -43,6 +43,11 @@ The app shell is an always-collapsed icon rail plus a persistent navigator panel
     mode when it resolves to ≥2 known repos, otherwise single-repo Project mode on
     its sole member. In-flight agents from all of the workspace's repos are nested
     inline under the workspace row, using the same compact card.
+  - **Collapsing rows** — any project or workspace row that has nested agents shows
+    a leading disclosure **chevron** that folds its agent list away; the row, its
+    state dot, and its count stay visible. The fold is per-row and persisted
+    (`repos.collapsed` / `workspaces.collapsed`), so it survives reloads. Rows with
+    no in-flight agents have nothing to fold and show no chevron.
 - Mission Control is the default home: a cross-project, attention-first triage
   inbox. Every task across every project is grouped by who needs you —
   **Needs you → Running → Review → Done → Idle** — and each row carries the

@@ -298,6 +298,10 @@ impl Database {
         // emits `session_needs_input`, cleared on session start/idle/exit. `idle` is
         // not stored — it is the default state when no attention and no session.
         self.add_column_if_missing("tasks", "attention", "TEXT")?;
+        // Sidebar UI preference: fold away a project's / workspace's nested
+        // in-flight agent list. A pure presentation flag, 1:1 with the entity.
+        self.add_column_if_missing("repos", "collapsed", "INTEGER NOT NULL DEFAULT 0")?;
+        self.add_column_if_missing("workspaces", "collapsed", "INTEGER NOT NULL DEFAULT 0")?;
         self.migrate_legacy_worktree_pattern()?;
         self.backfill_task_repos()?;
         Ok(())

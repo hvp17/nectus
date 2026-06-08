@@ -10,6 +10,9 @@ pub struct Repo {
     pub path: String,
     pub default_worktree_root: String,
     pub created_at: String,
+    /// Sidebar UI preference: when true, the navigator folds away this project's
+    /// nested in-flight agent list. Persisted so the fold survives reloads.
+    pub collapsed: bool,
 }
 
 #[derive(

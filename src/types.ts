@@ -22,6 +22,8 @@ export interface Repo {
   path: string;
   defaultWorktreeRoot: string;
   createdAt: string;
+  /** Sidebar fold state of this project's nested in-flight agent list. */
+  collapsed: boolean;
 }
 
 /** A durable, named group of repos (VSCode-workspace style). `repoIds` is ordered. */
@@ -31,6 +33,8 @@ export interface Workspace {
   repoIds: number[];
   createdAt: string;
   updatedAt: string;
+  /** Sidebar fold state of this workspace's nested in-flight agent list. */
+  collapsed: boolean;
 }
 
 /** One repo's working state within a task (Increment B). A task spans 1..N repos. */

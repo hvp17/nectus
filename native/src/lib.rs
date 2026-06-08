@@ -85,6 +85,12 @@ fn list_repos(state: State<'_, AppState>) -> AppResult<Vec<Repo>> {
     app_result(state.db.lock().list_repos())
 }
 
+/// Persist whether the sidebar folds away this project's nested agent list.
+#[tauri::command]
+fn set_repo_collapsed(id: i64, collapsed: bool, state: State<'_, AppState>) -> AppResult<()> {
+    app_result(state.db.lock().set_repo_collapsed(id, collapsed))
+}
+
 #[tauri::command]
 fn get_app_settings(state: State<'_, AppState>) -> AppResult<AppSettings> {
     app_result(state.db.lock().get_app_settings())
@@ -259,6 +265,12 @@ fn update_workspace(
 #[tauri::command]
 fn delete_workspace(id: i64, state: State<'_, AppState>) -> AppResult<()> {
     app_result(state.db.lock().delete_workspace(id))
+}
+
+/// Persist whether the sidebar folds away this workspace's nested agent list.
+#[tauri::command]
+fn set_workspace_collapsed(id: i64, collapsed: bool, state: State<'_, AppState>) -> AppResult<()> {
+    app_result(state.db.lock().set_workspace_collapsed(id, collapsed))
 }
 
 /// Report whether `gh` is installed, authenticated, and which account is active.
@@ -1064,6 +1076,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             add_repo,
             list_repos,
+            set_repo_collapsed,
             get_app_settings,
             update_app_settings,
             create_task,
@@ -1075,6 +1088,7 @@ pub fn run() {
             create_workspace,
             update_workspace,
             delete_workspace,
+            set_workspace_collapsed,
             task_diff_summary,
             task_diff_file,
             github_status,

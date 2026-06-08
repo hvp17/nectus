@@ -13,11 +13,11 @@ function task(overrides: Partial<TaskSummary>): TaskSummary {
   };
 }
 const repos: Repo[] = [
-  { id: 1, name: "alpha", path: "/a", defaultWorktreeRoot: "/a-wt", createdAt: "2026-06-07T00:00:00.000Z" },
-  { id: 2, name: "beta", path: "/b", defaultWorktreeRoot: "/b-wt", createdAt: "2026-06-07T00:00:00.000Z" },
+  { id: 1, name: "alpha", path: "/a", defaultWorktreeRoot: "/a-wt", createdAt: "2026-06-07T00:00:00.000Z", collapsed: false },
+  { id: 2, name: "beta", path: "/b", defaultWorktreeRoot: "/b-wt", createdAt: "2026-06-07T00:00:00.000Z", collapsed: false },
 ];
 const workspaces: Workspace[] = [
-  { id: 10, name: "Core", repoIds: [1, 2], createdAt: "x", updatedAt: "x" },
+  { id: 10, name: "Core", repoIds: [1, 2], createdAt: "x", updatedAt: "x", collapsed: false },
 ];
 
 describe("buildSidebarAgents", () => {

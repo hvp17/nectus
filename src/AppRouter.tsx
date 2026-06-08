@@ -19,6 +19,7 @@ import { useTaskActions } from "./hooks/useTaskActions";
 import { useTaskDeletion } from "./hooks/useTaskDeletion";
 import { useWorkspaceActions } from "./hooks/useWorkspaceActions";
 import { useProjectActions } from "./hooks/useProjectActions";
+import { useSidebarCollapse } from "./hooks/useSidebarCollapse";
 import { useComposer } from "./hooks/useComposer";
 import { useJiraBoardView } from "./hooks/useJiraBoardView";
 import { useSettingsActions } from "./hooks/useSettingsActions";
@@ -93,6 +94,7 @@ export function AppLayout() {
   useShellBootstrap();
   const workspaceActions = useWorkspaceActions();
   const { addProject } = useProjectActions();
+  const { setRepoCollapsed, setWorkspaceCollapsed } = useSidebarCollapse();
 
   // Server reads (queries) + shell UI state (store) — the shell composes its own
   // data directly now that `useApp` is gone.
@@ -397,6 +399,8 @@ export function AppLayout() {
             onCreateTaskForWorkspace={(id) => openComposer({ workspaceId: id })}
             onAddProject={addProject}
             onManageWorkspaces={openManageWorkspaces}
+            onToggleRepoCollapse={setRepoCollapsed}
+            onToggleWorkspaceCollapse={setWorkspaceCollapsed}
             busy={busy}
             loading={loading}
           />

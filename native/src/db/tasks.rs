@@ -518,6 +518,7 @@ mod folder_tests {
             path: String::new(),
             default_worktree_root: String::new(),
             created_at: String::new(),
+            collapsed: false,
         }
     }
 
