@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { Check, GitPullRequest, LoaderCircle } from "lucide-react";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 import { AgentLogo } from "./AgentBrand";
 import { PrReviewDetail } from "./PrReviewDetail";
 import { PrReviewBadge } from "./PrReviewBadge";
@@ -121,13 +122,12 @@ export function ReviewsPage({
 
       <form className="nx-rev-form" onSubmit={submit} aria-label="Start a PR review">
         <div className="nx-rev-form-row">
-          <input
+          <Input
             type="url"
             inputMode="url"
             placeholder="https://github.com/owner/repo/pull/123"
             aria-label="Pull request URL"
-            className="nx-in mono"
-            style={{ flex: 1 }}
+            className="flex-1 font-mono"
             value={prUrl}
             onChange={(event) => setPrUrl(event.target.value)}
           />
@@ -163,13 +163,12 @@ export function ReviewsPage({
             {consensus && (
               <label style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 4, fontSize: 12, color: "var(--muted-foreground)" }}>
                 Rounds
-                <input
+                <Input
                   type="number"
                   min={MIN_ROUNDS}
                   max={MAX_ROUNDS}
                   aria-label="Consensus rounds"
-                  className="nx-in"
-                  style={{ width: 56, textAlign: "center" }}
+                  className="w-14 text-center"
                   value={rounds}
                   onChange={(event) =>
                     setRounds(Math.min(MAX_ROUNDS, Math.max(MIN_ROUNDS, Number(event.target.value) || MIN_ROUNDS)))

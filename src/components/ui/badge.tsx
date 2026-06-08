@@ -24,6 +24,7 @@ const badgeVariants = cva(
         success: "border-transparent",
         warning: "border-transparent",
         info: "border-border",
+        review: "border-transparent",
       },
     },
     defaultVariants: {

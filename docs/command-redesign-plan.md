@@ -42,10 +42,14 @@
 - [x] **Phase 0 — Token retune** (`src/styles.css`): rewrite `:root`/`.dark`,
   multiplicative radius scale, register `--color-status-review`, flatten shadows,
   drop `.app-shell` aurora + dark card sheen. *(done & verified — build clean, 1026 tests pass)*
-- [ ] **Phase 1 — First-class cleanup**: add `Badge` `review` variant + wire verdict
-  labels to `Badge`; swap hand-rolled controls to shadcn (`IconRail` rail buttons,
-  `ReviewsPage` reviewer chips + inputs, `PrReviewDetail` verdict spans,
-  `SettingsPage` nav buttons); fix 3 `#fff` literals in `redesign.css`.
+- [x] **Phase 1 — First-class cleanup (core)** *(build clean, 1026 tests pass)*:
+  added `Badge` `review` variant (`badge.tsx` + `redesign.css` `--status-review`
+  rule); swapped `ReviewsPage` raw `<input>` → shadcn `Input`; tokenized the 2
+  app-level `#fff` (rail badge, verdict dot). Left JIRA brand whites
+  (`nx-jtype`/`nx-java`) intentionally. **Folded into their Phase 2 surface passes**
+  (cleaner to do while restyling the surface): `IconRail` rail buttons → shadcn,
+  reviewer chips → `Toggle`, `PrReviewDetail` verdict spans → `Badge`, `SettingsPage`
+  nav buttons → shadcn.
 - [ ] **Phase 2 — Per-surface fidelity** (restyle, in order): Mission Control →
   Board → Task (stage/ribbon/facts) → Settings → PR Reviews (matrix) → JIRA → composer.
 - [ ] **Phase 3 — ⌘K command palette** (new): `cmdk` + `ui/command.tsx` + `ui/kbd.tsx`,
@@ -84,3 +88,9 @@
   Next: Phase 1 — Badge `review` variant + wire verdict labels, swap hand-rolled
   controls (IconRail / ReviewsPage / PrReviewDetail / SettingsPage) to shadcn,
   fix 3 `#fff` literals in `redesign.css`.
+- **2026-06-08** — **Phase 1 (core) landed.** `Badge` gains a `review` variant
+  backed by `--status-review`; `ReviewsPage` PR-URL + rounds inputs now use shadcn
+  `Input` (aligns with the form's `Button` height); rail-badge + verdict-dot `#fff`
+  tokenized (JIRA brand whites left as intentional). The remaining control swaps
+  moved into their Phase 2 surface passes. `pnpm build` clean; **1026/1026 tests pass**.
+  Next: Phase 2 — Mission Control surface pass.
