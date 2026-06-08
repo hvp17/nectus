@@ -354,6 +354,25 @@ addition — no production change.
 `run()`, have `.catch` reverts, or are intentionally non-critical) — no
 silent-failure fixes warranted. Error handling across the app is disciplined.
 
+### Iteration 14 — done (2026-06-09) · commit pending
+
+**Goal (best practices — failure-path coverage):** Add
+`src/hooks/useSidebarCollapse.test.tsx` for the recently-shipped sidebar-collapse
+feature's optimistic-write + revert-on-failure logic.
+
+**Why:** `useSidebarCollapse` writes the repos/workspaces query cache optimistically
+for an instant fold, persists via `api.set{Repo,Workspace}Collapsed`, and reverts
+the cache if that write rejects. The revert is the easy-to-break, hard-to-notice
+part and had no test. Covered: optimistic fold lands + persists; cache reverts when
+the repo persist fails; cache reverts when the workspace persist fails. Uses the
+project's `createQueryClient` + `QueryClientProvider` + mocked `api` pattern.
+
+**Scope:** new file `src/hooks/useSidebarCollapse.test.tsx` (3 tests).
+
+**Verification:** isolation 3/3; `pnpm build` (ok).
+
+**Status:** committed.
+
 ## Backlog / future work (deeper investigation — no quick wins left)
 
 - Targeted coverage for any *new* untested logic as it lands (watch the diff).
