@@ -40,10 +40,10 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) * 1.4);
   --font-heading: var(--font-sans);
   --font-sans: 'Geist Variable', system-ui, -apple-system, sans-serif;
   --radius-2xl: calc(var(--radius) * 1.8);
@@ -51,7 +51,7 @@
   --radius-4xl: calc(var(--radius) * 2.6);
   --font-mono: 'Geist Mono Variable', 'JetBrains Mono Variable', ui-monospace, monospace;
   --font-serif: 'Source Serif 4 Variable', Georgia, serif;
-  --radius: 0.625rem;
+  --radius: 0.5rem;
   --tracking-tighter: calc(var(--tracking-normal) - 0.05em);
   --tracking-tight: calc(var(--tracking-normal) - 0.025em);
   --tracking-wide: calc(var(--tracking-normal) + 0.025em);
@@ -78,48 +78,50 @@
   --color-status-success: var(--status-success);
   --color-status-warning: var(--status-warning);
   --color-status-info: var(--status-info);
+  --color-status-review: var(--status-review);
 }
 
 :root {
   /* Light: clean, refined neutrals with a single teal signal and hairline rules. */
-  --background: oklch(0.9850 0.0020 240);
-  --foreground: oklch(0.2200 0.0150 252);
+  --background: oklch(0.9850 0.0010 285);
+  --foreground: oklch(0.2200 0.0060 285);
   --card: oklch(1.0000 0 0);
-  --card-foreground: oklch(0.2200 0.0150 252);
+  --card-foreground: oklch(0.2200 0.0060 285);
   --popover: oklch(1.0000 0 0);
-  --popover-foreground: oklch(0.2200 0.0150 252);
-  --primary: oklch(0.5600 0.1180 199);
-  --primary-foreground: oklch(0.9900 0.0080 200);
-  --secondary: oklch(0.9650 0.0040 240);
-  --secondary-foreground: oklch(0.3000 0.0130 252);
-  --muted: oklch(0.9650 0.0040 240);
-  --muted-foreground: oklch(0.5050 0.0130 250);
-  --accent: oklch(0.9500 0.0260 200);
-  --accent-foreground: oklch(0.4300 0.1000 200);
-  --destructive: oklch(0.5800 0.2050 23);
-  --border: oklch(0.2200 0.0200 252 / 0.10);
-  --input: oklch(0.2200 0.0200 252 / 0.14);
-  --ring: oklch(0.5600 0.1180 199);
-  --chart-1: oklch(0.6500 0.1300 196);
-  --chart-2: oklch(0.6000 0.1200 230);
-  --chart-3: oklch(0.5500 0.1300 268);
-  --chart-4: oklch(0.7000 0.1400 70);
-  --chart-5: oklch(0.6500 0.1500 150);
-  /* Semantic status signals — single source of truth for success / warning / info
-     (worktree dirty), reused everywhere a state needs color so the same concept is
-     always the same hue. Destructive stays reserved for genuine errors. */
-  --status-success: oklch(0.5800 0.1280 152);
-  --status-warning: oklch(0.7000 0.1550 65);
-  --status-info: oklch(0.5500 0.1150 262);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.9680 0.0040 240);
-  --sidebar-foreground: oklch(0.2600 0.0150 252);
-  --sidebar-primary: oklch(0.5600 0.1180 199);
-  --sidebar-primary-foreground: oklch(0.9900 0.0080 200);
-  --sidebar-accent: oklch(0.9500 0.0260 200);
-  --sidebar-accent-foreground: oklch(0.4300 0.1000 200);
-  --sidebar-border: oklch(0.2200 0.0200 252 / 0.08);
-  --sidebar-ring: oklch(0.5600 0.1180 199);
+  --popover-foreground: oklch(0.2200 0.0060 285);
+  --primary: oklch(0.5500 0.2000 277);
+  --primary-foreground: oklch(0.9900 0 0);
+  --secondary: oklch(0.9650 0.0030 285);
+  --secondary-foreground: oklch(0.3000 0.0100 285);
+  --muted: oklch(0.9650 0.0030 285);
+  --muted-foreground: oklch(0.5200 0.0080 285);
+  --accent: oklch(0.9500 0.0300 277);
+  --accent-foreground: oklch(0.4200 0.1300 277);
+  --destructive: oklch(0.5800 0.2100 23);
+  --border: oklch(0.2200 0.0100 285 / 0.12);
+  --input: oklch(0.2200 0.0100 285 / 0.16);
+  --ring: oklch(0.5500 0.2000 277);
+  --chart-1: oklch(0.5500 0.2000 277);
+  --chart-2: oklch(0.5800 0.1400 244);
+  --chart-3: oklch(0.5600 0.1700 300);
+  --chart-4: oklch(0.6600 0.1500 78);
+  --chart-5: oklch(0.5800 0.1300 158);
+  /* Semantic status signals — single source of truth for success / warning / info /
+     review, reused everywhere a state needs color so the same concept is always the
+     same hue. Destructive stays reserved for genuine errors. */
+  --status-success: oklch(0.5600 0.1300 158);
+  --status-warning: oklch(0.6600 0.1500 78);
+  --status-info: oklch(0.5500 0.1400 244);
+  --status-review: oklch(0.5400 0.1700 300);
+  --radius: 0.5rem;
+  --sidebar: oklch(0.9650 0.0020 285);
+  --sidebar-foreground: oklch(0.2600 0.0080 285);
+  --sidebar-primary: oklch(0.5500 0.2000 277);
+  --sidebar-primary-foreground: oklch(0.9900 0 0);
+  --sidebar-accent: oklch(0.9500 0.0300 277);
+  --sidebar-accent-foreground: oklch(0.4200 0.1300 277);
+  --sidebar-border: oklch(0.2200 0.0100 285 / 0.08);
+  --sidebar-ring: oklch(0.5500 0.2000 277);
   color: var(--foreground);
   background: var(--background);
   color-scheme: light;
@@ -127,81 +129,82 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   --destructive-foreground: oklch(0.9900 0 0);
-  --shadow-color: hsl(220 40% 20%);
-  --shadow-opacity: 0.08;
-  --shadow-blur: 16px;
+  --shadow-color: hsl(285 25% 20%);
+  --shadow-opacity: 0.05;
+  --shadow-blur: 12px;
   --shadow-spread: -4px;
   --shadow-offset-x: 0px;
-  --shadow-offset-y: 6px;
+  --shadow-offset-y: 4px;
   --letter-spacing: 0em;
   --spacing: 0.25rem;
-  --shadow-2xs: 0 1px 2px 0 hsl(220 40% 20% / 0.04);
-  --shadow-xs: 0 1px 2px 0 hsl(220 40% 20% / 0.05);
-  --shadow-sm: 0 1px 2px 0 hsl(220 40% 20% / 0.06), 0 1px 3px 0 hsl(220 40% 20% / 0.05);
-  --shadow: 0 2px 6px -1px hsl(220 40% 20% / 0.08), 0 1px 2px 0 hsl(220 40% 20% / 0.05);
-  --shadow-md: 0 6px 16px -4px hsl(220 40% 20% / 0.10), 0 2px 4px -2px hsl(220 40% 20% / 0.06);
-  --shadow-lg: 0 12px 28px -8px hsl(220 40% 20% / 0.12), 0 4px 8px -4px hsl(220 40% 20% / 0.08);
-  --shadow-xl: 0 24px 48px -12px hsl(220 40% 25% / 0.16), 0 8px 16px -8px hsl(220 40% 20% / 0.10);
-  --shadow-2xl: 0 32px 64px -16px hsl(220 40% 25% / 0.22);
+  --shadow-2xs: 0 1px 2px 0 hsl(285 25% 20% / 0.03);
+  --shadow-xs: 0 1px 2px 0 hsl(285 25% 20% / 0.04);
+  --shadow-sm: 0 1px 2px 0 hsl(285 25% 20% / 0.05);
+  --shadow: 0 1px 2px 0 hsl(285 25% 20% / 0.05), 0 2px 4px -2px hsl(285 25% 20% / 0.04);
+  --shadow-md: 0 4px 10px -3px hsl(285 25% 20% / 0.08), 0 2px 4px -2px hsl(285 25% 20% / 0.04);
+  --shadow-lg: 0 10px 24px -6px hsl(285 25% 20% / 0.10), 0 4px 8px -4px hsl(285 25% 20% / 0.06);
+  --shadow-xl: 0 18px 40px -10px hsl(285 25% 20% / 0.14), 0 8px 16px -8px hsl(285 25% 20% / 0.08);
+  --shadow-2xl: 0 28px 56px -14px hsl(285 25% 20% / 0.18);
   --tracking-normal: 0em;
 }
 
 .dark {
   /* Dark: deep cool obsidian with stepped elevation, one luminous teal signal,
      and hairline alpha borders for a precise, premium control-surface feel. */
-  --background: oklch(0.1900 0.0120 252);
-  --foreground: oklch(0.9500 0.0040 250);
-  --card: oklch(0.2280 0.0140 252);
-  --card-foreground: oklch(0.9500 0.0040 250);
-  --popover: oklch(0.2420 0.0150 252);
-  --popover-foreground: oklch(0.9500 0.0040 250);
-  --primary: oklch(0.8200 0.1350 195);
-  --primary-foreground: oklch(0.2000 0.0350 220);
-  --secondary: oklch(0.3000 0.0140 252);
-  --secondary-foreground: oklch(0.9200 0.0050 250);
-  --muted: oklch(0.2700 0.0130 252);
-  --muted-foreground: oklch(0.6750 0.0140 250);
-  --accent: oklch(0.3300 0.0420 210);
-  --accent-foreground: oklch(0.9300 0.0250 200);
-  --destructive: oklch(0.6500 0.2000 18);
-  --border: oklch(0.9900 0 0 / 0.09);
+  --background: oklch(0.1700 0.0050 285);
+  --foreground: oklch(0.9600 0 0);
+  --card: oklch(0.2250 0.0060 285);
+  --card-foreground: oklch(0.9600 0 0);
+  --popover: oklch(0.2500 0.0060 285);
+  --popover-foreground: oklch(0.9600 0 0);
+  --primary: oklch(0.6200 0.1900 277);
+  --primary-foreground: oklch(0.9800 0 0);
+  --secondary: oklch(0.2700 0.0060 285);
+  --secondary-foreground: oklch(0.9200 0.0040 285);
+  --muted: oklch(0.2700 0.0060 285);
+  --muted-foreground: oklch(0.6200 0.0100 285);
+  --accent: oklch(0.3000 0.0350 277);
+  --accent-foreground: oklch(0.9600 0 0);
+  --destructive: oklch(0.6400 0.2000 23);
+  --border: oklch(0.9900 0 0 / 0.08);
   --input: oklch(0.9900 0 0 / 0.13);
-  --ring: oklch(0.8200 0.1350 195);
-  --chart-1: oklch(0.8200 0.1350 195);
-  --chart-2: oklch(0.7000 0.1200 230);
-  --chart-3: oklch(0.6800 0.1300 285);
-  --chart-4: oklch(0.8000 0.1400 75);
-  --chart-5: oklch(0.7400 0.1500 152);
-  --status-success: oklch(0.7200 0.1450 152);
-  --status-warning: oklch(0.8000 0.1500 72);
-  --status-info: oklch(0.7000 0.1250 262);
-  --sidebar: oklch(0.1650 0.0120 252);
-  --sidebar-foreground: oklch(0.9200 0.0050 250);
-  --sidebar-primary: oklch(0.8200 0.1350 195);
-  --sidebar-primary-foreground: oklch(0.2000 0.0350 220);
-  --sidebar-accent: oklch(0.3200 0.0420 210);
-  --sidebar-accent-foreground: oklch(0.9300 0.0250 200);
+  --ring: oklch(0.6200 0.1900 277);
+  --chart-1: oklch(0.6200 0.1900 277);
+  --chart-2: oklch(0.6600 0.1400 244);
+  --chart-3: oklch(0.6600 0.1700 300);
+  --chart-4: oklch(0.7800 0.1500 78);
+  --chart-5: oklch(0.7000 0.1500 158);
+  --status-success: oklch(0.7000 0.1500 158);
+  --status-warning: oklch(0.7800 0.1500 78);
+  --status-info: oklch(0.6600 0.1400 244);
+  --status-review: oklch(0.6600 0.1700 300);
+  --sidebar: oklch(0.2000 0.0060 285);
+  --sidebar-foreground: oklch(0.9200 0.0040 285);
+  --sidebar-primary: oklch(0.6200 0.1900 277);
+  --sidebar-primary-foreground: oklch(0.9800 0 0);
+  --sidebar-accent: oklch(0.3000 0.0350 277);
+  --sidebar-accent-foreground: oklch(0.9600 0 0);
   --sidebar-border: oklch(0.9900 0 0 / 0.07);
-  --sidebar-ring: oklch(0.8200 0.1350 195);
+  --sidebar-ring: oklch(0.6200 0.1900 277);
   color-scheme: dark;
   --destructive-foreground: oklch(0.9900 0 0);
-  --radius: 0.625rem;
-  --shadow-color: hsl(220 60% 2%);
-  --shadow-opacity: 0.4;
-  --shadow-blur: 24px;
+  --radius: 0.5rem;
+  --shadow-color: hsl(285 40% 2%);
+  --shadow-opacity: 0.3;
+  --shadow-blur: 18px;
   --shadow-spread: -6px;
   --shadow-offset-x: 0px;
-  --shadow-offset-y: 12px;
+  --shadow-offset-y: 8px;
   --letter-spacing: 0em;
   --spacing: 0.25rem;
-  --shadow-2xs: 0 1px 2px 0 hsl(220 60% 2% / 0.30);
-  --shadow-xs: 0 1px 3px 0 hsl(220 60% 2% / 0.34);
-  --shadow-sm: 0 1px 2px 0 hsl(220 60% 2% / 0.36), 0 2px 6px -1px hsl(220 60% 2% / 0.30);
-  --shadow: 0 2px 8px -2px hsl(220 60% 2% / 0.40), 0 1px 2px 0 hsl(220 60% 2% / 0.34);
-  --shadow-md: 0 6px 16px -4px hsl(220 60% 2% / 0.46), 0 2px 6px -2px hsl(220 60% 2% / 0.34);
-  --shadow-lg: 0 12px 28px -6px hsl(220 60% 2% / 0.54), 0 4px 10px -4px hsl(220 60% 2% / 0.40);
-  --shadow-xl: 0 24px 50px -12px hsl(220 60% 2% / 0.62), 0 8px 18px -8px hsl(220 60% 2% / 0.44);
-  --shadow-2xl: 0 32px 64px -16px hsl(220 60% 2% / 0.72);
+  --shadow-2xs: 0 1px 2px 0 hsl(285 40% 2% / 0.24);
+  --shadow-xs: 0 1px 2px 0 hsl(285 40% 2% / 0.28);
+  --shadow-sm: 0 1px 2px 0 hsl(285 40% 2% / 0.30);
+  --shadow: 0 1px 2px 0 hsl(285 40% 2% / 0.34), 0 2px 6px -2px hsl(285 40% 2% / 0.30);
+  --shadow-md: 0 4px 12px -3px hsl(285 40% 2% / 0.40), 0 2px 6px -2px hsl(285 40% 2% / 0.30);
+  --shadow-lg: 0 10px 26px -6px hsl(285 40% 2% / 0.48), 0 4px 10px -4px hsl(285 40% 2% / 0.36);
+  --shadow-xl: 0 18px 44px -10px hsl(285 40% 2% / 0.56), 0 8px 18px -8px hsl(285 40% 2% / 0.40);
+  --shadow-2xl: 0 28px 56px -14px hsl(285 40% 2% / 0.66);
 }
 
 /* Fill the Tauri webview or browser preview — no fixed canvas size. */
@@ -268,8 +271,7 @@ body {
   background-color: color-mix(in oklch, var(--foreground) 28%, transparent);
 }
 
-/* Atmospheric depth: a faint accent aurora behind the whole shell so flat
-   panels read as layers floating over a lit canvas rather than dead fills. */
+/* Command is flat: the shell is a single calm canvas, no aurora. */
 .app-shell {
   position: relative;
   isolation: isolate;
@@ -277,21 +279,10 @@ body {
   width: 100%;
   height: 100%;
   min-height: 100dvh;
-  background:
-    radial-gradient(120% 90% at 0% -10%, color-mix(in oklch, var(--primary) 10%, transparent), transparent 55%),
-    radial-gradient(90% 80% at 100% 0%, color-mix(in oklch, var(--chart-3) 8%, transparent), transparent 50%),
-    var(--background);
+  background: var(--background);
 }
 
-/* Elevated surfaces get a 1px top sheen — the quiet "glass" tell. */
-.dark [data-slot="card"],
-.dark .metric,
-.dark .jira-card,
-.dark .review-run-summary {
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in oklch, white 6%, transparent),
-    var(--shadow-xs);
-}
+/* Command is flat: elevated surfaces read via hairline borders, not a glass sheen. */
 
 @media (prefers-reduced-motion: no-preference) {
   .content-shell [data-testid="dashboard-layout"],

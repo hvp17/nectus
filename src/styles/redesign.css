@@ -11,9 +11,9 @@
 /* ---------- App frame: icon rail + optional project panel + viewport ---------- */
 .nx-app {
   /* The primary rail is always collapsed to an icon-only strip. */
-  --nx-rail-w: 60px;
+  --nx-rail-w: 52px;
   /* The navigator panel matches shadcn's standard sidebar width (SIDEBAR_WIDTH). */
-  --nx-panel-w: 16rem;
+  --nx-panel-w: 14rem;
   position: relative;
   isolation: isolate;
   display: grid;
@@ -130,7 +130,7 @@
 .nx-rail-new:disabled:hover { background: transparent; color: var(--muted-foreground); }
 .nx-rail-badge {
   position: absolute; top: 3px; right: 5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
-  background: var(--status-warning); color: #fff; font-size: 10px; font-weight: 800; display: grid; place-items: center;
+  background: var(--status-warning); color: color-mix(in oklch, var(--status-warning) 30%, black); font-size: 10px; font-weight: 800; display: grid; place-items: center;
 }
 .nx-rail-sp { flex: 1; }
 
@@ -263,7 +263,7 @@
 /* ---------- Main content ---------- */
 .nx-main { flex: 1; width: 100%; min-width: 0; min-height: 0; height: 100%; overflow: hidden; padding: 22px 24px; display: flex; flex-direction: column; }
 .density-compact .nx-main { padding: 18px 20px; }
-.nx-h1 { margin: 0; font-size: 27px; font-weight: 700; letter-spacing: -0.02em; }
+.nx-h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
 .nx-sub { margin: 3px 0 0; font-size: 13px; color: var(--muted-foreground); }
 .nx-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .nx-head-actions { display: flex; gap: 8px; flex: none; }
@@ -632,7 +632,7 @@ textarea.nx-in { height: auto; padding: 9px 11px; line-height: 1.5; resize: vert
 .nx-matrix-rev { font-weight: 600; font-size: 12.5px; color: var(--foreground); }
 .nx-matrix-rev .sub { font-size: 10.5px; color: var(--muted-foreground); font-weight: 500; }
 .nx-vdot { width: 18px; height: 18px; border-radius: 999px; display: grid; place-items: center; flex: none; }
-.nx-vdot svg { width: 11px; height: 11px; color: #fff; }
+.nx-vdot svg { width: 11px; height: 11px; color: var(--primary-foreground); }
 .nx-vdot[data-v="passed"] { background: var(--status-success); }
 .nx-vdot[data-v="blockers"] { background: var(--destructive); }
 .nx-vdot[data-v="inconclusive"] { background: var(--muted-foreground); }
@@ -706,6 +706,7 @@ textarea.nx-in { height: auto; padding: 9px 11px; line-height: 1.5; resize: vert
 [data-slot="badge"][data-variant="warning"] { background: color-mix(in srgb, var(--status-warning) 18%, transparent); color: color-mix(in oklch, var(--status-warning) 55%, black); }
 .dark [data-slot="badge"][data-variant="warning"] { color: color-mix(in oklch, var(--status-warning) 82%, white); }
 [data-slot="badge"][data-variant="info"] { background: color-mix(in srgb, var(--foreground) 4%, transparent); color: var(--status-info); border-color: var(--border); }
+[data-slot="badge"][data-variant="review"] { background: color-mix(in srgb, var(--status-review) 16%, transparent); color: var(--status-review); }
 [data-slot="badge"] .nx-badge-dot { width: 7px; height: 7px; border-radius: 999px; background: currentColor; flex: none; }
 
 /* ---------- shared live pulse ---------- */

@@ -1,4 +1,4 @@
-import { FolderGit2, GitPullRequest, Plus, Radio, Settings, SquareKanban } from "lucide-react";
+import { FolderGit2, GitPullRequest, Plus, Radio, Search, Settings, SquareKanban } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 export type RailView = "mission" | "board" | "jira" | "reviews" | "settings";
@@ -11,6 +11,8 @@ interface IconRailProps {
   onCreateTask: () => void;
   /** A task needs a project; disable the create action until one is added. */
   canCreateTask: boolean;
+  /** Open the ⌘K command palette. */
+  onOpenPalette?: () => void;
 }
 
 const NAV: Array<{ id: Exclude<RailView, "settings">; label: string; Icon: typeof Radio }> = [
@@ -25,7 +27,7 @@ const NAV: Array<{ id: Exclude<RailView, "settings">; label: string; Icon: typeo
  * destination. Every button keeps its `aria-label`, so the accessible name (and
  * the tests that find buttons by name) is unchanged even though the text is hidden.
  */
-export function IconRail({ active, needsCount, onNavigate, onCreateTask, canCreateTask }: IconRailProps) {
+export function IconRail({ active, needsCount, onNavigate, onCreateTask, canCreateTask, onOpenPalette }: IconRailProps) {
   return (
     <nav className="nx-rail" aria-label="Primary">
       <div className="nx-rail-head">
@@ -34,6 +36,21 @@ export function IconRail({ active, needsCount, onNavigate, onCreateTask, canCrea
         </div>
       </div>
       <div className="nx-rail-nav">
+        {onOpenPalette && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="nx-rail-btn"
+                aria-label="Search (⌘K)"
+                onClick={onOpenPalette}
+              >
+                <Search aria-hidden="true" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Search · ⌘K</TooltipContent>
+          </Tooltip>
+        )}
         {NAV.map(({ id, label, Icon }) => (
           <Tooltip key={id}>
             <TooltipTrigger asChild>
