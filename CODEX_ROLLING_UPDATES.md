@@ -616,7 +616,7 @@ when needed, and skips sending when permission is not granted.
 **Commit:** `69ee1f6` (`test(notifications): cover session send fallbacks`)
 pushed to `origin/main`.
 
-### Iteration 18 - in progress (2026-06-09)
+### Iteration 18 - done (2026-06-09)
 
 **Goal:** Cover API-level opener and notification permission branches.
 
@@ -637,11 +637,41 @@ when permission is not granted.
 - Focused: `pnpm vitest run src/api.test.ts`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/api.test.ts` passed (19 tests).
 - `pnpm test` passed (55 files, 338 tests).
+- `pnpm build` passed.
+
+**Commit:** `fbd1f61` (`test(api): cover opener and notification permissions`)
+pushed to `origin/main`.
+
+### Iteration 19 - in progress (2026-06-09)
+
+**Goal:** Add focused coverage for session command task-state updates.
+
+**Rationale:** `useSessionCommands` owns the app-shell contract for starting,
+resuming, stopping, and clearing sessions in the task cache. It has no focused
+hook test, so regressions in agent-profile selection or `activeSessionId` /
+resumable session metadata updates would only be caught indirectly.
+
+**Docs checked:** Testing Library React docs for `renderHook` and wrapping async
+hook updates in `act`.
+
+**Claimed files:**
+- `src/hooks/useSessionCommands.test.tsx`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/hooks/useSessionCommands.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- `pnpm vitest run src/hooks/useSessionCommands.test.tsx` passed (4 tests).
+- `pnpm test` passed (57 files, 345 tests; includes the parallel agent's
+  untracked `src/hooks/useTaskDeletion.test.tsx` in the shared worktree).
 - `pnpm build` passed.
 
 ---
