@@ -422,7 +422,7 @@ make dependency tracking less explicit for cheap calculations.
 **Commit:** `6181589` (`refactor(jira): simplify column derivation`) pushed to
 `origin/main`.
 
-### Iteration 12 - in progress (2026-06-09)
+### Iteration 12 - done (2026-06-09)
 
 **Goal:** Remove the final `react-hooks/exhaustive-deps` suppression from
 `TaskWorkspace`.
@@ -444,7 +444,7 @@ and depend only on the value that should trigger synchronization.
 - Focused: `pnpm vitest run src/components/TaskWorkspace.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - First attempt with the Effect Event in the dependency list failed
@@ -456,6 +456,41 @@ and depend only on the value that should trigger synchronization.
 - `rg -n "eslint-disable-next-line react-hooks/exhaustive-deps|eslint-disable-line react-hooks/exhaustive-deps" src/components src/hooks`
   returned no matches.
 - `pnpm test` passed (49 files, 312 tests).
+- `pnpm build` passed.
+
+**Commit:** `16973e1`
+(`refactor(task-workspace): use effect event for diff refresh`) pushed to
+`origin/main`.
+
+### Iteration 13 - in progress (2026-06-09)
+
+**Goal:** Remove the unused `@fontsource-variable/inter` dependency.
+
+**Rationale:** The active font stack imports Geist, Geist Mono, JetBrains Mono, and
+Source Serif 4 in `src/styles.css`. `AGENTS.md` documents those same font roles,
+and a repo-wide search found no Inter import or token usage. Removing the unused
+font package trims dependency metadata and lockfile weight without changing the
+rendered theme.
+
+**Docs checked:** pnpm docs for removing dependencies. `pnpm remove` updates
+`package.json` and `pnpm-lock.yaml` together.
+
+**Claimed files:**
+- `package.json`
+- `pnpm-lock.yaml`
+
+**Verification plan:**
+- Search: confirm no `@fontsource-variable/inter` / Inter references remain.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- `pnpm remove @fontsource-variable/inter` removed one package.
+- `rg -n "@fontsource-variable/inter|Inter Variable|\\bInter\\b" package.json pnpm-lock.yaml src docs AGENTS.md README.md`
+  returned no matches.
+- `pnpm test` passed (50 files, 316 tests; Claude's in-progress
+  `src/statusLabels.test.ts` was present in the shared worktree).
 - `pnpm build` passed.
 
 ---
