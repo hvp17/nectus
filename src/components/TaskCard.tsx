@@ -91,13 +91,13 @@ export function TaskCard({
         <span className="nx-card-title">{task.title}</span>
         <div className="flex items-center gap-1.5 shrink-0">
           {attention?.kind === "needs_input" && (
-            <Badge variant="warning" className="attention-badge h-5 px-1.5 text-[10px]">
+            <Badge variant="warning" className="font-extrabold h-5 px-1.5 text-[10px]">
               <AlertTriangle size={11} />
               Needs you
             </Badge>
           )}
           {attention?.kind === "idle" && (
-            <Badge variant="success" className="attention-badge h-5 px-1.5 text-[10px]">
+            <Badge variant="success" className="font-extrabold h-5 px-1.5 text-[10px]">
               <CheckCircle2 size={11} />
               Done
             </Badge>
@@ -137,9 +137,8 @@ export function TaskCard({
       {reviewStatus && reviewStatusLabel && (
         <div>
           <Badge
-            variant={REVIEW_LOOP_BADGE_VARIANTS[reviewStatus]}
-            className="task-review-badge h-5 px-1.5 text-[10px]"
-            data-status={reviewStatus}
+            variant={reviewStatus === "passed" ? "success" : REVIEW_LOOP_BADGE_VARIANTS[reviewStatus]}
+            className="max-w-full font-extrabold h-5 px-1.5 text-[10px]"
           >
             {reviewStatus === "passed" && <CheckCircle2 size={11} />}
             {reviewStatusLabel}

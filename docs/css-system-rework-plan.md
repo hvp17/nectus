@@ -103,14 +103,30 @@ prior redesign).
   unlayered-CSS symptom. **Visually verified** Mission Control, Settings, and the
   Board in dark mode: layered surfaces render identically; unlayered badges/profile
   grid preserved. 287/45 green; build clean.
-- [ ] **P4 — Migrate primitive-coupled classes, then finish layering.** Convert
-  `.attention-badge`/`.task-review-badge` to utilities/cva (so the passed-green comes
-  from a `success` variant, not an unlayered override) and the `.profile-editor*`
-  Card/CardHeader/FieldGroup overrides to utilities; then wrap `task-board.css` +
-  `settings.css` in `@layer components` too. Also: migrate `.nx-seg` → shadcn
-  `ToggleGroup`; fold `TaskCard`'s `task-card-shell`+`nx-card` (two rails on one
-  element) into one; convert static inline `style={{}}` to utilities/tokens. Each
-  needs per-state visual verification (light + dark).
+- [x] **P4 (badges) — migrate the Badge overrides, layer `task-board.css`.** Replaced
+  `.attention-badge`/`.task-review-badge` with utilities (`font-extrabold`,
+  `max-w-full`) in `TaskCard`; the "passed" review badge now sources its green from
+  the `success` *variant* (whose color is byte-identical to the deleted
+  `[data-status=passed]` override) via a local ternary — so the board is pixel-identical
+  and the facts-rail is untouched. Deleted both badge rules and wrapped
+  `task-board.css` in `@layer components` (its 6 `!important` are legitimate drag/
+  selection runtime overrides, kept). Board badges visually verified identical
+  (dark). 287/45 green; build clean. **Now 4 of 5 surface files are layered.**
+
+### Remaining (deliberate follow-ups, out of this structural rework)
+
+- [ ] **`settings.css` stays unlayered — documented exception.** The `.profile-editor*`
+  suite restyles **five** shadcn primitives (Card, CardHeader, FieldGroup, Input via
+  `.profile-name-input`, Badge via `.profile-status-badge`) by relying on unlayered
+  precedence, and `.profile-status-badge` uses `color-mix(var(--agent-accent) …)` —
+  a per-`data-agent-kind` dynamic color that **cannot** be expressed as a static
+  Tailwind utility. Layering it cleanly needs a real `ProfileEditor` refactor (e.g. an
+  accent-aware Badge cva variant) with light/dark/compact verification. Tracked, not
+  rushed.
+- [ ] **Optional polish.** Migrate `.nx-seg` → shadcn `ToggleGroup` (JIRA toolbar);
+  fold `TaskCard`'s `task-card-shell`+`nx-card` (two rail mechanisms on one element)
+  into one; convert static inline `style={{}}` (Reviews/PrReviewDetail/JiraCard) to
+  utilities/tokens.
 - [ ] **P5 — Docs + PR.** Update `CLAUDE.md` frontend map + `docs/architecture.md`
   styling section; open PR.
 
