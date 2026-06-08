@@ -357,7 +357,7 @@ logic must run once.
 **Commit:** `075a393`
 (`fix(composer): seed focused workspace after hydration`) pushed to `origin/main`.
 
-### Iteration 10 - in progress (2026-06-09)
+### Iteration 10 - done (2026-06-09)
 
 **Goal:** Remove the `TaskDiffView` exhaustive-deps suppression by making the
 derived file list stable.
@@ -379,11 +379,44 @@ arrays when that is the intended dependency boundary.
 - Focused: `pnpm vitest run src/components/TaskDiffView.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/components/TaskDiffView.test.tsx` passed (6 tests).
 - `pnpm test` passed (49 files, 312 tests).
+- `pnpm build` passed.
+
+**Commit:** `94bb5b4`
+(`refactor(diff): remove file-list effect suppression`) pushed to `origin/main`.
+
+### Iteration 11 - in progress (2026-06-09)
+
+**Goal:** Remove the `useJira` columns memoization and its exhaustive-deps
+suppression.
+
+**Rationale:** The JIRA board columns are derived from at most the current board
+items and project statuses. The prior `useMemo` depended on a manual joined
+`statusFilterKey` because callers pass a fresh array, then suppressed
+`exhaustive-deps`. Computing the pure `deriveColumns` result directly is easier
+to reason about and removes the suppression without changing behavior.
+
+**Docs checked:** React docs for `useMemo` and memoization guidance. Manual
+memoization is useful for controlled performance boundaries, but it should not
+make dependency tracking less explicit for cheap calculations.
+
+**Claimed files:**
+- `src/hooks/useJira.ts`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/hooks/useJira.test.ts`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- `pnpm vitest run src/hooks/useJira.test.ts` passed (4 tests).
+- `pnpm test` passed (49 files, 312 tests; Claude's in-progress
+  `PullRequestChecks`/`collapsible` changes were present in the shared worktree).
 - `pnpm build` passed.
 
 ---

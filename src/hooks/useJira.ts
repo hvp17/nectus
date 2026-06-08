@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "../queries/keys";
@@ -214,14 +214,7 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
     await queryClient.invalidateQueries({ queryKey: queryKeys.jira.restStatus() });
   }, [queryClient]);
 
-  // Callers pass a fresh `statusFilter` array literal each render, so key the memo
-  // on its content to avoid rebuilding + sorting the columns every render.
-  const statusFilterKey = statusFilter.join(" ");
-  const columns = useMemo(
-    () => deriveColumns(items, projectStatuses, statusFilter),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items, projectStatuses, statusFilterKey],
-  );
+  const columns = deriveColumns(items, projectStatuses, statusFilter);
 
   return {
     jiraStatus,
