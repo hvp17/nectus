@@ -18,6 +18,7 @@ import { Skeleton } from "./ui/skeleton";
 import { AgentLogo } from "./AgentBrand";
 import { PrReviewBadge } from "./PrReviewBadge";
 import { openExternal } from "../lib/openExternal";
+import { PR_REVIEW_VERDICT_LABELS, prReviewVerdictKey } from "../statusLabels";
 import { toast } from "sonner";
 import type { AgentKind, AgentProfile, PrReview, PrReviewRun, PrReviewStatus, PrReviewVerdict } from "../types";
 
@@ -37,10 +38,6 @@ interface RoundColumn {
 }
 
 const inFlight = (status: PrReviewStatus) => status === "queued" || status === "reviewing";
-
-function verdictLabel(verdict: PrReviewVerdict): string {
-  return verdict === "passed" ? "Passed" : verdict === "blockers" ? "Blocking" : "Unsure";
-}
 
 /// Bucket a consensus review's flat run list into ascending per-round columns,
 /// each holding the verdict every reviewer gave that round.
@@ -256,7 +253,7 @@ function ConsensusBody({
                       <>
                         <VDot verdict={verdict} />
                         <span className="nx-vlabel" data-v={verdict}>
-                          {verdictLabel(verdict)}
+                          {PR_REVIEW_VERDICT_LABELS[verdict].short}
                         </span>
                       </>
                     ) : (
@@ -308,8 +305,7 @@ function ConsensusBanner({ review, roundsShown }: { review: PrReview; roundsShow
     );
   }
 
-  const verdictWord =
-    review.verdict === "passed" ? "Passed" : review.verdict === "blockers" ? "Blocking issues" : "Inconclusive";
+  const verdictWord = PR_REVIEW_VERDICT_LABELS[prReviewVerdictKey(review.verdict)].long;
   const roundsDone = review.roundsCompleted || roundsShown;
 
   if (review.converged) {

@@ -1,4 +1,4 @@
-import type { ReviewLoopStatus, ReviewVerdict, TaskStatus } from "./types";
+import type { PrReviewVerdict, ReviewLoopStatus, ReviewVerdict, TaskStatus } from "./types";
 
 export type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
 
@@ -57,3 +57,19 @@ export const REVIEW_VERDICT_LABELS: Record<ReviewVerdict, string> = {
   feedback: "Feedback",
   unknown: "Unknown",
 };
+
+/**
+ * Short (dense consensus-matrix cell) and long (badge / banner) labels for a
+ * finished PR-review verdict. The verdict value doubles as its CSS/tone token
+ * (`data-v` / `data-pr-verdict-tone`), so callers style off the verdict directly.
+ */
+export const PR_REVIEW_VERDICT_LABELS: Record<PrReviewVerdict, { short: string; long: string }> = {
+  passed: { short: "Passed", long: "Passed" },
+  blockers: { short: "Blocking", long: "Blocking issues" },
+  inconclusive: { short: "Unsure", long: "Inconclusive" },
+};
+
+/** Normalize a possibly-null verdict to a display key (null/unknown → inconclusive). */
+export function prReviewVerdictKey(verdict: PrReviewVerdict | null | undefined): PrReviewVerdict {
+  return verdict === "passed" || verdict === "blockers" ? verdict : "inconclusive";
+}

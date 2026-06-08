@@ -6,7 +6,12 @@ import { useTasksQuery } from "../queries/core";
 import { useAppStore } from "../store/appStore";
 import { isTauriRuntime, notifySessionEvent } from "../sessionNotifications";
 import { clearTaskAttention, upsertTaskAttention } from "../sessionAttention";
-import { taskFinishedToast, taskNeedsInputToast } from "../taskNotification";
+import {
+  sessionIdleContent,
+  sessionNeedsInputContent,
+  taskFinishedToast,
+  taskNeedsInputToast,
+} from "../taskNotification";
 import { upsertById, upsertNewestById } from "../lib/listState";
 import type {
   PrReview,
@@ -70,32 +75,27 @@ export function useEventBridge() {
       await add<SessionIdleEvent>("session_idle", (payload) => {
         const store = useAppStore.getState();
         const task = tasksRef.current.find((item) => item.id === payload.taskId);
-        const agentName = task?.agentName ?? "Codex";
-        const taskTitle = task?.title ?? "task is waiting";
-        const detail = payload.message ? ` ${payload.message}` : "";
+        const { title, body } = sessionIdleContent(task, payload);
         if (task) {
           store.setTaskAttention((current) => upsertTaskAttention(current, task, payload));
           store.setTaskToast(taskFinishedToast(task, payload));
         } else {
-          store.setMessage(`${agentName} finished: ${taskTitle}${detail}`);
+          store.setMessage(`${title}: ${body}`);
         }
-        void notifySessionEvent(`${agentName} finished`, `${taskTitle}${detail}`);
+        void notifySessionEvent(title, body);
       });
 
       await add<SessionNeedsInputEvent>("session_needs_input", (payload) => {
         const store = useAppStore.getState();
         const task = tasksRef.current.find((item) => item.id === payload.taskId);
-        const agentName = task?.agentName ?? "Codex";
-        const taskTitle = task?.title ?? "a task";
-        const prompt = payload.prompt ? `: ${payload.prompt}` : "";
-        const reason = payload.reason ? ` (${payload.reason})` : "";
+        const { title, body } = sessionNeedsInputContent(task, payload);
         if (task) {
           store.setTaskAttention((current) => upsertTaskAttention(current, task, payload));
           store.setTaskToast(taskNeedsInputToast(task, payload));
         } else {
-          store.setMessage(`${agentName} needs input for ${taskTitle}${reason}${prompt}`);
+          store.setMessage(`${title} for ${body}`);
         }
-        void notifySessionEvent(`${agentName} needs input`, `${taskTitle}${reason}${prompt}`);
+        void notifySessionEvent(title, body);
       });
 
       await add<SessionActivityEvent>("session_activity", (payload) => {

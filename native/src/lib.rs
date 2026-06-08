@@ -713,12 +713,7 @@ fn create_pr_review(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> AppResult<PrReview> {
-    enum Kind {
-        Single,
-        Consensus,
-    }
-
-    let (review, kind) = {
+    let review = {
         let db = state.db.lock();
         let parsed = github::parse_pull_request_url(&pr_url)?;
         let repo = db
@@ -744,34 +739,37 @@ fn create_pr_review(
             );
         }
 
+        // One reviewer → single review; two or more → a consensus review whose
+        // first selected reviewer doubles as the synthesizer. The stored `mode`
+        // then drives the runtime dispatch (here and on re-run).
         if reviewer_ids.len() <= 1 {
-            let review =
-                db.create_pr_review(repo.id, reviewer_ids[0], pr_url.trim(), parsed.number)?;
-            (review, Kind::Single)
+            db.create_pr_review(repo.id, reviewer_ids[0], pr_url.trim(), parsed.number)?
         } else {
-            // The first selected reviewer doubles as the synthesizer.
             let rounds = max_rounds.unwrap_or(3).clamp(1, MAX_CONSENSUS_ROUNDS);
-            let review = db.create_consensus_pr_review(
+            db.create_consensus_pr_review(
                 repo.id,
                 reviewer_ids[0],
                 &reviewer_ids,
                 rounds,
                 pr_url.trim(),
                 parsed.number,
-            )?;
-            (review, Kind::Consensus)
+            )?
         }
     };
 
-    match kind {
-        Kind::Single => state
-            .sessions
-            .run_pr_review(app, state.db.clone(), review.id),
-        Kind::Consensus => state
-            .sessions
-            .run_consensus_pr_review(app, state.db.clone(), review.id),
-    }
+    start_pr_review(&state, app, review.mode, review.id);
     Ok(review)
+}
+
+/// Kick off the background reviewer matching a review's mode. The single/consensus
+/// dispatch lives here once, shared by `create_pr_review` and `rerun_pr_review`.
+fn start_pr_review(state: &AppState, app: tauri::AppHandle, mode: PrReviewMode, review_id: i64) {
+    match mode {
+        PrReviewMode::Consensus => state
+            .sessions
+            .run_consensus_pr_review(app, state.db.clone(), review_id),
+        PrReviewMode::Single => state.sessions.run_pr_review(app, state.db.clone(), review_id),
+    }
 }
 
 #[tauri::command]
@@ -803,16 +801,7 @@ fn rerun_pr_review(
     state: State<'_, AppState>,
 ) -> AppResult<PrReview> {
     let review = app_result(state.db.lock().reset_pr_review_for_rerun(review_id))?;
-    match review.mode {
-        PrReviewMode::Consensus => {
-            state
-                .sessions
-                .run_consensus_pr_review(app, state.db.clone(), review.id)
-        }
-        PrReviewMode::Single => state
-            .sessions
-            .run_pr_review(app, state.db.clone(), review.id),
-    }
+    start_pr_review(&state, app, review.mode, review.id);
     Ok(review)
 }
 
