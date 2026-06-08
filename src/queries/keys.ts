@@ -5,9 +5,8 @@
  * bridge in the session hooks) reference the same tuples and never drift. Keys are
  * hierarchical so a domain can be invalidated wholesale (e.g. all `["github", …]`).
  *
- * Only the keys for queries actually wired to TanStack Query live here. The
- * remaining per-domain hooks (JIRA board, task diff, review loop, PR reviews) still
- * load through their own state; converting them adds their keys here.
+ * Only keys for reads actually wired to TanStack Query live here. Domain hooks
+ * should add keys here as their command reads move into the query layer.
  */
 export const queryKeys = {
   repos: () => ["repos"] as const,
@@ -18,6 +17,8 @@ export const queryKeys = {
 
   github: {
     status: () => ["github", "status"] as const,
+    /** Best-effort branch PR detection for a worktree task with no linked PR. */
+    pullRequestDetection: (taskId: number) => ["github", "pull-request-detection", taskId] as const,
     /** Live PR status for one task (checks/review decision); polled while open. */
     pullRequest: (taskId: number) => ["github", "pull-request", taskId] as const,
   },

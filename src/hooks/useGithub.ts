@@ -1,9 +1,11 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { api } from "../api";
-import { useGithubStatusQuery, useGithubPullRequestQuery } from "../queries/github";
+import {
+  useGithubStatusQuery,
+  useGithubPullRequestQuery,
+  useGithubPullRequestDetectionQuery,
+} from "../queries/github";
 import { queryKeys } from "../queries/keys";
-import { useAsyncEffect } from "./useAsyncEffect";
 import { isCliConnected } from "../lib/connection";
 import type { TaskSummary } from "../types";
 
@@ -36,24 +38,15 @@ export function useGithub({ selectedTask, applyTask }: UseGithubInput) {
 
   const selectedTaskId = selectedTask?.id;
   const selectedPrUrl = selectedTask?.prUrl ?? null;
-  const selectedHasWorktree = selectedTask?.hasWorktree ?? false;
 
   // When a worktree task has no linked PR yet, ask gh whether one already exists for
   // its branch (e.g. opened from the terminal by the agent) and backfill it.
   // Backfilling `prUrl` re-enables the PR-status query above, which then loads its
   // checks.
-  useAsyncEffect(
-    async (alive) => {
-      if (!ghReady || !selectedTaskId || !selectedHasWorktree || selectedPrUrl) return;
-      try {
-        const task = await api.detectGithubPullRequest(selectedTaskId);
-        if (alive() && task) applyTask(task);
-      } catch {
-        // Soft-fail: detection is best-effort; the Create button stays available.
-      }
-    },
-    [ghReady, selectedTaskId, selectedHasWorktree, selectedPrUrl, applyTask],
-  );
+  const detectedTask = useGithubPullRequestDetectionQuery(selectedTask, ghReady).data;
+  useEffect(() => {
+    if (detectedTask && !selectedPrUrl) applyTask(detectedTask);
+  }, [detectedTask, selectedPrUrl, applyTask]);
 
   const refreshPullRequest = useCallback(
     (task: TaskSummary) => {

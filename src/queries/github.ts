@@ -38,3 +38,21 @@ export function useGithubPullRequestQuery(task: TaskSummary | undefined, ghConne
     },
   });
 }
+
+/**
+ * Best-effort PR auto-detection for a worktree task whose agent may have opened a
+ * branch PR from the terminal. Kept as a query so all GitHub command reads share
+ * Query's task-keyed stale response handling instead of each hook owning an async
+ * effect guard.
+ */
+export function useGithubPullRequestDetectionQuery(task: TaskSummary | undefined, ghConnected: boolean) {
+  const taskId = task?.id;
+  const enabled = ghConnected && taskId != null && Boolean(task?.hasWorktree) && !task?.prUrl;
+  return useQuery({
+    queryKey: taskId != null ? queryKeys.github.pullRequestDetection(taskId) : queryKeys.github.pullRequestDetection(-1),
+    queryFn: () => api.detectGithubPullRequest(taskId as number),
+    enabled,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+}
