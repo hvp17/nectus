@@ -739,7 +739,7 @@ current surface instead of carrying obsolete branch trackers beside them.
 **Commit:** `7362e81` (`docs: remove obsolete command redesign tracker`) pushed
 to `origin/main`.
 
-### Iteration 22 - in progress (2026-06-09)
+### Iteration 22 - done (2026-06-09)
 
 **Goal:** Cover the JIRA REST token cache/update hook.
 
@@ -759,10 +759,43 @@ test.
 - Focused: `pnpm vitest run src/hooks/useJiraToken.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified; committing.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/hooks/useJiraToken.test.tsx` passed (2 tests).
+- `pnpm test` passed (59 files, 352 tests).
+- `pnpm build` passed.
+
+**Commit:** `055850d` (`test(jira): cover token cache updates`) pushed to
+`origin/main`.
+
+### Iteration 23 - in progress (2026-06-09)
+
+**Goal:** Remove the obsolete CSS-system rework tracker from the live docs tree.
+
+**Rationale:** `docs/css-system-rework-plan.md` is a branch-era working tracker
+that says to fold durable facts into permanent docs and delete the file once the
+work lands. It is not referenced by the docs index, contains stale verification
+counts from an older test suite shape, and now duplicates project rules already
+owned by `AGENTS.md` and the architecture/docs map.
+
+**Docs checked:** Diataxis guidance for keeping reference material factual,
+scannable, and current; obsolete rollout trackers should not sit beside the
+indexed current docs as if they were authoritative reference pages.
+
+**Claimed files:**
+- `docs/css-system-rework-plan.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Search: confirm no references to the CSS tracker remain.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified; committing.
+
+**Evidence:**
+- `rg -n "css-system-rework-plan|CSS System Rework|chore/css-coherence|287 tests|288 tests|45 files|46 files" README.md AGENTS.md docs src native package.json`
+  returned no matches.
 - `pnpm test` passed (59 files, 352 tests).
 - `pnpm build` passed.
 
@@ -770,8 +803,8 @@ test.
 
 ## Backlog / future work
 
-- Audit remaining custom async/loading hooks against the Query/Zustand ownership
-  boundary.
-- Inspect large files only where a real cohesion split is visible:
-  `src/AppRouter.tsx`, `native/src/sessions/mod.rs`, and `native/src/lib.rs`.
+- Audit remaining custom async/loading hooks only when new code introduces a real
+  ownership mismatch; the existing high-value hook coverage is mostly harvested.
 - Re-check terminal decoding docs against the recent UTF-8 boundary fixes.
+- Periodically diff the command/event/table reference against source after
+  backend changes.
