@@ -127,8 +127,11 @@ prior redesign).
   fold `TaskCard`'s `task-card-shell`+`nx-card` (two rail mechanisms on one element)
   into one; convert static inline `style={{}}` (Reviews/PrReviewDetail/JiraCard) to
   utilities/tokens.
-- [ ] **P5 — Docs + PR.** Update `CLAUDE.md` frontend map + `docs/architecture.md`
-  styling section; open PR.
+- [x] **P5 — Docs + PR.** Rewrote the `AGENTS.md`/`CLAUDE.md` styling file map (the
+  authoritative one): `styles.css` = single theme entry; per-surface CSS in
+  `@layer components`; the documented `settings.css` unlayered exception; `layout.css`
+  removed. (`docs/architecture.md` has no CSS section — nothing to change there.)
+  Opened the PR.
 
 ## Decision log
 
