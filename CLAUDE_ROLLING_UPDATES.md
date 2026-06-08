@@ -331,6 +331,29 @@ frontend and Rust sides; the obvious wins are harvested. Remaining value is
 incremental and requires deeper investigation per pass — cadence should stay
 deliberate, not churn.
 
+### Iteration 13 — done (2026-06-09) · commit pending
+
+**Goal (best practices — coverage of critical infra):** Add
+`src/hooks/useGuardedAction.test.ts`. `useGuardedAction` is the app's central
+async wrapper (clear message → optional busy → run → surface `String(error)` →
+optional rethrow → always reset busy) used by **9 hooks**, and it had no test.
+
+**Covers:** success returns the action's result + clears the message; a thrown
+error is surfaced as the message and returns `undefined`; `rethrow` re-throws
+after surfacing; `busy` toggles true→false around the action and still resets on
+failure (the `finally`); busy is left alone when not requested. Pure test
+addition — no production change.
+
+**Scope:** new file `src/hooks/useGuardedAction.test.ts` (5 tests).
+
+**Verification:** isolation 5/5; `pnpm build` (ok).
+
+**Status:** committed.
+
+**Note:** verified the `void`/fire-and-forget async sites are all sound (wrapped in
+`run()`, have `.catch` reverts, or are intentionally non-critical) — no
+silent-failure fixes warranted. Error handling across the app is disciplined.
+
 ## Backlog / future work (deeper investigation — no quick wins left)
 
 - Targeted coverage for any *new* untested logic as it lands (watch the diff).
