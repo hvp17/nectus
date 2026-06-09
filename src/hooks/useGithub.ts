@@ -33,6 +33,8 @@ export function useGithub({ selectedTask, applyTask }: UseGithubInput) {
   const ghReady = isCliConnected(githubStatus);
   const selectedPrUrl = selectedTask?.prUrl ?? null;
   const canReadPullRequest = ghReady && selectedTask?.id != null && Boolean(selectedPrUrl);
+  const canDetectPullRequest =
+    ghReady && selectedTask?.id != null && Boolean(selectedTask?.hasWorktree) && !selectedPrUrl;
 
   const pullRequestQuery = useGithubPullRequestQuery(selectedTask, ghReady);
   const pullRequest = canReadPullRequest ? (pullRequestQuery.data ?? null) : null;
@@ -42,10 +44,11 @@ export function useGithub({ selectedTask, applyTask }: UseGithubInput) {
   // its branch (e.g. opened from the terminal by the agent) and backfill it.
   // Backfilling `prUrl` re-enables the PR-status query above, which then loads its
   // checks.
-  const detectedTask = useGithubPullRequestDetectionQuery(selectedTask, ghReady).data;
+  const detectionQuery = useGithubPullRequestDetectionQuery(selectedTask, ghReady);
+  const detectedTask = canDetectPullRequest ? detectionQuery.data : undefined;
   useEffect(() => {
-    if (detectedTask && !selectedPrUrl) applyTask(detectedTask);
-  }, [detectedTask, selectedPrUrl, applyTask]);
+    if (detectedTask) applyTask(detectedTask);
+  }, [detectedTask, applyTask]);
 
   const refreshPullRequest = useCallback(
     (task: TaskSummary) => {

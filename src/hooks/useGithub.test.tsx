@@ -101,4 +101,22 @@ describe("useGithub", () => {
     expect(result.current.pullRequestLoading).toBe(false);
     expect(api.githubPullRequestStatus).not.toHaveBeenCalled();
   });
+
+  it("ignores cached pull request detection when the selected task cannot be detected", async () => {
+    const client = createQueryClient();
+    const detectedTask = task({ prUrl: linkedPullRequest.url });
+    const applyTask = vi.fn();
+    client.setQueryData(queryKeys.github.status(), connectedStatus);
+    client.setQueryData(queryKeys.github.pullRequestDetection(42), detectedTask);
+
+    const { result } = renderHook(
+      () => useGithub({ selectedTask: task({ hasWorktree: false, prUrl: null }), applyTask }),
+      { wrapper: makeWrapper(client) },
+    );
+
+    await waitFor(() => expect(result.current.ghReady).toBe(true));
+
+    expect(applyTask).not.toHaveBeenCalled();
+    expect(api.detectGithubPullRequest).not.toHaveBeenCalled();
+  });
 });

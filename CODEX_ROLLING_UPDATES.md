@@ -3859,7 +3859,7 @@ data exists, even though they do not fetch.
   gating returned diff state on `taskId != null`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useTaskDiff.test.tsx` failed as
@@ -3868,6 +3868,50 @@ data exists, even though they do not fetch.
 - Focused green `pnpm vitest run src/hooks/useTaskDiff.test.tsx` passed:
   1 file / 8 tests.
 - `pnpm verify` passed: frontend tests (70 files / 415 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `e05952d` (`fix(ui): hide stale task diff summary`) pushed to
+`origin/main`.
+
+### Iteration 104 - in progress (2026-06-09)
+
+**Goal:** Ignore cached GitHub PR-detection results when the selected task is
+not eligible for detection.
+
+**Rationale:** `useGithubPullRequestDetectionQuery` disables branch PR
+detection unless GitHub is connected, the selected task has a worktree, and the
+task has no linked `prUrl`. `useGithub` still reads `.data` directly and uses it
+in an effect, so a cached detection result can backfill a PR URL for a task that
+is no longer detection-eligible. The effect should share the query's eligibility
+gate.
+
+**Docs checked:** Context7 `/tanstack/query` disabled-query docs. Current
+guidance states that disabled queries initialize in success state when cached
+data exists, even though they do not fetch.
+
+**Claimed files:**
+- `src/hooks/useGithub.ts`
+- `src/hooks/useGithub.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: seed cached PR-detection data for a task that has no worktree and
+  run `pnpm vitest run src/hooks/useGithub.test.tsx`; it should fail while the
+  effect still backfills from disabled-query cache data.
+- Focused green: rerun `pnpm vitest run src/hooks/useGithub.test.tsx` after
+  gating the detection effect on the same prerequisites as the query.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useGithub.test.tsx` failed as expected
+  before implementation; cached detection data called `applyTask` even though
+  the selected task had no worktree.
+- Focused green `pnpm vitest run src/hooks/useGithub.test.tsx` passed:
+  1 file / 2 tests.
+- `pnpm verify` passed: frontend tests (70 files / 416 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
