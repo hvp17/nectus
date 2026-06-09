@@ -2309,7 +2309,7 @@ xterm-specific behavior.
 **Commit:** `c992454` (`test(ui): cover terminal session events`) pushed to
 `origin/main`.
 
-### Iteration 67 - in progress (2026-06-09)
+### Iteration 67 - done (2026-06-09)
 
 **Goal:** Reuse `useTauriEvent` for TerminalPane session events.
 
@@ -2323,6 +2323,39 @@ effect.
 
 **Docs checked:** Context7 Tauri v2 event docs for the `listen`/unlisten
 lifecycle, and the local `useTauriEvent` contract/tests.
+
+**Claimed files:**
+- `src/TerminalPane.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused test: `pnpm vitest run src/TerminalPane.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified and committed.
+
+**Evidence:**
+- `pnpm vitest run src/TerminalPane.test.tsx` passed: 1 file / 10 tests.
+- `pnpm verify` passed: frontend tests (59 files / 363 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `635f6d8` (`refactor(ui): reuse tauri event hook in terminal`) pushed
+to `origin/main`.
+
+### Iteration 68 - in progress (2026-06-09)
+
+**Goal:** Simplify TerminalPane's remaining drag/drop unlisten bookkeeping.
+
+**Rationale:** After Iteration 67 moved `session_output` and `session_exited` to
+`useTauriEvent`, the terminal setup effect had only one async unlisten callback
+left: the webview drag/drop listener. Replacing the leftover callback array with
+a single `unlistenDragDrop` slot keeps the effect aligned with its actual
+ownership while preserving the same late-resolution cleanup behavior.
+
+**Docs checked:** Context7 Tauri v2 event docs for unlisten cleanup from the
+preceding listener iterations; this change is a local simplification with no
+user-visible behavior change.
 
 **Claimed files:**
 - `src/TerminalPane.tsx`

@@ -117,7 +117,7 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
   useEffect(() => {
     if (!hostRef.current || !isTauriRuntime()) return;
 
-    const unlistenCallbacks: Array<() => void> = [];
+    let unlistenDragDrop: (() => void) | undefined;
     let disposed = false;
 
     getCurrentWebview().onDragDropEvent((event) => {
@@ -137,7 +137,7 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
       if (disposed) {
         unlisten();
       } else {
-        unlistenCallbacks.push(unlisten);
+        unlistenDragDrop = unlisten;
       }
     });
 
@@ -170,7 +170,7 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
       if (resizeFrame) cancelAnimationFrame(resizeFrame);
       resizeObserver.disconnect();
       themeObserver.disconnect();
-      unlistenCallbacks.forEach((unlisten) => unlisten());
+      unlistenDragDrop?.();
       for (const sessionId of Array.from(terminalsRef.current.keys())) {
         disposeCachedTerminal(sessionId);
       }
