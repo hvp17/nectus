@@ -5,6 +5,7 @@ import { api } from "../api";
 import { appRepo, appTask } from "./appFixtures";
 
 const mockedApi = vi.mocked(api);
+const ROUTED_VIEW_TIMEOUT_MS = 3_000;
 
 // The app now boots into Mission Control (cross-project triage); the per-project
 // kanban lives behind the "Board" rail button.
@@ -81,7 +82,9 @@ export function defineAppSmokeTests() {
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
 
     // Settings is a routed view; awaiting the first heading lets the navigation land.
-    expect(await screen.findByRole("heading", { name: "Agent Profiles" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Agent Profiles" }, { timeout: ROUTED_VIEW_TIMEOUT_MS }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /projects & worktrees/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Appearance" })).toBeInTheDocument();
 

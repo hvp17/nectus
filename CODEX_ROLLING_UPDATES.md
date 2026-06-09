@@ -4649,7 +4649,7 @@ exists.
   `useQueries` array and returning only the data/loading surface its consumers use.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready for collision check and commit.
+**Status:** verified and committed.
 
 **Evidence so far:**
 - `git status --short --branch` was clean after pushing `3df6c5c`.
@@ -4671,6 +4671,54 @@ exists.
   `pnpm vitest run src/App.test.tsx` immediately passed: 1 file / 50 tests.
 - Final `pnpm verify` passed: frontend tests (72 files / 429 tests), frontend
   build, Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `9810c07` (`fix(github): avoid empty pr queries`) pushed to
+`origin/main`.
+
+### Iteration 121 - in progress (2026-06-09)
+
+**Goal:** Harden the Settings smoke test against lazy-view timing in the full
+suite.
+
+**Rationale:** Iteration 120's first `pnpm verify` failed once in
+`src/App.test.tsx` while opening Settings: the test could not find the
+`Agent Profiles` heading before the default async-query timeout. The same
+`src/App.test.tsx` file immediately passed in isolation, and the full gate passed
+on rerun, so this is a suite-load timing flake around the lazy Settings view, not
+a product regression.
+
+**Docs checked:** Context7 `/testing-library/testing-library-docs` docs. Current
+Testing Library docs state `findBy*` queries combine `getBy` with `waitFor` and
+accept `waitFor` options as the last argument.
+
+**Claimed files:**
+- `src/test/appSmokeTests.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red/evidence check: use the observed `pnpm verify` failure from Iteration 120,
+  then confirm `pnpm vitest run src/App.test.tsx` passed in isolation.
+- Focused green: rerun `pnpm vitest run src/App.test.tsx` after adding a bounded
+  timeout to the Settings lazy-view heading assertion.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready for collision check and commit.
+
+**Evidence so far:**
+- `git status --short --branch` was clean after pushing `9810c07`.
+- `git log --oneline --decorate -10` shows `9810c07` at both local and
+  `origin/main`.
+- `CLAUDE_ROLLING_UPDATES.md` remains on older coverage/documentation work and
+  does not claim `src/test/appSmokeTests.tsx`.
+- The observed failure was `Unable to find role="heading" and name "Agent Profiles"`
+  during full `pnpm verify`; immediate isolated rerun
+  `pnpm vitest run src/App.test.tsx` passed: 1 file / 50 tests.
+- Context7 docs checked for Testing Library async query wait options.
+- Focused green `pnpm vitest run src/App.test.tsx` passed after the bounded
+  Settings heading wait: 1 file / 50 tests.
+- `pnpm verify` passed: frontend tests (72 files / 429 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
 ---
