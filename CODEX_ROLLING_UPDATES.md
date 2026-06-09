@@ -2469,7 +2469,7 @@ for replacement replay and only changes the delta decision.
 **Commit:** `8d132ba` (`fix(ui): reset replaced review output`) pushed to
 `origin/main`.
 
-### Iteration 71 - in progress (2026-06-09)
+### Iteration 71 - done (2026-06-09)
 
 **Goal:** Cover the live review-output event stream.
 
@@ -2497,7 +2497,7 @@ the listener returns an unlisten function. The tests use the existing
   `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx` failed as
@@ -2506,6 +2506,47 @@ the listener returns an unlisten function. The tests use the existing
 - Focused green `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx` passed:
   1 file / 6 tests.
 - `pnpm verify` passed: frontend tests (60 files / 371 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `e7d3b43` (`test(ui): cover live review output stream`) pushed to
+`origin/main`.
+
+### Iteration 72 - in progress (2026-06-09)
+
+**Goal:** Cover live review-output reset effects.
+
+**Rationale:** `useTaskReviewLoop` intentionally clears the ephemeral
+`liveReviewOutput` buffer when the selected task changes and when the selected
+task's review loop enters `reviewing` for a new run. Those resets prevent stale
+review output from appearing in another task or run. Iteration 71 covered chunk
+streaming; this iteration covers the two dependency-driven reset effects.
+
+**Docs checked:** Context7 `/reactjs/react.dev` docs for `useEffect`
+dependencies, confirming effects run on mount and whenever listed dependencies
+change. This hook intentionally uses those effects to synchronize ephemeral
+selected-task/run output.
+
+**Claimed files:**
+- `src/hooks/useTaskReviewLoop.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: temporarily disable the selected-task reset effect and run
+  `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx`; the selected-task
+  reset test should fail.
+- Focused green test: restore the effect and run
+  `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx` failed as
+  expected because `task 21 output` stayed visible after switching to task 22.
+- Focused green `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx` passed:
+  1 file / 8 tests.
+- `pnpm verify` passed: frontend tests (60 files / 373 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

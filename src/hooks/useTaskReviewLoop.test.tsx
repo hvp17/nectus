@@ -167,4 +167,55 @@ describe("useTaskReviewLoop", () => {
 
     expect(screen.getByTestId("live-output").textContent).toBe("");
   });
+
+  it("clears live review output when the selected task changes", async () => {
+    const client = createQueryClient();
+    const view = renderWithClient(<Harness selectedTaskId={21} />, client);
+
+    await waitFor(() => {
+      expect(eventTestState.handlers.has("review_output")).toBe(true);
+    });
+    act(() => {
+      eventTestState.handlers.get("review_output")?.({
+        payload: { taskId: 21, data: "task 21 output", startOffset: 0 },
+      });
+    });
+    expect(screen.getByTestId("live-output").textContent).toBe("task 21 output");
+
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <Harness selectedTaskId={22} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("live-output").textContent).toBe("");
+    });
+  });
+
+  it("clears live review output when a new review run starts", async () => {
+    const client = createQueryClient();
+    renderWithClient(<Harness selectedTaskId={21} />, client);
+
+    await waitFor(() => {
+      expect(eventTestState.handlers.has("review_output")).toBe(true);
+    });
+    act(() => {
+      eventTestState.handlers.get("review_output")?.({
+        payload: { taskId: 21, data: "previous live output", startOffset: 0 },
+      });
+    });
+    expect(screen.getByTestId("live-output").textContent).toBe("previous live output");
+
+    act(() => {
+      client.setQueryData(queryKeys.task.reviewLoop(21), {
+        ...reviewLoop,
+        status: "reviewing",
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("live-output").textContent).toBe("");
+    });
+  });
 });
