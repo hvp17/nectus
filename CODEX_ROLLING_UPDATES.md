@@ -3659,7 +3659,7 @@ only see a new reference when the dependencies change.
 **Commit:** `289d8c0` (`perf(ui): memoize jira board columns`) pushed to
 `origin/main`.
 
-### Iteration 99 - in progress (2026-06-09)
+### Iteration 99 - done (2026-06-09)
 
 **Goal:** Cancel in-flight JIRA board queries before optimistic transitions.
 
@@ -3687,7 +3687,7 @@ queries before snapshotting and writing optimistic cache state.
   the cancellation.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useJira.test.ts` failed as expected
@@ -3696,6 +3696,51 @@ queries before snapshotting and writing optimistic cache state.
 - Focused green `pnpm vitest run src/hooks/useJira.test.ts` passed:
   1 file / 6 tests.
 - `pnpm verify` passed: frontend tests (69 files / 411 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `03856f2` (`fix(ui): guard jira optimistic transitions`) pushed to
+`origin/main`.
+
+### Iteration 100 - in progress (2026-06-09)
+
+**Goal:** Roll back failed JIRA optimistic transitions when no board snapshot
+existed.
+
+**Rationale:** After the cancellation improvement, the optimistic transition path
+still only restores the board cache when `previous` is truthy. If transition is
+called before any board data exists and the mutation fails, the optimistic
+`setQueryData` creates an empty board cache entry that is not rolled back.
+TanStack Query's rollback guidance treats the snapshotted previous value as the
+state to restore, including the "no previous data" edge case.
+
+**Docs checked:** Context7 `/tanstack/query` optimistic update rollback docs.
+Current guidance snapshots previous query data before the optimistic write and
+uses that snapshot in the error path to restore cache state.
+
+**Claimed files:**
+- `src/hooks/useJira.ts`
+- `src/hooks/useJira.test.ts`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add a focused test that calls `transition` with no cached board data
+  and a rejected mutation, then assert the board query cache is removed; run
+  `pnpm vitest run src/hooks/useJira.test.ts` and expect failure before
+  implementation.
+- Focused green: rerun `pnpm vitest run src/hooks/useJira.test.ts` after
+  removing the optimistic cache entry when no previous snapshot existed.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useJira.test.ts` failed as expected
+  before implementation; the failed no-snapshot transition left `[]` in the
+  board cache instead of `undefined`.
+- Focused green `pnpm vitest run src/hooks/useJira.test.ts` passed:
+  1 file / 7 tests.
+- `pnpm verify` passed: frontend tests (69 files / 412 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

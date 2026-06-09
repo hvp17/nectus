@@ -138,6 +138,31 @@ describe("useJira", () => {
     expect(cancelQueries).toHaveBeenCalledWith({ queryKey: queryKeys.jira.board() });
   });
 
+  it("removes the optimistic board cache when transition fails without a prior snapshot", async () => {
+    const setMessage = vi.fn();
+    const client = createQueryClient();
+    mockedApi.jiraTransitionWorkItem.mockRejectedValueOnce(new Error("No transition"));
+    const { result } = renderHook(
+      () =>
+        useJira({
+          active: false,
+          configured: false,
+          project: null,
+          statusFilter: [],
+          setMessage,
+        }),
+      { wrapper: makeWrapper(client) },
+    );
+    expect(client.getQueryData(queryKeys.jira.board())).toBeUndefined();
+
+    await act(async () => {
+      await result.current.transition(item("A-1", "To Do"), "Done");
+    });
+
+    expect(client.getQueryData(queryKeys.jira.board())).toBeUndefined();
+    expect(setMessage).toHaveBeenCalledWith("Error: No transition");
+  });
+
   it("refreshes the board after adding a comment", async () => {
     const setMessage = vi.fn();
     const client = createQueryClient();

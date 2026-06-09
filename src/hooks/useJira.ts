@@ -140,7 +140,11 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
         await api.jiraTransitionWorkItem(item.key, statusName);
         await refresh();
       } catch (error) {
-        if (previous) queryClient.setQueryData(key, previous);
+        if (previous !== undefined) {
+          queryClient.setQueryData(key, previous);
+        } else {
+          queryClient.removeQueries({ queryKey: key });
+        }
         setMessage(String(error));
       }
     },
