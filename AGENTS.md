@@ -270,6 +270,9 @@ a profile's own PATH still wins. Current call sites:
 - agent PTY sessions — `native/src/sessions/mod.rs`
 - the reviewer launch shared by the task AI review loop and external PR reviews —
   `native/src/sessions/reviewer.rs` (`run_reviewer_command`)
+- `git` invocations in repo/worktree operations resolve `git` via
+  `resolve_executable` and set `PATH` to `augmented_path`
+  (`native/src/git_ops/mod.rs`).
 - `gh` invocations resolve `gh` via `resolve_executable`; `gh` is a single static
   binary that spawns no node, so it needs resolution but not `augmented_path`
   (`native/src/github.rs`).

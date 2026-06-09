@@ -10,8 +10,11 @@ fn git_output(repo_path: &Path, args: &[&str], failure_message: &str) -> Result<
 }
 
 fn git_command(repo_path: &Path) -> Command {
-    let mut command = Command::new("git");
-    command.arg("-C").arg(repo_path);
+    let mut command = Command::new(crate::process_util::resolve_executable("git"));
+    command
+        .env("PATH", crate::process_util::augmented_path())
+        .arg("-C")
+        .arg(repo_path);
     command
 }
 

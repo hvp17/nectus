@@ -1818,7 +1818,7 @@ future worktree behavior changes in one place without changing the public API.
 **Commit:** `6dd6f0e` (`refactor(git): share worktree add setup`) pushed to
 `origin/main`.
 
-### Iteration 54 - in progress (2026-06-09)
+### Iteration 54 - done (2026-06-09)
 
 **Goal:** Centralize production `git -C <repo>` command construction.
 
@@ -1840,7 +1840,7 @@ consistent while leaving test setup calls alone.
 - Production-spawn check: `rg -n "Command::new\\(\"git\"\\)|std::process::Command::new\\(\"git\"\\)" native/src/git_ops/mod.rs native/src/git_ops/diff.rs native/src/lib.rs native/src/db/tests.rs`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `cd native && cargo fmt --check` passed after formatting.
@@ -1848,6 +1848,48 @@ consistent while leaving test setup calls alone.
 - `rg -n "Command::new\\(\"git\"\\)|std::process::Command::new\\(\"git\"\\)" native/src/git_ops/mod.rs native/src/git_ops/diff.rs native/src/lib.rs native/src/db/tests.rs`
   shows the production `git_ops` constructor only in `git_command`; the rest are
   test setup calls.
+- `pnpm verify` passed: frontend tests (59 files / 353 tests), frontend build,
+  Rust tests (240 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `d0c1ecf` (`refactor(git): centralize repo command builder`) pushed
+to `origin/main`.
+
+### Iteration 55 - in progress (2026-06-09)
+
+**Goal:** Route production git commands through the shared external-CLI resolver.
+
+**Rationale:** `git_ops` now has one production command builder, so it can follow
+the project-wide macOS GUI PATH rule: resolve the executable through
+`process_util::resolve_executable` and set the child `PATH` to
+`process_util::augmented_path`. This keeps git behavior aligned with packaged-app
+CLI spawning and documents the new call site in `AGENTS.md`.
+
+**Docs checked:** Context7 Rust standard library docs for `Command::env` and the
+child-process environment override behavior.
+
+**Claimed files:**
+- `native/src/git_ops/mod.rs`
+- `AGENTS.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused Rust tests: `cd native && cargo test git_ops::tests::` and
+  `cd native && cargo test process_util::tests::`.
+- Rust format/lint: `cd native && cargo fmt --check` and
+  `cd native && cargo clippy --all-targets -- -D warnings`.
+- Docs/code check: `rg -n "resolve_executable\\(\"git\"\\)|git invocations resolve" native/src/git_ops/mod.rs AGENTS.md`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- `cd native && cargo fmt --check` passed.
+- `cd native && cargo test git_ops::tests::` passed: 21 tests.
+- `cd native && cargo test process_util::tests::` passed: 4 tests.
+- `cd native && cargo clippy --all-targets -- -D warnings` passed.
+- `rg -n "resolve_executable\\(\"git\"\\)|git.*resolve.*resolve_executable|native/src/git_ops/mod.rs" native/src/git_ops/mod.rs AGENTS.md`
+  shows the git builder and AGENTS call-site entry.
 - `pnpm verify` passed: frontend tests (59 files / 353 tests), frontend build,
   Rust tests (240 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
