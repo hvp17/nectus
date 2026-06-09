@@ -626,6 +626,8 @@ Current behavior:
 - Every fresh check clears any previous install target before reading the
   updater endpoint. If the re-check fails, stale toast actions cannot install an
   older successful update result.
+- If checks overlap, only the latest check is allowed to update the visible
+  status or install target; slower earlier responses are ignored.
 - Update integrity is secured by **Tauri minisign signing** (independent of
   Apple); the public key is committed in `native/tauri.conf.json`. The app is not
   Apple-notarized, so the **first** download trips a Gatekeeper "cannot

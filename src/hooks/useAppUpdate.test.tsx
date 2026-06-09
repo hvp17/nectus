@@ -28,6 +28,14 @@ const fakeResult = (): UpdateCheckResult => ({
   info: { version: "0.2.0", currentVersion: "0.1.0", notes: "n", date: null },
 });
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
+}
+
 function holdInstallAfterProgress(progress: DownloadProgress): () => void {
   let finishInstall: (() => void) | undefined;
   lib.installUpdate.mockImplementation(async (_u: unknown, onProgress: (p: DownloadProgress) => void) => {
@@ -130,6 +138,35 @@ describe("useAppUpdate", () => {
     render(<Probe />);
     await waitFor(() => expect(latest.status).toBe("error"));
     expect(latest.error).toContain("network down");
+  });
+
+  it("ignores an older check result after a newer check completes", async () => {
+    const firstCheck = deferred<UpdateCheckResult | null>();
+    const secondCheck = deferred<UpdateCheckResult | null>();
+    lib.checkForUpdate.mockReturnValueOnce(firstCheck.promise).mockReturnValueOnce(secondCheck.promise);
+    render(<Probe />);
+    await waitFor(() => expect(latest.status).toBe("checking"));
+
+    let manualCheck!: Promise<void>;
+    act(() => {
+      manualCheck = latest.check();
+    });
+    await act(async () => {
+      secondCheck.resolve(null);
+      await manualCheck;
+    });
+
+    expect(latest.status).toBe("upToDate");
+    expect(latest.info).toBeNull();
+
+    await act(async () => {
+      firstCheck.resolve(fakeResult());
+      await firstCheck.promise;
+      await Promise.resolve();
+    });
+
+    expect(latest.status).toBe("upToDate");
+    expect(latest.info).toBeNull();
   });
 
   it("clears a previous pending update before a fresh check fails", async () => {

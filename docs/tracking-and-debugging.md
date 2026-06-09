@@ -677,7 +677,8 @@ The hook also exposes `info`, `currentVersion`, `progress`, `error`, and
 `lastCheckedAt` for the About card. Starting a fresh check clears the previous
 `info`, progress, and pending install target before hitting the updater endpoint;
 if that re-check fails, old toast actions have no stale `Update` object to
-install.
+install. Overlapping checks are last-request-wins: a slower earlier response is
+ignored once a newer check has started.
 
 The updater fetches the manifest from:
 

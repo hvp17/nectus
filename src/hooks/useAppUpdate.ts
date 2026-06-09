@@ -41,6 +41,7 @@ export function useAppUpdate(): AppUpdateState {
   const [error, setError] = useState<string | null>(null);
   const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null);
   const pending = useRef<InstallableUpdate | null>(null);
+  const checkRequestId = useRef(0);
   // Synchronous re-entrancy guard: the toast Install action and the card Install
   // button both call installUpdate, and `disabled` only applies after a render —
   // a ref set before the first await blocks a concurrent second download/install
@@ -48,6 +49,7 @@ export function useAppUpdate(): AppUpdateState {
   const installing = useRef(false);
 
   const check = useCallback(async () => {
+    const requestId = ++checkRequestId.current;
     pending.current = null;
     setStatus("checking");
     setInfo(null);
@@ -55,6 +57,7 @@ export function useAppUpdate(): AppUpdateState {
     setError(null);
     try {
       const result = await checkForUpdate();
+      if (requestId !== checkRequestId.current) return;
       setLastCheckedAt(Date.now());
       if (!result) {
         setStatus("upToDate");
@@ -64,6 +67,7 @@ export function useAppUpdate(): AppUpdateState {
       setInfo(result.info);
       setStatus("available");
     } catch (caught) {
+      if (requestId !== checkRequestId.current) return;
       setError(errorMessage(caught));
       setStatus("error");
     }

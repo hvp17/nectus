@@ -4079,7 +4079,7 @@ result after a failed re-check.
   clearing pending update state at the start of each check.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useAppUpdate.test.tsx` failed as
@@ -4088,6 +4088,49 @@ result after a failed re-check.
 - Focused green `pnpm vitest run src/hooks/useAppUpdate.test.tsx` passed:
   1 file / 8 tests.
 - `pnpm verify` passed: frontend tests (70 files / 419 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `f743158` (`fix(update): clear stale pending check state`) pushed to
+`origin/main`.
+
+### Iteration 109 - in progress (2026-06-09)
+
+**Goal:** Make overlapping update checks last-request-wins.
+
+**Rationale:** `useAppUpdate.check()` can be called while a prior silent or
+manual check is still in flight. Today an older, slower check can resolve after
+a newer check and overwrite the newer status/info. The hook should ignore stale
+check completions so the UI reflects the latest requested check.
+
+**Docs checked:** Context7 `/reactjs/react.dev` async effect guidance. Current
+React docs recommend guarding async completions with an ignore/cancellation flag
+so stale responses cannot update state after a newer request supersedes them.
+
+**Claimed files:**
+- `src/hooks/useAppUpdate.ts`
+- `src/hooks/useAppUpdate.test.tsx`
+- `docs/features.md`
+- `docs/tracking-and-debugging.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add a hook test with a slower launch check resolving after a newer
+  manual check; run `pnpm vitest run src/hooks/useAppUpdate.test.tsx` and see the
+  stale result overwrite the newer status.
+- Focused green: rerun `pnpm vitest run src/hooks/useAppUpdate.test.tsx` after
+  adding a request-id guard to ignore stale check completions.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useAppUpdate.test.tsx` failed as
+  expected before implementation; the older launch check resolved late and
+  changed status from the newer `upToDate` result back to `available`.
+- Focused green `pnpm vitest run src/hooks/useAppUpdate.test.tsx` passed:
+  1 file / 9 tests.
+- `pnpm verify` passed: frontend tests (70 files / 420 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
