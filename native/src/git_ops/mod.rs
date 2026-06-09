@@ -37,6 +37,42 @@ fn git_output_allowing_codes(
     }
 }
 
+fn prepare_worktree_path(worktree_path: &Path) -> Result<(), String> {
+    if worktree_path.exists() {
+        return Err("Worktree path already exists".into());
+    }
+
+    if let Some(parent) = worktree_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create worktree parent folder: {error}"))?;
+    }
+    Ok(())
+}
+
+fn run_git_worktree_add(
+    repo_path: &Path,
+    worktree_path: &Path,
+    options: &[&str],
+    checkout_ref: &str,
+) -> Result<(), String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo_path)
+        .arg("worktree")
+        .arg("add")
+        .args(options)
+        .arg(worktree_path)
+        .arg(checkout_ref)
+        .output()
+        .map_err(|error| format!("Failed to run git worktree add: {error}"))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(command_error(&output, "git worktree add failed"))
+    }
+}
+
 pub fn validate_repo_path(path: &Path) -> Result<(), String> {
     if !path.exists() {
         return Err("Repository path does not exist".into());
@@ -191,38 +227,18 @@ pub fn create_worktree(
     branch_name: &str,
 ) -> Result<(), String> {
     validate_branch_name(branch_name)?;
-    if worktree_path.exists() {
-        return Err("Worktree path already exists".into());
-    }
-
-    if let Some(parent) = worktree_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|error| format!("Failed to create worktree parent folder: {error}"))?;
-    }
+    prepare_worktree_path(worktree_path)?;
 
     let remote = default_remote(repo_path)?;
     let default_branch = remote_default_branch(repo_path, &remote)?;
     fetch_remote(repo_path, &remote)?;
     let base_ref = format!("refs/remotes/{remote}/{default_branch}");
-
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(repo_path)
-        .arg("worktree")
-        .arg("add")
-        .arg("--no-track")
-        .arg("-b")
-        .arg(branch_name)
-        .arg(worktree_path)
-        .arg(&base_ref)
-        .output()
-        .map_err(|error| format!("Failed to run git worktree add: {error}"))?;
-
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(command_error(&output, "git worktree add failed"))
-    }
+    run_git_worktree_add(
+        repo_path,
+        worktree_path,
+        &["--no-track", "-b", branch_name],
+        &base_ref,
+    )
 }
 
 /// Extract `(owner, repo)` from a git remote URL, handling the common GitHub
@@ -293,29 +309,8 @@ pub fn create_worktree_at_ref(
     branch_name: &str,
 ) -> Result<(), String> {
     validate_branch_name(branch_name)?;
-    if worktree_path.exists() {
-        return Err("Worktree path already exists".into());
-    }
-    if let Some(parent) = worktree_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|error| format!("Failed to create worktree parent folder: {error}"))?;
-    }
-
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(repo_path)
-        .arg("worktree")
-        .arg("add")
-        .arg(worktree_path)
-        .arg(branch_name)
-        .output()
-        .map_err(|error| format!("Failed to run git worktree add: {error}"))?;
-
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(command_error(&output, "git worktree add failed"))
-    }
+    prepare_worktree_path(worktree_path)?;
+    run_git_worktree_add(repo_path, worktree_path, &[], branch_name)
 }
 
 /// Stable error returned when a non-forced [`remove_worktree`] would discard a

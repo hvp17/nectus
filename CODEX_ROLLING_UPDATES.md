@@ -1752,7 +1752,7 @@ pnpm docs for `pnpm remove`.
 **Commit:** `58042af` (`refactor(ui): simplify root providers`) pushed to
 `origin/main`.
 
-### Iteration 52 - in progress (2026-06-09)
+### Iteration 52 - done (2026-06-09)
 
 **Goal:** Remove the last unnecessary React namespace import from the root entry.
 
@@ -1772,12 +1772,45 @@ actually uses.
 - Root import check: `rg -n "React\\.StrictMode|import React from" src/main.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm build` passed.
 - `rg -n "React\\.StrictMode|import React from" src/main.tsx` returned no
   matches.
+- `pnpm verify` passed: frontend tests (59 files / 353 tests), frontend build,
+  Rust tests (240 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `77134e6` (`refactor(ui): simplify react entry import`) pushed to
+`origin/main`.
+
+### Iteration 53 - in progress (2026-06-09)
+
+**Goal:** Consolidate duplicated git worktree creation setup.
+
+**Rationale:** `create_worktree` and `create_worktree_at_ref` both validate the
+target path, create its parent folder, run `git worktree add`, and map command
+errors. Keeping the path preparation and command execution in small helpers keeps
+future worktree behavior changes in one place without changing the public API.
+
+**Docs checked:** Context7 Rust standard library docs for
+`std::process::Command` `arg`/`args`/`output` semantics.
+
+**Claimed files:**
+- `native/src/git_ops/mod.rs`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused Rust tests: `cd native && cargo test git_ops::tests::`.
+- Rust format: `cd native && cargo fmt --check`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- `cd native && cargo fmt --check` passed.
+- `cd native && cargo test git_ops::tests::` passed: 21 tests.
 - `pnpm verify` passed: frontend tests (59 files / 353 tests), frontend build,
   Rust tests (240 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
