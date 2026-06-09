@@ -208,7 +208,7 @@ Backend-to-frontend events:
 
 | Event | Payload | Source |
 | --- | --- | --- |
-| `session_output` | PTY output chunk and stream offset. | `native/src/sessions/mod.rs` |
+| `session_output` | PTY output chunk and stream offset. The backend decodes PTY bytes to UTF-8 before emitting: split multi-byte sequences are carried to the next read, genuinely invalid bytes become `U+FFFD`, and `start_offset` is computed after appending the decoded text to the bounded session buffer. | `native/src/sessions/mod.rs` (`decode_pty_chunk`, PTY reader loop) |
 | `session_activity` | Task id, session id, and the agent's latest human-readable activity line (throttled and de-duplicated). Parsed from each provider's structured event stream — Codex `agent_reasoning`/`agent_message`, Claude `PreToolUse` hook, OpenCode `message.part.updated` — so it reads as real progress ("Editing App.tsx", "Running npm test") rather than TUI chrome. Gemini and custom agents fall back to an ANSI-stripped tail of the PTY output. | `native/src/sessions/mod.rs` (`emit_activity_line`), driven by `codex.rs`, `claude.rs`, `opencode.rs` |
 | `session_exited` | Session id and optional exit code. | `native/src/sessions/mod.rs`, `native/src/lib.rs` |
 | `session_idle` | Task id, session id, turn id, optional message. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL), `claude.rs` (hooks), and `opencode.rs` (local server `/event` `session.idle`) |
@@ -485,6 +485,12 @@ defends this on several fronts:
 - **Unicode 11 widths.** `Unicode11Addon` + `terminal.unicode.activeVersion = "11"`
   make emoji/CJK occupy the cell count the agent assumes; a width disagreement
   desyncs cursor math.
+- **Backend UTF-8 chunking.** `native/src/sessions/mod.rs` decodes raw PTY bytes
+  before emitting `session_output`. A multi-byte glyph split across reads is held
+  in a tiny carry buffer until it completes, so box-drawing lines do not become
+  `�`; a truly invalid byte is replaced and the stream keeps moving. If `�`
+  appears in the terminal, check whether the producing process emitted invalid
+  bytes rather than assuming xterm created the replacement character.
 - **GPU renderer.** `loadWebglRenderer` loads `@xterm/addon-webgl` after
   `terminal.open(...)`; the DOM renderer leaves stale cells and renders `■` tofu.
   If the console logs `Terminal: WebGL2 renderer unavailable, using the DOM

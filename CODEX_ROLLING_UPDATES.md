@@ -4942,7 +4942,7 @@ that keys are deterministically hashed.
   `pnpm build`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready for collision check and commit.
+**Status:** verified and committed.
 
 **Evidence so far:**
 - `git status --short --branch` was clean after pushing `398c00b`.
@@ -4968,6 +4968,62 @@ that keys are deterministically hashed.
   HEAD..origin/main` was empty, `CLAUDE_ROLLING_UPDATES.md` still does not claim
   the query-key files, and `rg` found no remaining nullish calls through the
   typed query-key factories.
+
+**Commit:** `f274ba8` (`refactor(queries): require concrete key ids`) pushed to
+`origin/main`.
+
+### Iteration 126 - in progress (2026-06-09)
+
+**Goal:** Bring the terminal debugging docs up to date with the current PTY UTF-8
+decoder and xterm renderer assumptions.
+
+**Rationale:** `native/src/sessions/mod.rs` now carries split multi-byte UTF-8
+sequences across PTY reads, replaces genuinely invalid bytes with `U+FFFD`, and
+emits `session_output.start_offset` after appending decoded text to the bounded
+buffer. The troubleshooting doc mentioned terminal renderer and width issues but
+did not document this byte-boundary behavior, which matters when investigating
+tofu/replacement glyphs or output-offset drift.
+
+**Docs checked:** Context7 `/xtermjs/xterm.js` docs. Current docs show
+`Unicode11Addon` loaded then `terminal.unicode.activeVersion = "11"`, and
+`WebglAddon` loaded after `terminal.open(element)`, matching
+`src/TerminalPane.tsx`.
+
+**Claimed files:**
+- `docs/tracking-and-debugging.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Documentation fidelity check: compare the new doc text against
+  `decode_pty_chunk`, the PTY reader loop, and the existing decoder tests in
+  `native/src/sessions/mod.rs`.
+- Focused verification: run `rg` checks for the new documented terms and the
+  existing decoder tests.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready for collision check and commit.
+
+**Evidence so far:**
+- `git status --short --branch` was clean after pushing `f274ba8`.
+- `git log --oneline --decorate -8` shows `f274ba8` at both local and
+  `origin/main`.
+- `CLAUDE_ROLLING_UPDATES.md` remains on older coverage/documentation work and
+  does not claim terminal debugging docs.
+- Local source check found `decode_pty_chunk`, `split_at_utf8_boundary`, and
+  decoder tests covering split box-drawing glyphs, one-byte-at-a-time UTF-8,
+  invalid bytes, bounded carry, and offset preservation.
+- Context7 docs checked for xterm.js Unicode 11 and WebGL addon behavior.
+- Targeted Rust verification `cargo test sessions::tests::decode_pty_chunk`
+  passed: 8 tests.
+- `rg -n "decode_pty_chunk|Backend UTF-8 chunking|U\\+FFFD|start_offset"`
+  confirms the new debugging doc text points at the same implementation/test
+  vocabulary.
+- Full `pnpm verify` passed: frontend tests (73 files / 431 tests), frontend
+  production build, Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+- Pre-commit collision check: `git fetch origin main` completed, `git log
+  HEAD..origin/main` was empty, and `CLAUDE_ROLLING_UPDATES.md` still does not
+  claim terminal debugging docs.
 
 ---
 
