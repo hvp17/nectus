@@ -3269,7 +3269,7 @@ invalidation work when subsequent code depends on refreshed state.
 **Commit:** `42d4e1e` (`test(ui): cover settings action cache updates`) pushed
 to `origin/main`.
 
-### Iteration 90 - in progress (2026-06-09)
+### Iteration 90 - done (2026-06-09)
 
 **Goal:** Cover workspace action focus and refresh contracts.
 
@@ -3292,7 +3292,7 @@ work when the mutation flow depends on the cache being marked stale.
   and rerun the focused test; the delete-focus assertion should fail.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Initial focused run exposed a test-seed issue: `setQueryData(..., undefined)`
@@ -3305,6 +3305,45 @@ work when the mutation flow depends on the cache being marked stale.
 - Restored focused green `pnpm vitest run src/hooks/useWorkspaceActions.test.tsx`
   passed: 1 file / 3 tests.
 - `pnpm verify` passed: frontend tests (67 files / 402 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `ab6ed35` (`test(ui): cover workspace action focus`) pushed to
+`origin/main`.
+
+### Iteration 91 - in progress (2026-06-09)
+
+**Goal:** Cover project-add cancellation and selection behavior.
+
+**Rationale:** `useProjectActions` is the remaining small action hook with
+user-visible behavior: canceling the folder picker must stop before `addRepo`,
+while a selected folder should add the repo, select the returned repo before the
+refresh lands, invalidate bootstrap reads, and show the success message.
+
+**Docs checked:** Context7 `/vitest-dev/vitest/v4.1.6` mock-function docs.
+Current guidance covers hoisted module mocks, `mockResolvedValue` for async
+functions, and call assertions such as `toHaveBeenCalledWith`.
+
+**Claimed files:**
+- `src/hooks/useProjectActions.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused green: `pnpm vitest run src/hooks/useProjectActions.test.tsx`.
+- Red check: temporarily remove the folder-selection cancellation return and
+  rerun the focused test; the cancel test should fail.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Focused green `pnpm vitest run src/hooks/useProjectActions.test.tsx` passed:
+  1 file / 2 tests.
+- Red check failed as expected after temporarily removing the folder-selection
+  cancellation return; `addRepo` was called with `null`.
+- Restored focused green `pnpm vitest run src/hooks/useProjectActions.test.tsx`
+  passed: 1 file / 2 tests.
+- `pnpm verify` passed: frontend tests (68 files / 404 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
