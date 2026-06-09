@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
 import { act, renderHook } from "@testing-library/react";
-import { QueryClientProvider, type QueryClient, type QueryKey } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
 import { createQueryClient } from "../queries/queryClient";
 import { queryKeys } from "../queries/keys";
 import { useAppStore } from "../store/appStore";
-import { resetAppStore } from "../test/testUtils";
-import type { AppSettings, Repo } from "../types";
+import { expectBootstrapInvalidated, resetAppStore, seedBootstrapQueries, testTimestamp } from "../test/testUtils";
+import type { Repo } from "../types";
 import { useProjectActions } from "./useProjectActions";
 
 vi.mock("../api", () => ({
@@ -18,7 +18,6 @@ vi.mock("../api", () => ({
 }));
 
 const mockedApi = vi.mocked(api);
-const timestamp = "2026-06-09T00:00:00.000Z";
 
 function repo(overrides: Partial<Repo> = {}): Repo {
   return {
@@ -26,37 +25,10 @@ function repo(overrides: Partial<Repo> = {}): Repo {
     name: "nectus-desktop",
     path: "/tmp/nectus-desktop",
     defaultWorktreeRoot: "/tmp/nectus-desktop-worktrees",
-    createdAt: timestamp,
+    createdAt: testTimestamp,
     collapsed: false,
     ...overrides,
   };
-}
-
-function settings(): AppSettings {
-  return {
-    defaultAgentProfileId: null,
-    defaultWorktreeRootPattern: "~/.nectus/worktrees/{repoName}",
-    defaultBranchPrefix: "tgadliauskas/",
-    jiraBoardJql: null,
-    jiraSiteUrl: null,
-    jiraBoardProject: null,
-    jiraFilterMyIssues: false,
-    jiraFilterUnresolved: true,
-    jiraFilterCurrentSprint: false,
-    jiraRestEmail: null,
-    jiraFilterStatuses: [],
-    theme: "system",
-    density: "comfortable",
-    updatedAt: timestamp,
-  };
-}
-
-function seedBootstrapQueries(queryClient: QueryClient) {
-  queryClient.setQueryData(queryKeys.repos(), []);
-  queryClient.setQueryData(queryKeys.workspaces(), []);
-  queryClient.setQueryData(queryKeys.agentProfiles(), []);
-  queryClient.setQueryData(queryKeys.settings(), settings());
-  queryClient.setQueryData(queryKeys.tasks(), []);
 }
 
 function setup() {
@@ -67,16 +39,6 @@ function setup() {
   );
   const hook = renderHook(() => useProjectActions(), { wrapper });
   return { ...hook, queryClient };
-}
-
-function expectBootstrapInvalidated(queryClient: QueryClient) {
-  const expectInvalidated = (queryKey: QueryKey) =>
-    expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
-  expectInvalidated(queryKeys.repos());
-  expectInvalidated(queryKeys.workspaces());
-  expectInvalidated(queryKeys.agentProfiles());
-  expectInvalidated(queryKeys.settings());
-  expectInvalidated(queryKeys.tasks());
 }
 
 describe("useProjectActions", () => {

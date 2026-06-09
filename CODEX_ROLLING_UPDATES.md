@@ -3311,7 +3311,7 @@ work when the mutation flow depends on the cache being marked stale.
 **Commit:** `ab6ed35` (`test(ui): cover workspace action focus`) pushed to
 `origin/main`.
 
-### Iteration 91 - in progress (2026-06-09)
+### Iteration 91 - done (2026-06-09)
 
 **Goal:** Cover project-add cancellation and selection behavior.
 
@@ -3334,7 +3334,7 @@ functions, and call assertions such as `toHaveBeenCalledWith`.
   rerun the focused test; the cancel test should fail.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Focused green `pnpm vitest run src/hooks/useProjectActions.test.tsx` passed:
@@ -3343,6 +3343,52 @@ functions, and call assertions such as `toHaveBeenCalledWith`.
   cancellation return; `addRepo` was called with `null`.
 - Restored focused green `pnpm vitest run src/hooks/useProjectActions.test.tsx`
   passed: 1 file / 2 tests.
+- `pnpm verify` passed: frontend tests (68 files / 404 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `148d6e9` (`test(ui): cover project add action`) pushed to
+`origin/main`.
+
+### Iteration 92 - in progress (2026-06-09)
+
+**Goal:** Centralize repeated bootstrap-query test helpers.
+
+**Rationale:** The recent project/workspace/settings action tests duplicated the
+same app-settings fixture, bootstrap query seeding, and invalidation assertions.
+Moving those into `src/test/testUtils.tsx` keeps the test contract in one place
+and avoids future drift around TanStack Query's "seed concrete query data before
+asserting invalidation" behavior.
+
+**Docs checked:** Context7 `/tanstack/query` `queryClient.invalidateQueries`
+reference. Current docs state that invalidation marks matching cached queries
+invalid and refetches active ones by default, which matches the shared
+`getQueryState(...).isInvalidated` helper.
+
+**Claimed files:**
+- `src/test/testUtils.tsx`
+- `src/hooks/useProjectActions.test.tsx`
+- `src/hooks/useWorkspaceActions.test.tsx`
+- `src/hooks/useSettingsActions.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused green:
+  `pnpm vitest run src/hooks/useProjectActions.test.tsx src/hooks/useWorkspaceActions.test.tsx src/hooks/useSettingsActions.test.tsx`.
+- Red check: temporarily flip the shared invalidation helper to expect `false`
+  and rerun the focused tests; invalidation tests should fail.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Focused green
+  `pnpm vitest run src/hooks/useProjectActions.test.tsx src/hooks/useWorkspaceActions.test.tsx src/hooks/useSettingsActions.test.tsx`
+  passed: 3 files / 7 tests.
+- Red check failed as expected after temporarily flipping the shared
+  `expectQueryInvalidated` helper to expect `false`; all invalidation-dependent
+  tests saw `isInvalidated === true`.
+- Restored focused green passed again: 3 files / 7 tests.
 - `pnpm verify` passed: frontend tests (68 files / 404 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.

@@ -1,12 +1,18 @@
 import type { ReactNode } from "react";
 import { act, renderHook } from "@testing-library/react";
-import { QueryClientProvider, type QueryClient, type QueryKey } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
 import { createQueryClient } from "../queries/queryClient";
 import { queryKeys } from "../queries/keys";
 import { useAppStore } from "../store/appStore";
-import { resetAppStore } from "../test/testUtils";
+import {
+  appSettingsFixture,
+  expectBootstrapInvalidated,
+  resetAppStore,
+  seedBootstrapQueries,
+  testTimestamp,
+} from "../test/testUtils";
 import type { AgentProfile, AppSettings, AppSettingsInput } from "../types";
 import { useSettingsActions } from "./useSettingsActions";
 
@@ -18,27 +24,6 @@ vi.mock("../api", () => ({
 }));
 
 const mockedApi = vi.mocked(api);
-const timestamp = "2026-06-09T00:00:00.000Z";
-
-function settings(overrides: Partial<AppSettings> = {}): AppSettings {
-  return {
-    defaultAgentProfileId: 1,
-    defaultWorktreeRootPattern: "~/.nectus/worktrees/{repoName}",
-    defaultBranchPrefix: "tgadliauskas/",
-    jiraBoardJql: null,
-    jiraSiteUrl: null,
-    jiraBoardProject: null,
-    jiraFilterMyIssues: false,
-    jiraFilterUnresolved: true,
-    jiraFilterCurrentSprint: false,
-    jiraRestEmail: null,
-    jiraFilterStatuses: [],
-    theme: "system",
-    density: "comfortable",
-    updatedAt: timestamp,
-    ...overrides,
-  };
-}
 
 function settingsInput(overrides: Partial<AppSettingsInput> = {}): AppSettingsInput {
   return {
@@ -68,38 +53,26 @@ function profile(overrides: Partial<AgentProfile> & { id: number }): AgentProfil
     model: null,
     args: [],
     env: {},
-    createdAt: timestamp,
-    updatedAt: timestamp,
+    createdAt: testTimestamp,
+    updatedAt: testTimestamp,
     ...rest,
   };
 }
 
-function seedBootstrapQueries(queryClient: QueryClient) {
-  queryClient.setQueryData(queryKeys.repos(), []);
-  queryClient.setQueryData(queryKeys.workspaces(), []);
-  queryClient.setQueryData(queryKeys.tasks(), []);
-}
-
 function setup({
-  initialSettings = settings(),
+  initialSettings = appSettingsFixture({ defaultAgentProfileId: 1 }),
   agentProfiles = [profile({ id: 1 })],
 }: {
   initialSettings?: AppSettings;
   agentProfiles?: AgentProfile[];
 } = {}) {
   const queryClient = createQueryClient();
-  seedBootstrapQueries(queryClient);
-  queryClient.setQueryData(queryKeys.settings(), initialSettings);
-  queryClient.setQueryData(queryKeys.agentProfiles(), agentProfiles);
+  seedBootstrapQueries(queryClient, { settings: initialSettings, agentProfiles });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
   const hook = renderHook(() => useSettingsActions(), { wrapper });
   return { ...hook, queryClient };
-}
-
-function expectInvalidated(queryClient: QueryClient, queryKey: QueryKey) {
-  expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
 }
 
 describe("useSettingsActions", () => {
@@ -110,7 +83,7 @@ describe("useSettingsActions", () => {
 
   it("stores saved settings, selects the returned default agent, and invalidates bootstrap reads", async () => {
     const input = settingsInput();
-    const updated = settings({
+    const updated = appSettingsFixture({
       ...input,
       updatedAt: "2026-06-09T00:01:00.000Z",
     });
@@ -128,11 +101,7 @@ describe("useSettingsActions", () => {
     expect(queryClient.getQueryData(queryKeys.settings())).toEqual(updated);
     expect(useAppStore.getState().selectedAgentProfileId).toBe(2);
     expect(useAppStore.getState().message).toBe("Settings saved");
-    expectInvalidated(queryClient, queryKeys.repos());
-    expectInvalidated(queryClient, queryKeys.workspaces());
-    expectInvalidated(queryClient, queryKeys.agentProfiles());
-    expectInvalidated(queryClient, queryKeys.settings());
-    expectInvalidated(queryClient, queryKeys.tasks());
+    expectBootstrapInvalidated(queryClient);
   });
 
   it("upserts saved agent profiles into the cache", async () => {

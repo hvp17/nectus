@@ -1,14 +1,73 @@
 import type { ReactElement, ReactNode } from "react";
 import { fireEvent, render, type RenderOptions } from "@testing-library/react";
-import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
-import { vi } from "vitest";
+import { QueryClientProvider, type QueryClient, type QueryKey } from "@tanstack/react-query";
+import { expect, vi } from "vitest";
 import { TooltipProvider } from "../components/ui/tooltip";
 import { createQueryClient } from "../queries/queryClient";
+import { queryKeys } from "../queries/keys";
 import { useAppStore } from "../store/appStore";
+import type { AgentProfile, AppSettings, Repo, TaskSummary, Workspace } from "../types";
 
 /** Reset the singleton UI store to its initial state between tests (run in setup). */
 export function resetAppStore() {
   useAppStore.setState(useAppStore.getInitialState(), true);
+}
+
+export const testTimestamp = "2026-06-09T00:00:00.000Z";
+
+export function appSettingsFixture(overrides: Partial<AppSettings> = {}): AppSettings {
+  return {
+    defaultAgentProfileId: null,
+    defaultWorktreeRootPattern: "~/.nectus/worktrees/{repoName}",
+    defaultBranchPrefix: "tgadliauskas/",
+    jiraBoardJql: null,
+    jiraSiteUrl: null,
+    jiraBoardProject: null,
+    jiraFilterMyIssues: false,
+    jiraFilterUnresolved: true,
+    jiraFilterCurrentSprint: false,
+    jiraRestEmail: null,
+    jiraFilterStatuses: [],
+    theme: "system",
+    density: "comfortable",
+    updatedAt: testTimestamp,
+    ...overrides,
+  };
+}
+
+export function seedBootstrapQueries(
+  queryClient: QueryClient,
+  {
+    repos = [],
+    workspaces = [],
+    agentProfiles = [],
+    settings = appSettingsFixture(),
+    tasks = [],
+  }: {
+    repos?: Repo[];
+    workspaces?: Workspace[];
+    agentProfiles?: AgentProfile[];
+    settings?: AppSettings;
+    tasks?: TaskSummary[];
+  } = {},
+) {
+  queryClient.setQueryData(queryKeys.repos(), repos);
+  queryClient.setQueryData(queryKeys.workspaces(), workspaces);
+  queryClient.setQueryData(queryKeys.agentProfiles(), agentProfiles);
+  queryClient.setQueryData(queryKeys.settings(), settings);
+  queryClient.setQueryData(queryKeys.tasks(), tasks);
+}
+
+export function expectQueryInvalidated(queryClient: QueryClient, queryKey: QueryKey) {
+  expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
+}
+
+export function expectBootstrapInvalidated(queryClient: QueryClient) {
+  expectQueryInvalidated(queryClient, queryKeys.repos());
+  expectQueryInvalidated(queryClient, queryKeys.workspaces());
+  expectQueryInvalidated(queryClient, queryKeys.agentProfiles());
+  expectQueryInvalidated(queryClient, queryKeys.settings());
+  expectQueryInvalidated(queryClient, queryKeys.tasks());
 }
 
 export type TestPointerEvent = Event & {
