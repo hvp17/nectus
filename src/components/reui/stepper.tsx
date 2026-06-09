@@ -1,9 +1,6 @@
 import {
-  Children,
   createContext,
   HTMLAttributes,
-  isValidElement,
-  ReactElement,
   useCallback,
   useContext,
   useEffect,
@@ -27,7 +24,6 @@ type StepIndicators = {
 interface StepperContextValue {
   activeStep: number
   setActiveStep: (step: number) => void
-  stepsCount: number
   orientation: StepperOrientation
   registerTrigger: (node: HTMLButtonElement | null) => void
   triggerNodes: HTMLButtonElement[]
@@ -124,11 +120,6 @@ function Stepper({
     () => ({
       activeStep: currentStep,
       setActiveStep: handleSetActiveStep,
-      stepsCount: Children.toArray(children).filter(
-        (child): child is ReactElement =>
-          isValidElement(child) &&
-          (child.type as { displayName?: string }).displayName === "StepperItem"
-      ).length,
       orientation,
       registerTrigger,
       focusNext,

@@ -904,7 +904,7 @@ location.
 **Commit:** `c0313b7` (`refactor(tauri): centralize runtime detection`) pushed
 to `origin/main`.
 
-### Iteration 27 - in progress (2026-06-09)
+### Iteration 27 - done (2026-06-09)
 
 **Goal:** Keep notification-body formatting in the system notification API
 boundary.
@@ -929,11 +929,43 @@ flow and body normalization.
 - Focused: `pnpm vitest run src/sessionNotifications.test.ts src/api.test.ts`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/sessionNotifications.test.ts src/api.test.ts` passed (2
   files, 23 tests).
+- `pnpm test` passed (59 files, 352 tests).
+- `pnpm build` passed.
+
+**Commit:** `22b50cc`
+(`refactor(notifications): format system body at api boundary`) pushed to
+`origin/main`.
+
+### Iteration 28 - in progress (2026-06-09)
+
+**Goal:** Remove unused step-count bookkeeping from the workflow stepper.
+
+**Rationale:** The local `reui` stepper computes `stepsCount` by walking its
+children and stores it in context, but no component reads that field. Removing the
+dead context field also removes the child-introspection imports that only existed
+for the unused value.
+
+**Docs checked:** Context7 React docs for component purity and composition via
+props/children/context. This keeps the stepper context focused on values that
+rendering components actually consume.
+
+**Claimed files:**
+- `src/components/reui/stepper.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/components/TaskWorkspace.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `pnpm vitest run src/components/TaskWorkspace.test.tsx` passed (26 tests).
 - `pnpm test` passed (59 files, 352 tests).
 - `pnpm build` passed.
 
