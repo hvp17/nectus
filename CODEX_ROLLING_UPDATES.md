@@ -2155,7 +2155,7 @@ browser APIs using setup/cleanup, and cleanup on dependency changes/unmount.
 **Commit:** `5b01f16` (`refactor(ui): avoid explicit theme media query`) pushed
 to `origin/main`.
 
-### Iteration 63 - in progress (2026-06-09)
+### Iteration 63 - done (2026-06-09)
 
 **Goal:** Cover the Tauri event helper's async cleanup and error contract.
 
@@ -2179,7 +2179,7 @@ scope, such as when a component unmounts.
 - Focused test: `pnpm vitest run src/hooks/useTauriEvent.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Initial full `pnpm verify` caught a TypeScript-only issue in the deferred
@@ -2187,6 +2187,49 @@ scope, such as when a component unmounts.
   shared hoisted mock.
 - `pnpm vitest run src/hooks/useTauriEvent.test.tsx` passed: 1 file / 7 tests.
 - `pnpm verify` passed: frontend tests (59 files / 360 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `a14f327` (`test(ui): cover tauri event listener edges`) pushed to
+`origin/main`.
+
+### Iteration 64 - in progress (2026-06-09)
+
+**Goal:** Centralize the event bridge subscriptions on `useTauriEvent`.
+
+**Rationale:** `useEventBridge` still hand-rolls the async `listen()` lifecycle
+that `useTauriEvent` now covers directly: disposed guards, late unlisten cleanup,
+and subscription error handling. It also registers the bridge listeners
+sequentially, so a failed first subscription prevents later event channels from
+being registered. Moving each bridge channel to the shared hook should reduce
+duplicated lifecycle code and make subscription failures independent.
+
+**Docs checked:** Context7 Tauri v2 event docs for `listen`/unlisten lifecycle,
+plus the existing `useTauriEvent` tests that now cover late cleanup and error
+surfacing.
+
+**Claimed files:**
+- `src/hooks/useEventBridge.ts`
+- `src/hooks/useEventBridge.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: focused bridge test should fail before production refactor when the
+  first `listen()` call rejects and later event channels are not registered.
+- Focused green test: `pnpm vitest run src/hooks/useEventBridge.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useEventBridge.test.tsx` failed as
+  expected: after `session_idle` subscription rejected, `session_activity` was
+  not registered.
+- Focused green test `pnpm vitest run src/hooks/useEventBridge.test.tsx` passed:
+  1 file / 6 tests.
+- Neighbor check `pnpm vitest run src/hooks/useTauriEvent.test.tsx src/hooks/useEventBridge.test.tsx`
+  passed: 2 files / 13 tests.
+- `pnpm verify` passed: frontend tests (59 files / 361 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

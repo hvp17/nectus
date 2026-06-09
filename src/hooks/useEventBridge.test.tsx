@@ -68,6 +68,7 @@ describe("useEventBridge", () => {
   beforeEach(() => {
     listeners.clear();
     listenMock.mockClear();
+    useAppStore.setState({ liveLines: {}, message: null, taskAttention: [], taskToast: null });
     (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
   });
 
@@ -144,6 +145,23 @@ describe("useEventBridge", () => {
 
     const reviews = queryClient.getQueryData<PrReview[]>(queryKeys.prReviews.list());
     expect(reviews?.[0].id).toBe(9);
+  });
+
+  it("keeps registering later event channels when one subscription fails", async () => {
+    const error = new Error("session_idle failed");
+    listenMock.mockRejectedValueOnce(error);
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(queryKeys.tasks(), [baseTask]);
+    vi.mocked(api.listTasks).mockResolvedValue([baseTask]);
+
+    renderHook(() => useEventBridge(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await waitFor(() => expect(useAppStore.getState().message).toBe(String(error)));
+    await waitFor(() => expect(listeners.has("session_activity")).toBe(true));
   });
 });
 
