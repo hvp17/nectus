@@ -3008,7 +3008,7 @@ which matches the repo's `createQueryClient` factory.
 **Commit:** `cfb3de3` (`test(ui): cover shell bootstrap defaults`) pushed to
 `origin/main`.
 
-### Iteration 84 - in progress (2026-06-09)
+### Iteration 84 - done (2026-06-09)
 
 **Goal:** Centralize agent-profile default resolution.
 
@@ -3045,7 +3045,7 @@ selection is empty.
   `pnpm vitest run src/lib/agentProfiles.test.ts src/hooks/useShellBootstrap.test.tsx src/components/ReviewsPage.test.tsx src/components/JiraWorkItemDialog.test.tsx src/components/TaskWorkspace.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check
@@ -3057,6 +3057,47 @@ selection is empty.
   `pnpm vitest run src/lib/agentProfiles.test.ts src/hooks/useShellBootstrap.test.tsx src/components/ReviewsPage.test.tsx src/components/JiraWorkItemDialog.test.tsx src/components/TaskWorkspace.test.tsx`
   passed: 5 files / 43 tests.
 - `pnpm verify` passed: frontend tests (64 files / 391 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `ba0d071` (`refactor(ui): centralize agent profile defaults`) pushed
+to `origin/main`.
+
+### Iteration 85 - in progress (2026-06-09)
+
+**Goal:** Use available agent-profile resolution for session starts.
+
+**Rationale:** After centralizing default profile resolution, `useSessionCommands`
+still had the old `task.agentProfileId ?? selectedAgentProfileId ??
+agentProfiles[0]?.id` chain. That can pass a deleted/stale task profile id to the
+backend instead of falling back to the selected or first available profile.
+
+**Docs checked:** Context7 `/reactjs/react.dev` `useCallback` docs. The current
+guidance for custom hooks is to wrap returned functions in `useCallback` and
+declare every reactive value used inside the callback; this change should keep
+the returned session command functions dependency-complete.
+
+**Claimed files:**
+- `src/hooks/useSessionCommands.ts`
+- `src/hooks/useSessionCommands.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add a stale saved-profile test and run
+  `pnpm vitest run src/hooks/useSessionCommands.test.tsx`; it should fail before
+  the hook uses `resolveAgentProfileId`.
+- Focused green: rerun `pnpm vitest run src/hooks/useSessionCommands.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useSessionCommands.test.tsx` failed as
+  expected before implementation; the new stale saved-profile test saw
+  `api.startSession(9, 99)` instead of the selected available profile id `2`.
+- Focused green `pnpm vitest run src/hooks/useSessionCommands.test.tsx` passed:
+  1 file / 5 tests.
+- `pnpm verify` passed: frontend tests (64 files / 392 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

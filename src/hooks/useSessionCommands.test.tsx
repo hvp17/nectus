@@ -140,6 +140,21 @@ describe("useSessionCommands", () => {
     });
   });
 
+  it("falls back to the selected profile when a task's saved profile is unavailable", async () => {
+    const selectedTask = task({ id: 9, agentProfileId: 99 });
+    mockedApi.startSession.mockResolvedValue(session({ id: "session-9", taskId: selectedTask.id, agentProfileId: 2 }));
+    const { result } = setup({
+      selectedAgentProfileId: 2,
+      initialTasks: [selectedTask],
+    });
+
+    await act(async () => {
+      await result.current.startSession(selectedTask);
+    });
+
+    expect(mockedApi.startSession).toHaveBeenCalledWith(9, 2);
+  });
+
   it("does not start a task when no agent profile can be resolved", async () => {
     const selectedTask = task({ id: 8, agentProfileId: null });
     const { result, tasks } = setup({ agentProfiles: [], initialTasks: [selectedTask] });

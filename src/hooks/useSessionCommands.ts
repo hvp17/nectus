@@ -1,5 +1,6 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 import { api } from "../api";
+import { resolveAgentProfileId } from "../lib/agentProfiles";
 import { useGuardedAction } from "./useGuardedAction";
 import type { AgentProfile, Session, TaskSummary } from "../types";
 
@@ -37,28 +38,37 @@ export function useSessionCommands({
     [setTasks],
   );
 
-  const startSession = async (task: TaskSummary) => {
-    const agentProfileId = task.agentProfileId ?? selectedAgentProfileId ?? agentProfiles[0]?.id;
-    if (!agentProfileId) return;
-    await run(async () => {
-      const session = await api.startSession(task.id, agentProfileId);
-      applySession(session);
-      setSelectedTaskId(task.id);
-    });
-  };
+  const startSession = useCallback(
+    async (task: TaskSummary) => {
+      const agentProfileId = resolveAgentProfileId(agentProfiles, task.agentProfileId, selectedAgentProfileId);
+      if (!agentProfileId) return;
+      await run(async () => {
+        const session = await api.startSession(task.id, agentProfileId);
+        applySession(session);
+        setSelectedTaskId(task.id);
+      });
+    },
+    [agentProfiles, applySession, run, selectedAgentProfileId, setSelectedTaskId],
+  );
 
-  const stopSession = (sessionId: string) =>
-    run(async () => {
-      const session = await api.stopSession(sessionId);
-      applySession(session);
-    });
+  const stopSession = useCallback(
+    (sessionId: string) =>
+      run(async () => {
+        const session = await api.stopSession(sessionId);
+        applySession(session);
+      }),
+    [applySession, run],
+  );
 
-  const resumeSession = (task: TaskSummary) =>
-    run(async () => {
-      const session = await api.resumeSession(task.id);
-      applySession(session);
-      setSelectedTaskId(task.id);
-    });
+  const resumeSession = useCallback(
+    (task: TaskSummary) =>
+      run(async () => {
+        const session = await api.resumeSession(task.id);
+        applySession(session);
+        setSelectedTaskId(task.id);
+      }),
+    [applySession, run, setSelectedTaskId],
+  );
 
   const onSessionExit = useCallback(
     (sessionId: string) => {
