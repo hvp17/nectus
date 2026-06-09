@@ -3104,7 +3104,7 @@ the returned session command functions dependency-complete.
 **Commit:** `62acdd9` (`fix(ui): ignore stale session agent profiles`) pushed to
 `origin/main`.
 
-### Iteration 86 - in progress (2026-06-09)
+### Iteration 86 - done (2026-06-09)
 
 **Goal:** Stabilize session attention wrapper callbacks.
 
@@ -3131,7 +3131,7 @@ callback identity is reused while dependencies are `Object.is`-equal.
   `pnpm vitest run src/hooks/useSessionAttentionControls.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useSessionAttentionControls.test.tsx`
@@ -3140,6 +3140,45 @@ callback identity is reused while dependencies are `Object.is`-equal.
 - Focused green `pnpm vitest run src/hooks/useSessionAttentionControls.test.tsx`
   passed: 1 file / 6 tests.
 - `pnpm verify` passed: frontend tests (64 files / 393 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `837d598` (`refactor(ui): stabilize session attention callbacks`)
+pushed to `origin/main`.
+
+### Iteration 87 - in progress (2026-06-09)
+
+**Goal:** Cover task metadata cache updates and attention clearing.
+
+**Rationale:** `useTaskActions` is the central task metadata hook for board and
+workspace surfaces. Its `updateStatus` path replaces the task in the TanStack
+Query cache and clears attention when a task is marked `done`, but this behavior
+only had broad UI coverage.
+
+**Docs checked:** Context7 `/tanstack/query` testing docs. The current guidance
+is to mount Query-backed hook tests with a `QueryClientProvider` and an isolated
+`QueryClient` per test, matching the repo's existing `createQueryClient` helper.
+
+**Claimed files:**
+- `src/hooks/useTaskActions.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused green: `pnpm vitest run src/hooks/useTaskActions.test.tsx`.
+- Red check: temporarily remove the `status === "done"` attention-clear branch
+  and rerun the focused test; the new test should fail.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Focused green `pnpm vitest run src/hooks/useTaskActions.test.tsx` passed:
+  1 file / 1 test.
+- Red check failed as expected after temporarily removing the `status === "done"`
+  attention-clear branch; the task attention array still contained task `7`.
+- Restored focused green `pnpm vitest run src/hooks/useTaskActions.test.tsx`
+  passed: 1 file / 1 test.
+- `pnpm verify` passed: frontend tests (65 files / 394 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
