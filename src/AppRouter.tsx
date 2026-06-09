@@ -5,10 +5,6 @@ import { IconRail, type RailView } from "./components/IconRail";
 import { ProjectPanel } from "./components/ProjectPanel";
 import { MissionControl } from "./components/MissionControl";
 import { Workspace } from "./components/Workspace";
-import { TaskWorkspaceOverlay } from "./components/TaskWorkspaceOverlay";
-import { CreateTaskComposer } from "./components/CreateTaskComposer";
-import { WorkspaceManager } from "./components/WorkspaceManager";
-import { CommandPalette } from "./components/CommandPalette";
 import { useEventBridge } from "./hooks/useEventBridge";
 import { useShellBootstrap } from "./hooks/useShellBootstrap";
 import { usePrReviews } from "./hooks/usePrReviews";
@@ -56,6 +52,18 @@ const ReviewsPage = lazy(() =>
 );
 const JiraBoardPage = lazy(() =>
   import("./components/JiraBoardPage").then((module) => ({ default: module.JiraBoardPage })),
+);
+const TaskWorkspaceOverlay = lazy(() =>
+  import("./components/TaskWorkspaceOverlay").then((module) => ({ default: module.TaskWorkspaceOverlay })),
+);
+const CreateTaskComposer = lazy(() =>
+  import("./components/CreateTaskComposer").then((module) => ({ default: module.CreateTaskComposer })),
+);
+const WorkspaceManager = lazy(() =>
+  import("./components/WorkspaceManager").then((module) => ({ default: module.WorkspaceManager })),
+);
+const CommandPalette = lazy(() =>
+  import("./components/CommandPalette").then((module) => ({ default: module.CommandPalette })),
 );
 
 function getToastContent(message: string) {
@@ -420,19 +428,23 @@ export function AppLayout() {
         <Toaster closeButton theme={settings?.theme ?? "system"} />
       </div>
 
-      <CommandPalette
-        open={paletteOpen}
-        onOpenChange={setPaletteOpen}
-        repos={repos}
-        workspaces={workspaces}
-        tasks={tasks}
-        canCreateTask={repos.length > 0}
-        onNavigate={handleNavigate}
-        onOpenProject={openProjectBoard}
-        onOpenWorkspace={openWorkspaceFromPalette}
-        onOpenTask={openTask}
-        onCreateTask={openCreateTaskModal}
-      />
+      {paletteOpen && (
+        <Suspense fallback={null}>
+          <CommandPalette
+            open={paletteOpen}
+            onOpenChange={setPaletteOpen}
+            repos={repos}
+            workspaces={workspaces}
+            tasks={tasks}
+            canCreateTask={repos.length > 0}
+            onNavigate={handleNavigate}
+            onOpenProject={openProjectBoard}
+            onOpenWorkspace={openWorkspaceFromPalette}
+            onOpenTask={openTask}
+            onCreateTask={openCreateTaskModal}
+          />
+        </Suspense>
+      )}
     </AppContext.Provider>
   );
 }

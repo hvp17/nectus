@@ -1170,7 +1170,7 @@ option.
 **Commit:** `50a4e04` (`refactor(update): remove unused check options`) pushed
 to `origin/main`.
 
-### Iteration 35 - in progress (2026-06-09)
+### Iteration 35 - done (2026-06-09)
 
 **Goal:** Lazy-load secondary app views to reduce eager desktop bundle weight.
 
@@ -1192,7 +1192,7 @@ CSS code splitting for async chunks, so component CSS can follow the lazy view.
 - Focused: `pnpm vitest run src/App.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/App.test.tsx` passed (1 file, 49 tests).
@@ -1201,6 +1201,42 @@ CSS code splitting for async chunks, so component CSS can follow the lazy view.
   `ReviewsPage`, and `JiraBoardPage`; the main JS chunk dropped from about
   1,208 kB to 1,160 kB minified. Vite still reports the 500 kB warning, so
   deeper shell/task-workspace chunking remains future work.
+
+**Commit:** `295c2b5` (`perf(router): lazy-load secondary views`) pushed to
+`origin/main`.
+
+### Iteration 36 - in progress (2026-06-09)
+
+**Goal:** Lazy-load on-demand shell overlays and the command palette.
+
+**Rationale:** After splitting secondary rail views, `AppRouter.tsx` still eagerly
+imports large components that only appear after explicit user action: task
+workspace, task composer, workspace manager, and command palette. Moving those
+behind the existing viewport `Suspense` boundary, plus a small palette boundary,
+keeps the always-visible shell smaller while preserving the core board path.
+
+**Docs checked:** Context7 React docs for conditionally rendered lazy components
+under `Suspense`, including user-triggered reveals that show fallback content
+until the lazy component is ready.
+
+**Claimed files:**
+- `src/AppRouter.tsx`
+- `src/test/appTaskCreationTests.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/App.test.tsx src/components/TaskWorkspaceOverlay.test.tsx src/components/CreateTaskComposer.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `pnpm vitest run src/App.test.tsx src/components/TaskWorkspaceOverlay.test.tsx src/components/CreateTaskComposer.test.tsx`
+  passed (3 files, 51 tests).
+- `pnpm test` passed (59 files, 353 tests).
+- `pnpm build` passed. The main JS chunk dropped from about 1,160 kB to
+  482 kB minified; Vite still warns because `TaskWorkspaceOverlay` is now a
+  585 kB async chunk.
 
 ---
 
@@ -1212,5 +1248,8 @@ CSS code splitting for async chunks, so component CSS can follow the lazy view.
 - Continue bundle splitting only where a clear route/workflow boundary exists
   (for example task workspace, composer, or command palette) and verify with
   `pnpm build` chunk output.
+- Investigate splitting `TaskWorkspaceOverlay` internals (terminal/diff/review
+  surfaces) if bundle work continues; it is now isolated as the only warning-size
+  async chunk.
 - Periodically diff the command/event/table reference against source after
   backend changes.

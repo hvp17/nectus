@@ -18,6 +18,7 @@ function mockProject() {
 async function openCreateTaskModal() {
   fireEvent.click(await screen.findByRole("button", { name: "Board" }));
   fireEvent.click(await screen.findByRole("button", { name: /new task/i }));
+  await screen.findByRole("heading", { name: "New Task" });
 }
 
 // The composer uses Selects for project/agent and a Switch for the worktree.
@@ -69,7 +70,7 @@ export function defineAppTaskCreationTests() {
     await waitFor(() => expect(createFromRail).toBeEnabled());
     fireEvent.click(createFromRail);
 
-    expect(screen.getByRole("heading", { name: "New Task" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "New Task" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: /new task composer/i })).toBeInTheDocument();
   });
 
