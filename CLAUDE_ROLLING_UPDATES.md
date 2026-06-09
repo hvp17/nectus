@@ -469,6 +469,24 @@ themselves simplifications. The clear targets were in `src/components/reui/stepp
 exercises the stepper); `pnpm build` (ok — `noUnusedLocals` would catch a stale
 `stepperCtx`). **Status:** committed.
 
+### S2 — `ReviewsPage.tsx`: flatten reviewer ternaries + de-dup the selection
+
+In the reviews launcher (a file Codex actively maintains; the `activeReviewerIds`/
+`fallbackReviewerId` resolution is Codex's reviewer-guard work):
+- `toggleReviewer` was a **3-deep nested ternary**; rewrote as three flat
+  early-returns (`not selected → add`; `last one → keep`; `else → remove`).
+- `hasReviewer` and `submit` each recomputed the same "active else fallback else
+  none" reviewer list. Lifted it to one `reviewers` const at component scope, derived
+  `hasReviewer = reviewers.length > 0`, and `submit` now reuses it. Behavior identical.
+
+**Scope note:** a second Explore sweep of Codex's component files confirmed Codex's
+*own* additions are clean; the nested ternaries here trace to older (Claude) feature
+commits (`6c88c61`, `c39fda5`) but sit in Codex-maintained files and are exactly the
+"early returns over deep ternaries" cleanup the standing directive calls for.
+
+**Verification:** `pnpm vitest run src/components/ReviewsPage.test.tsx` (8/8);
+`pnpm build` (ok). **Status:** committed.
+
 ## Backlog / future work (deeper investigation — no quick wins left)
 
 - Targeted coverage for any *new* untested logic as it lands (watch the diff).

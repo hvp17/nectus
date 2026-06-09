@@ -82,26 +82,27 @@ export function ReviewsPage({
 
   // Two or more reviewers turns the review into a multi-model consensus run.
   const consensus = activeReviewerIds.length >= 2;
-  const hasReviewer = activeReviewerIds.length > 0 || fallbackReviewerId !== undefined;
+  // The reviewers a submit will use: the explicitly-selected ones, else the
+  // resolved default as a single reviewer, else none.
+  const reviewers =
+    activeReviewerIds.length > 0
+      ? activeReviewerIds
+      : fallbackReviewerId !== undefined
+        ? [fallbackReviewerId]
+        : [];
+  const hasReviewer = reviewers.length > 0;
 
   const toggleReviewer = (id: number) => {
-    setSelectedReviewerIds((current) =>
-      current.includes(id)
-        ? current.length > 1
-          ? current.filter((value) => value !== id)
-          : current
-        : [...current, id],
-    );
+    setSelectedReviewerIds((current) => {
+      if (!current.includes(id)) return [...current, id];
+      if (current.length === 1) return current; // keep at least one reviewer
+      return current.filter((value) => value !== id);
+    });
   };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const trimmed = prUrl.trim();
-    const reviewers = activeReviewerIds.length
-      ? activeReviewerIds
-      : fallbackReviewerId !== undefined
-        ? [fallbackReviewerId]
-        : [];
     if (!trimmed || creatingReview || reviewers.length === 0) return;
     onCreateReview(trimmed, reviewers, consensus ? rounds : undefined);
     setPrUrl("");
