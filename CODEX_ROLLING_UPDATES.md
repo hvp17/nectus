@@ -1445,7 +1445,7 @@ standard utility for deriving a subset union.
 **Commit:** `d5b6d1b` (`refactor(navigation): centralize app view types`) pushed
 to `origin/main`.
 
-### Iteration 43 - in progress (2026-06-09)
+### Iteration 43 - done (2026-06-09)
 
 **Goal:** Remove a dead local from the GitHub read hook.
 
@@ -1467,13 +1467,44 @@ locals whose values are never read, including write-only locals.
 - Focused: `pnpm vitest run src/queries/github.test.tsx src/components/TaskWorkspaceOverlay.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm exec tsc --noEmit --noUnusedLocals --noUnusedParameters` passed.
 - `pnpm vitest run src/queries/github.test.tsx src/components/TaskWorkspaceOverlay.test.tsx` passed (2 files, 4 tests).
 - `pnpm test` passed (59 files, 353 tests).
 - `pnpm build` passed.
+
+**Commit:** `17680ef` (`refactor(github): remove unused selected task id`) pushed
+to `origin/main`.
+
+### Iteration 44 - in progress (2026-06-09)
+
+**Goal:** Promote the successful unused-symbol audit into the standard
+TypeScript build gate.
+
+**Rationale:** Iteration 43 showed `noUnusedLocals`/`noUnusedParameters` catches
+real dead code and the tree now passes the stricter compiler check. Enabling the
+options in `tsconfig.json` keeps future unused locals and parameters from
+silently accumulating, and documenting the gate gives future agents the same
+expectation before they commit frontend changes.
+
+**Docs checked:** Context7 TypeScript docs for `noUnusedLocals` and
+`noUnusedParameters`.
+
+**Claimed files:**
+- `tsconfig.json`
+- `AGENTS.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `pnpm test` passed (59 files, 353 tests).
+- `pnpm build` passed with `noUnusedLocals` and `noUnusedParameters` enabled.
 
 ---
 

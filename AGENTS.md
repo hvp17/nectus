@@ -136,6 +136,10 @@ Build the frontend bundle:
 pnpm build
 ```
 
+The frontend TypeScript build runs with `strict`, `noUnusedLocals`, and
+`noUnusedParameters`; remove dead locals/parameters instead of leaving them for a
+later cleanup.
+
 Build the Mac desktop app and DMG:
 
 ```bash

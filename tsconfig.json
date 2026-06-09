@@ -9,6 +9,8 @@
     "allowSyntheticDefaultImports": true,
     "ignoreDeprecations": "6.0",
     "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
