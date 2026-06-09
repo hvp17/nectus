@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "../queries/keys";
+import { useOptionalQuery } from "../queries/optional";
 import { useTauriEvent } from "./useTauriEvent";
 import type { SessionIdleEvent, TaskDiffSummary } from "../types";
 
@@ -35,22 +36,17 @@ export function useTaskDiff(taskId: number | undefined): TaskDiff {
   const queryClient = useQueryClient();
   const hasTask = taskId != null;
 
-  const summaryQueryOptions = useMemo(() => {
-    if (taskId == null) return [];
-    const selectedTaskId = taskId;
-    return [
-      {
-        queryKey: queryKeys.task.diffSummary(selectedTaskId),
-        queryFn: () => api.taskDiffSummary(selectedTaskId),
-        staleTime: 0,
-      },
-    ];
-  }, [taskId]);
-
-  const summaryQueries = useQueries({ queries: summaryQueryOptions });
-  const summaryQuery = summaryQueries[0];
-  const summary = hasTask ? (summaryQuery?.data ?? null) : null;
-  const loading = hasTask && Boolean(summaryQuery?.isLoading);
+  const summaryQuery = useOptionalQuery<TaskDiffSummary>(
+    taskId == null
+      ? null
+      : {
+          queryKey: queryKeys.task.diffSummary(taskId),
+          queryFn: () => api.taskDiffSummary(taskId),
+          staleTime: 0,
+        },
+  );
+  const summary = hasTask ? (summaryQuery.data ?? null) : null;
+  const loading = hasTask && summaryQuery.isLoading;
   const error = hasTask && summaryQuery?.error ? String(summaryQuery.error) : null;
 
   const [files, setFiles] = useState<Record<string, FileDiffState>>({});

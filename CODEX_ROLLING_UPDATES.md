@@ -4703,7 +4703,7 @@ accept `waitFor` options as the last argument.
   timeout to the Settings lazy-view heading assertion.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready for collision check and commit.
+**Status:** verified and committed.
 
 **Evidence so far:**
 - `git status --short --branch` was clean after pushing `9810c07`.
@@ -4721,12 +4721,85 @@ accept `waitFor` options as the last argument.
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
+**Commit:** `dd07fba` (`test(app): stabilize settings navigation smoke`) pushed
+to `origin/main`.
+
+### Iteration 122 - in progress (2026-06-09)
+
+**Goal:** Extract the repeated optional-query pattern introduced by the recent
+no-placeholder query cleanups.
+
+**Rationale:** `usePrReviews`, `useTaskDiff`, and the GitHub PR query reads now
+each carry the same `useQueries({ queries: options-or-empty-array })[0]` shape to
+avoid disabled `undefined` cache entries. A tiny shared helper can keep that
+cache policy explicit in one place while preserving the smaller
+`data`/`isLoading`/`error` surface those consumers actually use.
+
+**Docs checked:** Context7 `/tanstack/query` docs. Current docs describe
+`useQueries` for a dynamic number of queries and show empty `queries` arrays when
+dependent ids are unavailable.
+
+**Claimed files:**
+- `src/queries/optional.ts`
+- `src/queries/optional.test.tsx`
+- `src/hooks/usePrReviews.ts`
+- `src/hooks/useTaskDiff.ts`
+- `src/queries/github.ts`
+- `AGENTS.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add a helper test proving `useOptionalQuery(null)` creates no cache
+  entry and returns an idle result; run `pnpm vitest run src/queries/optional.test.tsx`.
+- Focused green: implement the helper, refactor the three call sites, then run
+  `pnpm vitest run src/queries/optional.test.tsx src/hooks/usePrReviews.test.ts src/hooks/useTaskDiff.test.tsx src/queries/github.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready for staging and commit.
+
+**Evidence so far:**
+- `git status --short --branch` was clean after pushing `dd07fba`.
+- `git log --oneline --decorate -10` shows `dd07fba` at both local and
+  `origin/main`.
+- `CLAUDE_ROLLING_UPDATES.md` remains on older coverage/documentation work and
+  does not claim the query helper or these call sites.
+- Context7 docs checked for TanStack Query dynamic `useQueries`.
+- Red check `pnpm vitest run src/queries/optional.test.tsx` first failed while
+  `src/queries/optional.ts` was absent, proving the new helper test covered the
+  missing abstraction.
+- Helper green `pnpm vitest run src/queries/optional.test.tsx` passed:
+  1 file / 2 tests.
+- Focused green
+  `pnpm vitest run src/queries/optional.test.tsx src/hooks/usePrReviews.test.ts src/hooks/useTaskDiff.test.tsx src/queries/github.test.tsx`
+  passed: 4 files / 16 tests.
+- `rg` shows the local `useQueries` dynamic-array pattern is now centralized in
+  `src/queries/optional.ts`; the remaining `skipToken` hooks are separate future
+  candidates and were not changed in this pass.
+- First `pnpm verify` passed frontend tests (73 files / 431 tests) but failed in
+  `pnpm build`: `src/queries/optional.ts` exposed a too-broad `TError` generic
+  and a tuple-shaped options value that made TypeScript reject the empty dynamic
+  array branch.
+- Fixed the helper by matching the app's actual `Error | null` query error
+  surface and widening the local options value to
+  `Array<OptionalQueryOptions<...>>` before calling `useQueries`.
+- Post-fix
+  `pnpm vitest run src/queries/optional.test.tsx src/hooks/usePrReviews.test.ts src/hooks/useTaskDiff.test.tsx src/queries/github.test.tsx && pnpm build`
+  passed: 4 files / 16 tests, then frontend production build.
+- Full `pnpm verify` passed: frontend tests (73 files / 431 tests), frontend
+  production build, Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+- Pre-commit collision check: `git fetch origin main` completed, `git log
+  HEAD..origin/main` was empty, and `CLAUDE_ROLLING_UPDATES.md` remains on older
+  coverage/doc-audit work with no claim on these files.
+
 ---
 
 ## Backlog / future work
 
 - Audit remaining custom async/loading hooks only when new code introduces a real
   ownership mismatch; the existing high-value hook coverage is mostly harvested.
+- Evaluate `useTaskReviewLoop`'s `skipToken` placeholder-key behavior separately;
+  it still has explicit tests documenting the current `undefined` cache entries.
 - Re-check terminal decoding docs against the recent UTF-8 boundary fixes.
 - Keep future bundle work tied to measured `pnpm build` output; the current
   shell/task-workspace splits remove the warning-size chunks.

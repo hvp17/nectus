@@ -1,8 +1,8 @@
-import { useMemo } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import type { PullRequestInfo, TaskSummary } from "../types";
 import { queryKeys } from "./keys";
+import { useOptionalQuery } from "./optional";
 
 /** Poll cadence for a non-terminal PR's status (checks/review move on their own). */
 const AUTO_REFRESH_MS = 30_000;
@@ -27,24 +27,21 @@ export function useGithubStatusQuery() {
 export function useGithubPullRequestQuery(task: TaskSummary | undefined, ghConnected: boolean) {
   const taskId = task?.id;
   const enabled = ghConnected && taskId != null && Boolean(task?.prUrl);
-  const queryOptions = useMemo(() => {
-    if (!enabled || taskId == null) return [];
-    const selectedTaskId = taskId;
-    return [
-      {
-        queryKey: queryKeys.github.pullRequest(selectedTaskId),
-        queryFn: () => api.githubPullRequestStatus(selectedTaskId),
-        refetchOnWindowFocus: true,
-        refetchInterval: (query: { state: { data?: PullRequestInfo } }) => {
-          const state = query.state.data?.state;
-          const terminal = state === "merged" || state === "closed";
-          return terminal ? false : AUTO_REFRESH_MS;
+  const query = useOptionalQuery<PullRequestInfo>(
+    !enabled || taskId == null
+      ? null
+      : {
+          queryKey: queryKeys.github.pullRequest(taskId),
+          queryFn: () => api.githubPullRequestStatus(taskId),
+          refetchOnWindowFocus: true,
+          refetchInterval: (query: { state: { data?: PullRequestInfo } }) => {
+            const state = query.state.data?.state;
+            const terminal = state === "merged" || state === "closed";
+            return terminal ? false : AUTO_REFRESH_MS;
+          },
         },
-      },
-    ];
-  }, [enabled, taskId]);
-  const query = useQueries({ queries: queryOptions })[0];
-  return { data: query?.data, isLoading: Boolean(query?.isLoading) };
+  );
+  return { data: query.data, isLoading: query.isLoading };
 }
 
 /**
@@ -56,18 +53,15 @@ export function useGithubPullRequestQuery(task: TaskSummary | undefined, ghConne
 export function useGithubPullRequestDetectionQuery(task: TaskSummary | undefined, ghConnected: boolean) {
   const taskId = task?.id;
   const enabled = ghConnected && taskId != null && Boolean(task?.hasWorktree) && !task?.prUrl;
-  const queryOptions = useMemo(() => {
-    if (!enabled || taskId == null) return [];
-    const selectedTaskId = taskId;
-    return [
-      {
-        queryKey: queryKeys.github.pullRequestDetection(selectedTaskId),
-        queryFn: () => api.detectGithubPullRequest(selectedTaskId),
-        refetchOnWindowFocus: false,
-        retry: false,
-      },
-    ];
-  }, [enabled, taskId]);
-  const query = useQueries({ queries: queryOptions })[0];
-  return { data: query?.data };
+  const query = useOptionalQuery<TaskSummary | null>(
+    !enabled || taskId == null
+      ? null
+      : {
+          queryKey: queryKeys.github.pullRequestDetection(taskId),
+          queryFn: () => api.detectGithubPullRequest(taskId),
+          refetchOnWindowFocus: false,
+          retry: false,
+        },
+  );
+  return { data: query.data };
 }

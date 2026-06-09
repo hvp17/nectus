@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "../queries/keys";
+import { useOptionalQuery } from "../queries/optional";
 import { upsertNewestById } from "../lib/listState";
 import type { PrReview, PrReviewRun } from "../types";
 
@@ -38,19 +39,15 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
 
   // The selected (consensus) review's per-reviewer round outputs. Events keep them
   // live afterward via `setQueryData`; single reviews simply return no runs.
-  const runQueryOptions = useMemo(() => {
-    if (selectedPrReviewId == null) return [];
-    const reviewId = selectedPrReviewId;
-    return [
-      {
-        queryKey: queryKeys.prReviews.runs(reviewId),
-        queryFn: () => api.listPrReviewRuns(reviewId),
-        meta: { surfaceErrors: true },
-      },
-    ];
-  }, [selectedPrReviewId]);
-
-  const runQueries = useQueries({ queries: runQueryOptions });
+  const runsQuery = useOptionalQuery<PrReviewRun[]>(
+    selectedPrReviewId == null
+      ? null
+      : {
+          queryKey: queryKeys.prReviews.runs(selectedPrReviewId),
+          queryFn: () => api.listPrReviewRuns(selectedPrReviewId),
+          meta: { surfaceErrors: true },
+        },
+  );
 
   const setReviews = useCallback(
     (updater: (current: PrReview[]) => PrReview[]) => {
@@ -135,7 +132,7 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
     [prReviews, selectedPrReviewId],
   );
 
-  const selectedPrReviewRuns = runQueries[0]?.data ?? EMPTY_RUNS;
+  const selectedPrReviewRuns = runsQuery.data ?? EMPTY_RUNS;
 
   return {
     prReviews,
