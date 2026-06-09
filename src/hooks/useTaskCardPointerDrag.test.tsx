@@ -76,6 +76,26 @@ describe("useTaskCardPointerDrag", () => {
     expect(document.querySelector(".task-drag-ghost")).not.toBeInTheDocument();
   });
 
+  it("cancels pointer drags without treating them as drops", () => {
+    const onDragEnd = vi.fn();
+    const onPointerDragEnd = vi.fn();
+    render(<DragHarness onDragEnd={onDragEnd} onPointerDragEnd={onPointerDragEnd} />);
+
+    const card = screen.getByRole("button", { name: /drag task/i });
+    dispatchPointerEvent(card, "pointerdown", { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    dispatchPointerEvent(window, "pointermove", { pointerId: 1, clientX: 18, clientY: 10 });
+
+    expect(document.body).toHaveClass("task-drag-selection-lock");
+    expect(document.querySelector(".task-drag-ghost")).toBeInTheDocument();
+
+    dispatchPointerEvent(window, "pointercancel", { pointerId: 1, clientX: 18, clientY: 10 });
+
+    expect(onDragEnd).toHaveBeenCalledTimes(1);
+    expect(onPointerDragEnd).not.toHaveBeenCalled();
+    expect(document.body).not.toHaveClass("task-drag-selection-lock");
+    expect(document.querySelector(".task-drag-ghost")).not.toBeInTheDocument();
+  });
+
   it("does not attach drag tracking while busy", () => {
     const onDragStart = vi.fn();
     render(<DragHarness busy onDragStart={onDragStart} />);

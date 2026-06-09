@@ -2793,7 +2793,7 @@ reaches UI state.
 **Commit:** `2440c0d` (`test(ui): cover updater wrapper progress`) pushed to
 `origin/main`.
 
-### Iteration 79 - in progress (2026-06-09)
+### Iteration 79 - done (2026-06-09)
 
 **Goal:** Extract the duplicated minute tick into a shared hook.
 
@@ -2820,7 +2820,7 @@ returning `clearInterval(id)` from cleanup.
   `pnpm vitest run src/hooks/useMinuteNow.test.tsx src/lib/agentState.test.ts src/lib/sidebarAgents.test.ts`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useMinuteNow.test.tsx` failed before the
@@ -2838,6 +2838,48 @@ returning `clearInterval(id)` from cleanup.
   `pnpm vitest run src/hooks/useMinuteNow.test.tsx src/lib/agentState.test.ts src/lib/sidebarAgents.test.ts src/App.test.tsx`
   passed: 4 files / 63 tests.
 - `pnpm verify` passed: frontend tests (61 files / 377 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `2dd230c` (`refactor(ui): share minute tick hook`) pushed to
+`origin/main`.
+
+### Iteration 80 - in progress (2026-06-09)
+
+**Goal:** Cover pointer-cancel drag cleanup.
+
+**Rationale:** `useTaskCardPointerDrag` already has a dedicated
+`pointercancel` branch, but tests covered pointerup, unmount, and busy-flip
+cleanup only. Browser cancellation should end the drag, remove the ghost, unlock
+page selection, and avoid treating the cancelled gesture as a drop.
+
+**Docs checked:** MDN `pointercancel` event reference. It documents
+`pointercancel` as the browser signal that no more pointer events are likely,
+including when panning, zooming, scrolling, hardware changes, or other
+interruptions cancel pointer activity.
+
+**Claimed files:**
+- `src/hooks/useTaskCardPointerDrag.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: temporarily remove the `onDragEnd()` call from the hook's
+  `pointercancel` branch and run
+  `pnpm vitest run src/hooks/useTaskCardPointerDrag.test.tsx`; the new cancel
+  test should fail.
+- Focused green test: restore the hook and run
+  `pnpm vitest run src/hooks/useTaskCardPointerDrag.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useTaskCardPointerDrag.test.tsx` failed
+  as expected after temporarily removing `onDragEnd()` from the
+  `pointercancel` branch; the new test observed 0 cancel callbacks.
+- Focused green `pnpm vitest run src/hooks/useTaskCardPointerDrag.test.tsx`
+  passed: 1 file / 7 tests.
+- `pnpm verify` passed: frontend tests (61 files / 378 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
