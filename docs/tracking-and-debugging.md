@@ -751,6 +751,14 @@ cd native
 cargo test
 ```
 
+Rust formatting and linting:
+
+```bash
+cd native
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+```
+
 If Rust tests that execute `git` fail because `git` cannot be found, rerun with:
 
 ```bash

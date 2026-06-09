@@ -1611,7 +1611,7 @@ Tauri binary target or future examples outside the lint surface.
 
 **Commit:** `bd66bd4` (`docs: broaden rust clippy gate`) pushed to `origin/main`.
 
-### Iteration 48 - in progress (2026-06-09)
+### Iteration 48 - done (2026-06-09)
 
 **Goal:** Bring the architecture verification snippet in line with the new Rust
 format/lint gates.
@@ -1632,11 +1632,41 @@ official rustfmt/Cargo Book guidance from Iteration 46.
 **Verification plan:**
 - Docs check: `rg -n "cargo fmt --check|cargo clippy --all-targets -- -D warnings" docs/architecture.md AGENTS.md README.md`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `rg -n "cargo fmt --check|cargo clippy --all-targets -- -D warnings" docs/architecture.md AGENTS.md README.md`
   shows the Rust format and all-target Clippy gates in all three docs.
+
+**Commit:** `c85aeec` (`docs: sync architecture verification gates`) pushed to
+`origin/main`.
+
+### Iteration 49 - in progress (2026-06-09)
+
+**Goal:** Sync the tracking/debugging verification command reference with the new
+Rust format and all-target Clippy gates.
+
+**Rationale:** The current verification docs in README, AGENTS, and architecture
+were aligned, but `docs/tracking-and-debugging.md` still listed only `cargo test`
+under Rust verification commands. That guide owns troubleshooting commands, so
+the Rust format and lint gates belong there too.
+
+**Docs checked:** Context7 Cargo Book docs for `--all-targets`, plus the
+official rustfmt/Cargo Book guidance from Iteration 46.
+
+**Claimed files:**
+- `docs/tracking-and-debugging.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Docs check: `rg -n "cargo fmt --check|cargo clippy --all-targets -- -D warnings" README.md AGENTS.md docs/architecture.md docs/tracking-and-debugging.md`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `rg -n "cargo fmt --check|cargo clippy --all-targets -- -D warnings" README.md AGENTS.md docs/architecture.md docs/tracking-and-debugging.md`
+  shows the Rust format and all-target Clippy gates in all current verification
+  docs.
 
 ---
 
