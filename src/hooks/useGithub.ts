@@ -31,12 +31,12 @@ export function useGithub({ selectedTask, applyTask }: UseGithubInput) {
 
   const githubStatus = useGithubStatusQuery().data;
   const ghReady = isCliConnected(githubStatus);
+  const selectedPrUrl = selectedTask?.prUrl ?? null;
+  const canReadPullRequest = ghReady && selectedTask?.id != null && Boolean(selectedPrUrl);
 
   const pullRequestQuery = useGithubPullRequestQuery(selectedTask, ghReady);
-  const pullRequest = pullRequestQuery.data ?? null;
-  const pullRequestLoading = pullRequestQuery.isLoading;
-
-  const selectedPrUrl = selectedTask?.prUrl ?? null;
+  const pullRequest = canReadPullRequest ? (pullRequestQuery.data ?? null) : null;
+  const pullRequestLoading = canReadPullRequest && pullRequestQuery.isLoading;
 
   // When a worktree task has no linked PR yet, ask gh whether one already exists for
   // its branch (e.g. opened from the terminal by the agent) and backfill it.
