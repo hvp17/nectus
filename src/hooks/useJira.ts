@@ -131,6 +131,7 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
       // Optimistic: snapshot the whole board, flip the card locally, then
       // re-hydrate from JIRA on success or restore the snapshot on failure.
       const key = queryKeys.jira.board();
+      await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueryData<JiraWorkItem[]>(key);
       queryClient.setQueryData<JiraWorkItem[]>(key, (current = []) =>
         current.map((it) => (it.key === item.key ? { ...it, statusName } : it)),

@@ -5,6 +5,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
 import { createQueryClient } from "../queries/queryClient";
+import { queryKeys } from "../queries/keys";
 import { deriveColumns, useJira } from "./useJira";
 import type { JiraRestStatus, JiraStatus, JiraStatusDef, JiraWorkItem } from "../types";
 
@@ -110,6 +111,31 @@ describe("useJira", () => {
     rerender();
 
     expect(result.current.columns).toBe(firstColumns);
+  });
+
+  it("cancels in-flight board queries before an optimistic transition", async () => {
+    const setMessage = vi.fn();
+    const client = createQueryClient();
+    const cancelQueries = vi.spyOn(client, "cancelQueries");
+    const { result } = renderHook(
+      () =>
+        useJira({
+          active: true,
+          configured: true,
+          project: "A",
+          statusFilter: [],
+          setMessage,
+        }),
+      { wrapper: makeWrapper(client) },
+    );
+
+    await waitFor(() => expect(mockedApi.jiraSearchBoard).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      await result.current.transition(item("A-1", "To Do"), "Done");
+    });
+
+    expect(cancelQueries).toHaveBeenCalledWith({ queryKey: queryKeys.jira.board() });
   });
 
   it("refreshes the board after adding a comment", async () => {

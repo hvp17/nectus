@@ -3617,7 +3617,7 @@ and memoizing object values when object identity itself is part of the contract.
 **Commit:** `8ecfc7d` (`refactor(ui): narrow jira board action dependencies`)
 pushed to `origin/main`.
 
-### Iteration 98 - in progress (2026-06-09)
+### Iteration 98 - done (2026-06-09)
 
 **Goal:** Memoize JIRA board columns derived by `useJira`.
 
@@ -3644,7 +3644,7 @@ only see a new reference when the dependencies change.
   memoizing the derived columns.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useJira.test.ts` failed as expected
@@ -3653,6 +3653,49 @@ only see a new reference when the dependencies change.
 - Focused green `pnpm vitest run src/hooks/useJira.test.ts` passed:
   1 file / 5 tests.
 - `pnpm verify` passed: frontend tests (69 files / 410 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `289d8c0` (`perf(ui): memoize jira board columns`) pushed to
+`origin/main`.
+
+### Iteration 99 - in progress (2026-06-09)
+
+**Goal:** Cancel in-flight JIRA board queries before optimistic transitions.
+
+**Rationale:** `useJira.transition` snapshots the board, writes an optimistic
+status change, and rolls back on error. TanStack Query's optimistic-update guide
+recommends cancelling matching outgoing refetches before `setQueryData` so a
+stale response cannot overwrite the optimistic update while the mutation is in
+flight.
+
+**Docs checked:** Context7 `/tanstack/query` optimistic updates and
+`queryClient.cancelQueries` docs. Current guidance explicitly cancels matching
+queries before snapshotting and writing optimistic cache state.
+
+**Claimed files:**
+- `src/hooks/useJira.ts`
+- `src/hooks/useJira.test.ts`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add a focused test that transition calls
+  `queryClient.cancelQueries({ queryKey: queryKeys.jira.board() })` before the
+  optimistic path and run `pnpm vitest run src/hooks/useJira.test.ts`; it should
+  fail before implementation.
+- Focused green: rerun `pnpm vitest run src/hooks/useJira.test.ts` after adding
+  the cancellation.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useJira.test.ts` failed as expected
+  before implementation; `queryClient.cancelQueries` had zero calls during
+  transition.
+- Focused green `pnpm vitest run src/hooks/useJira.test.ts` passed:
+  1 file / 6 tests.
+- `pnpm verify` passed: frontend tests (69 files / 411 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
