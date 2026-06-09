@@ -8,7 +8,7 @@ import { queryKeys } from "../queries/keys";
 import { useAppStore } from "../store/appStore";
 import { api } from "../api";
 import { upsertTaskAttention } from "../sessionAttention";
-import type { PrReview, ReviewLoop, SessionNeedsInputEvent, TaskSummary } from "../types";
+import type { PrReview, ReviewLoop, ReviewRun, SessionNeedsInputEvent, TaskSummary } from "../types";
 
 // Capture the handlers the bridge registers so tests can fire events without a
 // Tauri backend.
@@ -133,6 +133,36 @@ describe("useEventBridge", () => {
     const tasks = queryClient.getQueryData<TaskSummary[]>(queryKeys.tasks());
     expect(tasks?.[0].status).toBe("done");
     expect(queryClient.getQueryData(queryKeys.task.reviewLoop(7))).toEqual(reviewLoop);
+  });
+
+  it("deduplicates repeated review loop run events by run id", async () => {
+    const queryClient = await mountBridge([baseTask]);
+    const reviewLoop: ReviewLoop = {
+      taskId: 7,
+      reviewerProfileId: 1,
+      status: "reviewing",
+      lastError: null,
+      createdAt: "2026-05-15T00:00:00.000Z",
+      updatedAt: "2026-05-15T00:01:00.000Z",
+    };
+    const reviewRun: ReviewRun = {
+      id: 21,
+      taskId: 7,
+      reviewerProfileId: 1,
+      verdict: "needs_changes",
+      prompt: "Review this task",
+      output: "Needs changes",
+      error: null,
+      createdAt: "2026-05-15T00:01:00.000Z",
+    };
+
+    act(() => {
+      listeners.get("review_loop_updated")?.({ payload: { taskId: 7, reviewLoop, reviewRun } });
+      listeners.get("review_loop_updated")?.({ payload: { taskId: 7, reviewLoop, reviewRun } });
+    });
+
+    const runs = queryClient.getQueryData<ReviewRun[]>(queryKeys.task.reviewRuns(7));
+    expect(runs?.map((run) => run.id)).toEqual([21]);
   });
 
   it("upserts a PR review into the list cache on pr_review_updated", async () => {

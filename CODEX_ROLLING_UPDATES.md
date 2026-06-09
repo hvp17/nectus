@@ -3946,7 +3946,7 @@ reconnection/state-restoration patterns.
   flushing pending output in the snapshot failure path.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/TerminalPane.test.tsx` failed as expected
@@ -3955,6 +3955,49 @@ reconnection/state-restoration patterns.
 - Focused green `pnpm vitest run src/TerminalPane.test.tsx` passed:
   1 file / 12 tests.
 - `pnpm verify` passed: frontend tests (70 files / 417 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `1153e4f` (`fix(ui): flush terminal output after snapshot failure`)
+pushed to `origin/main`.
+
+### Iteration 106 - in progress (2026-06-09)
+
+**Goal:** Deduplicate review-loop run cache updates from repeated backend
+events.
+
+**Rationale:** `useEventBridge` upserts PR-review runs by id but appends task
+review-loop runs blindly. If the backend emits the same `review_loop_updated`
+payload more than once, the selected task's review-run cache can show duplicate
+entries. The event bridge should use the same id-based list update helper for
+both review-run streams.
+
+**Docs checked:** Context7 `/tanstack/query` `setQueryData` docs. Current
+guidance treats cache writes as synchronous immutable updates and notes that
+updater functions create cache entries when they return data.
+
+**Claimed files:**
+- `src/hooks/useEventBridge.ts`
+- `src/hooks/useEventBridge.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: fire the same `review_loop_updated` event with the same
+  `reviewRun.id` twice and run `pnpm vitest run src/hooks/useEventBridge.test.tsx`;
+  it should fail while the cache holds duplicate runs.
+- Focused green: rerun `pnpm vitest run src/hooks/useEventBridge.test.tsx`
+  after replacing append with id-based upsert.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useEventBridge.test.tsx` failed as
+  expected before implementation; duplicate `review_loop_updated` events
+  produced `[21, 21]` in the review-run cache.
+- Focused green `pnpm vitest run src/hooks/useEventBridge.test.tsx` passed:
+  1 file / 7 tests.
+- `pnpm verify` passed: frontend tests (70 files / 418 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

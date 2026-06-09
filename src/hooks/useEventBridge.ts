@@ -147,10 +147,9 @@ export function useEventBridge() {
       );
       queryClient.setQueryData(queryKeys.task.reviewLoop(taskId), reviewLoop);
       if (reviewRun) {
-        queryClient.setQueryData(queryKeys.task.reviewRuns(taskId), (current: ReviewRun[] = []) => [
-          ...current,
-          reviewRun,
-        ]);
+        queryClient.setQueryData<ReviewRun[]>(queryKeys.task.reviewRuns(taskId), (current = []) =>
+          upsertById(current, reviewRun),
+        );
       }
     },
     { onError: handleSubscriptionError },
