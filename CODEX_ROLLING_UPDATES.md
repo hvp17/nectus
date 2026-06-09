@@ -2844,7 +2844,7 @@ returning `clearInterval(id)` from cleanup.
 **Commit:** `2dd230c` (`refactor(ui): share minute tick hook`) pushed to
 `origin/main`.
 
-### Iteration 80 - in progress (2026-06-09)
+### Iteration 80 - done (2026-06-09)
 
 **Goal:** Cover pointer-cancel drag cleanup.
 
@@ -2871,7 +2871,7 @@ interruptions cancel pointer activity.
   `pnpm vitest run src/hooks/useTaskCardPointerDrag.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useTaskCardPointerDrag.test.tsx` failed
@@ -2880,6 +2880,46 @@ interruptions cancel pointer activity.
 - Focused green `pnpm vitest run src/hooks/useTaskCardPointerDrag.test.tsx`
   passed: 1 file / 7 tests.
 - `pnpm verify` passed: frontend tests (61 files / 378 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `b1a6cc7` (`test(ui): cover pointer cancel drag cleanup`) pushed to
+`origin/main`.
+
+### Iteration 81 - in progress (2026-06-09)
+
+**Goal:** Cover command palette global shortcut behavior.
+
+**Rationale:** `CommandPalette` owns a global Cmd/Ctrl-K key listener, but there
+was no direct component test that it opens, closes, ignores unrelated keys, and
+prevents the browser default for the app shortcut. The test keeps the shell's
+keyboard entry point explicit.
+
+**Docs checked:** Context7 `/shadcn-ui/ui` command docs. The current
+`CommandDialog` examples use a global `keydown` listener for command-palette
+shortcuts and call `preventDefault()` before toggling the dialog.
+
+**Claimed files:**
+- `src/components/CommandPalette.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: temporarily remove `event.preventDefault()` from
+  `CommandPalette` and run `pnpm vitest run src/components/CommandPalette.test.tsx`;
+  the shortcut tests should fail on default prevention.
+- Focused green test: restore the component and run
+  `pnpm vitest run src/components/CommandPalette.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/components/CommandPalette.test.tsx` failed as
+  expected after temporarily removing `event.preventDefault()`; the open and
+  close shortcut tests observed `defaultPrevented === false`.
+- Focused green `pnpm vitest run src/components/CommandPalette.test.tsx`
+  passed: 1 file / 3 tests.
+- `pnpm verify` passed: frontend tests (62 files / 381 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
