@@ -2051,7 +2051,7 @@ replacing defaults.
 **Commit:** `563d690` (`chore: ignore local design prototypes`) pushed to
 `origin/main`.
 
-### Iteration 60 - in progress (2026-06-09)
+### Iteration 60 - done (2026-06-09)
 
 **Goal:** Cover explicit app theme and density application.
 
@@ -2072,11 +2072,43 @@ next dependency change.
 - Focused test: `pnpm vitest run src/hooks/useAppTheme.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/hooks/useAppTheme.test.tsx` passed: 1 file / 3 tests.
 - `pnpm verify` passed: frontend tests (59 files / 355 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `048d7f7` (`test(ui): cover explicit theme settings`) pushed to
+`origin/main`.
+
+### Iteration 61 - in progress (2026-06-09)
+
+**Goal:** Cover system-theme listener cleanup in the app theme hook.
+
+**Rationale:** The hook subscribes to the browser color-scheme media query only
+while the app theme is set to `system`. The existing test proved the change event
+updates the `dark` class, but it did not prove the listener is removed when the
+setting leaves `system` or when the component unmounts. The React effect contract
+makes that cleanup path important because settings changes re-run the effect.
+
+**Docs checked:** Context7 React docs for `useEffect` setup/cleanup behavior when
+dependencies change and when a component unmounts.
+
+**Claimed files:**
+- `src/hooks/useAppTheme.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused test: `pnpm vitest run src/hooks/useAppTheme.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- `pnpm vitest run src/hooks/useAppTheme.test.tsx` passed: 1 file / 5 tests.
+- `pnpm verify` passed: frontend tests (59 files / 357 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
