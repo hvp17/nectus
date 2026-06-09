@@ -2966,7 +2966,7 @@ actions inside command lists/dialogs.
 **Commit:** `3527f7f` (`test(ui): cover command palette selection`) pushed to
 `origin/main`.
 
-### Iteration 83 - in progress (2026-06-09)
+### Iteration 83 - done (2026-06-09)
 
 **Goal:** Cover shell bootstrap default selection and stale workspace cleanup.
 
@@ -2990,7 +2990,7 @@ which matches the repo's `createQueryClient` factory.
   to confirm the new assertions fail.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Focused green `pnpm vitest run src/hooks/useShellBootstrap.test.tsx` passed:
@@ -3002,6 +3002,61 @@ which matches the repo's `createQueryClient` factory.
 - Restored focused green `pnpm vitest run src/hooks/useShellBootstrap.test.tsx`
   passed: 1 file / 4 tests.
 - `pnpm verify` passed: frontend tests (63 files / 386 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `cfb3de3` (`test(ui): cover shell bootstrap defaults`) pushed to
+`origin/main`.
+
+### Iteration 84 - in progress (2026-06-09)
+
+**Goal:** Centralize agent-profile default resolution.
+
+**Rationale:** The shell, composer, JIRA launch panel, task review action, and
+PR Reviews page all spell their own `preferred ?? first profile` fallback. That
+duplicates behavior and lets stale IDs from settings or local state select a
+profile that is no longer available. A small shared helper can validate
+preferred IDs once and make reviewer fallback behavior explicit.
+
+**Docs checked:** Context7 `/reactjs/react.dev` state docs. The current guidance
+allows local state to be initialized from props and conditionally synchronized
+when props/options load, as long as updates avoid clobbering user edits; the PR
+Reviews page already follows that pattern and should keep seeding only when the
+selection is empty.
+
+**Claimed files:**
+- `src/lib/agentProfiles.ts`
+- `src/lib/agentProfiles.test.ts`
+- `src/hooks/useShellBootstrap.ts`
+- `src/hooks/useShellBootstrap.test.tsx`
+- `src/AppRouter.tsx`
+- `src/components/ReviewsPage.tsx`
+- `src/components/ReviewsPage.test.tsx`
+- `src/components/JiraWorkItemDialog.tsx`
+- `src/components/TaskWorkspace.tsx`
+- `docs/features.md`
+- `AGENTS.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add helper and stale-default tests before the helper/refactor and
+  run `pnpm vitest run src/lib/agentProfiles.test.ts src/hooks/useShellBootstrap.test.tsx`.
+- Focused green tests after implementation:
+  `pnpm vitest run src/lib/agentProfiles.test.ts src/hooks/useShellBootstrap.test.tsx src/components/ReviewsPage.test.tsx src/components/JiraWorkItemDialog.test.tsx src/components/TaskWorkspace.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check
+  `pnpm vitest run src/lib/agentProfiles.test.ts src/hooks/useShellBootstrap.test.tsx`
+  failed as expected before implementation: `src/lib/agentProfiles.test.ts`
+  could not resolve the missing helper module, and the stale-default bootstrap
+  test observed `selectedAgentProfileId === 99`.
+- Focused green
+  `pnpm vitest run src/lib/agentProfiles.test.ts src/hooks/useShellBootstrap.test.tsx src/components/ReviewsPage.test.tsx src/components/JiraWorkItemDialog.test.tsx src/components/TaskWorkspace.test.tsx`
+  passed: 5 files / 43 tests.
+- `pnpm verify` passed: frontend tests (64 files / 391 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

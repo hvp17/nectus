@@ -14,6 +14,7 @@ import {
 import { Textarea } from "./ui/textarea";
 import { AgentLogo } from "./AgentBrand";
 import { JiraAvatar, JiraIssueTypeIcon } from "./jiraVisuals";
+import { resolveAgentProfileId } from "../lib/agentProfiles";
 import { jiraBrowseUrl } from "../lib/jira";
 import type { AgentProfile, JiraTransition, JiraWorkItem } from "../types";
 
@@ -98,7 +99,7 @@ export function JiraWorkItemPanel({
         ? statusOptions
         : [item.statusName, ...statusOptions];
 
-  const launchAgentId = selectedAgentProfileId ?? agentProfiles[0]?.id;
+  const launchAgentId = resolveAgentProfileId(agentProfiles, selectedAgentProfileId);
   const launchAgent = agentProfiles.find((profile) => profile.id === launchAgentId);
 
   return (

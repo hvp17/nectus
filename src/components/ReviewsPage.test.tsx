@@ -100,6 +100,24 @@ it("submits a trimmed pull request URL with the default single reviewer", () => 
   expect(onCreateReview).toHaveBeenCalledWith("https://github.com/owner/repo/pull/9", [1], undefined);
 });
 
+it("falls back to the first reviewer when the default reviewer id is unavailable", () => {
+  const onCreateReview = vi.fn();
+  renderPage({
+    prReviews: [],
+    selectedPrReview: undefined,
+    selectedPrReviewId: undefined,
+    defaultReviewerProfileId: 99,
+    onCreateReview,
+  });
+
+  fireEvent.change(screen.getByLabelText("Pull request URL"), {
+    target: { value: "https://github.com/owner/repo/pull/9" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /review pull request/i }));
+
+  expect(onCreateReview).toHaveBeenCalledWith("https://github.com/owner/repo/pull/9", [1], undefined);
+});
+
 it("runs a consensus review when two or more reviewers are selected", () => {
   const onCreateReview = vi.fn();
   renderPage({ prReviews: [], selectedPrReview: undefined, selectedPrReviewId: undefined, onCreateReview });

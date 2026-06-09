@@ -5,6 +5,7 @@ import { Input } from "./ui/input";
 import { AgentLogo } from "./AgentBrand";
 import { PrReviewDetail } from "./PrReviewDetail";
 import { PrReviewBadge } from "./PrReviewBadge";
+import { resolveAgentProfileId } from "../lib/agentProfiles";
 import type { AgentProfile, PrReview, PrReviewRun } from "../types";
 
 const MIN_ROUNDS = 1;
@@ -63,7 +64,7 @@ export function ReviewsPage({
 }: ReviewsPageProps) {
   const [prUrl, setPrUrl] = useState("");
   const [selectedReviewerIds, setSelectedReviewerIds] = useState<number[]>(() => {
-    const initial = defaultReviewerProfileId ?? agentProfiles[0]?.id;
+    const initial = resolveAgentProfileId(agentProfiles, defaultReviewerProfileId);
     return initial ? [initial] : [];
   });
   const [rounds, setRounds] = useState(DEFAULT_ROUNDS);
@@ -72,7 +73,7 @@ export function ReviewsPage({
   // seed the default once it becomes available, but only while the selection is
   // still empty so a user pick is never clobbered.
   useEffect(() => {
-    const initial = defaultReviewerProfileId ?? agentProfiles[0]?.id;
+    const initial = resolveAgentProfileId(agentProfiles, defaultReviewerProfileId);
     if (initial === undefined) return;
     setSelectedReviewerIds((current) => (current.length === 0 ? [initial] : current));
   }, [defaultReviewerProfileId, agentProfiles]);

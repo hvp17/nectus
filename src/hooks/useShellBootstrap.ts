@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useReposQuery, useWorkspacesQuery, useAgentProfilesQuery, useSettingsQuery } from "../queries/core";
+import { resolveAgentProfileId } from "../lib/agentProfiles";
 import { useAppStore } from "../store/appStore";
 import type { AgentProfile, Repo, Workspace } from "../types";
 
@@ -24,7 +25,7 @@ export function useShellBootstrap() {
 
   useEffect(() => {
     if (useAppStore.getState().selectedAgentProfileId !== undefined) return;
-    const next = settings?.defaultAgentProfileId ?? agentProfiles[0]?.id;
+    const next = resolveAgentProfileId(agentProfiles, settings?.defaultAgentProfileId);
     if (next !== undefined) setSelectedAgentProfileId(next);
   }, [settings, agentProfiles, setSelectedAgentProfileId]);
 

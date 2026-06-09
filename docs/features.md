@@ -486,9 +486,10 @@ Current behavior:
   scrollable pane, a Copy button, a Re-run action (re-fetches the PR head to pick up
   new commits and clears the prior verdict), and Delete.
 - Reviewer profiles are the same agent profiles used elsewhere; the default reviewer
-  is the configured default agent profile. Claude and Gemini reviewers run with `-p`;
-  Codex reviewers run with `codex exec`, OpenCode reviewers run with `opencode run`,
-  and custom reviewers receive the prompt on stdin.
+  is the configured default agent profile when it is still available, otherwise the
+  first available profile. Claude and Gemini reviewers run with `-p`; Codex reviewers
+  run with `codex exec`, OpenCode reviewers run with `opencode run`, and custom
+  reviewers receive the prompt on stdin.
 - **Session resume for PR reviewers.** Claude, Codex, and OpenCode reviewers resume
   their prior session across reruns of the same PR review (the stored id is in
   `pr_reviews.reviewer_session_id`), so repeat reviews build on earlier findings

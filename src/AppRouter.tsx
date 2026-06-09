@@ -42,6 +42,7 @@ import { useTaskNotificationToast } from "./hooks/useTaskNotificationToast";
 import { formatNotificationBody } from "./notificationText";
 import { planTaskFocus } from "./taskNavigation";
 import { openExternal } from "./lib/openExternal";
+import { resolveAgentProfileId } from "./lib/agentProfiles";
 import { api } from "./api";
 
 const SettingsPage = lazy(() =>
@@ -164,7 +165,11 @@ export function AppLayout() {
   const setNewTaskWorkspaceId = useAppStore((s) => s.setNewTaskWorkspaceId);
   const closeComposerAction = useAppStore((s) => s.closeComposer);
   const selectedAgentProfileId = useAppStore((s) => s.selectedAgentProfileId);
-  const composerDefaultAgent = settings?.defaultAgentProfileId ?? selectedAgentProfileId;
+  const composerDefaultAgent = resolveAgentProfileId(
+    agentProfiles,
+    settings?.defaultAgentProfileId,
+    selectedAgentProfileId,
+  );
 
   useAppTheme(settings);
 
@@ -194,7 +199,7 @@ export function AppLayout() {
   const openComposer = useCallback(
     (target?: { repoId?: number; workspaceId?: number }) => {
       if (!newTaskAgentProfileId) {
-        const defaultAgentProfileId = settings?.defaultAgentProfileId ?? agentProfiles[0]?.id;
+        const defaultAgentProfileId = resolveAgentProfileId(agentProfiles, settings?.defaultAgentProfileId);
         if (defaultAgentProfileId) setNewTaskAgentProfileId(defaultAgentProfileId);
       }
       // Reachable from the icon rail / sidebar while a task or the workspace manager is
@@ -642,7 +647,11 @@ function JiraView() {
       onCloseCreate={jiraBoard.closeCreate}
       onCreateWorkItem={jiraBoard.createWorkItem}
       agentProfiles={agentProfiles}
-      selectedAgentProfileId={newTaskAgentProfileId ?? settings?.defaultAgentProfileId ?? agentProfiles[0]?.id}
+      selectedAgentProfileId={resolveAgentProfileId(
+        agentProfiles,
+        newTaskAgentProfileId,
+        settings?.defaultAgentProfileId,
+      )}
       site={jira.jiraStatus?.site}
       restConnected={jira.restConnected}
       onListTransitions={api.jiraListTransitions}
@@ -736,7 +745,7 @@ function ReviewsView() {
       selectedPrReviewId={pr.selectedPrReviewId}
       selectedPrReviewRuns={pr.selectedPrReviewRuns}
       agentProfiles={agentProfiles}
-      defaultReviewerProfileId={settings?.defaultAgentProfileId ?? agentProfiles[0]?.id}
+      defaultReviewerProfileId={resolveAgentProfileId(agentProfiles, settings?.defaultAgentProfileId)}
       creatingReview={pr.creatingReview}
       onSelectReview={pr.setSelectedPrReviewId}
       onCreateReview={pr.createPrReview}

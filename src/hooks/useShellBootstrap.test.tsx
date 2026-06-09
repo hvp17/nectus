@@ -128,6 +128,12 @@ describe("useShellBootstrap", () => {
     await waitFor(() => expect(store().selectedAgentProfileId).toBe(1));
   });
 
+  it("falls back to the first profile when the configured default is stale", async () => {
+    setup({ appSettings: { ...settings, defaultAgentProfileId: 99 } });
+
+    await waitFor(() => expect(store().selectedAgentProfileId).toBe(1));
+  });
+
   it("does not replace existing repo or agent selections", () => {
     store().setSelectedRepoId(99);
     store().setSelectedAgentProfileId(88);

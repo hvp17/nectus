@@ -14,6 +14,7 @@ import { TaskWorkspaceStage, type WorkflowStep } from "./taskWorkspace/TaskWorks
 import { deriveAttentionPreview } from "./attentionPreview";
 import { isReviewLoopActive } from "../statusLabels";
 import { isCliConnected } from "../lib/connection";
+import { resolveReviewerProfileId } from "../lib/agentProfiles";
 import { useTaskDiff } from "../hooks/useTaskDiff";
 import { type TaskAttention } from "../sessionAttention";
 import {
@@ -134,8 +135,7 @@ export function TaskWorkspace({
   busy = false,
   isDeleting = false,
 }: TaskWorkspaceProps) {
-  const defaultReviewerProfileId =
-    agentProfiles.find((profile) => profile.id !== task?.agentProfileId)?.id ?? agentProfiles[0]?.id;
+  const defaultReviewerProfileId = resolveReviewerProfileId(agentProfiles, task?.agentProfileId);
   const [reviewerProfileId, setReviewerProfileId] = useState<number | undefined>(
     reviewLoop?.reviewerProfileId ?? defaultReviewerProfileId,
   );
