@@ -2343,7 +2343,7 @@ lifecycle, and the local `useTauriEvent` contract/tests.
 **Commit:** `635f6d8` (`refactor(ui): reuse tauri event hook in terminal`) pushed
 to `origin/main`.
 
-### Iteration 68 - in progress (2026-06-09)
+### Iteration 68 - done (2026-06-09)
 
 **Goal:** Simplify TerminalPane's remaining drag/drop unlisten bookkeeping.
 
@@ -2365,11 +2365,55 @@ user-visible behavior change.
 - Focused test: `pnpm vitest run src/TerminalPane.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/TerminalPane.test.tsx` passed: 1 file / 10 tests.
 - `pnpm verify` passed: frontend tests (59 files / 363 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `4261125` (`refactor(ui): simplify terminal drag cleanup`) pushed to
+`origin/main`.
+
+### Iteration 69 - in progress (2026-06-09)
+
+**Goal:** Cover TerminalPane's late-resolving drag/drop unlisten cleanup.
+
+**Rationale:** Iteration 68 simplified the webview drag/drop cleanup to one
+`unlistenDragDrop` slot while preserving the `disposed` branch for the case where
+Tauri resolves `onDragDropEvent()` after React has unmounted the pane. Existing
+tests covered normal file-drop behavior but did not prove that late cleanup still
+calls the unlisten function. This adds a focused race test so the custom
+drag/drop lifecycle remains protected even though the generic Tauri event
+subscriptions now use `useTauriEvent`.
+
+**Docs checked:** Context7 `/websites/v2_tauri_app` docs for
+`getCurrentWebview().onDragDropEvent()`, which confirm it returns
+`Promise<UnlistenFn>` and the unlisten function must be called when the handler
+goes out of scope, such as component unmount.
+
+**Claimed files:**
+- `src/TerminalPane.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: temporarily remove the `disposed` cleanup branch and run
+  `pnpm vitest run src/TerminalPane.test.tsx`; the new test should fail because
+  the delayed unlisten is not called.
+- Focused green test: restore production code and run
+  `pnpm vitest run src/TerminalPane.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/TerminalPane.test.tsx` failed as expected with
+  `expected "vi.fn()" to be called 1 times, but got 0 times` after temporarily
+  removing the late-cleanup branch.
+- Focused green `pnpm vitest run src/TerminalPane.test.tsx` passed: 1 file /
+  11 tests.
+- `pnpm verify` passed: frontend tests (59 files / 364 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

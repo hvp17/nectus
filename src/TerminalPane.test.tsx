@@ -7,6 +7,9 @@ const terminalTestState = vi.hoisted(() => {
   const instances: MockTerminal[] = [];
   const handlers = new Map<string, (event: { payload: unknown }) => void>();
   let dragDropHandler: ((event: { payload: unknown }) => void) | undefined;
+  let delayNextDragDropListen = false;
+  let resolveDragDropListen: (() => void) | undefined;
+  let dragDropUnlisten: ReturnType<typeof vi.fn> | undefined;
   // Simulates a browser without WebGL2 (or a lost context): loading the WebGL
   // addon throws, exercising the DOM-renderer fallback in loadWebglRenderer.
   let shouldFailWebgl = false;
@@ -78,20 +81,39 @@ const terminalTestState = vi.hoisted(() => {
       shouldFailWebgl = value;
     },
     getDragDropHandler: () => dragDropHandler,
+    getDragDropUnlisten: () => dragDropUnlisten,
+    delayNextDragDropListen: () => {
+      delayNextDragDropListen = true;
+    },
+    resolveDelayedDragDropListen: () => {
+      resolveDragDropListen?.();
+    },
     listen: vi.fn(async (eventName: string, handler: (event: { payload: unknown }) => void) => {
       handlers.set(eventName, handler);
       return vi.fn(() => handlers.delete(eventName));
     }),
     getCurrentWebview: vi.fn(() => ({
-      onDragDropEvent: vi.fn(async (handler: (event: { payload: unknown }) => void) => {
+      onDragDropEvent: vi.fn((handler: (event: { payload: unknown }) => void) => {
         dragDropHandler = handler;
-        return vi.fn(() => {
+        const unlisten = vi.fn(() => {
           dragDropHandler = undefined;
+        });
+        dragDropUnlisten = unlisten;
+        if (!delayNextDragDropListen) return Promise.resolve(unlisten);
+        delayNextDragDropListen = false;
+        return new Promise<typeof unlisten>((resolve) => {
+          resolveDragDropListen = () => {
+            resolveDragDropListen = undefined;
+            resolve(unlisten);
+          };
         });
       }),
     })),
     resetDragDropHandler: () => {
       dragDropHandler = undefined;
+      dragDropUnlisten = undefined;
+      delayNextDragDropListen = false;
+      resolveDragDropListen = undefined;
     },
     MockTerminal,
     MockFitAddon,
@@ -324,6 +346,27 @@ describe("TerminalPane", () => {
       "session-21",
       "/Users/tomas/Desktop/screenshot\\ 1.png /tmp/report\\ \\(final\\).pdf ",
     );
+  });
+
+  it("unlistens drag/drop if registration resolves after unmount", async () => {
+    terminalTestState.delayNextDragDropListen();
+
+    const { unmount } = render(
+      <TerminalPane sessionId="session-21" onSessionExit={vi.fn()} onSessionInput={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      expect(terminalTestState.getDragDropHandler()).toBeTypeOf("function");
+    });
+    const unlisten = terminalTestState.getDragDropUnlisten();
+
+    unmount();
+    await act(async () => {
+      terminalTestState.resolveDelayedDragDropListen();
+    });
+
+    expect(unlisten).toHaveBeenCalledTimes(1);
+    expect(terminalTestState.getDragDropHandler()).toBeUndefined();
   });
 
   it("strips control characters from dropped paths so a newline can't submit early", async () => {
