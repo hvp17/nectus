@@ -246,7 +246,7 @@ function StepperTrigger({
   const myIdx = useMemo(
     () =>
       triggerNodes.findIndex((n: HTMLButtonElement) => n === btnRef.current),
-    [triggerNodes, btnRef.current]
+    [triggerNodes]
   )
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -254,20 +254,20 @@ function StepperTrigger({
       case "ArrowRight":
       case "ArrowDown":
         e.preventDefault()
-        if (myIdx !== -1 && focusNext) focusNext(myIdx)
+        if (myIdx !== -1) focusNext(myIdx)
         break
       case "ArrowLeft":
       case "ArrowUp":
         e.preventDefault()
-        if (myIdx !== -1 && focusPrev) focusPrev(myIdx)
+        if (myIdx !== -1) focusPrev(myIdx)
         break
       case "Home":
         e.preventDefault()
-        if (focusFirst) focusFirst()
+        focusFirst()
         break
       case "End":
         e.preventDefault()
-        if (focusLast) focusLast()
+        focusLast()
         break
       case "Enter":
       case " ":

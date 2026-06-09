@@ -1038,7 +1038,7 @@ unnecessarily.
 **Commit:** `a30781b` (`refactor(stepper): simplify memo and context reads`)
 pushed to `origin/main`.
 
-### Iteration 31 - in progress (2026-06-09)
+### Iteration 31 - done (2026-06-09)
 
 **Goal:** Add cleanup for workflow stepper trigger registration.
 
@@ -1050,6 +1050,38 @@ mount/unmount and follows normal effect setup/cleanup structure.
 **Docs checked:** Context7 React `useEffect` docs for setup and cleanup: effects
 that synchronize with an external system should return cleanup and list the
 reactive values they use.
+
+**Claimed files:**
+- `src/components/reui/stepper.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/components/TaskWorkspace.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and committed.
+
+**Evidence:**
+- `pnpm vitest run src/components/TaskWorkspace.test.tsx` passed (26 tests).
+- `pnpm test` passed (59 files, 352 tests).
+- `pnpm build` passed.
+
+**Commit:** `763cb91` (`fix(stepper): clean up trigger registration`) pushed to
+`origin/main`.
+
+### Iteration 32 - in progress (2026-06-09)
+
+**Goal:** Simplify workflow stepper keyboard navigation guards.
+
+**Rationale:** The stepper context defines `focusNext`, `focusPrev`,
+`focusFirst`, and `focusLast` as required functions, but `StepperTrigger` still
+guards them as optional. Its index memo also depends on `btnRef.current`, which
+is not a reactive value. Removing those leftovers keeps the trigger logic
+consistent with the context contract.
+
+**Docs checked:** Context7 React `useMemo` docs for dependency arrays: include
+the reactive values referenced by the calculation. The trigger index only needs
+to update when the registered trigger list changes.
 
 **Claimed files:**
 - `src/components/reui/stepper.tsx`
