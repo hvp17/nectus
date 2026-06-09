@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 import { IconRail, type RailView } from "./components/IconRail";
@@ -8,9 +8,6 @@ import { Workspace } from "./components/Workspace";
 import { TaskWorkspaceOverlay } from "./components/TaskWorkspaceOverlay";
 import { CreateTaskComposer } from "./components/CreateTaskComposer";
 import { WorkspaceManager } from "./components/WorkspaceManager";
-import { SettingsPage } from "./components/SettingsPage";
-import { ReviewsPage } from "./components/ReviewsPage";
-import { JiraBoardPage } from "./components/JiraBoardPage";
 import { CommandPalette } from "./components/CommandPalette";
 import { useEventBridge } from "./hooks/useEventBridge";
 import { useShellBootstrap } from "./hooks/useShellBootstrap";
@@ -50,6 +47,16 @@ import { formatNotificationBody } from "./notificationText";
 import { planTaskFocus } from "./taskNavigation";
 import { openExternal } from "./lib/openExternal";
 import { api } from "./api";
+
+const SettingsPage = lazy(() =>
+  import("./components/SettingsPage").then((module) => ({ default: module.SettingsPage })),
+);
+const ReviewsPage = lazy(() =>
+  import("./components/ReviewsPage").then((module) => ({ default: module.ReviewsPage })),
+);
+const JiraBoardPage = lazy(() =>
+  import("./components/JiraBoardPage").then((module) => ({ default: module.JiraBoardPage })),
+);
 
 function getToastContent(message: string) {
   const separator = message.indexOf(": ");
@@ -406,7 +413,9 @@ export function AppLayout() {
           />
         )}
 
-        <div className="nx-viewport">{viewport}</div>
+        <div className="nx-viewport">
+          <Suspense fallback={<div className="nx-viewport-fill" />}>{viewport}</Suspense>
+        </div>
 
         <Toaster closeButton theme={settings?.theme ?? "system"} />
       </div>
@@ -726,4 +735,3 @@ function ReviewsView() {
     />
   );
 }
-

@@ -1137,7 +1137,7 @@ as a derived value at the event boundary and passes it into the toast conversion
 **Commit:** `0e6a73b` (`refactor(notifications): reuse derived toast content`)
 pushed to `origin/main`.
 
-### Iteration 34 - in progress (2026-06-09)
+### Iteration 34 - done (2026-06-09)
 
 **Goal:** Remove the unused `silent` option from the update-check hook contract.
 
@@ -1160,12 +1160,47 @@ option.
 - Focused: `pnpm vitest run src/hooks/useAppUpdate.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/hooks/useAppUpdate.test.tsx` passed (1 file, 6 tests).
 - `pnpm test` passed (59 files, 353 tests).
 - `pnpm build` passed.
+
+**Commit:** `50a4e04` (`refactor(update): remove unused check options`) pushed
+to `origin/main`.
+
+### Iteration 35 - in progress (2026-06-09)
+
+**Goal:** Lazy-load secondary app views to reduce eager desktop bundle weight.
+
+**Rationale:** `pnpm build` consistently warns that the main JavaScript chunk is
+larger than 500 kB. `AppRouter.tsx` eagerly imports Settings, PR Reviews, and
+JIRA even though only one view renders at a time. Splitting the secondary rail
+views behind `React.lazy` keeps the core mission/board/task shell eager while
+letting Vite create async chunks for less-frequent surfaces.
+
+**Docs checked:** Context7 React docs for `lazy` + `Suspense`, and Context7 Vite
+v8 docs for dynamic imports and production code splitting. Vite also documents
+CSS code splitting for async chunks, so component CSS can follow the lazy view.
+
+**Claimed files:**
+- `src/AppRouter.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/App.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `pnpm vitest run src/App.test.tsx` passed (1 file, 49 tests).
+- `pnpm test` passed (59 files, 353 tests).
+- `pnpm build` passed and emitted async chunks for `SettingsPage`,
+  `ReviewsPage`, and `JiraBoardPage`; the main JS chunk dropped from about
+  1,208 kB to 1,160 kB minified. Vite still reports the 500 kB warning, so
+  deeper shell/task-workspace chunking remains future work.
 
 ---
 
@@ -1174,5 +1209,8 @@ option.
 - Audit remaining custom async/loading hooks only when new code introduces a real
   ownership mismatch; the existing high-value hook coverage is mostly harvested.
 - Re-check terminal decoding docs against the recent UTF-8 boundary fixes.
+- Continue bundle splitting only where a clear route/workflow boundary exists
+  (for example task workspace, composer, or command palette) and verify with
+  `pnpm build` chunk output.
 - Periodically diff the command/event/table reference against source after
   backend changes.
