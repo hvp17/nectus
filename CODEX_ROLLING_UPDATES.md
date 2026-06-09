@@ -2376,7 +2376,7 @@ user-visible behavior change.
 **Commit:** `4261125` (`refactor(ui): simplify terminal drag cleanup`) pushed to
 `origin/main`.
 
-### Iteration 69 - in progress (2026-06-09)
+### Iteration 69 - done (2026-06-09)
 
 **Goal:** Cover TerminalPane's late-resolving drag/drop unlisten cleanup.
 
@@ -2405,7 +2405,7 @@ goes out of scope, such as component unmount.
   `pnpm vitest run src/TerminalPane.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/TerminalPane.test.tsx` failed as expected with
@@ -2414,6 +2414,55 @@ goes out of scope, such as component unmount.
 - Focused green `pnpm vitest run src/TerminalPane.test.tsx` passed: 1 file /
   11 tests.
 - `pnpm verify` passed: frontend tests (59 files / 364 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `5e79481` (`test(ui): cover terminal drag cleanup race`) pushed to
+`origin/main`.
+
+### Iteration 70 - in progress (2026-06-09)
+
+**Goal:** Make ReviewTerminalPane output replay prefix-aware.
+
+**Rationale:** `ReviewTerminalPane` previously tracked only the number of
+characters written to xterm. That preserves the hot path for append-only live
+review output, but it can mix stale and new content when the pane receives a
+different recorded review output of the same length, or a longer replacement
+that is not an append. The fix extracts a tiny pure
+`reviewTerminalOutputDelta(renderedOutput, nextOutput)` helper: append the suffix
+when the next output still has the rendered prefix; otherwise reset the terminal
+and replay the replacement.
+
+**Docs checked:** Context7 `/websites/xtermjs` docs for `Terminal.write()` and
+`Terminal.dispose()`, confirming `write()` is the append API and terminal writes
+are buffered asynchronously. The component keeps the existing xterm reset call
+for replacement replay and only changes the delta decision.
+
+**Claimed files:**
+- `src/components/ReviewTerminalPane.tsx`
+- `src/lib/reviewTerminalOutput.ts`
+- `src/lib/reviewTerminalOutput.test.ts`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: `pnpm vitest run src/lib/reviewTerminalOutput.test.ts` fails before
+  the helper exists.
+- Focused green test: `pnpm vitest run src/lib/reviewTerminalOutput.test.ts`.
+- Nearby tests:
+  `pnpm vitest run src/lib/reviewTerminalOutput.test.ts src/components/TaskWorkspace.test.tsx src/components/TaskWorkspaceOverlay.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/lib/reviewTerminalOutput.test.ts` failed as
+  expected because `./reviewTerminalOutput` did not exist.
+- Focused green `pnpm vitest run src/lib/reviewTerminalOutput.test.ts` passed:
+  1 file / 4 tests.
+- Nearby tests
+  `pnpm vitest run src/lib/reviewTerminalOutput.test.ts src/components/TaskWorkspace.test.tsx src/components/TaskWorkspaceOverlay.test.tsx`
+  passed: 3 files / 31 tests.
+- `pnpm verify` passed: frontend tests (60 files / 368 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

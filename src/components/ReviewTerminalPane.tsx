@@ -4,6 +4,7 @@ import { ScanEye } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
 import { readTerminalTheme } from "../lib/terminalTheme";
+import { reviewTerminalOutputDelta } from "../lib/reviewTerminalOutput";
 
 interface ReviewTerminalPaneProps {
   /** Accumulated reviewer output — the live stream while a review runs, or the
@@ -28,9 +29,9 @@ const ENABLE_TERMINAL = import.meta.env.MODE !== "test";
 export function ReviewTerminalPane({ output, active }: ReviewTerminalPaneProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<{ terminal: Terminal; fit: FitAddon } | null>(null);
-  // How much of `output` has already been written, so growth can be appended
-  // rather than re-rendering the whole buffer on every chunk.
-  const writtenRef = useRef(0);
+  // What has already been written, so appends can stream as suffixes while
+  // replacements reset and replay instead of mixing old and new review output.
+  const renderedOutputRef = useRef("");
   const outputRef = useRef(output);
 
   useEffect(() => {
@@ -58,11 +59,10 @@ export function ReviewTerminalPane({ output, active }: ReviewTerminalPaneProps) 
 
     // Replay whatever output already accumulated before this pane mounted (the
     // live stream runs whether or not the Review tab is the visible one).
-    writtenRef.current = 0;
-    if (outputRef.current) {
-      terminal.write(outputRef.current);
-      writtenRef.current = outputRef.current.length;
-    }
+    renderedOutputRef.current = "";
+    const initialOutput = reviewTerminalOutputDelta(renderedOutputRef.current, outputRef.current);
+    if (initialOutput.chunk) terminal.write(initialOutput.chunk);
+    renderedOutputRef.current = initialOutput.renderedOutput;
     fit.fit();
 
     const resizeObserver = new ResizeObserver(() => fit.fit());
@@ -80,7 +80,7 @@ export function ReviewTerminalPane({ output, active }: ReviewTerminalPaneProps) 
       themeObserver.disconnect();
       terminal.dispose();
       terminalRef.current = null;
-      writtenRef.current = 0;
+      renderedOutputRef.current = "";
     };
   }, []);
 
@@ -88,15 +88,12 @@ export function ReviewTerminalPane({ output, active }: ReviewTerminalPaneProps) 
     const handle = terminalRef.current;
     if (!handle) return;
 
-    // A shorter buffer means a new run replaced the old output: clear and replay.
-    if (output.length < writtenRef.current) {
+    const nextOutput = reviewTerminalOutputDelta(renderedOutputRef.current, output);
+    if (nextOutput.reset) {
       handle.terminal.reset();
-      writtenRef.current = 0;
     }
-    if (output.length > writtenRef.current) {
-      handle.terminal.write(output.slice(writtenRef.current));
-      writtenRef.current = output.length;
-    }
+    if (nextOutput.chunk) handle.terminal.write(nextOutput.chunk);
+    renderedOutputRef.current = nextOutput.renderedOutput;
   }, [output]);
 
   return (
