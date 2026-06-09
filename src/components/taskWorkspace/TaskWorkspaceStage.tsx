@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, lazy, Suspense, type ReactNode } from "react";
 import {
   ArrowLeft,
   Check,
@@ -22,9 +22,6 @@ import {
 } from "../reui/stepper";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
 import { Separator } from "../ui/separator";
-import { TaskDiffView } from "../TaskDiffView";
-import { ReviewTerminalPane } from "../ReviewTerminalPane";
-import { TerminalPane } from "../../TerminalPane";
 import { cn } from "../../lib/utils";
 import type { TaskAttention } from "../../sessionAttention";
 import type { useTaskDiff } from "../../hooks/useTaskDiff";
@@ -36,6 +33,12 @@ import { TaskTerminalLauncher } from "./TaskTerminalLauncher";
 
 type StageTab = "terminal" | "diff" | "review";
 type TaskDiff = ReturnType<typeof useTaskDiff>;
+
+const TaskDiffView = lazy(() => import("../TaskDiffView").then((module) => ({ default: module.TaskDiffView })));
+const ReviewTerminalPane = lazy(() =>
+  import("../ReviewTerminalPane").then((module) => ({ default: module.ReviewTerminalPane })),
+);
+const TerminalPane = lazy(() => import("../../TerminalPane").then((module) => ({ default: module.TerminalPane })));
 
 /// One step of the task workflow ribbon. `action` is the inline control rendered
 /// only while the step is current.
@@ -235,26 +238,32 @@ export function TaskWorkspaceStage({
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden">
-          {stageTab === "diff" ? (
-            <TaskDiffView
-              summary={diff.summary}
-              loading={diff.loading}
-              error={diff.error}
-              files={diff.files}
-              onSelectFile={diff.loadFile}
-            />
-          ) : stageTab === "review" ? (
-            <ReviewTerminalPane output={reviewOutput} active={reviewInProgress} />
-          ) : task.activeSessionId ? (
-            <TerminalPane sessionId={task.activeSessionId} onSessionExit={onSessionExit} onSessionInput={onSessionInput} />
-          ) : (
-            <TaskTerminalLauncher
-              task={task}
-              canResumeSession={canResumeSession}
-              onResumeSession={onResumeSession}
-              onStartSession={onStartSession}
-            />
-          )}
+          <Suspense fallback={<div className="h-full" />}>
+            {stageTab === "diff" ? (
+              <TaskDiffView
+                summary={diff.summary}
+                loading={diff.loading}
+                error={diff.error}
+                files={diff.files}
+                onSelectFile={diff.loadFile}
+              />
+            ) : stageTab === "review" ? (
+              <ReviewTerminalPane output={reviewOutput} active={reviewInProgress} />
+            ) : task.activeSessionId ? (
+              <TerminalPane
+                sessionId={task.activeSessionId}
+                onSessionExit={onSessionExit}
+                onSessionInput={onSessionInput}
+              />
+            ) : (
+              <TaskTerminalLauncher
+                task={task}
+                canResumeSession={canResumeSession}
+                onResumeSession={onResumeSession}
+                onStartSession={onStartSession}
+              />
+            )}
+          </Suspense>
         </div>
 
         {attention && stageTab === "terminal" && (

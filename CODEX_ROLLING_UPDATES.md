@@ -1205,7 +1205,7 @@ CSS code splitting for async chunks, so component CSS can follow the lazy view.
 **Commit:** `295c2b5` (`perf(router): lazy-load secondary views`) pushed to
 `origin/main`.
 
-### Iteration 36 - in progress (2026-06-09)
+### Iteration 36 - done (2026-06-09)
 
 **Goal:** Lazy-load on-demand shell overlays and the command palette.
 
@@ -1228,7 +1228,7 @@ until the lazy component is ready.
 - Focused: `pnpm vitest run src/App.test.tsx src/components/TaskWorkspaceOverlay.test.tsx src/components/CreateTaskComposer.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/App.test.tsx src/components/TaskWorkspaceOverlay.test.tsx src/components/CreateTaskComposer.test.tsx`
@@ -1238,6 +1238,42 @@ until the lazy component is ready.
   482 kB minified; Vite still warns because `TaskWorkspaceOverlay` is now a
   585 kB async chunk.
 
+**Commit:** `ce99fbc` (`perf(router): lazy-load on-demand overlays`) pushed to
+`origin/main`.
+
+### Iteration 37 - in progress (2026-06-09)
+
+**Goal:** Lazy-load task workspace stage panes to split terminal-heavy code.
+
+**Rationale:** After isolating the task workspace as an async route chunk, Vite's
+remaining size warning moved to `TaskWorkspaceOverlay`. Inspection shows
+`TaskWorkspaceStage` eagerly imports the live terminal, diff view, and review
+terminal even though only one tab is visible. Lazy-loading those active pane
+components should keep the task workspace shell responsive while moving xterm and
+diff rendering into smaller on-demand chunks.
+
+**Docs checked:** Context7 React docs for conditionally rendered lazy components
+under a `Suspense` boundary.
+
+**Claimed files:**
+- `src/components/taskWorkspace/TaskWorkspaceStage.tsx`
+- `src/components/TaskWorkspace.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/components/TaskWorkspace.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `pnpm vitest run src/components/TaskWorkspace.test.tsx` passed (1 file, 26 tests).
+- `pnpm test` passed (59 files, 353 tests).
+- `pnpm build` passed without the previous chunk-size warning.
+  `TaskWorkspaceOverlay` dropped from about 585 kB to 51 kB minified, with
+  `TerminalPane`, `TaskDiffView`, and `ReviewTerminalPane` emitted as async
+  chunks.
+
 ---
 
 ## Backlog / future work
@@ -1245,11 +1281,7 @@ until the lazy component is ready.
 - Audit remaining custom async/loading hooks only when new code introduces a real
   ownership mismatch; the existing high-value hook coverage is mostly harvested.
 - Re-check terminal decoding docs against the recent UTF-8 boundary fixes.
-- Continue bundle splitting only where a clear route/workflow boundary exists
-  (for example task workspace, composer, or command palette) and verify with
-  `pnpm build` chunk output.
-- Investigate splitting `TaskWorkspaceOverlay` internals (terminal/diff/review
-  surfaces) if bundle work continues; it is now isolated as the only warning-size
-  async chunk.
+- Keep future bundle work tied to measured `pnpm build` output; the current
+  shell/task-workspace splits remove the warning-size chunks.
 - Periodically diff the command/event/table reference against source after
   backend changes.

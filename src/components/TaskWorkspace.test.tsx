@@ -272,16 +272,16 @@ describe("TaskWorkspace", () => {
     expect(screen.getByRole("tab", { name: /create pr/i })).toBeDisabled();
   });
 
-  it("opens the read-only reviewer terminal from the stage toggle", () => {
+  it("opens the read-only reviewer terminal from the stage toggle", async () => {
     renderTaskWorkspace({ task: { ...task, status: "review" } });
 
     fireEvent.click(screen.getByLabelText("Show reviewer terminal"));
 
-    expect(screen.getByTestId("review-terminal")).toBeInTheDocument();
+    expect(await screen.findByTestId("review-terminal")).toBeInTheDocument();
     expect(screen.getByText(/no review output yet/i)).toBeInTheDocument();
   });
 
-  it("auto-switches to the reviewer terminal while a review is running", () => {
+  it("auto-switches to the reviewer terminal while a review is running", async () => {
     renderTaskWorkspace({
       task: { ...task, status: "review" },
       reviewLoop: {
@@ -294,11 +294,11 @@ describe("TaskWorkspace", () => {
       },
     });
 
-    expect(screen.getByTestId("review-terminal")).toBeInTheDocument();
+    expect(await screen.findByTestId("review-terminal")).toBeInTheDocument();
     expect(screen.getByText(/waiting for the reviewer/i)).toBeInTheDocument();
   });
 
-  it("opens the reviewer terminal from the review card for a finished run", () => {
+  it("opens the reviewer terminal from the review card for a finished run", async () => {
     renderTaskWorkspace({
       task: { ...task, status: "review" },
       reviewLoop: {
@@ -325,7 +325,7 @@ describe("TaskWorkspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /open reviewer terminal/i }));
 
-    expect(screen.getByTestId("review-terminal")).toBeInTheDocument();
+    expect(await screen.findByTestId("review-terminal")).toBeInTheDocument();
     expect(screen.queryByText(/no review output yet/i)).not.toBeInTheDocument();
   });
 
