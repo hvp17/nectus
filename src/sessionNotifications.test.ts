@@ -24,10 +24,10 @@ describe("notifySessionEvent", () => {
     vi.restoreAllMocks();
   });
 
-  it("truncates long session notification bodies before sending", async () => {
+  it("passes raw session notification bodies to the API boundary", async () => {
     await notifySessionEvent("Codex finished", "A".repeat(300));
 
-    expect(mockedApi.sendSystemNotification).toHaveBeenCalledWith("Codex finished", `${"A".repeat(179)}…`);
+    expect(mockedApi.sendSystemNotification).toHaveBeenCalledWith("Codex finished", "A".repeat(300));
   });
 
   it("does not send outside the Tauri runtime", async () => {

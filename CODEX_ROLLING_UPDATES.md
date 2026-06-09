@@ -863,7 +863,7 @@ change keeps those documented command-call semantics intact.
 **Commit:** `a2d7a53` (`refactor(api): check tauri runtime dynamically`) pushed
 to `origin/main`.
 
-### Iteration 26 - in progress (2026-06-09)
+### Iteration 26 - done (2026-06-09)
 
 **Goal:** Move Tauri runtime detection into a neutral shared helper.
 
@@ -893,11 +893,47 @@ location.
 - Focused: `pnpm vitest run src/api.test.ts src/lib/update.test.ts src/sessionNotifications.test.ts src/hooks/useTaskDiff.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/api.test.ts src/lib/update.test.ts src/sessionNotifications.test.ts src/hooks/useTaskDiff.test.tsx`
   passed (4 files, 36 tests).
+- `pnpm test` passed (59 files, 352 tests).
+- `pnpm build` passed.
+
+**Commit:** `c0313b7` (`refactor(tauri): centralize runtime detection`) pushed
+to `origin/main`.
+
+### Iteration 27 - in progress (2026-06-09)
+
+**Goal:** Keep notification-body formatting in the system notification API
+boundary.
+
+**Rationale:** `notifySessionEvent` formatted notification bodies before calling
+`api.sendSystemNotification`, and `api.sendSystemNotification` formatted the body
+again before sending through the Tauri notification plugin. Formatting belongs at
+the platform boundary, so session notifications can pass raw event text and avoid
+duplicating truncation/Markdown stripping responsibility.
+
+**Docs checked:** Context7 Tauri 2 notification plugin docs for the documented
+permission flow: check permission, request when needed, then send the
+notification. The existing API wrapper remains the owner of that plugin-facing
+flow and body normalization.
+
+**Claimed files:**
+- `src/sessionNotifications.ts`
+- `src/sessionNotifications.test.ts`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/sessionNotifications.test.ts src/api.test.ts`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `pnpm vitest run src/sessionNotifications.test.ts src/api.test.ts` passed (2
+  files, 23 tests).
 - `pnpm test` passed (59 files, 352 tests).
 - `pnpm build` passed.
 
