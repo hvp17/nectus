@@ -18,8 +18,8 @@
   pathspec after re-reading `CLAUDE_ROLLING_UPDATES.md`.
 - Claude iteration 1 owned unused `@tanstack/react-router` removal:
   `package.json`, `pnpm-lock.yaml`, and `AGENTS.md`; it landed as `4b3fc06`.
-- Untracked `.claude/` and `design-mockups/` existed before Codex edits and are
-  not Codex-owned.
+- `.claude/` is now intentionally ignored as a local nested-worktree area.
+- Untracked `design-mockups/` existed before Codex edits and is not Codex-owned.
 
 ---
 
@@ -1931,7 +1931,7 @@ environment before any future refactor changes it accidentally.
 **Commit:** `eb66a2e` (`test(git): cover resolved git command builder`) pushed
 to `origin/main`.
 
-### Iteration 57 - in progress (2026-06-09)
+### Iteration 57 - done (2026-06-09)
 
 **Goal:** Keep local Claude worktrees out of git status.
 
@@ -1956,13 +1956,51 @@ file location.
 - Status check: `git status --short --branch` should no longer list `.claude/`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `git check-ignore -v .claude .claude/worktrees/opencode` shows both paths
   matched by `.gitignore:7:.claude/`.
 - `git status --short --branch` no longer lists `.claude/`; only the existing
   untracked `design-mockups/` remains outside this change.
+- `pnpm verify` passed: frontend tests (59 files / 353 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `c115ffd` (`chore: ignore local claude worktrees`) pushed to
+`origin/main`.
+
+### Iteration 58 - in progress (2026-06-09)
+
+**Goal:** Exclude local Claude worktrees from the Vite dev-server watcher too.
+
+**Rationale:** Iteration 57 aligned git status with the existing Vitest exclude,
+but `vite.config.ts` still only ignored `native/` for the dev-server watcher.
+Since `.claude/worktrees/*` can contain full repo copies, watching them can
+create unnecessary file-system churn during `pnpm dev`. A shared glob keeps the
+dev watcher and test exclude in sync.
+
+**Docs checked:** Context7 Vite v8 docs for `server.watch.ignored`, which is
+merged with Vite's default ignored list, and Context7 Vitest v4.1.6 docs for
+extending `test.exclude` with `configDefaults.exclude`.
+
+**Claimed files:**
+- `vite.config.ts`
+- `AGENTS.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Type/build check: `pnpm build`.
+- Full gate: `pnpm verify`.
+- Config check: `rg -n "localWorktreeIgnore|\\.claude" vite.config.ts AGENTS.md`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- `rg -n "localWorktreeIgnore|\\.claude" vite.config.ts AGENTS.md CODEX_ROLLING_UPDATES.md`
+  shows the shared Vite/Vitest glob, AGENTS local-worktree policy, and rolling
+  doc entries.
+- `pnpm build` passed.
 - `pnpm verify` passed: frontend tests (59 files / 353 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
