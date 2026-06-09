@@ -1241,7 +1241,7 @@ until the lazy component is ready.
 **Commit:** `ce99fbc` (`perf(router): lazy-load on-demand overlays`) pushed to
 `origin/main`.
 
-### Iteration 37 - in progress (2026-06-09)
+### Iteration 37 - done (2026-06-09)
 
 **Goal:** Lazy-load task workspace stage panes to split terminal-heavy code.
 
@@ -1264,7 +1264,7 @@ under a `Suspense` boundary.
 - Focused: `pnpm vitest run src/components/TaskWorkspace.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/components/TaskWorkspace.test.tsx` passed (1 file, 26 tests).
@@ -1273,6 +1273,38 @@ under a `Suspense` boundary.
   `TaskWorkspaceOverlay` dropped from about 585 kB to 51 kB minified, with
   `TerminalPane`, `TaskDiffView`, and `ReviewTerminalPane` emitted as async
   chunks.
+
+**Commit:** `dd6c9de` (`perf(task-workspace): lazy-load stage panes`) pushed to
+`origin/main`.
+
+### Iteration 38 - in progress (2026-06-09)
+
+**Goal:** Update architecture docs for the new lazy-loading boundaries.
+
+**Rationale:** The frontend file map still described `AppRouter` and the task
+workspace surfaces as if they were eager imports. The code now lazily loads
+secondary views, on-demand overlays, the command palette, and the task workspace
+stage panes. The reference docs should mirror that structure so future agents do
+not accidentally reintroduce eager imports while working in the shell.
+
+**Docs checked:** Diataxis/reference guidance via web search: reference docs
+should be concise, factual, and follow the product architecture they describe.
+
+**Claimed files:**
+- `AGENTS.md`
+- `docs/architecture.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Review: `rg -n "lazy|Suspense|TaskWorkspaceStage|AppRouter" AGENTS.md docs/architecture.md`.
+- No runtime test needed for docs-only changes.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `rg -n "lazy|Suspense|TaskWorkspaceStage|AppRouter" AGENTS.md docs/architecture.md`
+  shows the new AppRouter and task-workspace loading-boundary references.
+- Runtime tests were not run because this is a docs-only update.
 
 ---
 

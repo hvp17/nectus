@@ -64,6 +64,15 @@ component subscribes to backend events directly (three deliberate exceptions:
   `useSessionControls`, `useShellBootstrap`, …) that read the queries/store
   directly and can be called from any component.
 
+### Loading boundaries
+
+`AppRouter.tsx` keeps the core shell, Mission Control, and project/workspace
+boards eager, then lazy-loads secondary views (Settings, PR Reviews, JIRA),
+on-demand overlays (composer, workspace manager, task workspace), and the command
+palette behind `Suspense`. Inside the task workspace, `TaskWorkspaceStage` keeps
+the header/ribbon eager but lazy-loads the active `Terminal | Diff | Review` pane
+so xterm and diff rendering code load only when that surface is shown.
+
 ## One request, traced end to end
 
 Starting an agent session shows every layer in motion:
@@ -104,7 +113,7 @@ The reverse contract — events the backend can emit — is the same for review 
 | AI review loop / PR consensus review | `sessions/review_loop.rs`, `pr_review.rs`, `pr_consensus.rs`, `reviewer.rs` | `useTaskReviewLoop.ts`, `usePrReviews.ts` |
 | Spawning any external CLI (PATH rules) | `process_util.rs` | — |
 | Shared data contracts (serde ↔ TS) | `models/` | `types.ts` |
-| App shell / routing | `lib.rs` (Tauri setup) | `AppRouter.tsx`, `App.tsx` (providers only) |
+| App shell / routing / lazy boundaries | `lib.rs` (Tauri setup) | `AppRouter.tsx`, `App.tsx` (providers only), `TaskWorkspaceStage.tsx` |
 
 ## Entry-point files for a new contributor
 
@@ -119,8 +128,8 @@ Backend:
 
 Frontend:
 
-5. `src/AppRouter.tsx` — the React shell; how queries, store, and the event bridge
-   compose into routed views.
+5. `src/AppRouter.tsx` — the React shell; how queries, store, the event bridge,
+   and the lazy-loaded view/overlay boundaries compose into routed views.
 6. `src/hooks/useEventBridge.ts` — the single mount-once bridge routing Rust events
    into the Query cache / Zustand store.
 7. `src/queries/core.ts` (+ `keys.ts`, `cache.ts`) — the server-state read layer all
