@@ -69,4 +69,23 @@ describe("useAppTheme", () => {
 
     expect(document.documentElement).toHaveClass("dark");
   });
+
+  it("applies explicit theme and density settings", () => {
+    render(<ThemeProbe settings={{ ...systemSettings, theme: "dark", density: "compact" }} />);
+
+    expect(document.documentElement).toHaveClass("dark");
+    expect(document.documentElement).toHaveAttribute("data-density", "compact");
+  });
+
+  it("updates theme and density when settings change", () => {
+    const { rerender } = render(<ThemeProbe settings={{ ...systemSettings, theme: "dark", density: "compact" }} />);
+
+    expect(document.documentElement).toHaveClass("dark");
+    expect(document.documentElement).toHaveAttribute("data-density", "compact");
+
+    rerender(<ThemeProbe settings={{ ...systemSettings, theme: "light", density: "comfortable" }} />);
+
+    expect(document.documentElement).not.toHaveClass("dark");
+    expect(document.documentElement).toHaveAttribute("data-density", "comfortable");
+  });
 });

@@ -2008,7 +2008,7 @@ extending `test.exclude` with `configDefaults.exclude`.
 **Commit:** `a61e7c8` (`chore: ignore claude worktrees in vite watcher`) pushed
 to `origin/main`.
 
-### Iteration 59 - in progress (2026-06-09)
+### Iteration 59 - done (2026-06-09)
 
 **Goal:** Treat local design prototypes as scratch artifacts.
 
@@ -2034,7 +2034,7 @@ replacing defaults.
 - Type/build check: `pnpm build`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `git check-ignore -v design-mockups design-mockups/index.html .claude .claude/worktrees/opencode`
@@ -2045,6 +2045,38 @@ replacing defaults.
 - `git status --short --branch` now lists only the four intended tracked edits.
 - `pnpm build` passed.
 - `pnpm verify` passed: frontend tests (59 files / 353 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `563d690` (`chore: ignore local design prototypes`) pushed to
+`origin/main`.
+
+### Iteration 60 - in progress (2026-06-09)
+
+**Goal:** Cover explicit app theme and density application.
+
+**Rationale:** `useAppTheme` only had a regression test for system-theme media
+query changes. The hook also applies explicit light/dark mode and the
+`data-density` attribute from settings; both are user-visible settings and
+should be locked down with focused hook tests.
+
+**Docs checked:** Context7 React docs for `useEffect` dependency behavior: effects
+run on mount and when dependencies change, with cleanup on unmount or before the
+next dependency change.
+
+**Claimed files:**
+- `src/hooks/useAppTheme.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused test: `pnpm vitest run src/hooks/useAppTheme.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- `pnpm vitest run src/hooks/useAppTheme.test.tsx` passed: 1 file / 3 tests.
+- `pnpm verify` passed: frontend tests (59 files / 355 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
