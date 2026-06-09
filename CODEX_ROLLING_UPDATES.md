@@ -3817,7 +3817,7 @@ data exists, even though they do not fetch.
   gating PR-status data on the selected task's active PR prerequisite.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useGithub.test.tsx` failed as expected
@@ -3826,6 +3826,48 @@ data exists, even though they do not fetch.
 - Focused green `pnpm vitest run src/hooks/useGithub.test.tsx` passed:
   1 file / 1 test.
 - `pnpm verify` passed: frontend tests (70 files / 414 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `c226b73` (`fix(ui): hide stale github pr status`) pushed to
+`origin/main`.
+
+### Iteration 103 - in progress (2026-06-09)
+
+**Goal:** Hide cached task-diff summaries when no task is selected.
+
+**Rationale:** `useTaskDiff` documents that switching to no task should show a
+`null` summary immediately, but the disabled `skipToken` query still exposes
+cached data if the `["task", "diff-summary", undefined]` cache cell is ever
+seeded. The hook should treat `taskId == null` as authoritative for `summary`,
+`loading`, and `error`, matching the selected-task boundary.
+
+**Docs checked:** Context7 `/tanstack/query` disabled-query docs. Current
+guidance states that disabled queries initialize in success state when cached
+data exists, even though they do not fetch.
+
+**Claimed files:**
+- `src/hooks/useTaskDiff.ts`
+- `src/hooks/useTaskDiff.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: seed cached diff-summary data for the undefined task key and run
+  `pnpm vitest run src/hooks/useTaskDiff.test.tsx`; it should fail while the
+  disabled query data is still consumed.
+- Focused green: rerun `pnpm vitest run src/hooks/useTaskDiff.test.tsx` after
+  gating returned diff state on `taskId != null`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useTaskDiff.test.tsx` failed as
+  expected before implementation; cached diff-summary data for the undefined
+  task key was exposed while no task was selected.
+- Focused green `pnpm vitest run src/hooks/useTaskDiff.test.tsx` passed:
+  1 file / 8 tests.
+- `pnpm verify` passed: frontend tests (70 files / 415 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

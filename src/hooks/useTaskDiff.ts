@@ -33,15 +33,16 @@ export interface TaskDiff {
  */
 export function useTaskDiff(taskId: number | undefined): TaskDiff {
   const queryClient = useQueryClient();
+  const hasTask = taskId != null;
 
   const summaryQuery = useQuery({
     queryKey: queryKeys.task.diffSummary(taskId),
-    queryFn: taskId != null ? () => api.taskDiffSummary(taskId) : skipToken,
+    queryFn: hasTask ? () => api.taskDiffSummary(taskId) : skipToken,
     staleTime: 0,
   });
-  const summary = summaryQuery.data ?? null;
-  const loading = summaryQuery.isLoading;
-  const error = summaryQuery.error ? String(summaryQuery.error) : null;
+  const summary = hasTask ? (summaryQuery.data ?? null) : null;
+  const loading = hasTask && summaryQuery.isLoading;
+  const error = hasTask && summaryQuery.error ? String(summaryQuery.error) : null;
 
   const [files, setFiles] = useState<Record<string, FileDiffState>>({});
 

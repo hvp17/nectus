@@ -62,6 +62,18 @@ describe("useTaskDiff", () => {
     expect(mockedApi.taskDiffSummary).not.toHaveBeenCalled();
   });
 
+  it("hides cached summary data while no task is selected", () => {
+    const client = createQueryClient();
+    client.setQueryData(queryKeys.task.diffSummary(undefined), summary);
+
+    const { result } = renderHook(() => useTaskDiff(undefined), { wrapper: makeWrapper(client) });
+
+    expect(result.current.summary).toBeNull();
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBeNull();
+    expect(mockedApi.taskDiffSummary).not.toHaveBeenCalled();
+  });
+
   it("loads the changed-file summary as soon as a task is selected", async () => {
     mockedApi.taskDiffSummary.mockResolvedValue(summary);
     const { result } = renderHook(() => useTaskDiff(1), { wrapper: makeWrapper() });
