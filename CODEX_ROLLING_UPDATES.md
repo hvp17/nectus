@@ -1542,7 +1542,7 @@ is the relevant local/CI-style gate because warnings become failures.
 **Commit:** `a848ca0` (`docs: document rust clippy verification`) pushed to
 `origin/main`.
 
-### Iteration 46 - in progress (2026-06-09)
+### Iteration 46 - done (2026-06-09)
 
 **Goal:** Apply rustfmt to the backend and document `cargo fmt --check` alongside
 the Clippy gate.
@@ -1568,7 +1568,7 @@ checks formatting and exits non-zero when rustfmt would change files.
 - Rust tests: `cd native && cargo test`.
 - Docs check: `rg -n "cargo fmt --check|cargo clippy --tests -- -D warnings" AGENTS.md README.md`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `cd native && cargo fmt --check` passed.
@@ -1576,6 +1576,38 @@ checks formatting and exits non-zero when rustfmt would change files.
 - `cd native && cargo test` passed (240 tests).
 - `rg -n "cargo fmt --check|cargo clippy --tests -- -D warnings" AGENTS.md README.md`
   shows both Rust gates in both docs.
+
+**Commit:** `67344d4` (`style(rust): format backend sources`) pushed to
+`origin/main`.
+
+### Iteration 47 - in progress (2026-06-09)
+
+**Goal:** Broaden the documented Clippy gate from test targets to all Cargo
+targets.
+
+**Rationale:** Cargo's `--all-targets` covers the library, binaries, tests,
+benches, and examples, while `--tests` is narrower. The broader command passes
+in this repo, so the documented lint gate should use it to avoid leaving the
+Tauri binary target or future examples outside the lint surface.
+
+**Docs checked:** Context7 Cargo Book docs for target selection:
+`--all-targets` is equivalent to `--lib --bins --tests --benches --examples`.
+
+**Claimed files:**
+- `AGENTS.md`
+- `README.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Rust lint: `cd native && cargo clippy --all-targets -- -D warnings`.
+- Docs check: `rg -n "cargo clippy --all-targets -- -D warnings" AGENTS.md README.md`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `cd native && cargo clippy --all-targets -- -D warnings` passed.
+- `rg -n "cargo clippy --all-targets -- -D warnings" AGENTS.md README.md` shows
+  the all-target Clippy gate in both docs.
 
 ---
 

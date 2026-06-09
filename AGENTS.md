@@ -178,7 +178,7 @@ Run Rust linting:
 ```bash
 cd native
 cargo fmt --check
-cargo clippy --tests -- -D warnings
+cargo clippy --all-targets -- -D warnings
 ```
 
 Run the standard verification set before claiming work is complete:
@@ -188,7 +188,7 @@ pnpm test
 pnpm build
 cd native && cargo test
 cd native && cargo fmt --check
-cd native && cargo clippy --tests -- -D warnings
+cd native && cargo clippy --all-targets -- -D warnings
 ```
 
 For release-impacting changes, also run:

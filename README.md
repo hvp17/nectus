@@ -201,7 +201,7 @@ pnpm build
 cd native
 cargo test
 cargo fmt --check
-cargo clippy --tests -- -D warnings
+cargo clippy --all-targets -- -D warnings
 ```
 
 If Rust tests that shell out to git fail with `No such file or directory`, rerun
