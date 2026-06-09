@@ -89,6 +89,29 @@ describe("deriveColumns", () => {
 });
 
 describe("useJira", () => {
+  it("keeps derived columns stable when board inputs are unchanged", async () => {
+    const setMessage = vi.fn();
+    const client = createQueryClient();
+    const statusFilter: string[] = [];
+    const input = {
+      active: true,
+      configured: true,
+      project: "A",
+      statusFilter,
+      setMessage,
+    };
+    const { result, rerender } = renderHook(() => useJira(input), {
+      wrapper: makeWrapper(client),
+    });
+
+    await waitFor(() => expect(result.current.columns).toHaveLength(1));
+    const firstColumns = result.current.columns;
+
+    rerender();
+
+    expect(result.current.columns).toBe(firstColumns);
+  });
+
   it("refreshes the board after adding a comment", async () => {
     const setMessage = vi.fn();
     const client = createQueryClient();

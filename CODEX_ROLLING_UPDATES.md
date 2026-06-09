@@ -3571,7 +3571,7 @@ dependencies so the callbacks are reused while those dependencies are unchanged.
 **Commit:** `dabe121` (`refactor(ui): stabilize settings action callbacks`)
 pushed to `origin/main`.
 
-### Iteration 97 - in progress (2026-06-09)
+### Iteration 97 - done (2026-06-09)
 
 **Goal:** Narrow `useJiraBoardView` callback dependencies to stable JIRA action
 functions.
@@ -3602,7 +3602,7 @@ and memoizing object values when object identity itself is part of the contract.
   specific JIRA action functions.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useJiraBoardView.test.tsx` failed as
@@ -3611,6 +3611,48 @@ and memoizing object values when object identity itself is part of the contract.
 - Focused green `pnpm vitest run src/hooks/useJiraBoardView.test.tsx` passed:
   1 file / 2 tests.
 - `pnpm verify` passed: frontend tests (69 files / 409 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `8ecfc7d` (`refactor(ui): narrow jira board action dependencies`)
+pushed to `origin/main`.
+
+### Iteration 98 - in progress (2026-06-09)
+
+**Goal:** Memoize JIRA board columns derived by `useJira`.
+
+**Rationale:** `deriveColumns(items, projectStatuses, statusFilter)` is pure
+derived data, but `useJira` currently calls it on every render and returns a new
+`columns` array even when the underlying query data and filter are unchanged.
+Memoizing the derived array keeps board consumers from receiving unnecessary
+reference churn.
+
+**Docs checked:** Context7 `/reactjs/react.dev` `useMemo` docs. Current guidance
+shows using `useMemo` for derived arrays/objects so memoized children or effects
+only see a new reference when the dependencies change.
+
+**Claimed files:**
+- `src/hooks/useJira.ts`
+- `src/hooks/useJira.test.ts`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add a columns-reference stability test and run
+  `pnpm vitest run src/hooks/useJira.test.ts`; it should fail while
+  `deriveColumns` runs directly during every render.
+- Focused green: rerun `pnpm vitest run src/hooks/useJira.test.ts` after
+  memoizing the derived columns.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useJira.test.ts` failed as expected
+  before implementation; `columns` was deeply equal but a new array reference
+  after rerender.
+- Focused green `pnpm vitest run src/hooks/useJira.test.ts` passed:
+  1 file / 5 tests.
+- `pnpm verify` passed: frontend tests (69 files / 410 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

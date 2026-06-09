@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "../queries/keys";
@@ -214,7 +214,10 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
     await queryClient.invalidateQueries({ queryKey: queryKeys.jira.restStatus() });
   }, [queryClient]);
 
-  const columns = deriveColumns(items, projectStatuses, statusFilter);
+  const columns = useMemo(
+    () => deriveColumns(items, projectStatuses, statusFilter),
+    [items, projectStatuses, statusFilter],
+  );
 
   return {
     jiraStatus,
