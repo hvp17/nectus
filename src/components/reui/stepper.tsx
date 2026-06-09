@@ -25,7 +25,8 @@ interface StepperContextValue {
   activeStep: number
   setActiveStep: (step: number) => void
   orientation: StepperOrientation
-  registerTrigger: (node: HTMLButtonElement | null) => void
+  registerTrigger: (node: HTMLButtonElement) => void
+  unregisterTrigger: (node: HTMLButtonElement) => void
   triggerNodes: HTMLButtonElement[]
   focusNext: (currentIdx: number) => void
   focusPrev: (currentIdx: number) => void
@@ -79,17 +80,17 @@ function Stepper({
   const [activeStep, setActiveStep] = useState(defaultValue)
   const [triggerNodes, setTriggerNodes] = useState<HTMLButtonElement[]>([])
 
-  // Register/unregister triggers
-  const registerTrigger = useCallback((node: HTMLButtonElement | null) => {
+  const registerTrigger = useCallback((node: HTMLButtonElement) => {
     setTriggerNodes((prev) => {
-      if (node && !prev.includes(node)) {
+      if (!prev.includes(node)) {
         return [...prev, node]
-      } else if (!node && prev.includes(node!)) {
-        return prev.filter((n) => n !== node)
-      } else {
-        return prev
       }
+      return prev
     })
+  }, [])
+
+  const unregisterTrigger = useCallback((node: HTMLButtonElement) => {
+    setTriggerNodes((prev) => prev.filter((n) => n !== node))
   }, [])
 
   const handleSetActiveStep = useCallback(
@@ -122,6 +123,7 @@ function Stepper({
       setActiveStep: handleSetActiveStep,
       orientation,
       registerTrigger,
+      unregisterTrigger,
       focusNext,
       focusPrev,
       focusFirst,
@@ -134,6 +136,7 @@ function Stepper({
       handleSetActiveStep,
       orientation,
       registerTrigger,
+      unregisterTrigger,
       triggerNodes,
     ]
   )
@@ -218,6 +221,7 @@ function StepperTrigger({
     setActiveStep,
     activeStep,
     registerTrigger,
+    unregisterTrigger,
     triggerNodes,
     focusNext,
     focusPrev,
@@ -231,10 +235,12 @@ function StepperTrigger({
   // Register this trigger for keyboard navigation
   const btnRef = useRef<HTMLButtonElement>(null)
   useEffect(() => {
-    if (btnRef.current) {
-      registerTrigger(btnRef.current)
-    }
-  }, [btnRef.current])
+    const node = btnRef.current
+    if (!node) return
+
+    registerTrigger(node)
+    return () => unregisterTrigger(node)
+  }, [registerTrigger, unregisterTrigger])
 
   // Find our index among triggers for navigation
   const myIdx = useMemo(

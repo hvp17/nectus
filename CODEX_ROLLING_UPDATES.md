@@ -1007,7 +1007,7 @@ the app actually composes.
 **Commit:** `22bcf6d` (`refactor(stepper): remove unused local subcomponents`)
 pushed to `origin/main`.
 
-### Iteration 30 - in progress (2026-06-09)
+### Iteration 30 - done (2026-06-09)
 
 **Goal:** Remove stale stepper memo dependencies and duplicate context reads.
 
@@ -1019,6 +1019,37 @@ logic aligned to the values it actually reads.
 **Docs checked:** Context7 React `useMemo` docs for dependency arrays: include
 the reactive values referenced by the calculation so memo work does not re-run
 unnecessarily.
+
+**Claimed files:**
+- `src/components/reui/stepper.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/components/TaskWorkspace.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and committed.
+
+**Evidence:**
+- `pnpm vitest run src/components/TaskWorkspace.test.tsx` passed (26 tests).
+- `pnpm test` passed (59 files, 352 tests).
+- `pnpm build` passed.
+
+**Commit:** `a30781b` (`refactor(stepper): simplify memo and context reads`)
+pushed to `origin/main`.
+
+### Iteration 31 - in progress (2026-06-09)
+
+**Goal:** Add cleanup for workflow stepper trigger registration.
+
+**Rationale:** `StepperTrigger` registers its button node for keyboard navigation
+but never unregisters it on unmount, and the effect depends on `btnRef.current`.
+Making register/unregister explicit keeps the trigger registry accurate if steps
+mount/unmount and follows normal effect setup/cleanup structure.
+
+**Docs checked:** Context7 React `useEffect` docs for setup and cleanup: effects
+that synchronize with an external system should return cleanup and list the
+reactive values they use.
 
 **Claimed files:**
 - `src/components/reui/stepper.tsx`
