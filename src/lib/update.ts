@@ -17,8 +17,10 @@ export interface DownloadProgress {
 
 export interface UpdateCheckResult {
   info: UpdateInfo;
-  update: Update;
+  update: InstallableUpdate;
 }
+
+export type InstallableUpdate = Pick<Update, "downloadAndInstall">;
 
 /** The updater only works inside the Tauri runtime; everywhere else (browser
  * preview, Vitest) every call below no-ops so the UI degrades cleanly. */
@@ -47,7 +49,7 @@ export async function checkForUpdate(): Promise<UpdateCheckResult | null> {
 }
 
 export async function installUpdate(
-  update: Update,
+  update: InstallableUpdate,
   onProgress?: (progress: DownloadProgress) => void,
 ): Promise<void> {
   let downloaded = 0;

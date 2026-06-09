@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Update } from "@tauri-apps/plugin-updater";
 import {
   checkForUpdate,
   getAppVersion,
   installUpdate as runInstall,
   relaunchApp,
+  type InstallableUpdate,
   type UpdateInfo,
 } from "../lib/update";
 
@@ -40,7 +40,7 @@ export function useAppUpdate(): AppUpdateState {
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null);
-  const pending = useRef<Update | null>(null);
+  const pending = useRef<InstallableUpdate | null>(null);
   // Synchronous re-entrancy guard: the toast Install action and the card Install
   // button both call installUpdate, and `disabled` only applies after a render —
   // a ref set before the first await blocks a concurrent second download/install

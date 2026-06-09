@@ -11,6 +11,7 @@ vi.mock("@tauri-apps/api/app", () => ({ getVersion: appMock.getVersion }));
 import {
   checkForUpdate,
   getAppVersion,
+  type InstallableUpdate,
   installUpdate,
   isUpdaterAvailable,
   relaunchApp,
@@ -72,7 +73,8 @@ describe("update lib", () => {
       onEvent({ event: "Finished" });
     });
     const progress: Array<{ downloaded: number; contentLength: number | null }> = [];
-    await installUpdate({ downloadAndInstall } as never, (p) => progress.push(p));
+    const update = { downloadAndInstall } satisfies InstallableUpdate;
+    await installUpdate(update, (p) => progress.push(p));
     expect(downloadAndInstall).toHaveBeenCalledTimes(1);
     expect(progress.at(-1)).toEqual({ downloaded: 100, contentLength: 100 });
   });

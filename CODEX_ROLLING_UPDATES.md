@@ -2588,7 +2588,7 @@ preserving the expression's useful literal type.
 **Commit:** `1c0f5eb` (`test(ui): type app store attention fixtures`) pushed to
 `origin/main`.
 
-### Iteration 74 - in progress (2026-06-09)
+### Iteration 74 - done (2026-06-09)
 
 **Goal:** Tighten task-notification TaskSummary fixtures.
 
@@ -2611,11 +2611,54 @@ pattern.
 - Focused test: `pnpm vitest run src/taskNotification.test.ts`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Focused green `pnpm vitest run src/taskNotification.test.ts` passed: 1 file /
   7 tests.
+- `pnpm verify` passed: frontend tests (60 files / 373 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `bcab60a` (`test(ui): type task notification fixture`) pushed to
+`origin/main`.
+
+### Iteration 75 - in progress (2026-06-09)
+
+**Goal:** Narrow the updater install surface.
+
+**Rationale:** The app only needs the Tauri updater object's
+`downloadAndInstall` method after `checkForUpdate()`, but `UpdateCheckResult`
+previously exposed the full plugin `Update` type. Tests had to cast partial
+objects with `as never`. Introducing `InstallableUpdate =
+Pick<Update, "downloadAndInstall">` keeps `checkForUpdate()` compatible with the
+real plugin result while making the UI wrapper's public install contract match
+what the app actually uses.
+
+**Docs checked:** Context7 `/websites/v2_tauri_app` updater docs for the
+`check()` result and `update.downloadAndInstall()` progress-event flow.
+
+**Claimed files:**
+- `src/lib/update.ts`
+- `src/lib/update.test.ts`
+- `src/hooks/useAppUpdate.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused tests:
+  `pnpm vitest run src/lib/update.test.ts src/hooks/useAppUpdate.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Focused green
+  `pnpm vitest run src/lib/update.test.ts src/hooks/useAppUpdate.test.tsx`
+  passed: 2 files / 12 tests.
+- Initial `pnpm verify` caught the remaining boundary mismatch:
+  `useAppUpdate.ts` still stored the pending update as the full plugin `Update`
+  type. Root cause fixed by typing that ref as `InstallableUpdate`.
+- `pnpm build` passed after the hook type fix.
 - `pnpm verify` passed: frontend tests (60 files / 373 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.

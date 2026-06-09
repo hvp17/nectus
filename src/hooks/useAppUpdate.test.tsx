@@ -1,7 +1,7 @@
 import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppUpdate, type AppUpdateState } from "./useAppUpdate";
-import type { UpdateCheckResult } from "../lib/update";
+import type { InstallableUpdate, UpdateCheckResult } from "../lib/update";
 
 const lib = vi.hoisted(() => ({
   getAppVersion: vi.fn(),
@@ -24,7 +24,7 @@ function Probe() {
 }
 
 const fakeResult = (): UpdateCheckResult => ({
-  update: { downloadAndInstall: vi.fn() } as never,
+  update: { downloadAndInstall: vi.fn() } satisfies InstallableUpdate,
   info: { version: "0.2.0", currentVersion: "0.1.0", notes: "n", date: null },
 });
 
