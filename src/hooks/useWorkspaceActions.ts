@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { api } from "../api";
 import { useRefreshData } from "../queries/core";
 import { useGuardedAction } from "./useGuardedAction";
@@ -15,39 +16,48 @@ export function useWorkspaceActions() {
   const run = useGuardedAction(setMessage, setBusy);
   const refresh = useRefreshData();
 
-  const createWorkspace = (name: string, repoIds: number[]) =>
-    run(
-      async () => {
-        const workspace = await api.createWorkspace(name, repoIds);
-        await refresh();
-        setActiveWorkspaceId(workspace.id);
-        setMessage(`Workspace: Created ${workspace.name}`);
-        return workspace;
-      },
-      { busy: true, rethrow: true },
-    );
+  const createWorkspace = useCallback(
+    (name: string, repoIds: number[]) =>
+      run(
+        async () => {
+          const workspace = await api.createWorkspace(name, repoIds);
+          await refresh();
+          setActiveWorkspaceId(workspace.id);
+          setMessage(`Workspace: Created ${workspace.name}`);
+          return workspace;
+        },
+        { busy: true, rethrow: true },
+      ),
+    [refresh, run, setActiveWorkspaceId, setMessage],
+  );
 
-  const updateWorkspace = (id: number, name: string, repoIds: number[]) =>
-    run(
-      async () => {
-        const workspace = await api.updateWorkspace(id, name, repoIds);
-        await refresh();
-        setMessage(`Workspace: Saved ${workspace.name}`);
-        return workspace;
-      },
-      { busy: true, rethrow: true },
-    );
+  const updateWorkspace = useCallback(
+    (id: number, name: string, repoIds: number[]) =>
+      run(
+        async () => {
+          const workspace = await api.updateWorkspace(id, name, repoIds);
+          await refresh();
+          setMessage(`Workspace: Saved ${workspace.name}`);
+          return workspace;
+        },
+        { busy: true, rethrow: true },
+      ),
+    [refresh, run, setMessage],
+  );
 
-  const deleteWorkspace = (id: number) =>
-    run(
-      async () => {
-        await api.deleteWorkspace(id);
-        if (useAppStore.getState().activeWorkspaceId === id) setActiveWorkspaceId(undefined);
-        await refresh();
-        setMessage("Workspace: Deleted");
-      },
-      { busy: true, rethrow: true },
-    );
+  const deleteWorkspace = useCallback(
+    (id: number) =>
+      run(
+        async () => {
+          await api.deleteWorkspace(id);
+          if (useAppStore.getState().activeWorkspaceId === id) setActiveWorkspaceId(undefined);
+          await refresh();
+          setMessage("Workspace: Deleted");
+        },
+        { busy: true, rethrow: true },
+      ),
+    [refresh, run, setActiveWorkspaceId, setMessage],
+  );
 
   return { createWorkspace, updateWorkspace, deleteWorkspace };
 }

@@ -3438,7 +3438,7 @@ guidance explicitly recommends wrapping functions returned from custom hooks.
 **Commit:** `bb8d91d` (`refactor(ui): stabilize jira board config action`)
 pushed to `origin/main`.
 
-### Iteration 94 - in progress (2026-06-09)
+### Iteration 94 - done (2026-06-09)
 
 **Goal:** Stabilize the project-add action callback returned by
 `useProjectActions`.
@@ -3467,7 +3467,7 @@ change.
   `addProject` in `useCallback`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useProjectActions.test.tsx` failed as
@@ -3476,6 +3476,51 @@ change.
 - Focused green `pnpm vitest run src/hooks/useProjectActions.test.tsx` passed:
   1 file / 3 tests.
 - `pnpm verify` passed: frontend tests (69 files / 406 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `b526c2b` (`refactor(ui): stabilize project add callback`) pushed
+to `origin/main`.
+
+### Iteration 95 - in progress (2026-06-09)
+
+**Goal:** Stabilize the workspace action callbacks returned by
+`useWorkspaceActions`.
+
+**Rationale:** `useWorkspaceActions` exposes `createWorkspace`,
+`updateWorkspace`, and `deleteWorkspace` to workspace management UI. They are
+currently recreated on every render despite stable inputs. React's custom-hook
+guidance recommends wrapping returned functions in `useCallback`, keeping the
+hook API consistent with the recently stabilized project and JIRA actions.
+
+**Docs checked:** Context7 `/reactjs/react.dev` `useCallback` docs. Current
+guidance recommends wrapping functions returned from custom hooks and supplying
+the dependency array so React can reuse the callback while dependencies are
+unchanged.
+
+**Claimed files:**
+- `src/hooks/useWorkspaceActions.ts`
+- `src/hooks/useWorkspaceActions.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add a callback-stability test and run
+  `pnpm vitest run src/hooks/useWorkspaceActions.test.tsx`; it should fail
+  while the workspace actions are inline functions.
+- Focused green: rerun
+  `pnpm vitest run src/hooks/useWorkspaceActions.test.tsx` after wrapping the
+  returned actions in `useCallback`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useWorkspaceActions.test.tsx` failed as
+  expected before implementation; `createWorkspace` had a new function identity
+  after rerender.
+- Focused green `pnpm vitest run src/hooks/useWorkspaceActions.test.tsx` passed:
+  1 file / 4 tests.
+- `pnpm verify` passed: frontend tests (69 files / 407 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

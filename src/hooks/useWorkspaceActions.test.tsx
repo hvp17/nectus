@@ -47,6 +47,19 @@ describe("useWorkspaceActions", () => {
     vi.clearAllMocks();
   });
 
+  it("keeps workspace actions stable when dependencies are stable", () => {
+    const { result, rerender } = setup();
+
+    const firstCreateWorkspace = result.current.createWorkspace;
+    const firstUpdateWorkspace = result.current.updateWorkspace;
+    const firstDeleteWorkspace = result.current.deleteWorkspace;
+    rerender();
+
+    expect(result.current.createWorkspace).toBe(firstCreateWorkspace);
+    expect(result.current.updateWorkspace).toBe(firstUpdateWorkspace);
+    expect(result.current.deleteWorkspace).toBe(firstDeleteWorkspace);
+  });
+
   it("creates a workspace, focuses it, and refreshes bootstrap data", async () => {
     const created = workspace({ id: 7, name: "Design Systems" });
     mockedApi.createWorkspace.mockResolvedValue(created);
