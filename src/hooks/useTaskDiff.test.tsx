@@ -58,7 +58,7 @@ describe("useTaskDiff", () => {
     renderHook(() => useTaskDiff(undefined), { wrapper: makeWrapper(client) });
 
     expect(client.getQueryCache().find({ queryKey: ["task", "diff-summary", "none"] })).toBeUndefined();
-    expect(client.getQueryCache().find({ queryKey: queryKeys.task.diffSummary(undefined) })).toBeDefined();
+    expect(client.getQueryCache().find({ queryKey: queryKeys.task.diffSummary(undefined) })).toBeUndefined();
     expect(mockedApi.taskDiffSummary).not.toHaveBeenCalled();
   });
 

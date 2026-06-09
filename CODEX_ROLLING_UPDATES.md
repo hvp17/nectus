@@ -4537,7 +4537,7 @@ review id exists.
   dynamic `useQueries` array.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready for collision check and commit.
+**Status:** verified and committed.
 
 **Evidence so far:**
 - `git status --short --branch` was clean after pushing `0a56683`.
@@ -4558,6 +4558,59 @@ review id exists.
 - Follow-up `pnpm build` passed after that type-boundary fix.
 - Final `pnpm verify` passed: frontend tests (72 files / 429 tests), frontend
   build, Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `50758aa` (`fix(reviews): avoid empty runs query`) pushed to
+`origin/main`.
+
+### Iteration 119 - in progress (2026-06-09)
+
+**Goal:** Stop allocating an `undefined` task-diff summary query before a task is
+selected.
+
+**Rationale:** `useTaskDiff` mirrors the old PR-review pattern: `skipToken`
+prevents `taskDiffSummary` from running without a task, but `useQuery` still
+allocates `queryKeys.task.diffSummary(undefined)`. Unlike `useTaskReviewLoop`,
+there is no imperative no-task setter path that needs that disabled cache cell;
+the hook already returns `summary: null` while no task is selected.
+
+**Docs checked:** Context7 `/tanstack/query` docs. Current docs show
+`enabled`/`skipToken` for disabled dependent queries and dynamic `useQueries`
+with an empty `queries` array when no dependent ids exist. The latter matches a
+diff summary whose query key is meaningful only after a task id exists.
+
+**Claimed files:**
+- `src/hooks/useTaskDiff.ts`
+- `src/hooks/useTaskDiff.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: update the existing task-diff test to expect no
+  `queryKeys.task.diffSummary(undefined)` cache entry without a selected task;
+  run `pnpm vitest run src/hooks/useTaskDiff.test.tsx`.
+- Focused green: rerun the same suite after moving the summary read to a dynamic
+  `useQueries` array.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready for collision check and commit.
+
+**Evidence so far:**
+- `git status --short --branch` was clean after pushing `50758aa`.
+- `git log --oneline --decorate -10` shows `50758aa` at both local and
+  `origin/main`.
+- `CLAUDE_ROLLING_UPDATES.md` remains on older coverage/documentation work and
+  does not claim `useTaskDiff`.
+- Context7 docs checked for TanStack Query dependent queries and dynamic
+  `useQueries`.
+- Red check `pnpm vitest run src/hooks/useTaskDiff.test.tsx` failed as expected
+  before implementation: the disabled `skipToken` query still created
+  `queryKeys.task.diffSummary(undefined)`.
+- Focused green `pnpm vitest run src/hooks/useTaskDiff.test.tsx` passed: 1 file /
+  8 tests.
+- `pnpm build` passed after moving the summary read to a memoized dynamic
+  `useQueries` array.
+- `pnpm verify` passed: frontend tests (72 files / 429 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
 ---
