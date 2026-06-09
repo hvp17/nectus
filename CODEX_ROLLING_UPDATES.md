@@ -3350,7 +3350,7 @@ functions, and call assertions such as `toHaveBeenCalledWith`.
 **Commit:** `148d6e9` (`test(ui): cover project add action`) pushed to
 `origin/main`.
 
-### Iteration 92 - in progress (2026-06-09)
+### Iteration 92 - done (2026-06-09)
 
 **Goal:** Centralize repeated bootstrap-query test helpers.
 
@@ -3379,7 +3379,7 @@ invalid and refetches active ones by default, which matches the shared
   and rerun the focused tests; invalidation tests should fail.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Focused green
@@ -3390,6 +3390,48 @@ invalid and refetches active ones by default, which matches the shared
   tests saw `isInvalidated === true`.
 - Restored focused green passed again: 3 files / 7 tests.
 - `pnpm verify` passed: frontend tests (68 files / 404 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `df27b98` (`test(ui): share bootstrap query helpers`) pushed to
+`origin/main`.
+
+### Iteration 93 - in progress (2026-06-09)
+
+**Goal:** Stabilize the JIRA board config action callback.
+
+**Rationale:** `useJiraBoardView` returns several action callbacks into the JIRA
+board tree. Most are already wrapped in `useCallback`, but `setBoardConfig` is
+recreated on every render despite stable inputs. React's custom-hook guidance
+recommends wrapping returned functions in `useCallback` so consumers can optimize
+or avoid unnecessary effects.
+
+**Docs checked:** Context7 `/reactjs/react.dev` `useCallback` docs. Current
+guidance explicitly recommends wrapping functions returned from custom hooks.
+
+**Claimed files:**
+- `src/hooks/useJiraBoardView.ts`
+- `src/hooks/useJiraBoardView.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add the callback-stability test and run
+  `pnpm vitest run src/hooks/useJiraBoardView.test.tsx`; it should fail while
+  `setBoardConfig` is an inline function.
+- Focused green: rerun
+  `pnpm vitest run src/hooks/useJiraBoardView.test.tsx` after wrapping it in
+  `useCallback`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useJiraBoardView.test.tsx` failed as
+  expected before implementation; `setBoardConfig` had a new function identity
+  after rerender.
+- Focused green `pnpm vitest run src/hooks/useJiraBoardView.test.tsx` passed:
+  1 file / 1 test.
+- `pnpm verify` passed: frontend tests (69 files / 405 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

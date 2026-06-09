@@ -43,27 +43,30 @@ export function useJiraBoardView({ active, settings, setSettings, setMessage }: 
     setSelectedItem((current) => syncSelectedWorkItem(current, jira.items));
   }, [jira.items]);
 
-  const setBoardConfig = (partial: {
-    project?: string | null;
-    myIssues?: boolean;
-    unresolved?: boolean;
-    currentSprint?: boolean;
-    statuses?: string[];
-  }) =>
-    run(async () => {
-      if (!settings) return;
-      const updated = await api.updateAppSettings({
-        ...toSettingsInput(settings),
-        jiraBoardProject:
-          partial.project !== undefined ? partial.project : settings.jiraBoardProject ?? null,
-        jiraFilterMyIssues: partial.myIssues ?? settings.jiraFilterMyIssues,
-        jiraFilterUnresolved: partial.unresolved ?? settings.jiraFilterUnresolved,
-        jiraFilterCurrentSprint: partial.currentSprint ?? settings.jiraFilterCurrentSprint,
-        jiraFilterStatuses: partial.statuses ?? settings.jiraFilterStatuses,
-      });
-      setSettings(updated);
-      await jira.refresh();
-    });
+  const setBoardConfig = useCallback(
+    (partial: {
+      project?: string | null;
+      myIssues?: boolean;
+      unresolved?: boolean;
+      currentSprint?: boolean;
+      statuses?: string[];
+    }) =>
+      run(async () => {
+        if (!settings) return;
+        const updated = await api.updateAppSettings({
+          ...toSettingsInput(settings),
+          jiraBoardProject:
+            partial.project !== undefined ? partial.project : settings.jiraBoardProject ?? null,
+          jiraFilterMyIssues: partial.myIssues ?? settings.jiraFilterMyIssues,
+          jiraFilterUnresolved: partial.unresolved ?? settings.jiraFilterUnresolved,
+          jiraFilterCurrentSprint: partial.currentSprint ?? settings.jiraFilterCurrentSprint,
+          jiraFilterStatuses: partial.statuses ?? settings.jiraFilterStatuses,
+        });
+        setSettings(updated);
+        await jira.refresh();
+      }),
+    [jira.refresh, run, setSettings, settings],
+  );
 
   // Connecting/disconnecting a token writes jira_site_url / jira_rest_email
   // server-side. Re-read settings so the local copy stays fresh — otherwise a
