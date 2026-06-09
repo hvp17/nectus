@@ -3,6 +3,7 @@ import { expect, it, vi } from "vitest";
 import App from "../App";
 import { api } from "../api";
 import { formatNotificationBody } from "../notificationText";
+import { useAppStore } from "../store/appStore";
 import type { TaskSummary } from "../types";
 import { appRepo, appTask } from "./appFixtures";
 import { deferred } from "./testUtils";
@@ -167,6 +168,38 @@ export function defineAppTaskCreationTests() {
       expect(mockedApi.createTask).toHaveBeenCalledWith({
         repoId: appRepo.id,
         title: "Create title-only task",
+        prompt: null,
+        agentProfileId: 1,
+        hasWorktree: false,
+        branchName: null,
+        jiraIssueKey: null,
+        jiraIssueSummary: null,
+        jiraIssueUrl: null,
+      });
+    });
+  });
+
+  it("replaces a stale draft agent when opening the New Task composer", async () => {
+    mockProject();
+    useAppStore.setState({ newTaskAgentProfileId: 99 });
+    createTaskMock("Create with resolved agent", {
+      agentProfileId: 1,
+      agentName: "Codex",
+      agentKind: "codex",
+    });
+
+    render(<App />);
+
+    await openCreateTaskModal();
+    fireEvent.change(screen.getByLabelText(/title/i), {
+      target: { value: "Create with resolved agent" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /create & start/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.createTask).toHaveBeenCalledWith({
+        repoId: appRepo.id,
+        title: "Create with resolved agent",
         prompt: null,
         agentProfileId: 1,
         hasWorktree: false,

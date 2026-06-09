@@ -170,6 +170,12 @@ export function AppLayout() {
     settings?.defaultAgentProfileId,
     selectedAgentProfileId,
   );
+  const composerOpenAgent = resolveAgentProfileId(
+    agentProfiles,
+    newTaskAgentProfileId,
+    settings?.defaultAgentProfileId,
+    selectedAgentProfileId,
+  );
 
   useAppTheme(settings);
 
@@ -198,10 +204,7 @@ export function AppLayout() {
   // The sidebar rows' per-scope "+" actions pass a target; the rail passes none.
   const openComposer = useCallback(
     (target?: { repoId?: number; workspaceId?: number }) => {
-      if (!newTaskAgentProfileId) {
-        const defaultAgentProfileId = resolveAgentProfileId(agentProfiles, settings?.defaultAgentProfileId);
-        if (defaultAgentProfileId) setNewTaskAgentProfileId(defaultAgentProfileId);
-      }
+      if (composerOpenAgent !== newTaskAgentProfileId) setNewTaskAgentProfileId(composerOpenAgent);
       // Reachable from the icon rail / sidebar while a task or the workspace manager is
       // open, so dismiss the manager before the composer overlays the view.
       setManagingWorkspaces(false);
@@ -233,8 +236,7 @@ export function AppLayout() {
     },
     [
       newTaskAgentProfileId,
-      settings?.defaultAgentProfileId,
-      agentProfiles,
+      composerOpenAgent,
       setNewTaskAgentProfileId,
       workspaces,
       repos,

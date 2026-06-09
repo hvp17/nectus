@@ -4396,7 +4396,7 @@ store actions/setters to update state before a UI transition.
   through the JIRA panel/page/AppRouter handoff and into the composer draft.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready for collision check and commit.
+**Status:** verified and committed.
 
 **Evidence so far:**
 - Red check
@@ -4408,6 +4408,48 @@ store actions/setters to update state before a UI transition.
   `pnpm vitest run src/components/JiraWorkItemDialog.test.tsx src/hooks/useComposer.test.tsx`
   passed: 2 files / 5 tests.
 - `pnpm verify` passed: frontend tests (72 files / 427 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `1277968` (`fix(jira): carry launch agent into composer`) pushed to
+`origin/main`.
+
+### Iteration 116 - in progress (2026-06-09)
+
+**Goal:** Resolve stale New Task composer agent drafts when opening the composer.
+
+**Rationale:** The app's close/reset path uses `composerDefaultAgent`, which
+resolves through loaded profiles. The open path only checked whether
+`newTaskAgentProfileId` was truthy, so a stale draft id such as `99` could remain
+selected invisibly and be submitted to `createTask`.
+
+**Docs checked:** Context7 `/pmndrs/zustand` docs. Current Zustand docs support
+reading fresh store state and invoking store setters/actions outside component
+render flow, which matches correcting the store-owned composer draft immediately
+before opening the composer.
+
+**Claimed files:**
+- `src/AppRouter.tsx`
+- `src/test/appTaskCreationTests.tsx`
+- `docs/features.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add an app task-creation test that seeds stale
+  `newTaskAgentProfileId = 99`, opens the composer, creates a task, and expects
+  the resolved default profile id instead; run `pnpm vitest run src/App.test.tsx`.
+- Focused green: rerun the same test file after making `openComposer` resolve
+  the existing draft id against loaded profiles.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready for collision check and commit.
+
+**Evidence so far:**
+- Red check `pnpm vitest run src/App.test.tsx` failed as expected before
+  implementation; opening the composer with stale `newTaskAgentProfileId = 99`
+  submitted `agentProfileId: 99` to `createTask`.
+- Focused green `pnpm vitest run src/App.test.tsx` passed: 1 file / 50 tests.
+- `pnpm verify` passed: frontend tests (72 files / 428 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

@@ -170,6 +170,10 @@ linked story · review). The workspace header title is **click-to-edit** (a penc
 appears on hover): Enter or blur saves a trimmed, changed title via
 `update_task_metadata`, Escape reverts.
 
+Opening the composer resolves the draft agent against loaded agent profiles, keeping
+a valid existing draft choice when possible and falling back to the configured
+default or selected profile so stale profile ids are not submitted.
+
 File ownership: see [AGENTS.md](../AGENTS.md).
 
 ## Agent Profiles
