@@ -1346,7 +1346,7 @@ readers two places to inspect for the same gate.
 **Commit:** `5dff9a2` (`refactor(queries): rely on skipToken gates`) pushed to
 `origin/main`.
 
-### Iteration 40 - in progress (2026-06-09)
+### Iteration 40 - done (2026-06-09)
 
 **Goal:** Remove a no-op `useMemo` from `TaskWorkspace`.
 
@@ -1367,10 +1367,44 @@ identity pass-through values.
 - Focused: `pnpm vitest run src/components/TaskWorkspace.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/components/TaskWorkspace.test.tsx` passed (1 file, 26 tests).
+- `pnpm test` passed (59 files, 353 tests).
+- `pnpm build` passed.
+
+**Commit:** `a068a98` (`refactor(task-workspace): remove noop memo`) pushed to
+`origin/main`.
+
+### Iteration 41 - in progress (2026-06-09)
+
+**Goal:** Remove unnecessary `useMemo` wrappers from `TaskDiffView`.
+
+**Rationale:** `TaskDiffView` memoized `summary?.files ?? EMPTY_FILES` and a
+selected-file `find` result. The file-list expression already returns either the
+summary's stable `files` array or the module-level `EMPTY_FILES`; the selected
+metadata lookup returns an existing file object. Keeping both wrappers makes the
+diff pane harder to read without stabilizing any new object identity or avoiding
+an expensive calculation.
+
+**Docs checked:** Context7 React `useMemo` docs: memoization is useful for
+noticeably expensive calculations, memoized child props, or values that truly
+need stable identity as hook dependencies. These direct reads do not meet that
+bar.
+
+**Claimed files:**
+- `src/components/TaskDiffView.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/components/TaskDiffView.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `pnpm vitest run src/components/TaskDiffView.test.tsx` passed (1 file, 6 tests).
 - `pnpm test` passed (59 files, 353 tests).
 - `pnpm build` passed.
 

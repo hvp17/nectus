@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { FileDiff } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
@@ -49,7 +49,7 @@ function classifyLine(line: string): DiffLineKind {
 }
 
 export function TaskDiffView({ summary, loading, error, files, onSelectFile }: TaskDiffViewProps) {
-  const fileList = useMemo(() => summary?.files ?? EMPTY_FILES, [summary]);
+  const fileList = summary?.files ?? EMPTY_FILES;
   const [selected, setSelected] = useState<string | null>(null);
 
   // Keep a valid selection: default to the first file, and re-anchor if the
@@ -64,10 +64,7 @@ export function TaskDiffView({ summary, loading, error, files, onSelectFile }: T
     );
   }, [fileList]);
 
-  const selectedMeta = useMemo(
-    () => fileList.find((file) => file.path === selected),
-    [fileList, selected],
-  );
+  const selectedMeta = fileList.find((file) => file.path === selected);
 
   // Lazy-load the selected file's patch unless it is binary or already in flight.
   useEffect(() => {
