@@ -39,7 +39,6 @@ export function useJiraProjectStatusesQuery(project: string | null, enabled: boo
   return useQuery({
     queryKey: queryKeys.jira.projectStatuses(project),
     queryFn: shouldLoad ? () => api.jiraProjectStatuses(project) : skipToken,
-    enabled: shouldLoad,
     staleTime: 15 * 60_000,
   });
 }

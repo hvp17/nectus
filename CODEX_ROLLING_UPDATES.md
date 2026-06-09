@@ -1277,7 +1277,7 @@ under a `Suspense` boundary.
 **Commit:** `dd6c9de` (`perf(task-workspace): lazy-load stage panes`) pushed to
 `origin/main`.
 
-### Iteration 38 - in progress (2026-06-09)
+### Iteration 38 - done (2026-06-09)
 
 **Goal:** Update architecture docs for the new lazy-loading boundaries.
 
@@ -1299,12 +1299,49 @@ should be concise, factual, and follow the product architecture they describe.
 - Review: `rg -n "lazy|Suspense|TaskWorkspaceStage|AppRouter" AGENTS.md docs/architecture.md`.
 - No runtime test needed for docs-only changes.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `rg -n "lazy|Suspense|TaskWorkspaceStage|AppRouter" AGENTS.md docs/architecture.md`
   shows the new AppRouter and task-workspace loading-boundary references.
 - Runtime tests were not run because this is a docs-only update.
+
+**Commit:** `655ef2e` (`docs: document frontend lazy boundaries`) pushed to
+`origin/main`.
+
+### Iteration 39 - in progress (2026-06-09)
+
+**Goal:** Remove redundant TanStack Query `enabled` flags where `skipToken` already disables the query.
+
+**Rationale:** Several conditional queries use both `queryFn: condition ? fn :
+skipToken` and `enabled: condition`. In TanStack Query v5, `skipToken` is the
+type-safe conditional query function and disables the query without a separate
+`enabled` flag. Keeping both makes the query options noisier and gives future
+readers two places to inspect for the same gate.
+
+**Docs checked:** Context7 TanStack Query v5 docs for type-safe disabling with
+`skipToken`. The docs show `skipToken` directly in `queryFn` and reserve
+`enabled` for ordinary dependent queries or manual-refetch cases.
+
+**Claimed files:**
+- `src/queries/github.ts`
+- `src/queries/jira.ts`
+- `src/hooks/useTaskDiff.ts`
+- `src/hooks/useTaskReviewLoop.ts`
+- `src/hooks/usePrReviews.ts`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/queries/github.test.tsx src/queries/jira.test.tsx src/hooks/useTaskDiff.test.tsx src/hooks/useTaskReviewLoop.test.tsx src/hooks/usePrReviews.test.ts`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `pnpm vitest run src/queries/github.test.tsx src/queries/jira.test.tsx src/hooks/useTaskDiff.test.tsx src/hooks/useTaskReviewLoop.test.tsx src/hooks/usePrReviews.test.ts`
+  passed (5 files, 17 tests).
+- `pnpm test` passed (59 files, 353 tests).
+- `pnpm build` passed.
 
 ---
 

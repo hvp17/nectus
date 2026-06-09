@@ -53,13 +53,11 @@ export function useTaskReviewLoop({ selectedTaskId, onMessage }: UseTaskReviewLo
   const loopQuery = useQuery({
     queryKey: queryKeys.task.reviewLoop(selectedTaskId),
     queryFn: selectedTaskId !== undefined ? () => api.getTaskReviewLoop(selectedTaskId) : skipToken,
-    enabled: selectedTaskId !== undefined,
     staleTime: 0,
   });
   const runsQuery = useQuery({
     queryKey: queryKeys.task.reviewRuns(selectedTaskId),
     queryFn: selectedTaskId !== undefined ? () => api.listTaskReviewRuns(selectedTaskId) : skipToken,
-    enabled: selectedTaskId !== undefined,
     staleTime: 0,
   });
 

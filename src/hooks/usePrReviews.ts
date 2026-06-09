@@ -41,7 +41,6 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
   const runsQuery = useQuery({
     queryKey: queryKeys.prReviews.runs(selectedPrReviewId),
     queryFn: selectedPrReviewId != null ? () => api.listPrReviewRuns(selectedPrReviewId) : skipToken,
-    enabled: selectedPrReviewId != null,
     meta: { surfaceErrors: true },
   });
 

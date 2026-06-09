@@ -29,7 +29,6 @@ export function useGithubPullRequestQuery(task: TaskSummary | undefined, ghConne
   return useQuery({
     queryKey: queryKeys.github.pullRequest(taskId),
     queryFn: enabled ? () => api.githubPullRequestStatus(taskId) : skipToken,
-    enabled,
     refetchOnWindowFocus: true,
     refetchInterval: (query) => {
       const state = query.state.data?.state;
@@ -51,7 +50,6 @@ export function useGithubPullRequestDetectionQuery(task: TaskSummary | undefined
   return useQuery({
     queryKey: queryKeys.github.pullRequestDetection(taskId),
     queryFn: enabled ? () => api.detectGithubPullRequest(taskId) : skipToken,
-    enabled,
     refetchOnWindowFocus: false,
     retry: false,
   });

@@ -37,7 +37,6 @@ export function useTaskDiff(taskId: number | undefined): TaskDiff {
   const summaryQuery = useQuery({
     queryKey: queryKeys.task.diffSummary(taskId),
     queryFn: taskId != null ? () => api.taskDiffSummary(taskId) : skipToken,
-    enabled: taskId != null,
     staleTime: 0,
   });
   const summary = summaryQuery.data ?? null;
