@@ -4349,7 +4349,7 @@ and guarding the submit handler with the same state.
   reviewer id and using it for both disabled state and submit.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready for collision check and commit.
+**Status:** verified and committed.
 
 **Evidence so far:**
 - Red check `pnpm vitest run src/components/ReviewsPage.test.tsx` failed as
@@ -4358,6 +4358,56 @@ and guarding the submit handler with the same state.
 - Focused green `pnpm vitest run src/components/ReviewsPage.test.tsx` passed:
   1 file / 8 tests.
 - `pnpm verify` passed: frontend tests (71 files / 425 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `ab5215d` (`fix(reviews): require resolved reviewer profile`) pushed
+to `origin/main`.
+
+### Iteration 115 - in progress (2026-06-09)
+
+**Goal:** Carry the JIRA work-item launch-row agent into the task composer.
+
+**Rationale:** The JIRA work-item panel displays a resolved launch agent using the
+current task-agent draft and settings default. If the user clicks **Create task &
+start** without manually changing that dropdown, the panel opens the composer but
+does not copy the displayed agent id into the composer draft, so the composer can
+still have no selected agent and refuse submission.
+
+**Docs checked:** Context7 `/pmndrs/zustand` docs. Current Zustand docs show
+using `getState()` for fresh non-reactive state outside components and calling
+store actions/setters to update state before a UI transition.
+
+**Claimed files:**
+- `src/components/JiraWorkItemDialog.tsx`
+- `src/components/JiraWorkItemDialog.test.tsx`
+- `src/components/JiraBoardPage.tsx`
+- `src/hooks/useComposer.ts`
+- `src/hooks/useComposer.test.tsx`
+- `src/AppRouter.tsx`
+- `docs/features.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add panel and composer tests showing the resolved launch agent is
+  forwarded and stored; run
+  `pnpm vitest run src/components/JiraWorkItemDialog.test.tsx src/hooks/useComposer.test.tsx`.
+- Focused green: rerun the same command after threading the optional agent id
+  through the JIRA panel/page/AppRouter handoff and into the composer draft.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready for collision check and commit.
+
+**Evidence so far:**
+- Red check
+  `pnpm vitest run src/components/JiraWorkItemDialog.test.tsx src/hooks/useComposer.test.tsx`
+  failed as expected before implementation: the panel called `onCreateTask`
+  without the resolved agent id, and `createTaskFromStory(..., 2)` left
+  `newTaskAgentProfileId` undefined.
+- Focused green
+  `pnpm vitest run src/components/JiraWorkItemDialog.test.tsx src/hooks/useComposer.test.tsx`
+  passed: 2 files / 5 tests.
+- `pnpm verify` passed: frontend tests (72 files / 427 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

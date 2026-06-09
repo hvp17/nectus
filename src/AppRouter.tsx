@@ -617,6 +617,11 @@ function JiraView() {
   );
   const jiraBoard = useJiraBoardView({ active: true, settings, setSettings, setMessage });
   const jira = jiraBoard.jira;
+  const jiraLaunchAgentProfileId = resolveAgentProfileId(
+    agentProfiles,
+    newTaskAgentProfileId,
+    settings?.defaultAgentProfileId,
+  );
   return (
     <JiraBoardPage
       status={jira.jiraStatus}
@@ -636,9 +641,9 @@ function JiraView() {
       onRefresh={jira.refresh}
       onTransition={jira.transition}
       onOpenItem={jiraBoard.openItem}
-      onCreateTask={(item) => {
+      onCreateTask={(item, agentProfileId) => {
         jiraBoard.setSelectedItem(null);
-        void composer.createTaskFromStory(item);
+        void composer.createTaskFromStory(item, agentProfileId ?? jiraLaunchAgentProfileId);
       }}
       selectedItem={jiraBoard.selectedItem}
       onCloseItem={() => jiraBoard.setSelectedItem(null)}
@@ -647,11 +652,7 @@ function JiraView() {
       onCloseCreate={jiraBoard.closeCreate}
       onCreateWorkItem={jiraBoard.createWorkItem}
       agentProfiles={agentProfiles}
-      selectedAgentProfileId={resolveAgentProfileId(
-        agentProfiles,
-        newTaskAgentProfileId,
-        settings?.defaultAgentProfileId,
-      )}
+      selectedAgentProfileId={jiraLaunchAgentProfileId}
       site={jira.jiraStatus?.site}
       restConnected={jira.restConnected}
       onListTransitions={api.jiraListTransitions}

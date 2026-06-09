@@ -570,7 +570,8 @@ hydrate after the panel opens, an empty project field adopts the board/default
 project once it is available; on submit Nectus runs `acli jira workitem create`,
 refreshes the board, and auto-opens the new card's view panel — where the launch
 row can immediately start an agent on it. The panel's bottom launch row (agent
-select + **Create task & start**)
+select + **Create task & start**, carrying the selected launch agent into the task
+composer)
 and the card's **Create task** affordance both open the task composer pre-seeded
 from the story (title, description) with a project selector; the resulting
 task↔story link is stored locally on the task (`jira_issue_key/summary/url`) and

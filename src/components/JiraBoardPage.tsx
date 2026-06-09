@@ -59,7 +59,7 @@ interface JiraBoardPageProps {
   onTransition: (item: JiraWorkItem, statusName: string) => void;
   onOpenItem: (item: JiraWorkItem) => void;
   onOpenTask: (taskId: number) => void;
-  onCreateTask: (item: JiraWorkItem) => void;
+  onCreateTask: (item: JiraWorkItem, agentProfileId?: number) => void;
   /** When set, the board splits to dock the work-item side panel beside it. */
   selectedItem?: JiraWorkItem | null;
   onCloseItem?: () => void;

@@ -1,7 +1,7 @@
 import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { renderWithTooltipProvider } from "../test/testUtils";
-import type { JiraTransition, JiraWorkItem } from "../types";
+import type { AgentProfile, JiraTransition, JiraWorkItem } from "../types";
 import { JiraWorkItemPanel } from "./JiraWorkItemDialog";
 
 const item: JiraWorkItem = {
@@ -15,6 +15,31 @@ const item: JiraWorkItem = {
   url: null,
   description: null,
 };
+
+const agentProfiles: AgentProfile[] = [
+  {
+    id: 1,
+    name: "Codex",
+    agentKind: "codex",
+    command: "codex",
+    model: null,
+    args: [],
+    env: {},
+    createdAt: "2026-06-09T00:00:00.000Z",
+    updatedAt: "2026-06-09T00:00:00.000Z",
+  },
+  {
+    id: 2,
+    name: "Claude",
+    agentKind: "claude",
+    command: "claude",
+    model: null,
+    args: [],
+    env: {},
+    createdAt: "2026-06-09T00:00:00.000Z",
+    updatedAt: "2026-06-09T00:00:00.000Z",
+  },
+];
 
 function renderPanel(overrides: Partial<React.ComponentProps<typeof JiraWorkItemPanel>> = {}) {
   const props = {
@@ -74,5 +99,14 @@ describe("JiraWorkItemPanel status dropdown", () => {
     expect(onListTransitions).toHaveBeenCalledWith("SCRUM-3");
     fireEvent.click(screen.getByRole("combobox", { name: /status/i }));
     expect(await screen.findByRole("option", { name: "Blocked" })).toBeInTheDocument();
+  });
+
+  it("forwards the resolved launch agent when creating a task from the story", () => {
+    const onCreateTask = vi.fn();
+    renderPanel({ agentProfiles, selectedAgentProfileId: 2, onCreateTask });
+
+    fireEvent.click(screen.getByRole("button", { name: /create task & start/i }));
+
+    expect(onCreateTask).toHaveBeenCalledWith(item, 2);
   });
 });

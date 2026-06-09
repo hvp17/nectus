@@ -142,8 +142,9 @@ export function useComposer() {
   }, [settings?.defaultBranchPrefix, run, refresh, setMessage]);
 
   const createTaskFromStory = useCallback(
-    async (item: JiraWorkItem) => {
+    async (item: JiraWorkItem, agentProfileId?: number) => {
       const store = useAppStore.getState();
+      if (agentProfileId !== undefined) store.setNewTaskAgentProfileId(agentProfileId);
       store.setNewTaskTitle(item.summary);
       let description = item.description ?? "";
       if (!description) {

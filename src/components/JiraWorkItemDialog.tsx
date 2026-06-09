@@ -33,7 +33,7 @@ export interface JiraWorkItemPanelProps {
   onTransition: (item: JiraWorkItem, statusName: string) => void;
   onAssign: (key: string, assignee: string) => void;
   onComment: (key: string, body: string) => void;
-  onCreateTask: (item: JiraWorkItem) => void;
+  onCreateTask: (item: JiraWorkItem, agentProfileId?: number) => void;
   onPickAgent: (profileId: number) => void;
   onOpenUrl: (url: string) => void;
 }
@@ -245,7 +245,7 @@ export function JiraWorkItemPanel({
               </SelectContent>
             </Select>
           )}
-          <Button type="button" className="gap-2" onClick={() => onCreateTask(item)}>
+          <Button type="button" className="gap-2" onClick={() => onCreateTask(item, launchAgentId)}>
             <Play className="size-4" />
             Create task &amp; start
           </Button>
