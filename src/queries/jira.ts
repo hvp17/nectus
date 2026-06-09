@@ -1,6 +1,8 @@
-import { skipToken, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
+import type { JiraStatusDef } from "../types";
 import { queryKeys } from "./keys";
+import { useOptionalQuery } from "./optional";
 
 /**
  * JIRA read queries. All are best-effort (no `meta.surfaceErrors`) — the board view
@@ -36,11 +38,15 @@ export function useJiraProjectsQuery(enabled: boolean) {
 
 export function useJiraProjectStatusesQuery(project: string | null, enabled: boolean) {
   const shouldLoad = enabled && project != null;
-  return useQuery({
-    queryKey: queryKeys.jira.projectStatuses(project),
-    queryFn: shouldLoad ? () => api.jiraProjectStatuses(project) : skipToken,
-    staleTime: 15 * 60_000,
-  });
+  return useOptionalQuery<JiraStatusDef[]>(
+    shouldLoad
+      ? {
+          queryKey: queryKeys.jira.projectStatuses(project),
+          queryFn: () => api.jiraProjectStatuses(project),
+          staleTime: 15 * 60_000,
+        }
+      : null,
+  );
 }
 
 export function useJiraBoardQuery(enabled: boolean) {

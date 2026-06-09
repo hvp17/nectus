@@ -25,13 +25,13 @@ beforeEach(() => {
 });
 
 describe("useJiraProjectStatusesQuery", () => {
-  it("does not allocate an empty-string project-statuses query without a project", () => {
+  it("does not allocate a project-statuses query without a project", () => {
     const client = createQueryClient();
 
     renderHook(() => useJiraProjectStatusesQuery(null, true), { wrapper: makeWrapper(client) });
 
     expect(client.getQueryCache().find({ queryKey: queryKeys.jira.projectStatuses("") })).toBeUndefined();
-    expect(client.getQueryCache().find({ queryKey: queryKeys.jira.projectStatuses(null) })).toBeDefined();
+    expect(client.getQueryCache().find({ queryKey: queryKeys.jira.projectStatuses(null) })).toBeUndefined();
     expect(api.jiraProjectStatuses).not.toHaveBeenCalled();
   });
 });

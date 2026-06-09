@@ -4824,7 +4824,7 @@ an empty `queries` array for dependent dynamic queries when ids are unavailable.
   `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready for collision check and commit.
+**Status:** verified and committed.
 
 **Evidence so far:**
 - `git status --short --branch` was clean after pushing `ec630a9`.
@@ -4850,14 +4850,69 @@ an empty `queries` array for dependent dynamic queries when ids are unavailable.
   HEAD..origin/main` was empty, and `CLAUDE_ROLLING_UPDATES.md` still does not
   claim the review-loop files.
 
+**Commit:** `a53d11f` (`fix(reviews): avoid empty review loop queries`) pushed
+to `origin/main`.
+
+### Iteration 124 - in progress (2026-06-09)
+
+**Goal:** Remove the JIRA project-statuses `null` placeholder query and make it
+use the shared optional-query helper.
+
+**Rationale:** After Iteration 123, the only remaining `skipToken` optional read
+is `useJiraProjectStatusesQuery(project, enabled)`, and its test currently
+expects `queryKeys.jira.projectStatuses(null)` to allocate a disabled cache
+entry. The board uses project statuses only when REST is connected and a project
+exists, so the null cache cell is not useful state.
+
+**Docs checked:** Context7 `/tanstack/query` docs. Current docs show `enabled` or
+`skipToken` for fixed dependent `useQuery` reads, and `useQueries` with an empty
+`queries` array for dynamic dependent reads when inputs are unavailable.
+
+**Claimed files:**
+- `src/queries/jira.ts`
+- `src/queries/jira.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: change the JIRA project-statuses no-project test to expect no
+  `projectStatuses(null)` cache entry, then run
+  `pnpm vitest run src/queries/jira.test.tsx`.
+- Focused green: refactor `useJiraProjectStatusesQuery` to `useOptionalQuery`
+  and rerun `pnpm vitest run src/queries/jira.test.tsx src/queries/optional.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready for collision check and commit.
+
+**Evidence so far:**
+- `git status --short --branch` was clean after pushing `a53d11f`.
+- `git log --oneline --decorate -8` shows `a53d11f` at both local and
+  `origin/main`.
+- `CLAUDE_ROLLING_UPDATES.md` remains on older coverage/documentation work and
+  does not claim `src/queries/jira.ts`.
+- Context7 docs checked for TanStack Query nullable/dependent query patterns.
+- Red check `pnpm vitest run src/queries/jira.test.tsx` failed on the new
+  no-placeholder assertion: the current `skipToken` query created a disabled
+  `["jira","project-statuses",null]` cache entry.
+- Green `pnpm vitest run src/queries/jira.test.tsx src/queries/optional.test.tsx`
+  passed after moving project statuses to `useOptionalQuery`: 2 files / 3 tests.
+- Focused green
+  `pnpm vitest run src/queries/jira.test.tsx src/queries/optional.test.tsx src/hooks/useJira.test.ts`
+  passed: 3 files / 12 tests.
+- Full `pnpm verify` passed: frontend tests (73 files / 431 tests), frontend
+  production build, Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+- Pre-commit collision check: `git fetch origin main` completed, `git log
+  HEAD..origin/main` was empty, and `CLAUDE_ROLLING_UPDATES.md` still does not
+  claim the JIRA query files.
+
 ---
 
 ## Backlog / future work
 
 - Audit remaining custom async/loading hooks only when new code introduces a real
   ownership mismatch; the existing high-value hook coverage is mostly harvested.
-- Evaluate `useTaskReviewLoop`'s `skipToken` placeholder-key behavior separately;
-  it still has explicit tests documenting the current `undefined` cache entries.
+- Audit query-key helper parameter types now that optional reads avoid placeholder
+  `undefined`/`null` cache entries.
 - Re-check terminal decoding docs against the recent UTF-8 boundary fixes.
 - Keep future bundle work tied to measured `pnpm build` output; the current
   shell/task-workspace splits remove the warning-size chunks.
