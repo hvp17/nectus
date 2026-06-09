@@ -258,9 +258,10 @@ impl Database {
                 ",
             )
             .map_err(|error| error.to_string())?;
-        let result = rows(stmt
-            .query_map(params![task_id], task_repo_from_row)
-            .map_err(|error| error.to_string())?);
+        let result = rows(
+            stmt.query_map(params![task_id], task_repo_from_row)
+                .map_err(|error| error.to_string())?,
+        );
         result
     }
 
@@ -293,18 +294,20 @@ impl Database {
                     "{sql} WHERE EXISTS (SELECT 1 FROM task_repos tr WHERE tr.task_id = t.id AND tr.repo_id = ?1) ORDER BY t.updated_at DESC"
                 ))
                 .map_err(|error| error.to_string())?;
-            let mapped = rows(stmt
-                .query_map(params![repo_id], task_from_row)
-                .map_err(|error| error.to_string())?);
+            let mapped = rows(
+                stmt.query_map(params![repo_id], task_from_row)
+                    .map_err(|error| error.to_string())?,
+            );
             mapped?
         } else {
             let mut stmt = self
                 .conn
                 .prepare(&format!("{sql} ORDER BY t.updated_at DESC"))
                 .map_err(|error| error.to_string())?;
-            let mapped = rows(stmt
-                .query_map([], task_from_row)
-                .map_err(|error| error.to_string())?);
+            let mapped = rows(
+                stmt.query_map([], task_from_row)
+                    .map_err(|error| error.to_string())?,
+            );
             mapped?
         };
         for task in tasks.iter_mut() {
@@ -528,7 +531,11 @@ mod folder_tests {
         // id 6) would make the `{name}-{id}` fallback collide; the counter resolves it.
         let folders = unique_worktree_folders(&[repo("api-6", 8), repo("api", 5), repo("api", 6)]);
         let distinct: std::collections::HashSet<_> = folders.iter().collect();
-        assert_eq!(distinct.len(), 3, "all folders must be distinct: {folders:?}");
+        assert_eq!(
+            distinct.len(),
+            3,
+            "all folders must be distinct: {folders:?}"
+        );
         assert_eq!(folders[0], "api-6");
         assert_eq!(folders[1], "api");
     }

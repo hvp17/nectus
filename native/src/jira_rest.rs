@@ -225,8 +225,9 @@ pub fn transition_to_status(
     status_name: &str,
 ) -> Result<(), String> {
     let transitions = list_transitions(site, email, token, key)?;
-    let transition_id = transition_id_for_status(&transitions, status_name)
-        .ok_or_else(|| format!("No legal transition to \"{status_name}\" from the current status"))?;
+    let transition_id = transition_id_for_status(&transitions, status_name).ok_or_else(|| {
+        format!("No legal transition to \"{status_name}\" from the current status")
+    })?;
     perform_transition(site, email, token, key, transition_id)
 }
 
@@ -261,7 +262,8 @@ mod tests {
 
     #[test]
     fn finds_transition_id_for_status_case_insensitively() {
-        let transitions = parse_transitions(include_str!("jira_fixtures/transitions.json")).unwrap();
+        let transitions =
+            parse_transitions(include_str!("jira_fixtures/transitions.json")).unwrap();
 
         assert_eq!(
             transition_id_for_status(&transitions, "in progress"),

@@ -37,7 +37,12 @@ fn run_pr_review(app: &AppHandle, db: &Arc<Mutex<Database>>, review_id: i64) -> 
             .agent_profile_by_id(review.reviewer_profile_id)?
             .ok_or_else(|| "Reviewer profile not found".to_string())?;
         database.set_pr_review_status(review_id, PrReviewStatus::Reviewing, None)?;
-        (review.pr_number, repo.path, repo.default_worktree_root, reviewer)
+        (
+            review.pr_number,
+            repo.path,
+            repo.default_worktree_root,
+            reviewer,
+        )
     };
     emit_pr_review_update(app, db, review_id);
 
@@ -80,14 +85,21 @@ fn run_pr_review(app: &AppHandle, db: &Arc<Mutex<Database>>, review_id: i64) -> 
             };
             // PR reviews surface their output through the Reviews view, not the
             // live task workspace, so they keep the captured-output path.
-            run_reviewer_command(&reviewer, worktree_path, &prompt, resume_id.as_deref(), None)
+            run_reviewer_command(
+                &reviewer,
+                worktree_path,
+                &prompt,
+                resume_id.as_deref(),
+                None,
+            )
         },
     )?;
 
     // Capture once, keep: persist the resolved id only on the first run.
     if supports_resume && !resuming {
         if let Some(session_id) = run_output.session_id.as_deref() {
-            db.lock().set_pr_review_session_id(review_id, Some(session_id))?;
+            db.lock()
+                .set_pr_review_session_id(review_id, Some(session_id))?;
         }
     }
 

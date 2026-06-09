@@ -33,7 +33,10 @@ pub(super) struct ReviewerRunOutput {
 /// id (`--session-id`/`--resume`); Codex and OpenCode mint internally and we
 /// capture + resume by id. Gemini/Custom have no supported resume path.
 pub(super) fn reviewer_supports_resume(kind: AgentKind) -> bool {
-    matches!(kind, AgentKind::Claude | AgentKind::Codex | AgentKind::OpenCode)
+    matches!(
+        kind,
+        AgentKind::Claude | AgentKind::Codex | AgentKind::OpenCode
+    )
 }
 
 /// Mint a fresh reviewer session id for Claude's `--session-id` (requires a
@@ -57,7 +60,9 @@ pub(super) fn run_reviewer_command(
     let claude_start_id = (reviewer.agent_kind == AgentKind::Claude && resume.is_none())
         .then(new_reviewer_session_id);
     let preset_session_id = match reviewer.agent_kind {
-        AgentKind::Claude => resume.map(str::to_string).or_else(|| claude_start_id.clone()),
+        AgentKind::Claude => resume
+            .map(str::to_string)
+            .or_else(|| claude_start_id.clone()),
         _ => None,
     };
 
@@ -280,7 +285,11 @@ mod tests {
         );
         assert_eq!(
             plan.args,
-            vec!["exec".to_string(), "--json".to_string(), "Review this".to_string()]
+            vec![
+                "exec".to_string(),
+                "--json".to_string(),
+                "Review this".to_string()
+            ]
         );
         assert!(!plan.pipe_prompt_to_stdin);
     }
@@ -334,7 +343,10 @@ mod tests {
             None,
             None,
         );
-        assert_eq!(claude.args, vec!["-p".to_string(), "Review this".to_string()]);
+        assert_eq!(
+            claude.args,
+            vec!["-p".to_string(), "Review this".to_string()]
+        );
 
         let gemini = build_reviewer_args(
             &agent("Gemini", AgentKind::Gemini, "gemini"),
@@ -342,7 +354,10 @@ mod tests {
             None,
             None,
         );
-        assert_eq!(gemini.args, vec!["-p".to_string(), "Review this".to_string()]);
+        assert_eq!(
+            gemini.args,
+            vec!["-p".to_string(), "Review this".to_string()]
+        );
     }
 
     #[test]

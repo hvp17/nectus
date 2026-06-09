@@ -94,29 +94,30 @@ fn run_review_round(
         app: app.clone(),
         task_id,
     };
-    let run_output = match run_reviewer_command(&reviewer, cwd, &prompt, resume_id.as_deref(), Some(&sink))
-    {
-        Ok(output) => output,
-        Err(error) => {
-            let run = db.lock().record_review_run(ReviewRunInput {
-                task_id,
-                reviewer_profile_id: reviewer.id,
-                verdict: ReviewVerdict::Unknown,
-                prompt,
-                output: String::new(),
-                error: Some(error.clone()),
-            })?;
-            emit_review_loop_update(&app, &db, task_id, Some(run));
-            return Err(error);
-        }
-    };
+    let run_output =
+        match run_reviewer_command(&reviewer, cwd, &prompt, resume_id.as_deref(), Some(&sink)) {
+            Ok(output) => output,
+            Err(error) => {
+                let run = db.lock().record_review_run(ReviewRunInput {
+                    task_id,
+                    reviewer_profile_id: reviewer.id,
+                    verdict: ReviewVerdict::Unknown,
+                    prompt,
+                    output: String::new(),
+                    error: Some(error.clone()),
+                })?;
+                emit_review_loop_update(&app, &db, task_id, Some(run));
+                return Err(error);
+            }
+        };
 
     // Capture once, keep: persist the resolved id only when we did not already
     // have one, so the canonical thread (esp. for Codex/OpenCode) is the one we
     // keep resuming.
     if supports_resume && !resuming {
         if let Some(session_id) = run_output.session_id.as_deref() {
-            db.lock().set_review_loop_session_id(task_id, Some(session_id))?;
+            db.lock()
+                .set_review_loop_session_id(task_id, Some(session_id))?;
         }
     }
     // The marker line is stripped here, so the verdict noise never reaches the DB
@@ -355,7 +356,10 @@ mod tests {
             parse_review_verdict("Blocking issue: but this is just me explaining one.").0,
             ReviewVerdict::Unknown
         );
-        assert_eq!(parse_review_verdict("Looks reasonable overall.").0, ReviewVerdict::Unknown);
+        assert_eq!(
+            parse_review_verdict("Looks reasonable overall.").0,
+            ReviewVerdict::Unknown
+        );
     }
 
     #[test]

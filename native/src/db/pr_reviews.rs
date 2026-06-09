@@ -1,6 +1,4 @@
-use super::rows::{
-    pr_review_from_row, pr_review_reviewer_from_row, pr_review_run_from_row, rows,
-};
+use super::rows::{pr_review_from_row, pr_review_reviewer_from_row, pr_review_run_from_row, rows};
 use super::{now, Database};
 use crate::git_ops;
 use crate::models::{
@@ -96,9 +94,10 @@ impl Database {
             .conn
             .prepare(&format!("{PR_REVIEW_SELECT} ORDER BY pr.id DESC"))
             .map_err(|error| error.to_string())?;
-        let mut reviews = rows(stmt
-            .query_map([], pr_review_from_row)
-            .map_err(|error| error.to_string())?)?;
+        let mut reviews = rows(
+            stmt.query_map([], pr_review_from_row)
+                .map_err(|error| error.to_string())?,
+        )?;
         for review in &mut reviews {
             if review.mode == PrReviewMode::Consensus {
                 review.reviewers = self.list_pr_review_reviewers(review.id)?;
@@ -213,9 +212,10 @@ impl Database {
                 ",
             )
             .map_err(|error| error.to_string())?;
-        let result = rows(stmt
-            .query_map(params![pr_review_id], pr_review_reviewer_from_row)
-            .map_err(|error| error.to_string())?);
+        let result = rows(
+            stmt.query_map(params![pr_review_id], pr_review_reviewer_from_row)
+                .map_err(|error| error.to_string())?,
+        );
         result
     }
 
@@ -254,21 +254,20 @@ impl Database {
     pub fn list_pr_review_runs(&self, pr_review_id: i64) -> Result<Vec<PrReviewRun>, String> {
         let mut stmt = self
             .conn
-            .prepare(&format!("{PR_REVIEW_RUN_SELECT} WHERE prr.pr_review_id = ?1 ORDER BY prr.id"))
+            .prepare(&format!(
+                "{PR_REVIEW_RUN_SELECT} WHERE prr.pr_review_id = ?1 ORDER BY prr.id"
+            ))
             .map_err(|error| error.to_string())?;
-        let result = rows(stmt
-            .query_map(params![pr_review_id], pr_review_run_from_row)
-            .map_err(|error| error.to_string())?);
+        let result = rows(
+            stmt.query_map(params![pr_review_id], pr_review_run_from_row)
+                .map_err(|error| error.to_string())?,
+        );
         result
     }
 
     /// Mark how many parallel rounds have finished, so the UI can show progress
     /// while a consensus run is mid-flight.
-    pub fn set_pr_review_progress(
-        &self,
-        id: i64,
-        rounds_completed: i64,
-    ) -> Result<(), String> {
+    pub fn set_pr_review_progress(&self, id: i64, rounds_completed: i64) -> Result<(), String> {
         self.execute_pr_review_update(
             "UPDATE pr_reviews SET rounds_completed = ?1, updated_at = ?2 WHERE id = ?3",
             params![rounds_completed, now(), id],

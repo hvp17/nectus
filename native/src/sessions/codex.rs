@@ -137,7 +137,10 @@ struct InputRequestEvent {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum ResponseItem {
-    FunctionCall { name: String, arguments: String },
+    FunctionCall {
+        name: String,
+        arguments: String,
+    },
     #[serde(other)]
     Other,
 }
@@ -508,4 +511,3 @@ fn request_user_input_prompt_from_value(value: &serde_json::Value) -> Option<Str
         prompt_preview(&prompts.join(" "))
     }
 }
-

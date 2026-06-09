@@ -137,17 +137,17 @@ mod tests {
     fn augments_minimal_path_with_install_dirs() {
         let home = tempdir().unwrap();
 
-        let augmented = augmented_path_in(
-            OsString::from("/usr/bin:/bin"),
-            Some(home.path()),
-        );
+        let augmented = augmented_path_in(OsString::from("/usr/bin:/bin"), Some(home.path()));
         let dirs: Vec<PathBuf> = env::split_paths(&augmented).collect();
 
         // Original entries are preserved, ahead of the appended install dirs.
         assert!(dirs.contains(&PathBuf::from("/usr/bin")));
         assert!(dirs.contains(&PathBuf::from("/opt/homebrew/bin")));
         assert!(dirs.contains(&home.path().join(".local").join("bin")));
-        let usr_bin = dirs.iter().position(|d| d == Path::new("/usr/bin")).unwrap();
+        let usr_bin = dirs
+            .iter()
+            .position(|d| d == Path::new("/usr/bin"))
+            .unwrap();
         let brew = dirs
             .iter()
             .position(|d| d == Path::new("/opt/homebrew/bin"))

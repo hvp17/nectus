@@ -92,7 +92,12 @@ mod tests {
     fn only_opencode_needs_a_local_server_and_arg_prompt() {
         let oc = provider_session(AgentKind::OpenCode);
         assert!(oc.needs_local_server && oc.sends_prompt_in_args);
-        for kind in [AgentKind::Codex, AgentKind::Claude, AgentKind::Gemini, AgentKind::Custom] {
+        for kind in [
+            AgentKind::Codex,
+            AgentKind::Claude,
+            AgentKind::Gemini,
+            AgentKind::Custom,
+        ] {
             let ps = provider_session(kind);
             assert!(!ps.needs_local_server && !ps.sends_prompt_in_args);
         }
@@ -101,7 +106,12 @@ mod tests {
     #[test]
     fn only_claude_cleans_up_an_event_sink() {
         assert!(provider_session(AgentKind::Claude).cleanup_event_sink);
-        for kind in [AgentKind::Codex, AgentKind::OpenCode, AgentKind::Gemini, AgentKind::Custom] {
+        for kind in [
+            AgentKind::Codex,
+            AgentKind::OpenCode,
+            AgentKind::Gemini,
+            AgentKind::Custom,
+        ] {
             assert!(!provider_session(kind).cleanup_event_sink);
         }
     }

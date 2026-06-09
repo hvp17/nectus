@@ -24,7 +24,10 @@ impl Database {
         if settings.default_worktree_root_pattern.trim().is_empty() {
             return Err("Worktree root pattern is required".into());
         }
-        if !settings.default_worktree_root_pattern.contains("{repoName}") {
+        if !settings
+            .default_worktree_root_pattern
+            .contains("{repoName}")
+        {
             return Err("Worktree root pattern must include {repoName}".into());
         }
         if let Some(profile_id) = settings.default_agent_profile_id {
@@ -107,7 +110,10 @@ impl Database {
     /// Clear the stored REST email (called on disconnect; the site is left as-is).
     pub fn clear_jira_rest_email(&self) -> Result<(), String> {
         self.conn
-            .execute("UPDATE app_settings SET jira_rest_email = NULL WHERE id = 1", [])
+            .execute(
+                "UPDATE app_settings SET jira_rest_email = NULL WHERE id = 1",
+                [],
+            )
             .map_err(|error| format!("Failed to clear JIRA REST email: {error}"))?;
         Ok(())
     }

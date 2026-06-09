@@ -26,9 +26,9 @@ mod pr_consensus;
 mod pr_review;
 mod pr_verdict;
 mod pr_worktree;
+mod provider;
 mod review_loop;
 mod reviewer;
-mod provider;
 mod reviewer_output;
 mod terminal_io;
 mod verdict;
@@ -38,9 +38,9 @@ use claude::{cleanup_event_sink, spawn_claude_event_watcher};
 use codex::{latest_codex_session_metadata, spawn_codex_event_watcher};
 use command::resolve_agent_command;
 use opencode::{latest_opencode_session_metadata_from_server, spawn_opencode_event_watcher};
-use provider::{provider_session, WatcherKind};
 use pr_consensus::spawn_consensus_pr_review;
 use pr_review::spawn_pr_review;
+use provider::{provider_session, WatcherKind};
 use review_loop::spawn_review_on_session_idle;
 use terminal_io::write_agent_submission;
 
@@ -72,9 +72,7 @@ enum SessionSignal {
     /// tool-use hooks, OpenCode message parts). Replaces the raw-PTY scraper for
     /// those providers, which on a full-screen TUI only surfaced statusline
     /// chrome and echoed keystrokes.
-    Activity {
-        text: String,
-    },
+    Activity { text: String },
 }
 
 /// Emit the frontend event for a session signal and, on idle, spawn any pending
@@ -760,7 +758,11 @@ impl SessionManager {
                 if let Some(mut running) = removed {
                     // EOF means the child has exited; wait() reaps the zombie and
                     // yields the real status so we can report a true exit code.
-                    let exit_code = running.child.wait().ok().map(|status| status.exit_code() as i32);
+                    let exit_code = running
+                        .child
+                        .wait()
+                        .ok()
+                        .map(|status| status.exit_code() as i32);
                     if let Some((id, label)) = resolve_resumable_metadata(
                         agent_kind,
                         &cwd,
@@ -1218,14 +1220,18 @@ mod tests {
 
     #[test]
     fn normalize_activity_skips_blank_and_symbol_only_lines() {
-        assert_eq!(normalize_activity("\n\n   \n---\nRunning tests"), Some("Running tests".to_string()));
+        assert_eq!(
+            normalize_activity("\n\n   \n---\nRunning tests"),
+            Some("Running tests".to_string())
+        );
         assert_eq!(normalize_activity("   \n***\n"), None);
         assert_eq!(normalize_activity(""), None);
     }
 
     #[test]
     fn normalize_activity_truncates_to_payload_cap() {
-        let line = normalize_activity(&"x".repeat(ACTIVITY_LINE_MAX + 50)).expect("a long line survives");
+        let line =
+            normalize_activity(&"x".repeat(ACTIVITY_LINE_MAX + 50)).expect("a long line survives");
         assert_eq!(line.chars().count(), ACTIVITY_LINE_MAX);
     }
 
@@ -1283,7 +1289,12 @@ mod tests {
         let now = Instant::now();
         let earlier = now - ACTIVITY_THROTTLE - Duration::from_millis(10);
         assert_eq!(
-            activity_to_emit(Some("Reading file".to_string()), Some("Reading file"), Some(earlier), now),
+            activity_to_emit(
+                Some("Reading file".to_string()),
+                Some("Reading file"),
+                Some(earlier),
+                now
+            ),
             None
         );
     }
@@ -1293,7 +1304,12 @@ mod tests {
         let now = Instant::now();
         let just_now = now - Duration::from_millis(50);
         assert_eq!(
-            activity_to_emit(Some("Newer line".to_string()), Some("Older line"), Some(just_now), now),
+            activity_to_emit(
+                Some("Newer line".to_string()),
+                Some("Older line"),
+                Some(just_now),
+                now
+            ),
             None
         );
     }
@@ -1303,7 +1319,12 @@ mod tests {
         let now = Instant::now();
         let earlier = now - ACTIVITY_THROTTLE - Duration::from_millis(10);
         assert_eq!(
-            activity_to_emit(Some("Newer line".to_string()), Some("Older line"), Some(earlier), now),
+            activity_to_emit(
+                Some("Newer line".to_string()),
+                Some("Older line"),
+                Some(earlier),
+                now
+            ),
             Some("Newer line".to_string())
         );
     }
@@ -1384,7 +1405,10 @@ mod tests {
         let second = decode_pty_chunk(&mut carry, &bytes[4..]);
         let combined = format!("{first}{second}");
         assert_eq!(combined, "────");
-        assert!(!combined.contains('\u{fffd}'), "no U+FFFD replacement chars");
+        assert!(
+            !combined.contains('\u{fffd}'),
+            "no U+FFFD replacement chars"
+        );
         assert!(carry.is_empty(), "carry drains once the sequence completes");
     }
 
@@ -1428,7 +1452,10 @@ mod tests {
         let mut carry = Vec::new();
         for byte in &bytes[..3] {
             assert_eq!(decode_pty_chunk(&mut carry, &[*byte]), "");
-            assert!(carry.len() <= 3, "carry stays bounded at the max UTF-8 tail");
+            assert!(
+                carry.len() <= 3,
+                "carry stays bounded at the max UTF-8 tail"
+            );
         }
         assert_eq!(decode_pty_chunk(&mut carry, &[bytes[3]]), "\u{1f600}");
         assert!(carry.is_empty());

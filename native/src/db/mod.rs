@@ -1,11 +1,11 @@
 use crate::git_ops;
+use crate::models::Repo;
 #[cfg(test)]
 use crate::models::{
     AgentKind, AgentProfileInput, AppSettingsInput, DensityMode, PrReviewMode, PrReviewRunInput,
     PrReviewStatus, PrReviewVerdict, ReviewLoopStatus, ReviewRunInput, ReviewVerdict, TaskStatus,
     ThemeMode,
 };
-use crate::models::Repo;
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
 #[cfg(test)]

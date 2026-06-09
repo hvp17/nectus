@@ -200,6 +200,7 @@ pnpm test
 pnpm build
 cd native
 cargo test
+cargo fmt --check
 cargo clippy --tests -- -D warnings
 ```
 

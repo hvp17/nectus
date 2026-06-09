@@ -31,11 +31,7 @@ const MAX_PEER_REVIEW_CHARS: usize = 6000;
 
 /// Run a queued consensus review on a background thread, mirroring
 /// [`super::pr_review::spawn_pr_review`] but fanning out to several reviewers.
-pub(super) fn spawn_consensus_pr_review(
-    app: AppHandle,
-    db: Arc<Mutex<Database>>,
-    review_id: i64,
-) {
+pub(super) fn spawn_consensus_pr_review(app: AppHandle, db: Arc<Mutex<Database>>, review_id: i64) {
     std::thread::spawn(move || {
         if let Err(error) = run_consensus_pr_review(&app, &db, review_id) {
             tracing::warn!(?error, review_id, "consensus pr review failed");
@@ -212,11 +208,16 @@ fn run_rounds_and_synthesize(
 
     // Merge the final round into one consensus review the human can paste.
     let synth_prompt = build_synthesis_prompt(pr_number, meta, converged, &last_round);
-    let synth_raw = run_reviewer_command(synthesizer, worktree_path, &synth_prompt, None, None)?.text;
+    let synth_raw =
+        run_reviewer_command(synthesizer, worktree_path, &synth_prompt, None, None)?.text;
     let (synth_verdict, synth_review) = parse_pr_review_output(&synth_raw);
     // When the reviewers agreed, that shared verdict is authoritative; otherwise
     // trust the synthesizer's read of the merged review.
-    let final_verdict = if converged { agreed_verdict } else { synth_verdict };
+    let final_verdict = if converged {
+        agreed_verdict
+    } else {
+        synth_verdict
+    };
     Ok((converged, final_verdict, synth_review))
 }
 
@@ -273,7 +274,10 @@ fn verdicts_converged(verdicts: &[PrReviewVerdict]) -> Option<PrReviewVerdict> {
     if first == PrReviewVerdict::Inconclusive {
         return None;
     }
-    verdicts.iter().all(|verdict| *verdict == first).then_some(first)
+    verdicts
+        .iter()
+        .all(|verdict| *verdict == first)
+        .then_some(first)
 }
 
 fn pr_context(pr_number: i64, meta: &PrMeta) -> String {
@@ -440,8 +444,18 @@ mod tests {
     #[test]
     fn debate_prompt_includes_other_reviewers_but_not_self() {
         let prior = vec![
-            outcome(1, "Codex", PrReviewVerdict::Blockers, "Codex found a null deref."),
-            outcome(2, "Claude", PrReviewVerdict::Passed, "Claude says it looks fine."),
+            outcome(
+                1,
+                "Codex",
+                PrReviewVerdict::Blockers,
+                "Codex found a null deref.",
+            ),
+            outcome(
+                2,
+                "Claude",
+                PrReviewVerdict::Passed,
+                "Claude says it looks fine.",
+            ),
         ];
 
         let prompt = build_debate_prompt(42, &meta(), 2, 1, &prior);
@@ -458,7 +472,12 @@ mod tests {
     #[test]
     fn synthesis_prompt_lists_all_reviews_and_flags_disagreement() {
         let reviews = vec![
-            outcome(1, "Codex", PrReviewVerdict::Blockers, "Blocking: missing test."),
+            outcome(
+                1,
+                "Codex",
+                PrReviewVerdict::Blockers,
+                "Blocking: missing test.",
+            ),
             outcome(2, "Claude", PrReviewVerdict::Passed, "No blockers found."),
         ];
 

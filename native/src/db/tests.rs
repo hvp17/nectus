@@ -311,7 +311,10 @@ fn persists_jira_filter_statuses_and_rest_account() {
     let reloaded = db.get_app_settings().unwrap();
     assert_eq!(reloaded.jira_filter_statuses, vec!["To Do", "Done"]);
     assert_eq!(reloaded.jira_rest_email.as_deref(), Some("a@b.com"));
-    assert_eq!(reloaded.jira_site_url.as_deref(), Some("acme.atlassian.net"));
+    assert_eq!(
+        reloaded.jira_site_url.as_deref(),
+        Some("acme.atlassian.net")
+    );
 
     // Disconnect clears the email but leaves the rest of the board config intact.
     db.clear_jira_rest_email().unwrap();
@@ -1018,10 +1021,19 @@ fn creates_lists_and_transitions_a_pr_review() {
 
     assert_eq!(review.verdict, None);
 
-    db.set_pr_review_meta(review.id, Some("Add feature"), Some("octocat"), Some("main"))
-        .unwrap();
-    db.set_pr_review_result(review.id, "## Review\nLooks good.", PrReviewVerdict::Blockers)
-        .unwrap();
+    db.set_pr_review_meta(
+        review.id,
+        Some("Add feature"),
+        Some("octocat"),
+        Some("main"),
+    )
+    .unwrap();
+    db.set_pr_review_result(
+        review.id,
+        "## Review\nLooks good.",
+        PrReviewVerdict::Blockers,
+    )
+    .unwrap();
 
     let loaded = db.pr_review_by_id(review.id).unwrap().unwrap();
     assert_eq!(loaded.status, PrReviewStatus::Ready);
@@ -1093,7 +1105,10 @@ fn creates_a_consensus_pr_review_and_records_rounds() {
             error: None,
         })
         .unwrap();
-    assert_eq!(claude_run.reviewer_name.as_deref(), Some(claude.name.as_str()));
+    assert_eq!(
+        claude_run.reviewer_name.as_deref(),
+        Some(claude.name.as_str())
+    );
     assert_eq!(claude_run.round, 1);
 
     let runs = db.list_pr_review_runs(review.id).unwrap();
@@ -1101,15 +1116,23 @@ fn creates_a_consensus_pr_review_and_records_rounds() {
     assert_eq!(runs[0].verdict, PrReviewVerdict::Blockers);
 
     db.set_pr_review_progress(review.id, 2).unwrap();
-    db.set_pr_review_consensus(review.id, "## Consensus\nmissing test.", PrReviewVerdict::Blockers, true)
-        .unwrap();
+    db.set_pr_review_consensus(
+        review.id,
+        "## Consensus\nmissing test.",
+        PrReviewVerdict::Blockers,
+        true,
+    )
+    .unwrap();
 
     let loaded = db.pr_review_by_id(review.id).unwrap().unwrap();
     assert_eq!(loaded.status, PrReviewStatus::Ready);
     assert_eq!(loaded.rounds_completed, 2);
     assert_eq!(loaded.converged, Some(true));
     assert_eq!(loaded.verdict, Some(PrReviewVerdict::Blockers));
-    assert_eq!(loaded.review_output.as_deref(), Some("## Consensus\nmissing test."));
+    assert_eq!(
+        loaded.review_output.as_deref(),
+        Some("## Consensus\nmissing test.")
+    );
 
     // A consensus review needs at least two reviewers.
     assert!(db
@@ -1357,7 +1380,9 @@ fn rejects_a_blank_workspace_name() {
 fn rejects_a_workspace_with_no_repos() {
     let db = Database::open_in_memory().unwrap();
     // An empty workspace would resolve to a filter that hides every project.
-    let error = db.create_workspace("Empty".to_string(), vec![]).unwrap_err();
+    let error = db
+        .create_workspace("Empty".to_string(), vec![])
+        .unwrap_err();
     assert!(error.contains("repository"));
 }
 
@@ -1427,10 +1452,7 @@ fn creates_a_cross_repo_task_with_a_worktree_per_repo() {
         db.conn
             .execute(
                 "UPDATE repos SET default_worktree_root = ?1 WHERE id = ?2",
-                rusqlite::params![
-                    wt_root.path().join(&repo.name).to_string_lossy(),
-                    repo.id
-                ],
+                rusqlite::params![wt_root.path().join(&repo.name).to_string_lossy(), repo.id],
             )
             .unwrap();
     }
@@ -1477,9 +1499,11 @@ fn creates_a_cross_repo_task_with_a_worktree_per_repo() {
     assert!(db.task_by_id(task.id).unwrap().is_none());
     let orphans: i64 = db
         .conn
-        .query_row("SELECT COUNT(*) FROM task_repos WHERE task_id = ?1", [task.id], |row| {
-            row.get(0)
-        })
+        .query_row(
+            "SELECT COUNT(*) FROM task_repos WHERE task_id = ?1",
+            [task.id],
+            |row| row.get(0),
+        )
         .unwrap();
     assert_eq!(orphans, 0);
 }
@@ -1515,7 +1539,8 @@ fn review_loop_tracks_and_resets_reviewer_session_id() {
     db.start_review_loop(task.id, reviewer.id).unwrap();
     assert_eq!(db.review_loop_session_id(task.id).unwrap(), None);
 
-    db.set_review_loop_session_id(task.id, Some("sid-1")).unwrap();
+    db.set_review_loop_session_id(task.id, Some("sid-1"))
+        .unwrap();
     assert_eq!(
         db.review_loop_session_id(task.id).unwrap(),
         Some("sid-1".to_string())
@@ -1541,7 +1566,8 @@ fn pr_review_tracks_reviewer_session_id_across_reruns() {
 
     assert_eq!(db.pr_review_session_id(review.id).unwrap(), None);
 
-    db.set_pr_review_session_id(review.id, Some("sid-9")).unwrap();
+    db.set_pr_review_session_id(review.id, Some("sid-9"))
+        .unwrap();
     assert_eq!(
         db.pr_review_session_id(review.id).unwrap(),
         Some("sid-9".to_string())

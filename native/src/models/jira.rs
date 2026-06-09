@@ -114,7 +114,11 @@ mod tests {
             ("Abandoned", JiraStatusCategory::Unknown),
         ];
         for (token, expected) in cases {
-            assert_eq!(JiraStatusCategory::from_token(token), expected, "token: {token}");
+            assert_eq!(
+                JiraStatusCategory::from_token(token),
+                expected,
+                "token: {token}"
+            );
         }
     }
 }

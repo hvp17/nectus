@@ -289,7 +289,6 @@ fn string_field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
         .filter(|value| !value.is_empty())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -381,7 +380,10 @@ mod tests {
             Some("TodoWrite".to_string())
         );
         assert_eq!(
-            claude_activity_text("Task", Some(&serde_json::json!({"description":"Audit auth"}))),
+            claude_activity_text(
+                "Task",
+                Some(&serde_json::json!({"description":"Audit auth"}))
+            ),
             Some("Task: Audit auth".to_string())
         );
     }

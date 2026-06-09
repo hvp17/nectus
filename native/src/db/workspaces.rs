@@ -12,9 +12,10 @@ impl Database {
                 "SELECT id, name, created_at, updated_at, collapsed FROM workspaces ORDER BY name",
             )
             .map_err(|error| error.to_string())?;
-        let mut workspaces = rows(stmt
-            .query_map([], workspace_from_row)
-            .map_err(|error| error.to_string())?)?;
+        let mut workspaces = rows(
+            stmt.query_map([], workspace_from_row)
+                .map_err(|error| error.to_string())?,
+        )?;
         for workspace in workspaces.iter_mut() {
             workspace.repo_ids = self.workspace_repo_ids(workspace.id)?;
         }
@@ -40,11 +41,7 @@ impl Database {
         }
     }
 
-    pub fn create_workspace(
-        &self,
-        name: String,
-        repo_ids: Vec<i64>,
-    ) -> Result<Workspace, String> {
+    pub fn create_workspace(&self, name: String, repo_ids: Vec<i64>) -> Result<Workspace, String> {
         let name = trimmed_name(name)?;
         // A workspace with no repos would resolve to an empty repo-scope filter
         // that hides every project, so reject it (the UI also gates the button).
@@ -128,7 +125,11 @@ impl Database {
     /// Reject a name already used by another workspace (case-insensitive), so the
     /// switcher never shows two indistinguishable entries. `exclude_id` lets an
     /// update keep its own name.
-    fn ensure_unique_workspace_name(&self, name: &str, exclude_id: Option<i64>) -> Result<(), String> {
+    fn ensure_unique_workspace_name(
+        &self,
+        name: &str,
+        exclude_id: Option<i64>,
+    ) -> Result<(), String> {
         let existing: Option<i64> = self
             .conn
             .query_row(
@@ -149,11 +150,14 @@ impl Database {
     fn workspace_repo_ids(&self, workspace_id: i64) -> Result<Vec<i64>, String> {
         let mut stmt = self
             .conn
-            .prepare("SELECT repo_id FROM workspace_repos WHERE workspace_id = ?1 ORDER BY position")
+            .prepare(
+                "SELECT repo_id FROM workspace_repos WHERE workspace_id = ?1 ORDER BY position",
+            )
             .map_err(|error| error.to_string())?;
-        let result = rows(stmt
-            .query_map(params![workspace_id], |row| row.get::<_, i64>(0))
-            .map_err(|error| error.to_string())?);
+        let result = rows(
+            stmt.query_map(params![workspace_id], |row| row.get::<_, i64>(0))
+                .map_err(|error| error.to_string())?,
+        );
         result
     }
 }

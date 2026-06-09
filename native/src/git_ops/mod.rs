@@ -384,9 +384,13 @@ pub fn delete_branch(repo_path: &Path, branch_name: &str) -> Result<(), String> 
 }
 
 pub fn is_dirty(path: &Path) -> bool {
-    git_output(path, &["status", "--porcelain"], "Failed to check worktree status")
-        .map(|output| !output.stdout.is_empty())
-        .unwrap_or(false)
+    git_output(
+        path,
+        &["status", "--porcelain"],
+        "Failed to check worktree status",
+    )
+    .map(|output| !output.stdout.is_empty())
+    .unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -437,15 +441,13 @@ mod tests {
             Some(Path::new("/Users/alice")),
         );
 
-        assert_eq!(
-            root,
-            PathBuf::from("/Users/alice/.nectus/worktrees/nectus")
-        );
+        assert_eq!(root, PathBuf::from("/Users/alice/.nectus/worktrees/nectus"));
     }
 
     #[test]
     fn expands_bare_tilde_to_home() {
-        let root = resolve_worktree_root(Path::new("/tmp/nectus"), "~", Some(Path::new("/home/bob")));
+        let root =
+            resolve_worktree_root(Path::new("/tmp/nectus"), "~", Some(Path::new("/home/bob")));
 
         assert_eq!(root, PathBuf::from("/home/bob"));
     }
@@ -467,8 +469,7 @@ mod tests {
     fn falls_back_to_repo_relative_when_home_missing() {
         // Without a resolvable home, a `~` pattern degrades to the prior
         // repo-relative behavior rather than panicking.
-        let root =
-            resolve_worktree_root(Path::new("/tmp/nectus"), "~/work/{repoName}", None);
+        let root = resolve_worktree_root(Path::new("/tmp/nectus"), "~/work/{repoName}", None);
 
         assert_eq!(root, PathBuf::from("/tmp/nectus/~/work/nectus"));
     }
@@ -558,7 +559,13 @@ mod tests {
         let worktree = dir.join(worktree_name);
         run_git(
             dir,
-            &["worktree", "add", "-b", "feature", worktree.to_str().unwrap()],
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "feature",
+                worktree.to_str().unwrap(),
+            ],
         );
         worktree
     }
@@ -648,7 +655,10 @@ mod tests {
     fn rejects_unparseable_remote_urls() {
         assert_eq!(parse_remote_owner_repo(""), None);
         assert_eq!(parse_remote_owner_repo("not-a-url"), None);
-        assert_eq!(parse_remote_owner_repo("https://github.com/owner-only"), None);
+        assert_eq!(
+            parse_remote_owner_repo("https://github.com/owner-only"),
+            None
+        );
     }
 
     #[test]
@@ -733,8 +743,10 @@ mod tests {
         fs::write(repo.join("new.txt"), "alpha\nbeta\n").unwrap();
 
         let files = diff_summary(repo, None).unwrap();
-        let by_path: HashMap<&str, &DiffFileEntry> =
-            files.iter().map(|file| (file.path.as_str(), file)).collect();
+        let by_path: HashMap<&str, &DiffFileEntry> = files
+            .iter()
+            .map(|file| (file.path.as_str(), file))
+            .collect();
 
         let modified = by_path.get("a.txt").expect("a.txt in diff");
         assert_eq!(modified.change, DiffChangeKind::Modified);
@@ -766,14 +778,19 @@ mod tests {
         fs::write(repo.join("a.txt"), "one\ntwo\nthree\n").unwrap();
 
         let files = diff_summary(repo, Some(&base)).unwrap();
-        let by_path: HashMap<&str, &DiffFileEntry> =
-            files.iter().map(|file| (file.path.as_str(), file)).collect();
+        let by_path: HashMap<&str, &DiffFileEntry> = files
+            .iter()
+            .map(|file| (file.path.as_str(), file))
+            .collect();
 
         let modified = by_path.get("a.txt").expect("a.txt in diff");
         assert_eq!(modified.change, DiffChangeKind::Modified);
         // Both the committed and the uncommitted additions, relative to the base.
         assert_eq!(modified.additions, 2);
-        assert_eq!(by_path.get("b.txt").expect("b.txt in diff").change, DiffChangeKind::Added);
+        assert_eq!(
+            by_path.get("b.txt").expect("b.txt in diff").change,
+            DiffChangeKind::Added
+        );
     }
 
     #[test]
@@ -832,11 +849,23 @@ mod tests {
 
         let tracked = diff_file(repo, None, "a.txt").unwrap();
         assert!(tracked.contains("@@"), "tracked patch has a hunk header");
-        assert!(tracked.contains("-two"), "tracked patch shows the removed line");
-        assert!(tracked.contains("+TWO"), "tracked patch shows the added line");
+        assert!(
+            tracked.contains("-two"),
+            "tracked patch shows the removed line"
+        );
+        assert!(
+            tracked.contains("+TWO"),
+            "tracked patch shows the added line"
+        );
 
         let untracked = diff_file(repo, None, "new.txt").unwrap();
-        assert!(untracked.contains("new.txt"), "untracked patch names the file");
-        assert!(untracked.contains("+fresh"), "untracked patch shows the new line");
+        assert!(
+            untracked.contains("new.txt"),
+            "untracked patch names the file"
+        );
+        assert!(
+            untracked.contains("+fresh"),
+            "untracked patch shows the new line"
+        );
     }
 }

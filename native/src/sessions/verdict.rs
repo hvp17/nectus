@@ -64,9 +64,18 @@ mod tests {
 
     #[test]
     fn parses_each_token_case_insensitively() {
-        assert_eq!(parse_verdict_line("NECTUS_VERDICT: CLEAN"), Some(VerdictToken::Clean));
-        assert_eq!(parse_verdict_line("nectus_verdict: blockers"), Some(VerdictToken::Blockers));
-        assert_eq!(parse_verdict_line("  NECTUS_VERDICT:feedback  "), Some(VerdictToken::Feedback));
+        assert_eq!(
+            parse_verdict_line("NECTUS_VERDICT: CLEAN"),
+            Some(VerdictToken::Clean)
+        );
+        assert_eq!(
+            parse_verdict_line("nectus_verdict: blockers"),
+            Some(VerdictToken::Blockers)
+        );
+        assert_eq!(
+            parse_verdict_line("  NECTUS_VERDICT:feedback  "),
+            Some(VerdictToken::Feedback)
+        );
     }
 
     #[test]

@@ -415,7 +415,9 @@ mod tests {
             7
         );
         assert_eq!(
-            parse_pull_request_url("github.com/a/b/pull/9").unwrap().number,
+            parse_pull_request_url("github.com/a/b/pull/9")
+                .unwrap()
+                .number,
             9
         );
     }

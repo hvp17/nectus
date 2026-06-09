@@ -133,14 +133,7 @@ fn collect_adf_text(node: &serde_json::Value, out: &mut String) {
         // with a newline; the wrapping `doc` node adds none.
         if matches!(
             node_type,
-            Some(
-                "paragraph"
-                    | "heading"
-                    | "listItem"
-                    | "blockquote"
-                    | "codeBlock"
-                    | "rule"
-            )
+            Some("paragraph" | "heading" | "listItem" | "blockquote" | "codeBlock" | "rule")
         ) {
             out.push('\n');
         }
@@ -716,7 +709,13 @@ mod tests {
     #[test]
     fn builds_board_jql_with_status_filter() {
         assert_eq!(
-            build_board_jql("ENG", false, false, false, &["To Do".into(), "In Progress".into()]),
+            build_board_jql(
+                "ENG",
+                false,
+                false,
+                false,
+                &["To Do".into(), "In Progress".into()]
+            ),
             "project = \"ENG\" AND status in (\"To Do\", \"In Progress\") ORDER BY updated DESC"
         );
     }

@@ -162,7 +162,10 @@ mod tests {
             parse_codex_event(
                 r#"{"type":"thread.started","thread_id":"019ea176-226e-70b2-a6b5-cdceddc3c91f"}"#
             ),
-            (None, Some("019ea176-226e-70b2-a6b5-cdceddc3c91f".to_string()))
+            (
+                None,
+                Some("019ea176-226e-70b2-a6b5-cdceddc3c91f".to_string())
+            )
         );
         assert_eq!(
             parse_codex_event(
@@ -188,7 +191,9 @@ mod tests {
             )
         );
         assert_eq!(
-            parse_opencode_event(r#"{"type":"step_start","sessionID":"ses_abc","part":{"id":"p"}}"#),
+            parse_opencode_event(
+                r#"{"type":"step_start","sessionID":"ses_abc","part":{"id":"p"}}"#
+            ),
             (None, Some("ses_abc".to_string()))
         );
     }
@@ -214,12 +219,16 @@ mod tests {
         let delta = collector
             .push(b"{\"type\":\"text\",\"sessionID\":\"ses_1\",\"part\":{\"type\":\"text\",\"text\":\"PASS\"}}\n");
         assert_eq!(delta, "PASS");
-        assert_eq!(collector.finish(), ("PASS".to_string(), Some("ses_1".to_string())));
+        assert_eq!(
+            collector.finish(),
+            ("PASS".to_string(), Some("ses_1".to_string()))
+        );
     }
 
     #[test]
     fn collector_passes_plain_text_through_and_keeps_preset_session() {
-        let mut collector = ReviewerOutputCollector::new(ReviewerWire::Plain, Some("sid".to_string()));
+        let mut collector =
+            ReviewerOutputCollector::new(ReviewerWire::Plain, Some("sid".to_string()));
         assert_eq!(collector.push(b"PASS\n"), "PASS\n");
         assert_eq!(collector.push(b"looks good"), "looks good");
         assert_eq!(

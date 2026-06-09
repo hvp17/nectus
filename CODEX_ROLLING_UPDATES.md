@@ -1509,7 +1509,7 @@ expectation before they commit frontend changes.
 **Commit:** `d6449c4` (`chore(types): enforce unused symbol checks`) pushed to
 `origin/main`.
 
-### Iteration 45 - in progress (2026-06-09)
+### Iteration 45 - done (2026-06-09)
 
 **Goal:** Add the verified Rust Clippy command to the documented verification
 gate.
@@ -1532,12 +1532,50 @@ is the relevant local/CI-style gate because warnings become failures.
 - Rust lint gate: `cd native && cargo clippy --tests -- -D warnings`.
 - Docs check: `rg -n "cargo clippy --tests -- -D warnings" AGENTS.md README.md`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `cd native && cargo clippy --tests -- -D warnings` passed.
 - `rg -n "cargo clippy --tests -- -D warnings" AGENTS.md README.md` shows the
   gate in both docs.
+
+**Commit:** `a848ca0` (`docs: document rust clippy verification`) pushed to
+`origin/main`.
+
+### Iteration 46 - in progress (2026-06-09)
+
+**Goal:** Apply rustfmt to the backend and document `cargo fmt --check` alongside
+the Clippy gate.
+
+**Rationale:** `cargo fmt --check` reported existing formatting drift in the
+Rust backend. The right improvement is a mechanical `cargo fmt` pass plus adding
+the check command to the same verification docs that now list Clippy, so future
+backend changes keep formatting and linting explicit.
+
+**Docs checked:** Context7 had no rustfmt match, so I used the official Cargo
+Book `cargo fmt` page and rustfmt repository guidance: `cargo fmt --check`
+checks formatting and exits non-zero when rustfmt would change files.
+
+**Claimed files:**
+- `native/src/**/*.rs`
+- `AGENTS.md`
+- `README.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Rust format: `cd native && cargo fmt --check`.
+- Rust lint: `cd native && cargo clippy --tests -- -D warnings`.
+- Rust tests: `cd native && cargo test`.
+- Docs check: `rg -n "cargo fmt --check|cargo clippy --tests -- -D warnings" AGENTS.md README.md`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `cd native && cargo fmt --check` passed.
+- `cd native && cargo clippy --tests -- -D warnings` passed.
+- `cd native && cargo test` passed (240 tests).
+- `rg -n "cargo fmt --check|cargo clippy --tests -- -D warnings" AGENTS.md README.md`
+  shows both Rust gates in both docs.
 
 ---
 
