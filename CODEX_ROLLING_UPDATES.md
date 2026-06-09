@@ -2886,7 +2886,7 @@ interruptions cancel pointer activity.
 **Commit:** `b1a6cc7` (`test(ui): cover pointer cancel drag cleanup`) pushed to
 `origin/main`.
 
-### Iteration 81 - in progress (2026-06-09)
+### Iteration 81 - done (2026-06-09)
 
 **Goal:** Cover command palette global shortcut behavior.
 
@@ -2911,7 +2911,7 @@ shortcuts and call `preventDefault()` before toggling the dialog.
   `pnpm vitest run src/components/CommandPalette.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/components/CommandPalette.test.tsx` failed as
@@ -2920,6 +2920,46 @@ shortcuts and call `preventDefault()` before toggling the dialog.
 - Focused green `pnpm vitest run src/components/CommandPalette.test.tsx`
   passed: 1 file / 3 tests.
 - `pnpm verify` passed: frontend tests (62 files / 381 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `e2583bb` (`test(ui): cover command palette shortcut`) pushed to
+`origin/main`.
+
+### Iteration 82 - in progress (2026-06-09)
+
+**Goal:** Cover command palette item selection ordering.
+
+**Rationale:** `CommandPalette` intentionally closes the dialog before running a
+selected command so the routed view does not render behind a closing overlay.
+The shortcut tests from iteration 81 cover opening/closing via keyboard; this
+iteration locks down the separate `CommandItem` selection path and call order.
+
+**Docs checked:** Context7 `/shadcn-ui/ui` command docs for `CommandItem`
+selection usage. The docs show command items using `onSelect` to run command
+actions inside command lists/dialogs.
+
+**Claimed files:**
+- `src/components/CommandPalette.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: temporarily remove `onOpenChange(false)` from the `run` helper and
+  run `pnpm vitest run src/components/CommandPalette.test.tsx`; the new
+  selection-order test should fail.
+- Focused green test: restore the helper and run
+  `pnpm vitest run src/components/CommandPalette.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/components/CommandPalette.test.tsx` failed as
+  expected after temporarily removing `onOpenChange(false)` from the selection
+  helper; the new selection-order test observed no close call.
+- Focused green `pnpm vitest run src/components/CommandPalette.test.tsx`
+  passed: 1 file / 4 tests.
+- `pnpm verify` passed: frontend tests (62 files / 382 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
