@@ -1785,7 +1785,7 @@ actually uses.
 **Commit:** `77134e6` (`refactor(ui): simplify react entry import`) pushed to
 `origin/main`.
 
-### Iteration 53 - in progress (2026-06-09)
+### Iteration 53 - done (2026-06-09)
 
 **Goal:** Consolidate duplicated git worktree creation setup.
 
@@ -1806,11 +1806,48 @@ future worktree behavior changes in one place without changing the public API.
 - Rust format: `cd native && cargo fmt --check`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `cd native && cargo fmt --check` passed.
 - `cd native && cargo test git_ops::tests::` passed: 21 tests.
+- `pnpm verify` passed: frontend tests (59 files / 353 tests), frontend build,
+  Rust tests (240 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `6dd6f0e` (`refactor(git): share worktree add setup`) pushed to
+`origin/main`.
+
+### Iteration 54 - in progress (2026-06-09)
+
+**Goal:** Centralize production `git -C <repo>` command construction.
+
+**Rationale:** After Iteration 53, the remaining production `git_ops` callers
+still rebuild the same `Command::new("git").arg("-C").arg(repo_path)` prefix in
+multiple places. A tiny command-builder helper keeps the repo-path handling
+consistent while leaving test setup calls alone.
+
+**Docs checked:** Context7 Rust standard library docs for the
+`std::process::Command` builder pattern.
+
+**Claimed files:**
+- `native/src/git_ops/mod.rs`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused Rust tests: `cd native && cargo test git_ops::tests::`.
+- Rust format: `cd native && cargo fmt --check`.
+- Production-spawn check: `rg -n "Command::new\\(\"git\"\\)|std::process::Command::new\\(\"git\"\\)" native/src/git_ops/mod.rs native/src/git_ops/diff.rs native/src/lib.rs native/src/db/tests.rs`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- `cd native && cargo fmt --check` passed after formatting.
+- `cd native && cargo test git_ops::tests::` passed: 21 tests.
+- `rg -n "Command::new\\(\"git\"\\)|std::process::Command::new\\(\"git\"\\)" native/src/git_ops/mod.rs native/src/git_ops/diff.rs native/src/lib.rs native/src/db/tests.rs`
+  shows the production `git_ops` constructor only in `git_command`; the rest are
+  test setup calls.
 - `pnpm verify` passed: frontend tests (59 files / 353 tests), frontend build,
   Rust tests (240 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.

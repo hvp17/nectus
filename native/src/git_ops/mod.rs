@@ -9,6 +9,12 @@ fn git_output(repo_path: &Path, args: &[&str], failure_message: &str) -> Result<
     git_output_allowing_codes(repo_path, args, &[], failure_message)
 }
 
+fn git_command(repo_path: &Path) -> Command {
+    let mut command = Command::new("git");
+    command.arg("-C").arg(repo_path);
+    command
+}
+
 /// Like [`git_output`] but also treats the listed non-zero exit codes as success.
 /// `git diff --no-index` exits 1 ("differences found"), expected when diffing an
 /// untracked file against `/dev/null`.
@@ -18,9 +24,7 @@ fn git_output_allowing_codes(
     allowed_codes: &[i32],
     failure_message: &str,
 ) -> Result<Output, String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(repo_path)
+    let output = git_command(repo_path)
         .args(args)
         .output()
         .map_err(|error| format!("{failure_message}: {error}"))?;
@@ -55,9 +59,7 @@ fn run_git_worktree_add(
     options: &[&str],
     checkout_ref: &str,
 ) -> Result<(), String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(repo_path)
+    let output = git_command(repo_path)
         .arg("worktree")
         .arg("add")
         .args(options)
@@ -331,12 +333,8 @@ pub fn remove_worktree(repo_path: &Path, worktree_path: &Path, force: bool) -> R
         return Err(WORKTREE_HAS_CHANGES.to_string());
     }
 
-    let mut command = Command::new("git");
-    command
-        .arg("-C")
-        .arg(repo_path)
-        .arg("worktree")
-        .arg("remove");
+    let mut command = git_command(repo_path);
+    command.arg("worktree").arg("remove");
     if force {
         command.arg("--force");
     }
@@ -362,9 +360,7 @@ pub fn remove_worktree(repo_path: &Path, worktree_path: &Path, force: bool) -> R
 /// the ephemeral `nectus-pr-review-*` branches a PR-review worktree checks out, so
 /// they don't accumulate after every review.
 pub fn delete_branch(repo_path: &Path, branch_name: &str) -> Result<(), String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(repo_path)
+    let output = git_command(repo_path)
         .args(["branch", "-D", branch_name])
         .output()
         .map_err(|error| format!("Failed to run git branch -D: {error}"))?;
