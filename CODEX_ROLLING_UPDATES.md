@@ -2709,7 +2709,7 @@ flow reports `Started` with `contentLength`, then `Progress` with
 **Commit:** `d44c776` (`test(ui): cover updater progress state`) pushed to
 `origin/main`.
 
-### Iteration 77 - in progress (2026-06-09)
+### Iteration 77 - done (2026-06-09)
 
 **Goal:** Cover indeterminate updater install progress.
 
@@ -2736,7 +2736,7 @@ show `downloadAndInstall()` events and the Rust event model uses
   `pnpm vitest run src/hooks/useAppUpdate.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useAppUpdate.test.tsx` failed as expected
@@ -2745,6 +2745,48 @@ show `downloadAndInstall()` events and the Rust event model uses
 - Focused green `pnpm vitest run src/hooks/useAppUpdate.test.tsx` passed: 1 file /
   7 tests.
 - `pnpm verify` passed: frontend tests (60 files / 374 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `5bb5911` (`test(ui): cover indeterminate updater progress`) pushed
+to `origin/main`.
+
+### Iteration 78 - in progress (2026-06-09)
+
+**Goal:** Cover updater wrapper indeterminate progress events.
+
+**Rationale:** The hook-level tests from iterations 76-77 mock
+`installUpdate`, so they do not prove the wrapper itself preserves
+`contentLength: null` from Tauri's progress stream. A wrapper-level test catches
+regressions where unknown download size gets coerced to `0` or dropped before it
+reaches UI state.
+
+**Docs checked:** Context7 `/websites/v2_tauri_app` updater docs for
+`downloadAndInstall()` events. The docs show `Started`, `Progress`, and
+`Finished`, and the Tauri v2 Rust event model carries
+`content_length: Option<u64>`.
+
+**Claimed files:**
+- `src/lib/update.test.ts`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: temporarily coerce missing content length to `0` in
+  `src/lib/update.ts` and run `pnpm vitest run src/lib/update.test.ts`; the new
+  wrapper assertion should fail.
+- Focused green test: restore the wrapper and run
+  `pnpm vitest run src/lib/update.test.ts`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/lib/update.test.ts` failed as expected after
+  temporarily coercing unknown `contentLength` to `0`; the new test expected
+  `null` for all progress events.
+- Focused green `pnpm vitest run src/lib/update.test.ts` passed: 1 file /
+  7 tests.
+- `pnpm verify` passed: frontend tests (60 files / 375 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

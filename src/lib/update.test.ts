@@ -10,6 +10,7 @@ vi.mock("@tauri-apps/api/app", () => ({ getVersion: appMock.getVersion }));
 
 import {
   checkForUpdate,
+  type DownloadProgress,
   getAppVersion,
   type InstallableUpdate,
   installUpdate,
@@ -77,6 +78,22 @@ describe("update lib", () => {
     await installUpdate(update, (p) => progress.push(p));
     expect(downloadAndInstall).toHaveBeenCalledTimes(1);
     expect(progress.at(-1)).toEqual({ downloaded: 100, contentLength: 100 });
+  });
+
+  it("streams indeterminate download progress when content length is unknown", async () => {
+    const downloadAndInstall = vi.fn(async (onEvent: (e: unknown) => void) => {
+      onEvent({ event: "Started", data: { contentLength: null } });
+      onEvent({ event: "Progress", data: { chunkLength: 40 } });
+      onEvent({ event: "Finished" });
+    });
+    const progress: DownloadProgress[] = [];
+    const update = { downloadAndInstall } satisfies InstallableUpdate;
+    await installUpdate(update, (p) => progress.push(p));
+    expect(progress).toEqual([
+      { downloaded: 0, contentLength: null },
+      { downloaded: 40, contentLength: null },
+      { downloaded: 40, contentLength: null },
+    ]);
   });
 
   it("relaunches inside Tauri", async () => {
