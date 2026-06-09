@@ -941,7 +941,7 @@ flow and body normalization.
 (`refactor(notifications): format system body at api boundary`) pushed to
 `origin/main`.
 
-### Iteration 28 - in progress (2026-06-09)
+### Iteration 28 - done (2026-06-09)
 
 **Goal:** Remove unused step-count bookkeeping from the workflow stepper.
 
@@ -962,9 +962,44 @@ rendering components actually consume.
 - Focused: `pnpm vitest run src/components/TaskWorkspace.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
+**Status:** verified and committed.
+
+**Evidence:**
+- `pnpm vitest run src/components/TaskWorkspace.test.tsx` passed (26 tests).
+- `pnpm test` passed (59 files, 352 tests).
+- `pnpm build` passed.
+
+**Commit:** `3061a78` (`refactor(stepper): remove unused step count context`)
+pushed to `origin/main`.
+
+### Iteration 29 - in progress (2026-06-09)
+
+**Goal:** Trim unused workflow stepper subcomponents from the local `reui` file.
+
+**Rationale:** The app only imports the nav/item/trigger/indicator/title/
+description pieces of the local stepper. `StepperSeparator`, `StepperPanel`,
+`StepperContent`, and the exported hooks are unused outside the file, so keeping
+them expands the local API and maintenance surface without serving the current
+workflow.
+
+**Docs checked:** Context7 React docs for component composition with props,
+children, and context. This keeps the local stepper API aligned to the components
+the app actually composes.
+
+**Claimed files:**
+- `src/components/reui/stepper.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Search: confirm removed stepper exports have no remaining references.
+- Focused: `pnpm vitest run src/components/TaskWorkspace.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
 **Status:** verified and ready to commit.
 
 **Evidence:**
+- `rg -n "StepperSeparator|StepperPanel|StepperContent|StepperContentProps" src docs README.md AGENTS.md`
+  returned no matches.
 - `pnpm vitest run src/components/TaskWorkspace.test.tsx` passed (26 tests).
 - `pnpm test` passed (59 files, 352 tests).
 - `pnpm build` passed.

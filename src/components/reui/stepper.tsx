@@ -344,21 +344,6 @@ function StepperIndicator({
   )
 }
 
-function StepperSeparator({ className }: React.ComponentProps<"div">) {
-  const { state } = useStepItem()
-
-  return (
-    <div
-      data-slot="stepper-separator"
-      data-state={state}
-      className={cn(
-        "bg-muted rounded-sm group-data-[orientation=horizontal]/stepper-nav:h-0.5 group-data-[orientation=vertical]/stepper-nav:h-12 group-data-[orientation=vertical]/stepper-nav:w-0.5 m-0.5 group-data-[orientation=horizontal]/stepper-nav:flex-1",
-        className
-      )}
-    />
-  )
-}
-
 function StepperTitle({ children, className }: React.ComponentProps<"h3">) {
   const { state } = useStepItem()
 
@@ -414,65 +399,15 @@ function StepperNav({ children, className }: React.ComponentProps<"nav">) {
   )
 }
 
-function StepperPanel({ children, className }: React.ComponentProps<"div">) {
-  const { activeStep } = useStepper()
-
-  return (
-    <div
-      data-slot="stepper-panel"
-      data-state={activeStep}
-      className={cn("w-full", className)}
-    >
-      {children}
-    </div>
-  )
-}
-
-interface StepperContentProps extends React.ComponentProps<"div"> {
-  value: number
-  forceMount?: boolean
-}
-
-function StepperContent({
-  value,
-  forceMount,
-  children,
-  className,
-}: StepperContentProps) {
-  const { activeStep } = useStepper()
-  const isActive = value === activeStep
-
-  if (!forceMount && !isActive) {
-    return null
-  }
-
-  return (
-    <div
-      data-slot="stepper-content"
-      data-state={activeStep}
-      className={cn("w-full", className, !isActive && forceMount && "hidden")}
-      hidden={!isActive && forceMount}
-    >
-      {children}
-    </div>
-  )
-}
-
 export {
-  useStepper,
-  useStepItem,
   Stepper,
   StepperItem,
   StepperTrigger,
   StepperIndicator,
-  StepperSeparator,
   StepperTitle,
   StepperDescription,
-  StepperPanel,
-  StepperContent,
   StepperNav,
   type StepperProps,
   type StepperItemProps,
   type StepperTriggerProps,
-  type StepperContentProps,
 }
