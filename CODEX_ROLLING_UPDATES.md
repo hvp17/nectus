@@ -3903,7 +3903,7 @@ data exists, even though they do not fetch.
   gating the detection effect on the same prerequisites as the query.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useGithub.test.tsx` failed as expected
@@ -3912,6 +3912,49 @@ data exists, even though they do not fetch.
 - Focused green `pnpm vitest run src/hooks/useGithub.test.tsx` passed:
   1 file / 2 tests.
 - `pnpm verify` passed: frontend tests (70 files / 416 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `9db7bb3` (`fix(ui): gate github pr detection cache`) pushed to
+`origin/main`.
+
+### Iteration 105 - in progress (2026-06-09)
+
+**Goal:** Replay live terminal output buffered during a failed history snapshot.
+
+**Rationale:** `TerminalPane` buffers `session_output` events while
+`sessionOutputSnapshot` is loading, then replays them after the history snapshot.
+If the snapshot request rejects, the catch path writes an error line but never
+flushes `pendingOutput`, so fresh live output emitted during the failed snapshot
+can be hidden until another chunk arrives. The failure path should still drain
+pending live output and sync the PTY size.
+
+**Docs checked:** Context7 `/xtermjs/xterm.js` docs. Current API docs show
+`Terminal.write(data)` as the standard way to feed PTY output and document
+reconnection/state-restoration patterns.
+
+**Claimed files:**
+- `src/TerminalPane.tsx`
+- `src/TerminalPane.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: make `sessionOutputSnapshot` reject after a live `session_output`
+  chunk has been buffered and run `pnpm vitest run src/TerminalPane.test.tsx`;
+  it should fail while the pending live output remains unwritten.
+- Focused green: rerun `pnpm vitest run src/TerminalPane.test.tsx` after
+  flushing pending output in the snapshot failure path.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/TerminalPane.test.tsx` failed as expected
+  before implementation; live output buffered during a failed snapshot was never
+  written to xterm.
+- Focused green `pnpm vitest run src/TerminalPane.test.tsx` passed:
+  1 file / 12 tests.
+- `pnpm verify` passed: frontend tests (70 files / 417 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

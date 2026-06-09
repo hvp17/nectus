@@ -220,6 +220,12 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
     cached.renderedOffset = endOffset;
   };
 
+  const flushPendingOutput = (cached: CachedTerminal) => {
+    cached.pendingOutput.splice(0).forEach((output) => {
+      writeOutput(cached, output.data, output.startOffset);
+    });
+  };
+
   const getOrCreateTerminal = (sessionId: string) => {
     const existing = terminalsRef.current.get(sessionId);
     if (existing) return existing;
@@ -299,9 +305,7 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
           cached.ptyCols = snapshot.cols;
         }
         writeOutput(cached, snapshot.data, snapshot.startOffset);
-        cached.pendingOutput.splice(0).forEach((output) => {
-          writeOutput(cached, output.data, output.startOffset);
-        });
+        flushPendingOutput(cached);
         // History is now rendered; switch the live terminal to the pane size so
         // the agent redraws (via SIGWINCH) at the size the user actually sees.
         syncTerminalToPane(sessionId, cached);
@@ -309,6 +313,8 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
       .catch((error) => {
         if (terminalsRef.current.get(sessionId) === cached) {
           cached.terminal.writeln(`\r\nFailed to load terminal history: ${String(error)}`);
+          flushPendingOutput(cached);
+          syncTerminalToPane(sessionId, cached);
         }
       })
       .finally(() => {

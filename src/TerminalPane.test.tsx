@@ -2,6 +2,8 @@ import { act, render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TerminalPane } from "./TerminalPane";
 import { api } from "./api";
+import { deferred } from "./test/testUtils";
+import type { SessionOutputSnapshot } from "./types";
 
 const terminalTestState = vi.hoisted(() => {
   const instances: MockTerminal[] = [];
@@ -271,6 +273,37 @@ describe("TerminalPane", () => {
     expect(resizeOrder).toBeLessThan(writeOrder);
 
     // After replay, the PTY is synced to the pane (mock terminal stays 24x80).
+    expect(mockedApi.resizeSession).toHaveBeenCalledWith("session-21", 24, 80);
+  });
+
+  it("flushes live output buffered before a failed history snapshot", async () => {
+    const snapshot = deferred<SessionOutputSnapshot>();
+    mockedApi.sessionOutputSnapshot.mockReturnValueOnce(snapshot.promise);
+
+    render(
+      <TerminalPane sessionId="session-21" onSessionExit={vi.fn()} onSessionInput={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      expect(terminalTestState.instances).toHaveLength(1);
+    });
+
+    const terminal = terminalTestState.instances[0];
+    act(() => {
+      terminalTestState.handlers.get("session_output")?.({
+        payload: { sessionId: "session-21", data: "live after failed snapshot", startOffset: 0 },
+      });
+    });
+    expect(terminal.write).not.toHaveBeenCalledWith("live after failed snapshot");
+
+    await act(async () => {
+      snapshot.reject(new Error("snapshot unavailable"));
+    });
+
+    await waitFor(() => {
+      expect(terminal.writeln).toHaveBeenCalledWith(expect.stringContaining("Failed to load terminal history"));
+    });
+    expect(terminal.write).toHaveBeenCalledWith("live after failed snapshot");
     expect(mockedApi.resizeSession).toHaveBeenCalledWith("session-21", 24, 80);
   });
 
