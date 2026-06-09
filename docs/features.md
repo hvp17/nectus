@@ -613,7 +613,9 @@ When Theme is set to System, the UI follows OS color-scheme changes while the
 app is running. Before persisted settings hydrate, the app uses that same System
 theme behavior instead of briefly forcing light mode. Settings persist through
 the `get_app_settings` / `update_app_settings` commands (the `app_settings`
-table).
+table). After saving settings, the shell's selected agent is resolved against the
+loaded profile list before it is updated, so a stale default profile id in the
+returned settings cannot become the active launcher choice.
 
 File ownership: see [AGENTS.md](../AGENTS.md).
 

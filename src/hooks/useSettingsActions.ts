@@ -6,6 +6,7 @@ import { makeCacheSetter } from "../queries/cache";
 import { useRefreshData } from "../queries/core";
 import { useGuardedAction } from "./useGuardedAction";
 import { useAppStore } from "../store/appStore";
+import { resolveAgentProfileId } from "../lib/agentProfiles";
 import { upsertById } from "../lib/listState";
 import type { AgentProfile, AppSettings, AppSettingsInput } from "../types";
 
@@ -32,17 +33,16 @@ export function useSettingsActions() {
         async () => {
           const updated = await api.updateAppSettings(input);
           setSettings(updated);
-          // The default agent may have changed; reflect it. useShellBootstrap's
-          // getState() guard keeps the bootstrap default-agent effect from
-          // re-overriding this pick.
-          setSelectedAgentProfileId(updated.defaultAgentProfileId ?? undefined);
+          // The default agent may have changed; reflect only a resolvable shell pick.
+          const agentProfiles = queryClient.getQueryData<AgentProfile[]>(queryKeys.agentProfiles()) ?? [];
+          setSelectedAgentProfileId(resolveAgentProfileId(agentProfiles, updated.defaultAgentProfileId));
           setMessage("Settings saved");
           await refresh();
           return updated;
         },
         { busy: true, rethrow: true },
       ),
-    [refresh, run, setMessage, setSelectedAgentProfileId, setSettings],
+    [queryClient, refresh, run, setMessage, setSelectedAgentProfileId, setSettings],
   );
 
   const saveAgentProfile = useCallback(

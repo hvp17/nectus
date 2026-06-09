@@ -100,7 +100,9 @@ describe("useSettingsActions", () => {
     });
     mockedApi.updateAppSettings.mockResolvedValue(updated);
     useAppStore.setState({ selectedAgentProfileId: 1 });
-    const { result, queryClient } = setup();
+    const { result, queryClient } = setup({
+      agentProfiles: [profile({ id: 1, name: "Codex" }), profile({ id: 2, name: "Claude" })],
+    });
 
     let returned: AppSettings | undefined;
     await act(async () => {
@@ -113,6 +115,28 @@ describe("useSettingsActions", () => {
     expect(useAppStore.getState().selectedAgentProfileId).toBe(2);
     expect(useAppStore.getState().message).toBe("Settings saved");
     expectBootstrapInvalidated(queryClient);
+  });
+
+  it("resolves a stale returned default agent before updating shell selection", async () => {
+    const input = settingsInput({ defaultAgentProfileId: 99 });
+    const updated = appSettingsFixture({
+      ...input,
+      updatedAt: "2026-06-09T00:03:00.000Z",
+    });
+    mockedApi.updateAppSettings.mockResolvedValue(updated);
+    useAppStore.setState({ selectedAgentProfileId: 2 });
+    const { result, queryClient } = setup({
+      agentProfiles: [profile({ id: 1, name: "Codex" }), profile({ id: 2, name: "Claude" })],
+    });
+
+    let returned: AppSettings | undefined;
+    await act(async () => {
+      returned = await result.current.saveAppSettings(input);
+    });
+
+    expect(returned).toEqual(updated);
+    expect(queryClient.getQueryData(queryKeys.settings())).toEqual(updated);
+    expect(useAppStore.getState().selectedAgentProfileId).toBe(1);
   });
 
   it("upserts saved agent profiles into the cache", async () => {

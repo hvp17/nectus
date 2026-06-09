@@ -4442,7 +4442,7 @@ before opening the composer.
   the existing draft id against loaded profiles.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready for collision check and commit.
+**Status:** verified and committed.
 
 **Evidence so far:**
 - Red check `pnpm vitest run src/App.test.tsx` failed as expected before
@@ -4450,6 +4450,56 @@ before opening the composer.
   submitted `agentProfileId: 99` to `createTask`.
 - Focused green `pnpm vitest run src/App.test.tsx` passed: 1 file / 50 tests.
 - `pnpm verify` passed: frontend tests (72 files / 428 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `0a0d19c` (`fix(composer): resolve stale draft agent`) pushed to
+`origin/main`.
+
+### Iteration 117 - in progress (2026-06-09)
+
+**Goal:** Resolve the saved settings default agent before writing it into shell
+selection.
+
+**Rationale:** `useSettingsActions.saveAppSettings` caches the returned settings
+and then writes `updated.defaultAgentProfileId` directly to the global selected
+agent. Neighboring bootstrap/composer paths resolve agent ids against the loaded
+profiles first, so a stale returned default such as `99` can leave the shell
+selection pointing at an invisible/nonexistent profile.
+
+**Docs checked:** Context7 `/tanstack/query` docs. Current QueryClient docs
+confirm `getQueryData` is the synchronous read API for existing cached query data
+and `setQueryData` is the synchronous write path after a successful save; an
+updater returning `undefined` bails out of creating a cache entry.
+
+**Claimed files:**
+- `src/hooks/useSettingsActions.ts`
+- `src/hooks/useSettingsActions.test.tsx`
+- `docs/features.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add a settings-action test where the backend returns a stale
+  `defaultAgentProfileId` and expect the selected shell agent to fall back to the
+  first loaded profile; run `pnpm vitest run src/hooks/useSettingsActions.test.tsx`.
+- Focused green: rerun the same test file after resolving the returned id against
+  the cached agent profile list.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready for collision check and commit.
+
+**Evidence so far:**
+- `git status --short --branch` is clean on `main...origin/main`.
+- `git log --oneline --decorate -8` shows `0a0d19c` at both local and
+  `origin/main`.
+- `CLAUDE_ROLLING_UPDATES.md` still documents older coverage-only iterations and
+  no current overlap with the settings-action files claimed here.
+- Red check `pnpm vitest run src/hooks/useSettingsActions.test.tsx` failed as
+  expected before implementation: the new test observed
+  `selectedAgentProfileId: 99` instead of the resolved loaded profile `1`.
+- Focused green `pnpm vitest run src/hooks/useSettingsActions.test.tsx` passed:
+  1 file / 4 tests.
+- `pnpm verify` passed: frontend tests (72 files / 429 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
