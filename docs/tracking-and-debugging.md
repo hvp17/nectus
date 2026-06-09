@@ -67,8 +67,11 @@ Frontend state lives in three layers, not a single god-hook (the old
   `taskAttention` maps, `deletingTaskIds`, and toasts/messages.
 - **Events — one mount-once bridge (`src/hooks/useEventBridge.ts`).** Mounted in
   `AppLayout`, it owns every Rust session/review/PR subscription and routes each
-  event to the Query cache or the Zustand store. Because events are centralized,
-  the domain hooks are pure cache consumers callable per component.
+  event to the Query cache or the Zustand store. Each channel uses
+  `src/hooks/useTauriEvent.ts` for the Tauri `listen` lifecycle, so a failed
+  subscription is surfaced without blocking the other event channels. Because
+  events are centralized, the domain hooks are pure cache consumers callable per
+  component.
 
 Review status is included in task summaries so the board can label cards before
 a task is opened; review is modeled as a single pass.
@@ -221,7 +224,9 @@ Frontend event listeners:
   (`session_activity` / `session_idle` / `session_needs_input` /
   `session_exited`, `review_loop_updated`, `pr_review_updated`) and routes each
   event to the Query cache (tasks, review loop/runs, PR reviews) or the Zustand
-  store (`liveLines` / `taskAttention`, toasts/notifications). It records
+  store (`liveLines` / `taskAttention`, toasts/notifications). Each bridge
+  channel is subscribed through `src/hooks/useTauriEvent.ts`, which owns the
+  shared late-unlisten cleanup and subscription-error path. The bridge records
   `session_activity` into a per-task `liveLines` map (cleared on
   `session_exited`) that drives the live "what it's doing" line on task cards and
   Mission Control rows, and resolves `session_exited` to its task via the active

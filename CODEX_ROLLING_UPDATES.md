@@ -2193,7 +2193,7 @@ scope, such as when a component unmounts.
 **Commit:** `a14f327` (`test(ui): cover tauri event listener edges`) pushed to
 `origin/main`.
 
-### Iteration 64 - in progress (2026-06-09)
+### Iteration 64 - done (2026-06-09)
 
 **Goal:** Centralize the event bridge subscriptions on `useTauriEvent`.
 
@@ -2219,7 +2219,7 @@ surfacing.
 - Focused green test: `pnpm vitest run src/hooks/useEventBridge.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useEventBridge.test.tsx` failed as
@@ -2229,6 +2229,44 @@ surfacing.
   1 file / 6 tests.
 - Neighbor check `pnpm vitest run src/hooks/useTauriEvent.test.tsx src/hooks/useEventBridge.test.tsx`
   passed: 2 files / 13 tests.
+- `pnpm verify` passed: frontend tests (59 files / 361 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `ef7b2e5` (`refactor(ui): centralize event bridge subscriptions`)
+pushed to `origin/main`.
+
+### Iteration 65 - in progress (2026-06-09)
+
+**Goal:** Sync docs for the event bridge subscription refactor.
+
+**Rationale:** Iteration 64 changed frontend architecture by moving every
+`useEventBridge` event channel onto the shared `useTauriEvent` lifecycle helper.
+The code was verified and pushed, but the project guide and event architecture
+docs still described the bridge only as a monolithic subscriber. The docs should
+now state that the bridge remains the single routing owner while `useTauriEvent`
+owns per-channel `listen` cleanup and subscription error handling.
+
+**Docs checked:** Local authoritative docs map in `AGENTS.md`, plus Context7
+Tauri v2 docs already fetched for the `listen`/unlisten contract in the preceding
+iterations.
+
+**Claimed files:**
+- `AGENTS.md`
+- `docs/architecture.md`
+- `docs/tracking-and-debugging.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Docs grep:
+  `rg -n "useTauriEvent|single, mount-once bridge|subscription" AGENTS.md docs/architecture.md docs/tracking-and-debugging.md`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Docs grep `rg -n "useTauriEvent|single, mount-once bridge|subscription" AGENTS.md docs/architecture.md docs/tracking-and-debugging.md`
+  shows the updated event-bridge ownership in all three docs.
 - `pnpm verify` passed: frontend tests (59 files / 361 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.

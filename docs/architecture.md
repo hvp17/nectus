@@ -46,8 +46,10 @@ external CLI.
 **Up (live state):** long-running work (PTY sessions, review loops, PR reviews)
 emits Tauri events from Rust. The single **mount-once** `useEventBridge` (in
 `AppLayout`) is the *only* place that subscribes; it routes each event into the
-TanStack Query cache or the Zustand store, and components re-render from there. No
-component subscribes to backend events directly (three deliberate exceptions:
+TanStack Query cache or the Zustand store, and each bridge channel delegates the
+Tauri `listen` lifecycle to `useTauriEvent` so subscription cleanup and errors are
+handled consistently. Components re-render from cache/store state. No component
+subscribes to backend events directly (three deliberate exceptions:
 `TerminalPane` consumes `session_output`, `useTaskReviewLoop` consumes
 `review_output`, `useTaskDiff` consumes `session_idle`).
 
@@ -131,7 +133,7 @@ Frontend:
 5. `src/AppRouter.tsx` — the React shell; how queries, store, the event bridge,
    and the lazy-loaded view/overlay boundaries compose into routed views.
 6. `src/hooks/useEventBridge.ts` — the single mount-once bridge routing Rust events
-   into the Query cache / Zustand store.
+   into the Query cache / Zustand store via `useTauriEvent` subscriptions.
 7. `src/queries/core.ts` (+ `keys.ts`, `cache.ts`) — the server-state read layer all
    data hooks build on.
 8. `src/api.ts` + `src/types.ts` — the typed command boundary and the
