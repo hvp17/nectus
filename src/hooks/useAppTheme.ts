@@ -4,7 +4,7 @@ import type { AppSettings } from "../types";
 export function useAppTheme(settings?: AppSettings) {
   useEffect(() => {
     const root = document.documentElement;
-    const theme = settings?.theme;
+    const theme = settings?.theme ?? "system";
     root.dataset.density = settings?.density ?? "comfortable";
 
     if (theme !== "system") {

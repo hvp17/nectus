@@ -4122,7 +4122,7 @@ so stale responses cannot update state after a newer request supersedes them.
   adding a request-id guard to ignore stale check completions.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useAppUpdate.test.tsx` failed as
@@ -4131,6 +4131,49 @@ so stale responses cannot update state after a newer request supersedes them.
 - Focused green `pnpm vitest run src/hooks/useAppUpdate.test.tsx` passed:
   1 file / 9 tests.
 - `pnpm verify` passed: frontend tests (70 files / 420 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `6dd2cd1` (`fix(update): ignore stale check responses`) pushed to
+`origin/main`.
+
+### Iteration 110 - in progress (2026-06-09)
+
+**Goal:** Use the system color scheme while app settings are still loading.
+
+**Rationale:** `useAppTheme` treats `settings?.theme === undefined` as an
+explicit non-system theme, which removes dark mode before settings hydrate. The
+persisted default is System, so the pre-settings fallback should also follow the
+OS color scheme and subscribe to future color-scheme changes.
+
+**Docs checked:** MDN `prefers-color-scheme` and `Window.matchMedia()` docs. The
+current docs describe `prefers-color-scheme` as the way to detect the user's
+requested light/dark theme and `matchMedia()` as returning a `MediaQueryList`
+that can be monitored with a `change` event.
+
+**Claimed files:**
+- `src/hooks/useAppTheme.ts`
+- `src/hooks/useAppTheme.test.tsx`
+- `docs/features.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add a hook test rendering without settings while the system query
+  reports dark; run `pnpm vitest run src/hooks/useAppTheme.test.tsx` and see it
+  fail because the hook does not query system theme.
+- Focused green: rerun `pnpm vitest run src/hooks/useAppTheme.test.tsx` after
+  defaulting the missing theme to `system`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useAppTheme.test.tsx` failed as expected
+  before implementation; rendering without settings left the root without the
+  `dark` class even though the system query reported dark.
+- Focused green `pnpm vitest run src/hooks/useAppTheme.test.tsx` passed:
+  1 file / 7 tests.
+- `pnpm verify` passed: frontend tests (70 files / 421 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

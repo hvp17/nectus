@@ -600,8 +600,10 @@ refreshed when the pattern changes. Databases created before this default shippe
 are migrated from the legacy sibling layout (`../{repoName}-worktrees`) to the
 `~/.nectus` default on open, unless the pattern was customized.
 When Theme is set to System, the UI follows OS color-scheme changes while the
-app is running. Settings persist through the `get_app_settings` /
-`update_app_settings` commands (the `app_settings` table).
+app is running. Before persisted settings hydrate, the app uses that same System
+theme behavior instead of briefly forcing light mode. Settings persist through
+the `get_app_settings` / `update_app_settings` commands (the `app_settings`
+table).
 
 File ownership: see [AGENTS.md](../AGENTS.md).
 

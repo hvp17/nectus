@@ -19,7 +19,7 @@ const systemSettings: AppSettings = {
   updatedAt: "2026-05-16T00:00:00.000Z",
 };
 
-function ThemeProbe({ settings }: { settings: AppSettings }) {
+function ThemeProbe({ settings }: { settings?: AppSettings }) {
   useAppTheme(settings);
   return null;
 }
@@ -84,6 +84,15 @@ describe("useAppTheme", () => {
     });
 
     expect(document.documentElement).toHaveClass("dark");
+  });
+
+  it("uses the system theme before settings are loaded", () => {
+    const colorScheme = mockColorSchemeQuery(true);
+
+    render(<ThemeProbe />);
+
+    expect(document.documentElement).toHaveClass("dark");
+    expect(colorScheme.listeners.size).toBe(1);
   });
 
   it("removes the system theme listener when leaving system mode", () => {
