@@ -2,8 +2,22 @@ import { describe, expect, it } from "vitest";
 import { taskFinishedToast, taskNeedsInputToast, taskToastFromContent } from "./taskNotification";
 import type { SessionIdleEvent, SessionNeedsInputEvent, TaskSummary } from "./types";
 
+const baseTask = {
+  id: 7,
+  repoId: 3,
+  title: "Wire up auth",
+  status: "in_progress",
+  agentName: "Claude",
+  agentKind: "claude",
+  hasWorktree: false,
+  isDirty: false,
+  taskRepos: [{ repoId: 3, repoName: "nectus", isDirty: false, position: 0 }],
+  createdAt: "2026-06-09T00:00:00.000Z",
+  updatedAt: "2026-06-09T00:00:00.000Z",
+} satisfies TaskSummary;
+
 const task = (overrides: Partial<TaskSummary> = {}): TaskSummary =>
-  ({ id: 7, title: "Wire up auth", agentName: "Claude", agentKind: "claude", ...overrides }) as unknown as TaskSummary;
+  ({ ...baseTask, ...overrides });
 
 describe("taskFinishedToast", () => {
   it("links the toast to the task with a success kind", () => {

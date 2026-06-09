@@ -2553,7 +2553,7 @@ selected-task/run output.
 **Commit:** `fa83354` (`test(ui): cover review output resets`) pushed to
 `origin/main`.
 
-### Iteration 73 - in progress (2026-06-09)
+### Iteration 73 - done (2026-06-09)
 
 **Goal:** Tighten app-store task-attention fixtures.
 
@@ -2576,11 +2576,46 @@ preserving the expression's useful literal type.
 - Focused test: `pnpm vitest run src/store/appStore.test.ts`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Focused green `pnpm vitest run src/store/appStore.test.ts` passed: 1 file /
   5 tests.
+- `pnpm verify` passed: frontend tests (60 files / 373 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `1c0f5eb` (`test(ui): type app store attention fixtures`) pushed to
+`origin/main`.
+
+### Iteration 74 - in progress (2026-06-09)
+
+**Goal:** Tighten task-notification TaskSummary fixtures.
+
+**Rationale:** `src/taskNotification.test.ts` used a double cast
+`as unknown as TaskSummary` over a partial task object. That bypassed the real
+required fields (`repoId`, `status`, `hasWorktree`, `isDirty`, `taskRepos`,
+timestamps) in a test for notification text that is task-contract dependent.
+Replacing it with a base fixture that `satisfies TaskSummary` keeps overrides
+ergonomic while letting TypeScript validate the fixture.
+
+**Docs checked:** Context7 `/microsoft/typescript` docs for the `satisfies`
+operator, reused from Iteration 73 because this is the same fixture-typing
+pattern.
+
+**Claimed files:**
+- `src/taskNotification.test.ts`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused test: `pnpm vitest run src/taskNotification.test.ts`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Focused green `pnpm vitest run src/taskNotification.test.ts` passed: 1 file /
+  7 tests.
 - `pnpm verify` passed: frontend tests (60 files / 373 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
