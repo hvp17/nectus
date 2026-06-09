@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useAppStore } from "./appStore";
 import { resetAppStore } from "../test/testUtils";
+import type { TaskAttention } from "../sessionAttention";
 
 const s = () => useAppStore.getState();
 
@@ -24,13 +25,29 @@ describe("appStore", () => {
   });
 
   it("setTaskAttention applies a functional update over current state", () => {
+    const idleAttention = {
+      taskId: 1,
+      kind: "idle",
+      title: "Finished task",
+      message: "Done",
+      updatedAt: "2026-06-09T00:00:00.000Z",
+    } satisfies TaskAttention;
+    const needsInputAttention = {
+      taskId: 2,
+      kind: "needs_input",
+      title: "Blocked task",
+      reason: "approval_request",
+      prompt: "Approve command?",
+      updatedAt: "2026-06-09T00:00:01.000Z",
+    } satisfies TaskAttention;
+
     s().setTaskAttention(() => [
-      { taskId: 1, kind: "finished" } as never,
-      { taskId: 2, kind: "needs_input" } as never,
+      idleAttention,
+      needsInputAttention,
     ]);
-    s().setTaskAttention((current) => current.filter((a) => (a as { taskId: number }).taskId !== 1));
+    s().setTaskAttention((current) => current.filter((attention) => attention.taskId !== 1));
     expect(s().taskAttention).toHaveLength(1);
-    expect((s().taskAttention[0] as { taskId: number }).taskId).toBe(2);
+    expect(s().taskAttention[0]?.taskId).toBe(2);
   });
 
   it("setLiveLines merges per-task activity lines", () => {

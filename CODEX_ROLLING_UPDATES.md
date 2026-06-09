@@ -2512,7 +2512,7 @@ the listener returns an unlisten function. The tests use the existing
 **Commit:** `e7d3b43` (`test(ui): cover live review output stream`) pushed to
 `origin/main`.
 
-### Iteration 72 - in progress (2026-06-09)
+### Iteration 72 - done (2026-06-09)
 
 **Goal:** Cover live review-output reset effects.
 
@@ -2539,13 +2539,48 @@ selected-task/run output.
   `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx` failed as
   expected because `task 21 output` stayed visible after switching to task 22.
 - Focused green `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx` passed:
   1 file / 8 tests.
+- `pnpm verify` passed: frontend tests (60 files / 373 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `fa83354` (`test(ui): cover review output resets`) pushed to
+`origin/main`.
+
+### Iteration 73 - in progress (2026-06-09)
+
+**Goal:** Tighten app-store task-attention fixtures.
+
+**Rationale:** `src/store/appStore.test.ts` used `as never` casts and an invalid
+`"finished"` attention kind to exercise `setTaskAttention`. The real
+`TaskAttention.kind` contract is `"idle" | "needs_input"`, so the cast hid the
+store shape in a central state test. Replacing those fixtures with
+`satisfies TaskAttention` keeps the test readable while making TypeScript check
+the actual contract.
+
+**Docs checked:** Context7 `/microsoft/typescript` docs for the `satisfies`
+operator, confirming it validates object literals against a target type while
+preserving the expression's useful literal type.
+
+**Claimed files:**
+- `src/store/appStore.test.ts`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused test: `pnpm vitest run src/store/appStore.test.ts`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Focused green `pnpm vitest run src/store/appStore.test.ts` passed: 1 file /
+  5 tests.
 - `pnpm verify` passed: frontend tests (60 files / 373 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
