@@ -4033,7 +4033,7 @@ state updates inside memoized callbacks.
   after setting the guidance message in the early return.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useSessionCommands.test.tsx` failed as
@@ -4042,6 +4042,52 @@ state updates inside memoized callbacks.
 - Focused green `pnpm vitest run src/hooks/useSessionCommands.test.tsx` passed:
   1 file / 5 tests.
 - `pnpm verify` passed: frontend tests (70 files / 418 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `6e28a14` (`fix(ui): guide missing agent profile starts`) pushed to
+`origin/main`.
+
+### Iteration 108 - in progress (2026-06-09)
+
+**Goal:** Clear stale pending updater state before a fresh update check.
+
+**Rationale:** `useAppUpdate` stores the installable Tauri `Update` object in a
+ref after a successful check. If a later manual check fails, the hook reports
+`error` but keeps the old pending update object. A still-visible old toast
+action could call `installUpdate()` and install the stale result. A fresh check
+should invalidate the previous install target before reading the endpoint.
+
+**Docs checked:** Context7 `/tauri-apps/plugins-workspace` updater docs. The
+documented JavaScript flow is `const update = await check()` followed by
+`await update.downloadAndInstall()` for that returned update object, so the
+install target should come from the current successful check, not an older
+result after a failed re-check.
+
+**Claimed files:**
+- `src/hooks/useAppUpdate.ts`
+- `src/hooks/useAppUpdate.test.tsx`
+- `docs/features.md`
+- `docs/tracking-and-debugging.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add a hook test where an update is found, a later check fails, and
+  `installUpdate()` must not call the old pending updater object; run
+  `pnpm vitest run src/hooks/useAppUpdate.test.tsx`.
+- Focused green: rerun `pnpm vitest run src/hooks/useAppUpdate.test.tsx` after
+  clearing pending update state at the start of each check.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useAppUpdate.test.tsx` failed as
+  expected before implementation; after a failed re-check, `info` still held the
+  old version `0.2.0`.
+- Focused green `pnpm vitest run src/hooks/useAppUpdate.test.tsx` passed:
+  1 file / 8 tests.
+- `pnpm verify` passed: frontend tests (70 files / 419 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

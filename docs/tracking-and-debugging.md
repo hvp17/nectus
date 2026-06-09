@@ -674,7 +674,10 @@ Settings → About & Updates → "Check for updates"
 | `error` | Check or install failed (`error` holds the message). |
 
 The hook also exposes `info`, `currentVersion`, `progress`, `error`, and
-`lastCheckedAt` for the About card.
+`lastCheckedAt` for the About card. Starting a fresh check clears the previous
+`info`, progress, and pending install target before hitting the updater endpoint;
+if that re-check fails, old toast actions have no stale `Update` object to
+install.
 
 The updater fetches the manifest from:
 

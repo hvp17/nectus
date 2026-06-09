@@ -48,14 +48,15 @@ export function useAppUpdate(): AppUpdateState {
   const installing = useRef(false);
 
   const check = useCallback(async () => {
+    pending.current = null;
     setStatus("checking");
+    setInfo(null);
+    setProgress(null);
     setError(null);
     try {
       const result = await checkForUpdate();
       setLastCheckedAt(Date.now());
       if (!result) {
-        pending.current = null;
-        setInfo(null);
         setStatus("upToDate");
         return;
       }

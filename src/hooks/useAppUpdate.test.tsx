@@ -132,6 +132,25 @@ describe("useAppUpdate", () => {
     expect(latest.error).toContain("network down");
   });
 
+  it("clears a previous pending update before a fresh check fails", async () => {
+    lib.checkForUpdate.mockResolvedValueOnce(fakeResult()).mockRejectedValueOnce(new Error("network down"));
+    render(<Probe />);
+    await waitFor(() => expect(latest.status).toBe("available"));
+
+    await act(async () => {
+      await latest.check();
+    });
+
+    expect(latest.status).toBe("error");
+    expect(latest.info).toBeNull();
+
+    await act(async () => {
+      await latest.installUpdate();
+    });
+
+    expect(lib.installUpdate).not.toHaveBeenCalled();
+  });
+
   it("relaunches via the lib", async () => {
     render(<Probe />);
     await waitFor(() => expect(latest.status).toBe("upToDate"));
