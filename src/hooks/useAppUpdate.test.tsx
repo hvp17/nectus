@@ -1,7 +1,7 @@
 import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppUpdate, type AppUpdateState } from "./useAppUpdate";
-import type { InstallableUpdate, UpdateCheckResult } from "../lib/update";
+import type { DownloadProgress, InstallableUpdate, UpdateCheckResult } from "../lib/update";
 
 const lib = vi.hoisted(() => ({
   getAppVersion: vi.fn(),
@@ -28,6 +28,20 @@ const fakeResult = (): UpdateCheckResult => ({
   info: { version: "0.2.0", currentVersion: "0.1.0", notes: "n", date: null },
 });
 
+function holdInstallAfterProgress(progress: DownloadProgress): () => void {
+  let finishInstall: (() => void) | undefined;
+  lib.installUpdate.mockImplementation(async (_u: unknown, onProgress: (p: DownloadProgress) => void) => {
+    onProgress(progress);
+    await new Promise<void>((resolve) => {
+      finishInstall = resolve;
+    });
+  });
+  return () => {
+    if (!finishInstall) throw new Error("install did not start");
+    finishInstall();
+  };
+}
+
 describe("useAppUpdate", () => {
   beforeEach(() => {
     lib.getAppVersion.mockResolvedValue("0.1.0");
@@ -53,15 +67,7 @@ describe("useAppUpdate", () => {
 
   it("downloads then becomes ready, reporting progress", async () => {
     lib.checkForUpdate.mockResolvedValue(fakeResult());
-    let finishInstall: (() => void) | undefined;
-    lib.installUpdate.mockImplementation(
-      async (_u: unknown, onProgress: (p: { downloaded: number; contentLength: number | null }) => void) => {
-        onProgress({ downloaded: 50, contentLength: 100 });
-        await new Promise<void>((resolve) => {
-          finishInstall = resolve;
-        });
-      },
-    );
+    const finishInstall = holdInstallAfterProgress({ downloaded: 50, contentLength: 100 });
     render(<Probe />);
     await waitFor(() => expect(latest.status).toBe("available"));
     await act(async () => {
@@ -70,14 +76,32 @@ describe("useAppUpdate", () => {
     await waitFor(() => {
       expect(latest.status).toBe("downloading");
       expect(latest.progress).toBe(0.5);
-      expect(finishInstall).toBeDefined();
     });
     await act(async () => {
-      finishInstall?.();
+      finishInstall();
     });
     await waitFor(() => expect(latest.status).toBe("ready"));
     expect(latest.progress).toBe(1);
     expect(lib.installUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps progress indeterminate when the download size is unknown", async () => {
+    lib.checkForUpdate.mockResolvedValue(fakeResult());
+    const finishInstall = holdInstallAfterProgress({ downloaded: 50, contentLength: null });
+    render(<Probe />);
+    await waitFor(() => expect(latest.status).toBe("available"));
+    await act(async () => {
+      void latest.installUpdate();
+    });
+    await waitFor(() => {
+      expect(latest.status).toBe("downloading");
+      expect(latest.progress).toBeNull();
+    });
+    await act(async () => {
+      finishInstall();
+    });
+    await waitFor(() => expect(latest.status).toBe("ready"));
+    expect(latest.progress).toBe(1);
   });
 
   it("ignores a second install while one is in flight", async () => {

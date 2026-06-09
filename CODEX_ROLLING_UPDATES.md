@@ -2666,7 +2666,7 @@ what the app actually uses.
 **Commit:** `9866466` (`refactor(ui): narrow updater install type`) pushed to
 `origin/main`.
 
-### Iteration 76 - in progress (2026-06-09)
+### Iteration 76 - done (2026-06-09)
 
 **Goal:** Cover updater install progress while the install is still in flight.
 
@@ -2694,7 +2694,7 @@ flow reports `Started` with `contentLength`, then `Progress` with
   `pnpm vitest run src/hooks/useAppUpdate.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useAppUpdate.test.tsx` failed as expected
@@ -2703,6 +2703,48 @@ flow reports `Started` with `contentLength`, then `Progress` with
 - Focused green `pnpm vitest run src/hooks/useAppUpdate.test.tsx` passed: 1 file /
   6 tests.
 - `pnpm verify` passed: frontend tests (60 files / 373 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `d44c776` (`test(ui): cover updater progress state`) pushed to
+`origin/main`.
+
+### Iteration 77 - in progress (2026-06-09)
+
+**Goal:** Cover indeterminate updater install progress.
+
+**Rationale:** Tauri updater progress may not know the full download size. The
+app intentionally keeps `progress` as `null` during `downloading` when
+`contentLength` is absent, so the Settings update card can treat the install as
+indeterminate instead of showing a misleading percentage. The known-length test
+from iteration 76 did not cover this branch.
+
+**Docs checked:** Context7 official Tauri plugin workspace docs for the updater
+plugin flow, plus Context7 `/websites/v2_tauri_app` updater docs. The v2 docs
+show `downloadAndInstall()` events and the Rust event model uses
+`content_length: Option<u64>`, matching the app's null-aware wrapper.
+
+**Claimed files:**
+- `src/hooks/useAppUpdate.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: temporarily change unknown-length progress to `0` and run
+  `pnpm vitest run src/hooks/useAppUpdate.test.tsx`; the new indeterminate
+  assertion should fail.
+- Focused green test: restore the hook and run
+  `pnpm vitest run src/hooks/useAppUpdate.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useAppUpdate.test.tsx` failed as expected
+  after temporarily reporting `0` for unknown-length progress: the new test
+  expected `null`.
+- Focused green `pnpm vitest run src/hooks/useAppUpdate.test.tsx` passed: 1 file /
+  7 tests.
+- `pnpm verify` passed: frontend tests (60 files / 374 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
