@@ -24,7 +24,7 @@ export interface AppUpdateState {
   progress: number | null;
   error: string | null;
   lastCheckedAt: number | null;
-  check: (options?: { silent?: boolean }) => Promise<void>;
+  check: () => Promise<void>;
   installUpdate: () => Promise<void>;
   relaunch: () => Promise<void>;
 }
@@ -47,7 +47,7 @@ export function useAppUpdate(): AppUpdateState {
   // on the same Update resource (the plugin does not lock it).
   const installing = useRef(false);
 
-  const check = useCallback(async (_options?: { silent?: boolean }) => {
+  const check = useCallback(async () => {
     setStatus("checking");
     setError(null);
     try {
@@ -99,7 +99,7 @@ export function useAppUpdate(): AppUpdateState {
     void getAppVersion().then((version) => {
       if (!cancelled) setCurrentVersion(version);
     });
-    void check({ silent: true });
+    void check();
     return () => {
       cancelled = true;
     };

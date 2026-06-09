@@ -37,7 +37,7 @@ describe("useAppUpdate", () => {
   });
   afterEach(() => vi.clearAllMocks());
 
-  it("runs a silent launch check and resolves to upToDate", async () => {
+  it("runs a launch check and resolves to upToDate", async () => {
     render(<Probe />);
     await waitFor(() => expect(latest.status).toBe("upToDate"));
     expect(latest.currentVersion).toBe("0.1.0");

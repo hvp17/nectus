@@ -1101,7 +1101,7 @@ to update when the registered trigger list changes.
 **Commit:** `61741f0` (`refactor(stepper): simplify keyboard navigation guards`)
 pushed to `origin/main`.
 
-### Iteration 33 - in progress (2026-06-09)
+### Iteration 33 - done (2026-06-09)
 
 **Goal:** Reuse derived session notification content when creating task toasts.
 
@@ -1126,11 +1126,44 @@ as a derived value at the event boundary and passes it into the toast conversion
 - Focused: `pnpm vitest run src/taskNotification.test.ts src/hooks/useEventBridge.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/taskNotification.test.ts src/hooks/useEventBridge.test.tsx`
   passed (2 files, 12 tests).
+- `pnpm test` passed (59 files, 353 tests).
+- `pnpm build` passed.
+
+**Commit:** `0e6a73b` (`refactor(notifications): reuse derived toast content`)
+pushed to `origin/main`.
+
+### Iteration 34 - in progress (2026-06-09)
+
+**Goal:** Remove the unused `silent` option from the update-check hook contract.
+
+**Rationale:** `useAppUpdate.check` accepted an options object with `silent`, but
+the hook no longer reads that option. The launch check is still silent by UI
+behavior because the app only surfaces update toasts for the resulting state;
+there is no separate plugin-level silent flag in the current Tauri updater flow.
+
+**Docs checked:** Context7 Tauri 2 updater docs for the current JavaScript flow:
+`check()`, optional update metadata, `downloadAndInstall()`, and `relaunch()`.
+The docs expose request options such as proxy/timeout/headers, not a `silent`
+option.
+
+**Claimed files:**
+- `src/hooks/useAppUpdate.ts`
+- `src/hooks/useAppUpdate.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/hooks/useAppUpdate.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `pnpm vitest run src/hooks/useAppUpdate.test.tsx` passed (1 file, 6 tests).
 - `pnpm test` passed (59 files, 353 tests).
 - `pnpm build` passed.
 
