@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Check, ChevronDown, GitPullRequest, LoaderCircle } from "lucide-react";
 import { AgentLogo } from "./AgentBrand";
 import { Button } from "./ui/button";
@@ -134,9 +134,8 @@ export function TaskWorkspace({
   busy = false,
   isDeleting = false,
 }: TaskWorkspaceProps) {
-  const reviewerProfiles = useMemo(() => agentProfiles, [agentProfiles]);
   const defaultReviewerProfileId =
-    reviewerProfiles.find((profile) => profile.id !== task?.agentProfileId)?.id ?? reviewerProfiles[0]?.id;
+    agentProfiles.find((profile) => profile.id !== task?.agentProfileId)?.id ?? agentProfiles[0]?.id;
   const [reviewerProfileId, setReviewerProfileId] = useState<number | undefined>(
     reviewLoop?.reviewerProfileId ?? defaultReviewerProfileId,
   );
@@ -186,7 +185,7 @@ export function TaskWorkspace({
     },
     { additions: 0, deletions: 0 },
   );
-  const selectedReviewerProfile = reviewerProfiles.find((profile) => profile.id === reviewerProfileId);
+  const selectedReviewerProfile = agentProfiles.find((profile) => profile.id === reviewerProfileId);
   const reviewActive = Boolean(reviewLoop && isReviewLoopActive(reviewLoop.status));
   const reviewInProgress = reviewLoop?.status === "reviewing";
   const canResumeSession = task.agentKind === "codex" || task.agentKind === "claude" || task.agentKind === "opencode";
@@ -197,7 +196,7 @@ export function TaskWorkspace({
     displayed: displayedAttentionDetail,
     truncated: isAttentionDetailTruncated,
   } = deriveAttentionPreview(attention);
-  const startReviewDisabled = !selectedReviewerProfile || reviewerProfiles.length === 0 || reviewInProgress;
+  const startReviewDisabled = !selectedReviewerProfile || agentProfiles.length === 0 || reviewInProgress;
   const reviewReadyForNextStep = reviewLoop?.status === "passed";
   const githubReady = isCliConnected(githubStatus);
   const canCreateViaGithub = Boolean(githubReady && task.hasWorktree && !task.prUrl);
@@ -245,7 +244,7 @@ export function TaskWorkspace({
             size="sm"
             aria-label="Change reviewer"
             className="h-8 max-w-[150px]"
-            disabled={reviewActive || reviewerProfiles.length === 0}
+            disabled={reviewActive || agentProfiles.length === 0}
           >
             {selectedReviewerProfile ? (
               <>
@@ -262,7 +261,7 @@ export function TaskWorkspace({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-44">
           <DropdownMenuGroup>
-            {reviewerProfiles.map((profile) => (
+            {agentProfiles.map((profile) => (
               <DropdownMenuItem
                 key={profile.id}
                 onSelect={() => setReviewerProfileId(profile.id)}
@@ -322,7 +321,7 @@ export function TaskWorkspace({
           : "Choose a reviewer profile",
       completed: reviewReadyForNextStep || task.status === "done",
       loading: reviewInProgress,
-      disabled: reviewerProfiles.length === 0 || reviewInProgress,
+      disabled: agentProfiles.length === 0 || reviewInProgress,
       action: reviewAction,
     },
     {

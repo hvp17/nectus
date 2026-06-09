@@ -1309,7 +1309,7 @@ should be concise, factual, and follow the product architecture they describe.
 **Commit:** `655ef2e` (`docs: document frontend lazy boundaries`) pushed to
 `origin/main`.
 
-### Iteration 39 - in progress (2026-06-09)
+### Iteration 39 - done (2026-06-09)
 
 **Goal:** Remove redundant TanStack Query `enabled` flags where `skipToken` already disables the query.
 
@@ -1335,11 +1335,42 @@ readers two places to inspect for the same gate.
 - Focused: `pnpm vitest run src/queries/github.test.tsx src/queries/jira.test.tsx src/hooks/useTaskDiff.test.tsx src/hooks/useTaskReviewLoop.test.tsx src/hooks/usePrReviews.test.ts`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/queries/github.test.tsx src/queries/jira.test.tsx src/hooks/useTaskDiff.test.tsx src/hooks/useTaskReviewLoop.test.tsx src/hooks/usePrReviews.test.ts`
   passed (5 files, 17 tests).
+- `pnpm test` passed (59 files, 353 tests).
+- `pnpm build` passed.
+
+**Commit:** `5dff9a2` (`refactor(queries): rely on skipToken gates`) pushed to
+`origin/main`.
+
+### Iteration 40 - in progress (2026-06-09)
+
+**Goal:** Remove a no-op `useMemo` from `TaskWorkspace`.
+
+**Rationale:** `TaskWorkspace` creates `reviewerProfiles` with
+`useMemo(() => agentProfiles, [agentProfiles])`, but that returns the same array
+identity it received and does not cache any derived calculation. Using
+`agentProfiles` directly removes indirection in the review workflow state.
+
+**Docs checked:** Context7 React `useMemo` docs: memoization is useful for
+expensive calculations, memoized props, or hook dependencies, not direct
+identity pass-through values.
+
+**Claimed files:**
+- `src/components/TaskWorkspace.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/components/TaskWorkspace.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `pnpm vitest run src/components/TaskWorkspace.test.tsx` passed (1 file, 26 tests).
 - `pnpm test` passed (59 files, 353 tests).
 - `pnpm build` passed.
 
