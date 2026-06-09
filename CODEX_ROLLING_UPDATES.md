@@ -2083,7 +2083,7 @@ next dependency change.
 **Commit:** `048d7f7` (`test(ui): cover explicit theme settings`) pushed to
 `origin/main`.
 
-### Iteration 61 - in progress (2026-06-09)
+### Iteration 61 - done (2026-06-09)
 
 **Goal:** Cover system-theme listener cleanup in the app theme hook.
 
@@ -2104,11 +2104,51 @@ dependencies change and when a component unmounts.
 - Focused test: `pnpm vitest run src/hooks/useAppTheme.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/hooks/useAppTheme.test.tsx` passed: 1 file / 5 tests.
 - `pnpm verify` passed: frontend tests (59 files / 357 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `d65a065` (`test(ui): cover theme listener cleanup`) pushed to
+`origin/main`.
+
+### Iteration 62 - in progress (2026-06-09)
+
+**Goal:** Avoid unnecessary system color-scheme queries for explicit themes.
+
+**Rationale:** `useAppTheme` currently calls `window.matchMedia` on every effect
+run, even when the user has selected explicit `light` or `dark` mode. That keeps
+the code coupled to a browser system-theme API for states that do not need it.
+Branching by theme first makes the hook simpler: explicit themes synchronously
+toggle the root class, while only `system` mode reads and subscribes to
+`prefers-color-scheme`.
+
+**Docs checked:** Context7 React docs for effects that synchronize with external
+browser APIs using setup/cleanup, and cleanup on dependency changes/unmount.
+
+**Claimed files:**
+- `src/hooks/useAppTheme.ts`
+- `src/hooks/useAppTheme.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: `pnpm vitest run src/hooks/useAppTheme.test.tsx` should fail on the
+  new explicit-theme `matchMedia` expectation before production code changes.
+- Focused green test: `pnpm vitest run src/hooks/useAppTheme.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useAppTheme.test.tsx` failed as expected:
+  explicit dark mode still called `matchMedia("(prefers-color-scheme: dark)")`
+  once.
+- Focused green test `pnpm vitest run src/hooks/useAppTheme.test.tsx` passed:
+  1 file / 6 tests.
+- `pnpm verify` passed: frontend tests (59 files / 358 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

@@ -117,6 +117,15 @@ describe("useAppTheme", () => {
     expect(document.documentElement).toHaveAttribute("data-density", "compact");
   });
 
+  it("does not query the system color scheme for explicit themes", () => {
+    const matchMedia = vi.spyOn(window, "matchMedia");
+
+    render(<ThemeProbe settings={{ ...systemSettings, theme: "dark" }} />);
+
+    expect(document.documentElement).toHaveClass("dark");
+    expect(matchMedia).not.toHaveBeenCalled();
+  });
+
   it("updates theme and density when settings change", () => {
     const { rerender } = render(<ThemeProbe settings={{ ...systemSettings, theme: "dark", density: "compact" }} />);
 
