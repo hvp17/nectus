@@ -14,21 +14,20 @@ pub(super) fn configure_agent_command(
     resume: bool,
     initial_prompt: Option<&str>,
     opencode_port: Option<u16>,
-) {
+) -> Result<(), String> {
     match agent.agent_kind {
         AgentKind::Codex => codex::configure(command, agent, session_id, resume),
         AgentKind::Claude => claude::configure(command, agent, session_id, resume),
         AgentKind::Gemini => gemini::configure(command, agent),
-        AgentKind::OpenCode => opencode::configure(
-            command,
-            agent,
-            session_id,
-            resume,
-            initial_prompt,
-            opencode_port,
-        ),
+        AgentKind::OpenCode => {
+            let port = opencode_port.ok_or_else(|| {
+                "OpenCode sessions require a reserved local server port".to_string()
+            })?;
+            opencode::configure(command, agent, session_id, resume, initial_prompt, port);
+        }
         AgentKind::Custom => command.args(&agent.args),
     }
+    Ok(())
 }
 
 pub(super) fn fallback_agent_candidates(command: &str, home: Option<&Path>) -> Vec<PathBuf> {
@@ -103,7 +102,8 @@ mod tests {
             true,
             None,
             None,
-        );
+        )
+        .unwrap();
 
         assert_eq!(
             argv(&command),
@@ -125,7 +125,8 @@ mod tests {
             false,
             None,
             None,
-        );
+        )
+        .unwrap();
 
         let argv = argv(&command);
         assert_eq!(
@@ -158,7 +159,8 @@ mod tests {
             false,
             None,
             None,
-        );
+        )
+        .unwrap();
 
         assert_eq!(
             argv(&command),
@@ -180,7 +182,8 @@ mod tests {
             false,
             Some("Implement the task"),
             Some(49152),
-        );
+        )
+        .unwrap();
 
         assert_eq!(
             argv(&command),
@@ -214,7 +217,8 @@ mod tests {
             true,
             Some("ignored on resume"),
             Some(49153),
-        );
+        )
+        .unwrap();
 
         assert_eq!(
             argv(&command),
@@ -229,6 +233,25 @@ mod tests {
                 "--agent",
                 "build",
             ]
+        );
+    }
+
+    #[test]
+    fn opencode_requires_local_server_port() {
+        let mut command = CommandBuilder::new(OsString::from("opencode"));
+        let err = configure_agent_command(
+            &mut command,
+            &agent(AgentKind::OpenCode, None, &[]),
+            "session-missing-port",
+            false,
+            Some("ignored"),
+            None,
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            err,
+            "OpenCode sessions require a reserved local server port"
         );
     }
 }

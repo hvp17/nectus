@@ -5001,7 +5001,7 @@ tofu/replacement glyphs or output-offset drift.
   existing decoder tests.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready for collision check and commit.
+**Status:** verified and committed.
 
 **Evidence so far:**
 - `git status --short --branch` was clean after pushing `f274ba8`.
@@ -5025,15 +5025,74 @@ tofu/replacement glyphs or output-offset drift.
   HEAD..origin/main` was empty, and `CLAUDE_ROLLING_UPDATES.md` still does not
   claim terminal debugging docs.
 
+**Commit:** `795298d` (`docs(terminal): document pty utf8 decoding`) pushed to
+`origin/main`.
+
+### Iteration 127 - in progress (2026-06-09)
+
+**Goal:** Replace the OpenCode missing-port `expect` with an explicit session
+startup error.
+
+**Rationale:** `provider_session(AgentKind::OpenCode).needs_local_server` reserves
+a localhost port before command construction today, so the panic is not expected
+in normal operation. Still, this is app/session startup code with a user-facing
+`Result` boundary; if the invariant is ever broken, returning a clear
+`Err("OpenCode sessions require ...")` is better than aborting through `expect`.
+
+**Docs checked:** Official Rust `std::result` docs. The docs describe `Result` as
+the type for returning and propagating expected/recoverable errors and `?` as the
+early-return propagation operator.
+
+**Claimed files:**
+- `native/src/sessions/agents/mod.rs`
+- `native/src/sessions/agents/opencode.rs`
+- `native/src/sessions/mod.rs`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red/type check: add an OpenCode command-config test that expects
+  `configure_agent_command(..., opencode_port: None)` to return an error, then
+  run `cd native && cargo test sessions::agents::tests::opencode_requires_local_server_port`.
+- Green: make `configure_agent_command` return `Result<(), String>`, propagate it
+  with `?` at session startup, and update existing command-config tests.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence so far:**
+- `git status --short --branch` was clean after pushing `795298d`.
+- `git log --oneline --decorate -8` shows `795298d` at both local and
+  `origin/main`.
+- `CLAUDE_ROLLING_UPDATES.md` remains on older coverage/documentation work and
+  does not claim session agent command files.
+- Production panic scan found the OpenCode `port.expect(...)`; surrounding
+  startup code already returns `Result<_, String>` and reserves the port from
+  `provider_session(...).needs_local_server`.
+- Official Rust docs checked for `Result` and `?` propagation.
+- Red test:
+  `cd native && cargo test sessions::agents::tests::opencode_requires_local_server_port`
+  failed because `configure_agent_command` returned `()` and had no `unwrap_err`.
+- Green focused test:
+  `cd native && cargo test sessions::agents::tests` passed 6/6 after
+  `configure_agent_command` began returning `Result<(), String>`, OpenCode
+  command configuration required a concrete `u16` port, and session startup
+  propagated configuration errors with `?`.
+- First full gate attempt: `pnpm verify` passed frontend tests, frontend build,
+  and Rust tests, then failed at `cargo fmt --check` on the new `ok_or_else`
+  line wrap. Ran `cd native && cargo fmt`; rerunning the full gate.
+- Full `pnpm verify` passed after formatting: frontend tests (73 files / 431
+  tests), frontend production build, Rust tests (242 tests), `cargo fmt
+  --check`, and `cargo clippy --all-targets -- -D warnings`.
+- Pre-commit collision check: `git fetch origin main` completed, `git log
+  HEAD..origin/main` was empty, and `CLAUDE_ROLLING_UPDATES.md` remains on
+  frontend hook coverage/doc-audit notes with no claimed session agent files.
+
 ---
 
 ## Backlog / future work
 
 - Audit remaining custom async/loading hooks only when new code introduces a real
   ownership mismatch; the existing high-value hook coverage is mostly harvested.
-- Audit query-key helper parameter types now that optional reads avoid placeholder
-  `undefined`/`null` cache entries.
-- Re-check terminal decoding docs against the recent UTF-8 boundary fixes.
 - Keep future bundle work tied to measured `pnpm build` output; the current
   shell/task-workspace splits remove the warning-size chunks.
 - Periodically diff the command/event/table reference against source after

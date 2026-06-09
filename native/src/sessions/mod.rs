@@ -502,7 +502,7 @@ impl SessionManager {
             resume,
             initial_prompt,
             opencode_port,
-        );
+        )?;
         // Bundled apps launched from Finder inherit a minimal environment with no
         // TERM, so agents (Claude Code via Ink/supports-color) render monochrome.
         // Advertise the color-capable terminal xterm.js provides; a profile's own

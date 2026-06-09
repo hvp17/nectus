@@ -8,9 +8,8 @@ pub(super) fn configure(
     session_id: &str,
     resume: bool,
     initial_prompt: Option<&str>,
-    port: Option<u16>,
+    port: u16,
 ) {
-    let port = port.expect("OpenCode sessions require a reserved local server port");
     command.arg("--hostname");
     command.arg("127.0.0.1");
     command.arg("--port");
