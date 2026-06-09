@@ -1,4 +1,3 @@
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
@@ -10,6 +9,7 @@ import { api } from "./api";
 import { openExternal } from "./lib/openExternal";
 import { readTerminalTheme } from "./lib/terminalTheme";
 import { isTauriRuntime } from "./lib/tauriRuntime";
+import { useTauriEvent } from "./hooks/useTauriEvent";
 import type { SessionExitedEvent, SessionOutputEvent } from "./types";
 
 interface TerminalPaneProps {
@@ -94,43 +94,31 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
     sessionIdRef.current = sessionId;
   }, [sessionId]);
 
+  useTauriEvent<SessionOutputEvent>("session_output", (payload) => {
+    const cached = terminalsRef.current.get(payload.sessionId);
+    if (!cached) return;
+
+    if (cached.loadingSnapshot) {
+      cached.pendingOutput.push(payload);
+    } else {
+      writeOutput(cached, payload.data, payload.startOffset);
+    }
+  });
+
+  useTauriEvent<SessionExitedEvent>("session_exited", (payload) => {
+    const cached = terminalsRef.current.get(payload.sessionId);
+    if (cached) {
+      cached.terminal.writeln("\r\nSession stopped.");
+      disposeCachedTerminal(payload.sessionId);
+    }
+    onSessionExitRef.current(payload.sessionId);
+  });
+
   useEffect(() => {
     if (!hostRef.current || !isTauriRuntime()) return;
 
-    const unlistenCallbacks: UnlistenFn[] = [];
+    const unlistenCallbacks: Array<() => void> = [];
     let disposed = false;
-
-    listen<SessionOutputEvent>("session_output", (event) => {
-      const cached = terminalsRef.current.get(event.payload.sessionId);
-      if (!cached) return;
-
-      if (cached.loadingSnapshot) {
-        cached.pendingOutput.push(event.payload);
-      } else {
-        writeOutput(cached, event.payload.data, event.payload.startOffset);
-      }
-    }).then((unlisten) => {
-      if (disposed) {
-        unlisten();
-      } else {
-        unlistenCallbacks.push(unlisten);
-      }
-    });
-
-    listen<SessionExitedEvent>("session_exited", (event) => {
-      const cached = terminalsRef.current.get(event.payload.sessionId);
-      if (cached) {
-        cached.terminal.writeln("\r\nSession stopped.");
-        disposeCachedTerminal(event.payload.sessionId);
-      }
-      onSessionExitRef.current(event.payload.sessionId);
-    }).then((unlisten) => {
-      if (disposed) {
-        unlisten();
-      } else {
-        unlistenCallbacks.push(unlisten);
-      }
-    });
 
     getCurrentWebview().onDragDropEvent((event) => {
       if (event.payload.type !== "drop") return;

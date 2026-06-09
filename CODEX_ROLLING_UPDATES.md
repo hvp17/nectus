@@ -2274,7 +2274,7 @@ iterations.
 **Commit:** `446929c` (`docs: sync event bridge architecture`) pushed to
 `origin/main`.
 
-### Iteration 66 - in progress (2026-06-09)
+### Iteration 66 - done (2026-06-09)
 
 **Goal:** Cover TerminalPane's core Tauri session event paths.
 
@@ -2292,6 +2292,40 @@ xterm-specific behavior.
 
 **Claimed files:**
 - `src/TerminalPane.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused test: `pnpm vitest run src/TerminalPane.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified and committed.
+
+**Evidence:**
+- `pnpm vitest run src/TerminalPane.test.tsx` passed: 1 file / 10 tests.
+- `pnpm verify` passed: frontend tests (59 files / 363 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `c992454` (`test(ui): cover terminal session events`) pushed to
+`origin/main`.
+
+### Iteration 67 - in progress (2026-06-09)
+
+**Goal:** Reuse `useTauriEvent` for TerminalPane session events.
+
+**Rationale:** TerminalPane must keep terminal-stream handling outside the
+mount-once bridge, but its `session_output` and `session_exited` subscriptions
+still duplicated the same async `listen().then(unlisten)` cleanup pattern that
+`useTauriEvent` now owns. Iteration 66 added focused coverage for those two event
+paths, so the listener lifecycle can be centralized while keeping drag/drop,
+resize, theme observation, and terminal disposal in the existing terminal setup
+effect.
+
+**Docs checked:** Context7 Tauri v2 event docs for the `listen`/unlisten
+lifecycle, and the local `useTauriEvent` contract/tests.
+
+**Claimed files:**
+- `src/TerminalPane.tsx`
 - `CODEX_ROLLING_UPDATES.md`
 
 **Verification plan:**
