@@ -4486,7 +4486,7 @@ updater returning `undefined` bails out of creating a cache entry.
   the cached agent profile list.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready for collision check and commit.
+**Status:** verified and committed.
 
 **Evidence so far:**
 - `git status --short --branch` is clean on `main...origin/main`.
@@ -4501,6 +4501,63 @@ updater returning `undefined` bails out of creating a cache entry.
   1 file / 4 tests.
 - `pnpm verify` passed: frontend tests (72 files / 429 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `0a56683` (`fix(settings): resolve saved default agent`) pushed to
+`origin/main`.
+
+### Iteration 118 - in progress (2026-06-09)
+
+**Goal:** Stop allocating an `undefined` PR-review runs query before a review is
+selected.
+
+**Rationale:** `usePrReviews` already uses `skipToken` to avoid calling
+`listPrReviewRuns` with no selected review, but `useQuery` still creates a cache
+entry keyed as `queryKeys.prReviews.runs(undefined)`. The existing test name says
+the desired invariant is no placeholder runs query before selection, while its
+assertion still expects the disabled `undefined` query entry. This keeps the cache
+catalog cleaner and aligns the test with its behavior statement.
+
+**Docs checked:** Context7 `/tanstack/query` docs. Current dependent-query docs
+show `enabled` / `skipToken` for conditionally disabling a query, and dynamic
+`useQueries` with an empty `queries` array when no dependent ids exist. The latter
+fits this selected-review runs query because there is no useful cache key until a
+review id exists.
+
+**Claimed files:**
+- `src/hooks/usePrReviews.ts`
+- `src/hooks/usePrReviews.test.ts`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: update the existing PR-review hook test to expect no
+  `queryKeys.prReviews.runs(undefined)` cache entry before selection; run
+  `pnpm vitest run src/hooks/usePrReviews.test.ts`.
+- Focused green: rerun the same hook suite after moving selected-review runs to a
+  dynamic `useQueries` array.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready for collision check and commit.
+
+**Evidence so far:**
+- `git status --short --branch` was clean after pushing `0a56683`.
+- `git log --oneline --decorate -8` shows `0a56683` at both local and
+  `origin/main`.
+- `CLAUDE_ROLLING_UPDATES.md` remains on older coverage/documentation work and
+  does not claim `usePrReviews`.
+- Context7 docs checked for TanStack Query dependent queries and dynamic
+  `useQueries`.
+- Red check `pnpm vitest run src/hooks/usePrReviews.test.ts` failed as expected
+  before implementation: the disabled `skipToken` query still created
+  `queryKeys.prReviews.runs(undefined)`.
+- Focused green `pnpm vitest run src/hooks/usePrReviews.test.ts` passed: 1 file /
+  3 tests.
+- First `pnpm verify` reached frontend tests successfully (72 files / 429 tests)
+  but failed at `tsc`: the inline conditional `useQueries` options inferred a
+  zero-or-one tuple. The options were moved into a memoized dynamic array.
+- Follow-up `pnpm build` passed after that type-boundary fix.
+- Final `pnpm verify` passed: frontend tests (72 files / 429 tests), frontend
+  build, Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
 ---

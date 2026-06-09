@@ -59,7 +59,7 @@ it("does not allocate a placeholder runs query before a review is selected", asy
   await waitFor(() => expect(api.listPrReviews).toHaveBeenCalled());
 
   expect(client.getQueryCache().find({ queryKey: ["pr-reviews", "none", "runs"] })).toBeUndefined();
-  expect(client.getQueryCache().find({ queryKey: queryKeys.prReviews.runs(undefined) })).toBeDefined();
+  expect(client.getQueryCache().find({ queryKey: queryKeys.prReviews.runs(undefined) })).toBeUndefined();
   expect(api.listPrReviewRuns).not.toHaveBeenCalled();
 });
 
