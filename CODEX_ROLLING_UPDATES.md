@@ -2236,7 +2236,7 @@ surfacing.
 **Commit:** `ef7b2e5` (`refactor(ui): centralize event bridge subscriptions`)
 pushed to `origin/main`.
 
-### Iteration 65 - in progress (2026-06-09)
+### Iteration 65 - done (2026-06-09)
 
 **Goal:** Sync docs for the event bridge subscription refactor.
 
@@ -2262,12 +2262,47 @@ iterations.
   `rg -n "useTauriEvent|single, mount-once bridge|subscription" AGENTS.md docs/architecture.md docs/tracking-and-debugging.md`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Docs grep `rg -n "useTauriEvent|single, mount-once bridge|subscription" AGENTS.md docs/architecture.md docs/tracking-and-debugging.md`
   shows the updated event-bridge ownership in all three docs.
 - `pnpm verify` passed: frontend tests (59 files / 361 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `446929c` (`docs: sync event bridge architecture`) pushed to
+`origin/main`.
+
+### Iteration 66 - in progress (2026-06-09)
+
+**Goal:** Cover TerminalPane's core Tauri session event paths.
+
+**Rationale:** `TerminalPane` intentionally keeps the terminal stream outside the
+mount-once event bridge because it owns xterm instances and per-session terminal
+buffers. Existing tests cover setup, input, drag/drop, snapshot replay, and
+links, but not the two direct Tauri event handlers: `session_output` writing live
+output to the matching terminal, and `session_exited` writing the stopped line,
+disposing the cached terminal, and notifying the shell. Locking these down makes
+any later listener-lifecycle refactor safer.
+
+**Docs checked:** Context7 Tauri v2 event docs for `listen`/unlisten lifecycle
+from the preceding event-listener iterations; local TerminalPane code owns the
+xterm-specific behavior.
+
+**Claimed files:**
+- `src/TerminalPane.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused test: `pnpm vitest run src/TerminalPane.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- `pnpm vitest run src/TerminalPane.test.tsx` passed: 1 file / 10 tests.
+- `pnpm verify` passed: frontend tests (59 files / 363 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

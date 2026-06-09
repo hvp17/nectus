@@ -49,9 +49,9 @@ const terminalTestState = vi.hoisted(() => {
       instances.push(this);
     }
 
-    open() {}
-    writeln() {}
-    dispose() {}
+    open = vi.fn();
+    writeln = vi.fn();
+    dispose = vi.fn();
 
     onData(handler: (data: string) => void) {
       this.dataHandler = handler;
@@ -250,6 +250,47 @@ describe("TerminalPane", () => {
 
     // After replay, the PTY is synced to the pane (mock terminal stays 24x80).
     expect(mockedApi.resizeSession).toHaveBeenCalledWith("session-21", 24, 80);
+  });
+
+  it("writes live session output to the matching terminal", async () => {
+    render(
+      <TerminalPane sessionId="session-21" onSessionExit={vi.fn()} onSessionInput={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      expect(mockedApi.resizeSession).toHaveBeenCalledWith("session-21", 24, 80);
+    });
+
+    act(() => {
+      terminalTestState.handlers.get("session_output")?.({
+        payload: { sessionId: "session-21", data: "live output", startOffset: 0 },
+      });
+    });
+
+    expect(terminalTestState.instances[0].write).toHaveBeenCalledWith("live output");
+  });
+
+  it("disposes the terminal and notifies when its session exits", async () => {
+    const onSessionExit = vi.fn();
+    render(
+      <TerminalPane sessionId="session-21" onSessionExit={onSessionExit} onSessionInput={vi.fn()} />,
+    );
+
+    await waitFor(() => {
+      expect(terminalTestState.handlers.has("session_exited")).toBe(true);
+    });
+
+    const terminal = terminalTestState.instances[0];
+
+    act(() => {
+      terminalTestState.handlers.get("session_exited")?.({
+        payload: { sessionId: "session-21" },
+      });
+    });
+
+    expect(terminal.writeln).toHaveBeenCalledWith("\r\nSession stopped.");
+    expect(terminal.dispose).toHaveBeenCalledTimes(1);
+    expect(onSessionExit).toHaveBeenCalledWith("session-21");
   });
 
   it("sends dropped file paths to the active session when files are dropped on the terminal", async () => {
