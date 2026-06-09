@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Circle, Folder, FolderGit2, GitPullRequest, Layers, Plus, Radio, Settings, SquareKanban } from "lucide-react";
 import {
   CommandDialog,
@@ -46,17 +45,6 @@ export function CommandPalette({
   onOpenTask,
   onCreateTask,
 }: CommandPaletteProps) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && (event.key === "k" || event.key === "K")) {
-        event.preventDefault();
-        onOpenChange(!open);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onOpenChange]);
-
   // Close first, then act, so the routed view isn't rendered behind the closing dialog.
   const run = (action: () => void) => {
     onOpenChange(false);

@@ -14,6 +14,7 @@ import { useWorkspaceActions } from "./hooks/useWorkspaceActions";
 import { useProjectActions } from "./hooks/useProjectActions";
 import { useSidebarCollapse } from "./hooks/useSidebarCollapse";
 import { useComposer } from "./hooks/useComposer";
+import { useCommandPaletteShortcut } from "./hooks/useCommandPaletteShortcut";
 import { useJiraBoardView } from "./hooks/useJiraBoardView";
 import { useSettingsActions } from "./hooks/useSettingsActions";
 import { useJiraToken } from "./hooks/useJiraToken";
@@ -181,8 +182,11 @@ export function AppLayout() {
 
   // The workspace manager overlays the current view, like the New Task composer.
   const [managingWorkspaces, setManagingWorkspaces] = useState(false);
-  // The ⌘K command palette (mounted once; its own key listener toggles it).
+  // The ⌘K command palette is lazy-mounted only while open, so the global
+  // toggle shortcut lives here in the always-mounted shell, not in the palette.
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const togglePalette = useCallback(() => setPaletteOpen((open) => !open), []);
+  useCommandPaletteShortcut(togglePalette);
 
   // Close the composer and reset the whole draft (incl. the cross-repo selection)
   // in one store action, so a selection can't leak across opens.

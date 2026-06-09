@@ -398,6 +398,38 @@ only assert wiring) or Codex-adjacent/complex (`useComposer`, `useJiraBoardView`
 The high-value, collision-free coverage is now done. Further iterations shift to
 monitoring new code as it lands rather than mining the (clean) existing code.
 
+### Iteration 16 — done (2026-06-09) · 100-commit review + regression fix
+
+**Goal (user request):** Review the last 100 commits on `main` for correctness.
+
+**Method:** Ran the full gate on the cumulative state (frontend **431 tests** +
+build, Rust **242 tests** — all green) and reviewed all 100 commit diffs via four
+parallel review agents (25 each).
+
+**Result:** 99/100 correct. The 29 `fix`, 30 `refactor`, 4 `perf`, and 24 `test`
+commits were verified message-matches-diff and behavior-preserving — including the
+JIRA optimistic-rollback fixes (`removeQueries` vs orphaned `[]`), the `skipToken`/
+`useOptionalQuery` empty-query elimination, the agent-profile `resolveAgentProfileId`
+validation, the git `augmented_path` fix, and the `rustfmt`-only `style(rust)` commit.
+
+**One real regression found + fixed:** `ce99fbc perf(router): lazy-load on-demand
+overlays` made `CommandPalette` mount only while open, but the global ⌘K listener
+lived **inside** the palette — so ⌘K could no longer open it from the closed state
+(only the IconRail search button could). The unit test masked it by rendering the
+palette always-mounted.
+
+**Fix (this iteration):**
+- New `src/hooks/useCommandPaletteShortcut.ts` — the global ⌘K/Ctrl+K toggle in the
+  always-mounted shell (`AppLayout`), keeping the lazy-load perf win.
+- Removed the dead listener from the lazy `CommandPalette`; fixed the now-stale
+  "mounted once" comment in `AppRouter`.
+- Moved + strengthened the tests: `useCommandPaletteShortcut.test.ts` now actually
+  verifies open-from-closed and unmount cleanup (the old palette test could not).
+
+**Verification:** full `pnpm test` (74 files, 432 tests), `pnpm build`.
+
+**Status:** committed.
+
 ## Backlog / future work (deeper investigation — no quick wins left)
 
 - Targeted coverage for any *new* untested logic as it lands (watch the diff).
