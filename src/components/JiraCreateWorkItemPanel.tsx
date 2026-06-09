@@ -49,13 +49,18 @@ export function JiraCreateWorkItemPanel({
   onClose,
   onCreate,
 }: JiraCreateWorkItemPanelProps) {
-  const [project, setProject] = useState(defaultProject ?? projects[0]?.key ?? "");
+  const defaultProjectKey = defaultProject ?? projects[0]?.key ?? "";
+  const [project, setProject] = useState(defaultProjectKey);
   const [issueType, setIssueType] = useState<string>(JIRA_WORK_ITEM_TYPES[0]);
   const [summary, setSummary] = useState("");
   const [description, setDescription] = useState("");
   const [assignee, setAssignee] = useState("");
   const [labels, setLabels] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  if (!project && defaultProjectKey) {
+    setProject(defaultProjectKey);
+  }
 
   const canSubmit = Boolean(project) && summary.trim().length > 0 && !submitting;
 

@@ -4210,7 +4210,7 @@ submitting status.
   after deriving a reviewer-available guard for the button and submit handler.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/components/ReviewsPage.test.tsx` failed as
@@ -4219,6 +4219,55 @@ submitting status.
 - Focused green `pnpm vitest run src/components/ReviewsPage.test.tsx` passed:
   1 file / 7 tests.
 - `pnpm verify` passed: frontend tests (70 files / 422 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `79b2056` (`fix(reviews): require reviewer before submission`) pushed
+to `origin/main`.
+
+### Iteration 112 - in progress (2026-06-09)
+
+**Goal:** Let the JIRA create panel adopt a project that loads after mount.
+
+**Rationale:** `JiraCreateWorkItemPanel` initializes its `project` state from
+`defaultProject ?? projects[0]` once. If the panel mounts before projects or the
+board project are available, the local project stays empty even after props
+hydrate, keeping the Create action disabled until the user manually reopens or
+chooses a project. It should fill an empty project from the newly available
+default without clobbering later user choices.
+
+**Docs checked:** Context7 `/reactjs/react.dev` state/prop guidance. Current
+React docs call out deriving controlled form state from component state and
+show conditional state adjustment when props change, guarded to avoid loops and
+avoid overwriting user state unnecessarily.
+
+**Claimed files:**
+- `src/components/JiraCreateWorkItemPanel.tsx`
+- `src/components/JiraCreateWorkItemPanel.test.tsx`
+- `docs/features.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add a test that mounts the create panel with no projects, types a
+  summary, rerenders with a default project, and expects Create to enable and
+  submit that project; run
+  `pnpm vitest run src/components/JiraCreateWorkItemPanel.test.tsx`.
+- Focused green: rerun the same test after filling the project only when the
+  current project is empty.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/components/JiraCreateWorkItemPanel.test.tsx`
+  failed as expected before implementation; Create stayed disabled after
+  projects/default project hydrated.
+- Focused green `pnpm vitest run src/components/JiraCreateWorkItemPanel.test.tsx`
+  passed: 1 file / 1 test.
+- First full `pnpm verify` caught a TypeScript fixture error in the new test
+  (`JiraProject` has `key`/`name`, no `id`); fixture corrected and focused test
+  rerun green.
+- `pnpm verify` passed: frontend tests (71 files / 423 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
