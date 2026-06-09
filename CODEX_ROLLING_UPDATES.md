@@ -3063,7 +3063,7 @@ selection is empty.
 **Commit:** `ba0d071` (`refactor(ui): centralize agent profile defaults`) pushed
 to `origin/main`.
 
-### Iteration 85 - in progress (2026-06-09)
+### Iteration 85 - done (2026-06-09)
 
 **Goal:** Use available agent-profile resolution for session starts.
 
@@ -3089,7 +3089,7 @@ the returned session command functions dependency-complete.
 - Focused green: rerun `pnpm vitest run src/hooks/useSessionCommands.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useSessionCommands.test.tsx` failed as
@@ -3098,6 +3098,48 @@ the returned session command functions dependency-complete.
 - Focused green `pnpm vitest run src/hooks/useSessionCommands.test.tsx` passed:
   1 file / 5 tests.
 - `pnpm verify` passed: frontend tests (64 files / 392 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `62acdd9` (`fix(ui): ignore stale session agent profiles`) pushed to
+`origin/main`.
+
+### Iteration 86 - in progress (2026-06-09)
+
+**Goal:** Stabilize session attention wrapper callbacks.
+
+**Rationale:** `useSessionAttentionControls` wraps the lower-level session
+commands to clear task attention before start/resume/stop, but three returned
+wrappers were recreated on every render. Those functions flow into the task
+workspace tree, so they should follow the same stable custom-hook callback
+contract as `useSessionCommands`.
+
+**Docs checked:** Context7 `/reactjs/react.dev` `useCallback` docs. React
+recommends wrapping functions returned from custom hooks in `useCallback`; the
+callback identity is reused while dependencies are `Object.is`-equal.
+
+**Claimed files:**
+- `src/hooks/useSessionAttentionControls.ts`
+- `src/hooks/useSessionAttentionControls.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add a callback-stability test and run
+  `pnpm vitest run src/hooks/useSessionAttentionControls.test.tsx`; it should
+  fail while start/resume/stop are plain functions.
+- Focused green: rerun
+  `pnpm vitest run src/hooks/useSessionAttentionControls.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useSessionAttentionControls.test.tsx`
+  failed as expected before implementation; the callback-stability test saw a
+  new `startSession` function identity after rerender.
+- Focused green `pnpm vitest run src/hooks/useSessionAttentionControls.test.tsx`
+  passed: 1 file / 6 tests.
+- `pnpm verify` passed: frontend tests (64 files / 393 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

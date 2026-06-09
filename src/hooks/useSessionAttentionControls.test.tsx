@@ -133,4 +133,17 @@ describe("useSessionAttentionControls", () => {
     expect(currentAttention().map((entry) => entry.taskId)).toEqual([7, 8]);
     expect(sessionCommands.stopSession).toHaveBeenCalledWith("missing-session");
   });
+
+  it("keeps returned command wrappers stable while inputs are unchanged", () => {
+    const { result, rerender } = setup();
+    const first = result.current;
+
+    rerender();
+
+    expect(result.current.startSession).toBe(first.startSession);
+    expect(result.current.resumeSession).toBe(first.resumeSession);
+    expect(result.current.stopSession).toBe(first.stopSession);
+    expect(result.current.onSessionExit).toBe(first.onSessionExit);
+    expect(result.current.onSessionInput).toBe(first.onSessionInput);
+  });
 });

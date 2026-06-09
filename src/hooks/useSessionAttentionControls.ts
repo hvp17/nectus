@@ -20,23 +20,39 @@ export function useSessionAttentionControls({
   setTaskAttention,
   sessionCommands,
 }: UseSessionAttentionControlsArgs) {
-  const startSession = async (task: TaskSummary) => {
-    setTaskAttention((current) => clearTaskAttention(current, task.id));
-    await sessionCommands.startSession(task);
-  };
+  const {
+    startSession: startCommand,
+    resumeSession: resumeCommand,
+    stopSession: stopCommand,
+    onSessionExit: onSessionExitCommand,
+  } = sessionCommands;
 
-  const resumeSession = async (task: TaskSummary) => {
-    setTaskAttention((current) => clearTaskAttention(current, task.id));
-    await sessionCommands.resumeSession(task);
-  };
-
-  const stopSession = async (sessionId: string) => {
-    const task = tasksRef.current.find((task) => task.activeSessionId === sessionId);
-    if (task) {
+  const startSession = useCallback(
+    async (task: TaskSummary) => {
       setTaskAttention((current) => clearTaskAttention(current, task.id));
-    }
-    await sessionCommands.stopSession(sessionId);
-  };
+      await startCommand(task);
+    },
+    [setTaskAttention, startCommand],
+  );
+
+  const resumeSession = useCallback(
+    async (task: TaskSummary) => {
+      setTaskAttention((current) => clearTaskAttention(current, task.id));
+      await resumeCommand(task);
+    },
+    [setTaskAttention, resumeCommand],
+  );
+
+  const stopSession = useCallback(
+    async (sessionId: string) => {
+      const task = tasksRef.current.find((task) => task.activeSessionId === sessionId);
+      if (task) {
+        setTaskAttention((current) => clearTaskAttention(current, task.id));
+      }
+      await stopCommand(sessionId);
+    },
+    [setTaskAttention, stopCommand, tasksRef],
+  );
 
   const onSessionExit = useCallback(
     (sessionId: string) => {
@@ -44,9 +60,9 @@ export function useSessionAttentionControls({
       if (task) {
         setTaskAttention((current) => clearTaskAttention(current, task.id));
       }
-      sessionCommands.onSessionExit(sessionId);
+      onSessionExitCommand(sessionId);
     },
-    [sessionCommands, setTaskAttention, tasksRef],
+    [onSessionExitCommand, setTaskAttention, tasksRef],
   );
 
   const onSessionInput = useCallback(
