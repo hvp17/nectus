@@ -4,6 +4,8 @@ import { resolveAgentProfileId } from "../lib/agentProfiles";
 import { useGuardedAction } from "./useGuardedAction";
 import type { AgentProfile, Session, TaskSummary } from "../types";
 
+const NO_AGENT_PROFILE_MESSAGE = "No agent profiles are available. Add one in Settings before starting a session.";
+
 interface UseSessionCommandsParams {
   agentProfiles: AgentProfile[];
   selectedAgentProfileId?: number;
@@ -41,14 +43,17 @@ export function useSessionCommands({
   const startSession = useCallback(
     async (task: TaskSummary) => {
       const agentProfileId = resolveAgentProfileId(agentProfiles, task.agentProfileId, selectedAgentProfileId);
-      if (!agentProfileId) return;
+      if (!agentProfileId) {
+        setMessage(NO_AGENT_PROFILE_MESSAGE);
+        return;
+      }
       await run(async () => {
         const session = await api.startSession(task.id, agentProfileId);
         applySession(session);
         setSelectedTaskId(task.id);
       });
     },
-    [agentProfiles, applySession, run, selectedAgentProfileId, setSelectedTaskId],
+    [agentProfiles, applySession, run, selectedAgentProfileId, setMessage, setSelectedTaskId],
   );
 
   const stopSession = useCallback(

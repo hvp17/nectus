@@ -157,13 +157,14 @@ describe("useSessionCommands", () => {
 
   it("does not start a task when no agent profile can be resolved", async () => {
     const selectedTask = task({ id: 8, agentProfileId: null });
-    const { result, tasks } = setup({ agentProfiles: [], initialTasks: [selectedTask] });
+    const { result, message, tasks } = setup({ agentProfiles: [], initialTasks: [selectedTask] });
 
     await act(async () => {
       await result.current.startSession(selectedTask);
     });
 
     expect(mockedApi.startSession).not.toHaveBeenCalled();
+    expect(message()).toBe("No agent profiles are available. Add one in Settings before starting a session.");
     expect(tasks()[0]).toEqual(selectedTask);
   });
 

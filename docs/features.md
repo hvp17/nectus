@@ -208,6 +208,8 @@ Current behavior:
 - A task can have only one active session.
 - Direct-edit tasks launch in the project path.
 - Worktree-backed tasks launch in the worktree path.
+- Starting a session requires at least one agent profile; if none exists, the app
+  shows guidance to add one in Settings instead of silently ignoring the launch.
 - New task prompts are written to the PTY after launch. OpenCode is the exception:
   its initial task prompt is passed through `opencode --prompt`, so Nectus skips the
   post-spawn PTY write to avoid a duplicate prompt.

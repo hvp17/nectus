@@ -3989,7 +3989,7 @@ updater functions create cache entries when they return data.
   after replacing append with id-based upsert.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useEventBridge.test.tsx` failed as
@@ -3997,6 +3997,50 @@ updater functions create cache entries when they return data.
   produced `[21, 21]` in the review-run cache.
 - Focused green `pnpm vitest run src/hooks/useEventBridge.test.tsx` passed:
   1 file / 7 tests.
+- `pnpm verify` passed: frontend tests (70 files / 418 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `a3a2dbf` (`fix(ui): dedupe review loop run events`) pushed to
+`origin/main`.
+
+### Iteration 107 - in progress (2026-06-09)
+
+**Goal:** Surface guidance when starting a session without any available agent
+profile.
+
+**Rationale:** `useSessionCommands.startSession` resolves the task/default
+agent profile before entering the guarded action. When no profile exists, it
+returns silently, leaving any stale message in place and giving the user no
+reason the Start button did nothing. The command should clear stale state by
+setting a concrete guidance message.
+
+**Docs checked:** Context7 `/reactjs/react.dev` `useCallback` docs. Current
+guidance keeps callback dependencies explicit and uses setter callbacks for
+state updates inside memoized callbacks.
+
+**Claimed files:**
+- `src/hooks/useSessionCommands.ts`
+- `src/hooks/useSessionCommands.test.tsx`
+- `docs/features.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: extend the no-agent-profile test to expect a guidance message and
+  run `pnpm vitest run src/hooks/useSessionCommands.test.tsx`; it should fail
+  while the stale message remains.
+- Focused green: rerun `pnpm vitest run src/hooks/useSessionCommands.test.tsx`
+  after setting the guidance message in the early return.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useSessionCommands.test.tsx` failed as
+  expected before implementation; the no-agent-profile path left the previous
+  `"stale"` message in place instead of showing guidance.
+- Focused green `pnpm vitest run src/hooks/useSessionCommands.test.tsx` passed:
+  1 file / 5 tests.
 - `pnpm verify` passed: frontend tests (70 files / 418 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
