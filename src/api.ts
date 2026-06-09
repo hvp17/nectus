@@ -47,7 +47,7 @@ import type {
   Workspace,
 } from "./types";
 
-const isTauri = "__TAURI_INTERNALS__" in window;
+const isTauriRuntime = () => "__TAURI_INTERNALS__" in window;
 
 const browserFallbackProfiles: AgentProfile[] = [
   {
@@ -77,18 +77,18 @@ const browserFallbackProfiles: AgentProfile[] = [
 export const api = {
   async listRepos(): Promise<Repo[]> {
     if (isBrowserPreview) return seedRepos;
-    if (!isTauri) return [];
+    if (!isTauriRuntime()) return [];
     return invoke("list_repos");
   },
   async addRepo(path: string): Promise<Repo> {
     return invoke("add_repo", { path });
   },
   async setRepoCollapsed(id: number, collapsed: boolean): Promise<void> {
-    if (!isTauri) return;
+    if (!isTauriRuntime()) return;
     return invoke("set_repo_collapsed", { id, collapsed });
   },
   async pickRepositoryFolder(): Promise<string | null> {
-    if (!isTauri) return null;
+    if (!isTauriRuntime()) return null;
     const selected = await open({
       directory: true,
       multiple: false,
@@ -98,7 +98,7 @@ export const api = {
   },
   async listTasks(repoId?: number): Promise<TaskSummary[]> {
     if (isBrowserPreview) return repoId ? seedTasks.filter((t) => t.repoId === repoId) : seedTasks;
-    if (!isTauri) return [];
+    if (!isTauriRuntime()) return [];
     return invoke("list_tasks", { repoId: repoId ?? null });
   },
   async createTask(input: {
@@ -162,7 +162,7 @@ export const api = {
   },
   async listWorkspaces(): Promise<Workspace[]> {
     if (isBrowserPreview) return seedWorkspaces;
-    if (!isTauri) return [];
+    if (!isTauriRuntime()) return [];
     return invoke("list_workspaces");
   },
   async createWorkspace(name: string, repoIds: number[]): Promise<Workspace> {
@@ -175,27 +175,27 @@ export const api = {
     return invoke("delete_workspace", { id });
   },
   async setWorkspaceCollapsed(id: number, collapsed: boolean): Promise<void> {
-    if (!isTauri) return;
+    if (!isTauriRuntime()) return;
     return invoke("set_workspace_collapsed", { id, collapsed });
   },
   async taskDiffSummary(taskId: number): Promise<TaskDiffSummary> {
     if (isBrowserPreview) return seedTaskDiffSummary(taskId);
-    if (!isTauri) return { baseLabel: null, files: [] };
+    if (!isTauriRuntime()) return { baseLabel: null, files: [] };
     return invoke("task_diff_summary", { taskId });
   },
   async taskDiffFile(taskId: number, file: string): Promise<string> {
     if (isBrowserPreview) return seedTaskDiffFile(taskId, file);
-    if (!isTauri) return "";
+    if (!isTauriRuntime()) return "";
     return invoke("task_diff_file", { taskId, file });
   },
   async githubStatus(): Promise<GithubStatus> {
     if (isBrowserPreview) return seedGithubStatus;
-    if (!isTauri) return { installed: false, authenticated: false, account: null };
+    if (!isTauriRuntime()) return { installed: false, authenticated: false, account: null };
     return invoke("github_status");
   },
   async githubPullRequestStatus(taskId: number): Promise<PullRequestInfo> {
     if (isBrowserPreview) return seedPullRequest(taskId);
-    if (!isTauri)
+    if (!isTauriRuntime())
       return {
         number: 0,
         url: "",
@@ -210,22 +210,22 @@ export const api = {
     return invoke("github_pull_request_status", { taskId });
   },
   async detectGithubPullRequest(taskId: number): Promise<TaskSummary | null> {
-    if (!isTauri) return null;
+    if (!isTauriRuntime()) return null;
     return invoke("detect_github_pull_request", { taskId });
   },
   async jiraStatus(): Promise<JiraStatus> {
     if (isBrowserPreview) return seedJiraStatus;
-    if (!isTauri) return { installed: false, authenticated: false, account: null, site: null };
+    if (!isTauriRuntime()) return { installed: false, authenticated: false, account: null, site: null };
     return invoke("jira_status");
   },
   async jiraListProjects(): Promise<JiraProject[]> {
     if (isBrowserPreview) return seedJiraProjects;
-    if (!isTauri) return [];
+    if (!isTauriRuntime()) return [];
     return invoke("jira_list_projects");
   },
   async jiraSearchBoard(): Promise<JiraWorkItem[]> {
     if (isBrowserPreview) return seedJiraBoard;
-    if (!isTauri) return [];
+    if (!isTauriRuntime()) return [];
     return invoke("jira_search_board");
   },
   async jiraGetWorkItem(key: string): Promise<JiraWorkItem> {
@@ -301,17 +301,17 @@ export const api = {
   },
   async listPrReviews(): Promise<PrReview[]> {
     if (isBrowserPreview) return seedPrReviews;
-    if (!isTauri) return [];
+    if (!isTauriRuntime()) return [];
     return invoke("list_pr_reviews");
   },
   async getPrReview(reviewId: number): Promise<PrReview | null> {
     if (isBrowserPreview) return seedPrReviews.find((review) => review.id === reviewId) ?? null;
-    if (!isTauri) return null;
+    if (!isTauriRuntime()) return null;
     return invoke("get_pr_review", { reviewId });
   },
   async listPrReviewRuns(reviewId: number): Promise<PrReviewRun[]> {
     if (isBrowserPreview) return seedPrReviewRuns(reviewId);
-    if (!isTauri) return [];
+    if (!isTauriRuntime()) return [];
     return invoke("list_pr_review_runs", { reviewId });
   },
   async rerunPrReview(reviewId: number): Promise<PrReview> {
@@ -326,7 +326,7 @@ export const api = {
   },
   async listAgentProfiles(): Promise<AgentProfile[]> {
     if (isBrowserPreview) return seedProfiles;
-    if (!isTauri) return browserFallbackProfiles;
+    if (!isTauriRuntime()) return browserFallbackProfiles;
     return invoke("list_agent_profiles");
   },
   async upsertAgentProfile(
@@ -345,17 +345,17 @@ export const api = {
   },
   async getTaskReviewLoop(taskId: number): Promise<ReviewLoop | null> {
     if (isBrowserPreview) return seedReviewLoop(taskId);
-    if (!isTauri) return null;
+    if (!isTauriRuntime()) return null;
     return invoke("get_task_review_loop", { taskId });
   },
   async listTaskReviewRuns(taskId: number): Promise<ReviewRun[]> {
     if (isBrowserPreview) return seedReviewRuns(taskId);
-    if (!isTauri) return [];
+    if (!isTauriRuntime()) return [];
     return invoke("list_task_review_runs", { taskId });
   },
   async getAppSettings(): Promise<AppSettings> {
     if (isBrowserPreview) return seedSettings;
-    if (!isTauri) {
+    if (!isTauriRuntime()) {
       return {
         defaultAgentProfileId: browserFallbackProfiles[0]?.id ?? null,
         defaultWorktreeRootPattern: "~/.nectus/worktrees/{repoName}",
@@ -406,14 +406,14 @@ export const api = {
     return invoke("session_output_snapshot", { sessionId });
   },
   async openExternalUrl(url: string): Promise<void> {
-    if (!isTauri) {
+    if (!isTauriRuntime()) {
       window.open(url, "_blank", "noopener,noreferrer");
       return;
     }
     await openUrl(url);
   },
   async sendSystemNotification(title: string, body: string): Promise<boolean> {
-    if (!isTauri) return false;
+    if (!isTauriRuntime()) return false;
 
     let granted = await isPermissionGranted();
     if (!granted) {

@@ -801,7 +801,7 @@ indexed current docs as if they were authoritative reference pages.
 **Commit:** `c9bce86` (`docs: remove obsolete css rework tracker`) pushed to
 `origin/main`.
 
-### Iteration 24 - in progress (2026-06-09)
+### Iteration 24 - done (2026-06-09)
 
 **Goal:** Clean stale coordination statuses from the Codex rolling log.
 
@@ -821,10 +821,42 @@ paths, which matches the shared-checkout rule in this rolling log.
 - Search: confirm old coordination/status wording is gone from completed entries.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Search for obsolete coordination/status phrases returned no matches.
+- `pnpm test` passed (59 files, 352 tests).
+- `pnpm build` passed.
+
+**Commit:** `0358ad6` (`docs(rolling): clean stale codex coordination status`)
+pushed to `origin/main`.
+
+### Iteration 25 - in progress (2026-06-09)
+
+**Goal:** Make the frontend Tauri runtime check dynamic and simplify API tests.
+
+**Rationale:** `src/api.ts` captured `isTauri` at module load, so tests had to
+reset and re-import the whole module to cover Tauri-only branches. A small
+`isTauriRuntime()` helper keeps the same Tauri command boundary while removing
+that brittle import-order coupling.
+
+**Docs checked:** Context7 Tauri 2 docs for `invoke` from
+`@tauri-apps/api/core`, typed promise returns, and JSON argument passing. This
+change keeps those documented command-call semantics intact.
+
+**Claimed files:**
+- `src/api.ts`
+- `src/api.test.ts`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/api.test.ts`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `pnpm vitest run src/api.test.ts` passed (19 tests).
 - `pnpm test` passed (59 files, 352 tests).
 - `pnpm build` passed.
 

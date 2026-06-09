@@ -177,9 +177,6 @@ describe("api", () => {
   });
 
   it("requests live pull request status for a task", async () => {
-    // `isTauri` is captured at module load, so re-import with the flag present
-    // (githubPullRequestStatus returns a disconnected fallback outside Tauri).
-    vi.resetModules();
     Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
     mockedInvoke.mockResolvedValueOnce({
       number: 9,
@@ -192,8 +189,7 @@ describe("api", () => {
       checksState: "pending",
     });
 
-    const { api: tauriApi } = await import("./api");
-    const info = await tauriApi.githubPullRequestStatus(9);
+    const info = await api.githubPullRequestStatus(9);
 
     expect(info.number).toBe(9);
     expect(mockedInvoke).toHaveBeenCalledWith("github_pull_request_status", { taskId: 9 });
@@ -208,8 +204,6 @@ describe("api", () => {
   });
 
   it("detects an existing pull request for a task branch", async () => {
-    // `isTauri` is captured at module load, so re-import with the flag present.
-    vi.resetModules();
     Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
     mockedInvoke.mockResolvedValueOnce({
       id: 5,
@@ -223,8 +217,7 @@ describe("api", () => {
       updatedAt: "2026-06-02T12:01:00.000Z",
     });
 
-    const { api: tauriApi } = await import("./api");
-    const task = await tauriApi.detectGithubPullRequest(5);
+    const task = await api.detectGithubPullRequest(5);
 
     expect(task?.prUrl).toBe("https://github.com/hvp17/nectus/pull/9");
     expect(mockedInvoke).toHaveBeenCalledWith("detect_github_pull_request", { taskId: 5 });
@@ -248,27 +241,21 @@ describe("api", () => {
   });
 
   it("opens external URLs through the Tauri opener plugin inside Tauri", async () => {
-    vi.resetModules();
     Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
 
-    const { api: tauriApi } = await import("./api");
-
-    await tauriApi.openExternalUrl("https://example.com/docs");
+    await api.openExternalUrl("https://example.com/docs");
 
     expect(mockedOpenUrl).toHaveBeenCalledWith("https://example.com/docs");
   });
 
   it("truncates long system notification bodies sent to Tauri", async () => {
-    vi.resetModules();
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
       configurable: true,
       value: {},
     });
     mockedIsPermissionGranted.mockResolvedValue(true);
 
-    const { api: tauriApi } = await import("./api");
-
-    await tauriApi.sendSystemNotification("Codex finished", "A".repeat(300));
+    await api.sendSystemNotification("Codex finished", "A".repeat(300));
 
     expect(mockedRequestPermission).not.toHaveBeenCalled();
     expect(mockedSendNotification).toHaveBeenCalledWith({
@@ -278,7 +265,6 @@ describe("api", () => {
   });
 
   it("requests notification permission before sending when needed", async () => {
-    vi.resetModules();
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
       configurable: true,
       value: {},
@@ -286,8 +272,7 @@ describe("api", () => {
     mockedIsPermissionGranted.mockResolvedValue(false);
     mockedRequestPermission.mockResolvedValue("granted");
 
-    const { api: tauriApi } = await import("./api");
-    const sent = await tauriApi.sendSystemNotification("Codex finished", "Done");
+    const sent = await api.sendSystemNotification("Codex finished", "Done");
 
     expect(sent).toBe(true);
     expect(mockedRequestPermission).toHaveBeenCalled();
@@ -298,7 +283,6 @@ describe("api", () => {
   });
 
   it("does not send a notification when permission is denied", async () => {
-    vi.resetModules();
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
       configurable: true,
       value: {},
@@ -306,8 +290,7 @@ describe("api", () => {
     mockedIsPermissionGranted.mockResolvedValue(false);
     mockedRequestPermission.mockResolvedValue("denied");
 
-    const { api: tauriApi } = await import("./api");
-    const sent = await tauriApi.sendSystemNotification("Codex finished", "Done");
+    const sent = await api.sendSystemNotification("Codex finished", "Done");
 
     expect(sent).toBe(false);
     expect(mockedSendNotification).not.toHaveBeenCalled();
