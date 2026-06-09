@@ -732,6 +732,12 @@ Relevant code:
 
 ## Verification Commands
 
+Full standard gate:
+
+```bash
+pnpm verify
+```
+
 Frontend tests:
 
 ```bash

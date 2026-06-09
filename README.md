@@ -196,13 +196,11 @@ affect update integrity, which is minisign-secured end to end.
 Run the standard checks before calling a change complete:
 
 ```bash
-pnpm test
-pnpm build
-cd native
-cargo test
-cargo fmt --check
-cargo clippy --all-targets -- -D warnings
+pnpm verify
 ```
+
+`pnpm verify` runs the frontend tests, frontend build, Rust tests, Rust format
+check, and all-target Clippy lint gate.
 
 If Rust tests that shell out to git fail with `No such file or directory`, rerun
 with an explicit PATH before changing code:

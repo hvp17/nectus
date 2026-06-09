@@ -140,11 +140,7 @@ Frontend:
 ## Verify a change
 
 ```bash
-pnpm test                 # vitest
-pnpm build                # tsc && vite build
-cd native && cargo test   # Rust
-cd native && cargo fmt --check
-cd native && cargo clippy --all-targets -- -D warnings
+pnpm verify               # vitest, build, Rust test/fmt/clippy
 ```
 
 For release-impacting changes also run `pnpm desktop:build`. See

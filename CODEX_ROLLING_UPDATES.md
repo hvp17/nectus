@@ -1641,7 +1641,7 @@ official rustfmt/Cargo Book guidance from Iteration 46.
 **Commit:** `c85aeec` (`docs: sync architecture verification gates`) pushed to
 `origin/main`.
 
-### Iteration 49 - in progress (2026-06-09)
+### Iteration 49 - done (2026-06-09)
 
 **Goal:** Sync the tracking/debugging verification command reference with the new
 Rust format and all-target Clippy gates.
@@ -1661,12 +1661,50 @@ official rustfmt/Cargo Book guidance from Iteration 46.
 **Verification plan:**
 - Docs check: `rg -n "cargo fmt --check|cargo clippy --all-targets -- -D warnings" README.md AGENTS.md docs/architecture.md docs/tracking-and-debugging.md`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `rg -n "cargo fmt --check|cargo clippy --all-targets -- -D warnings" README.md AGENTS.md docs/architecture.md docs/tracking-and-debugging.md`
   shows the Rust format and all-target Clippy gates in all current verification
   docs.
+
+**Commit:** `0dc281a` (`docs: sync tracking verification gates`) pushed to
+`origin/main`.
+
+### Iteration 50 - in progress (2026-06-09)
+
+**Goal:** Add a single `pnpm verify` script for the standard verification gate
+and update docs to point to it.
+
+**Rationale:** The standard gate now spans frontend tests/build plus Rust tests,
+formatting, and all-target Clippy. Keeping that as repeated shell snippets makes
+future drift likely. A root `pnpm verify` script gives agents and humans one
+command while preserving individual commands for focused troubleshooting.
+
+**Docs checked:** Context7 pnpm docs for package scripts: `pnpm run` executes
+scripts from `package.json`, `pnpm <script>` is supported when the name does not
+conflict with a built-in command, and scripts can call other scripts.
+
+**Claimed files:**
+- `package.json`
+- `AGENTS.md`
+- `README.md`
+- `docs/architecture.md`
+- `docs/tracking-and-debugging.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Full: `pnpm verify`.
+- Docs check: `rg -n "pnpm verify" package.json README.md AGENTS.md docs/architecture.md docs/tracking-and-debugging.md`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- `pnpm verify` passed: frontend tests (59 files / 353 tests), frontend build,
+  Rust tests (240 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+- `rg -n "pnpm verify" package.json README.md AGENTS.md docs/architecture.md docs/tracking-and-debugging.md`
+  shows the root verification script in every updated verification doc.
 
 ---
 

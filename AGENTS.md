@@ -184,11 +184,7 @@ cargo clippy --all-targets -- -D warnings
 Run the standard verification set before claiming work is complete:
 
 ```bash
-pnpm test
-pnpm build
-cd native && cargo test
-cd native && cargo fmt --check
-cd native && cargo clippy --all-targets -- -D warnings
+pnpm verify
 ```
 
 For release-impacting changes, also run:

@@ -9,6 +9,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "verify": "pnpm test && pnpm build && cd native && cargo test && cargo fmt --check && cargo clippy --all-targets -- -D warnings",
     "desktop:dev": "tauri dev --config native/tauri.conf.json",
     "desktop:dev:no-watch": "tauri dev --no-watch --config native/tauri.conf.json",
     "desktop:dev:green": "bash scripts/desktop-dev-green.sh",
