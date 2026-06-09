@@ -558,7 +558,8 @@ status category.
 
 It is a full management surface: create a new work item, drag a card between
 columns to transition it (optimistic — reverted if JIRA's workflow rejects the
-move), and open a card to dock an **inline side panel** beside the board (the
+move, and carrying the known target status category while the refresh is
+pending), and open a card to dock an **inline side panel** beside the board (the
 board stays in context as a 2-column split; it is no longer a modal dialog) to
 change status, assign, or comment. Successful JIRA writes refresh the board in
 place. **New work item** in the toolbar opens an

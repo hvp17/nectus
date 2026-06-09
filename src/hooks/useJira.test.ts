@@ -164,6 +164,37 @@ describe("useJira", () => {
     expect(cancelQueries).toHaveBeenCalledWith({ queryKey: queryKeys.jira.board() });
   });
 
+  it("uses the target status category for optimistic transitions when known", async () => {
+    const setMessage = vi.fn();
+    const client = createQueryClient();
+    const todoItem = item("A-1", "To Do");
+    const doneItem: JiraWorkItem = { ...item("A-2", "Done"), statusCategory: "done" };
+    client.setQueryData<JiraWorkItem[]>(queryKeys.jira.board(), [todoItem, doneItem]);
+    const { result } = renderHook(
+      () =>
+        useJira({
+          active: false,
+          configured: false,
+          project: null,
+          statusFilter: [],
+          setMessage,
+        }),
+      { wrapper: makeWrapper(client) },
+    );
+
+    await act(async () => {
+      await result.current.transition(todoItem, "Done");
+    });
+
+    expect(mockedApi.jiraTransitionWorkItem).toHaveBeenCalledWith("A-1", "Done");
+    expect(
+      client.getQueryData<JiraWorkItem[]>(queryKeys.jira.board())?.find((it) => it.key === "A-1"),
+    ).toMatchObject({
+      statusName: "Done",
+      statusCategory: "done",
+    });
+  });
+
   it("removes the optimistic board cache when transition fails without a prior snapshot", async () => {
     const setMessage = vi.fn();
     const client = createQueryClient();

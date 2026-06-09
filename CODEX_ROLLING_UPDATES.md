@@ -4256,7 +4256,7 @@ avoid overwriting user state unnecessarily.
   current project is empty.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/components/JiraCreateWorkItemPanel.test.tsx`
@@ -4268,6 +4268,52 @@ avoid overwriting user state unnecessarily.
   (`JiraProject` has `key`/`name`, no `id`); fixture corrected and focused test
   rerun green.
 - `pnpm verify` passed: frontend tests (71 files / 423 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `fba2273` (`fix(jira): adopt loaded project in create panel`) pushed
+to `origin/main`.
+
+### Iteration 113 - in progress (2026-06-09)
+
+**Goal:** Keep JIRA optimistic transitions' status category in sync with the
+target column.
+
+**Rationale:** `useJira.transition()` updates the cached work item's `statusName`
+before JIRA confirms the transition, but it leaves `statusCategory` untouched.
+Without the optional REST status skeleton, board columns are derived from cached
+items and ordered by category. Moving a card from To Do to Done can therefore
+leave the new Done column carrying the old `to_do` category until the board
+refreshes.
+
+**Docs checked:** Context7 `/tanstack/query` optimistic-update docs. Current
+TanStack Query docs show deriving replacement cache data with `setQueryData`,
+keeping updates immutable, snapshotting previous data for rollback, and
+invalidating after mutation settlement for server truth.
+
+**Claimed files:**
+- `src/hooks/useJira.ts`
+- `src/hooks/useJira.test.ts`
+- `docs/features.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add a hook test where an optimistic transition moves a To Do item
+  into an already-known Done column and must update both `statusName` and
+  `statusCategory`; run `pnpm vitest run src/hooks/useJira.test.ts`.
+- Focused green: rerun the same test after deriving the target category from the
+  cached destination status when available.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready for collision check and commit.
+
+**Evidence so far:**
+- Red check `pnpm vitest run src/hooks/useJira.test.ts` failed as expected
+  before implementation; the moved item had `statusName: "Done"` but kept
+  `statusCategory: "to_do"`.
+- Focused green `pnpm vitest run src/hooks/useJira.test.ts` passed:
+  1 file / 9 tests.
+- `pnpm verify` passed: frontend tests (71 files / 424 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

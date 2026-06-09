@@ -133,9 +133,15 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
       const key = queryKeys.jira.board();
       await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueryData<JiraWorkItem[]>(key);
-      queryClient.setQueryData<JiraWorkItem[]>(key, (current = []) =>
-        current.map((it) => (it.key === item.key ? { ...it, statusName } : it)),
-      );
+      queryClient.setQueryData<JiraWorkItem[]>(key, (current = []) => {
+        const targetCategory =
+          projectStatuses.find((status) => status.name === statusName)?.category ??
+          current.find((it) => it.statusName === statusName)?.statusCategory ??
+          item.statusCategory;
+        return current.map((it) =>
+          it.key === item.key ? { ...it, statusName, statusCategory: targetCategory } : it,
+        );
+      });
       try {
         await api.jiraTransitionWorkItem(item.key, statusName);
         await refresh();
@@ -148,7 +154,7 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
         setMessage(String(error));
       }
     },
-    [queryClient, refresh, setMessage],
+    [projectStatuses, queryClient, refresh, setMessage],
   );
 
   const assign = useCallback(
