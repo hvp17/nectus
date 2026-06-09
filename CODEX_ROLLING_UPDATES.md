@@ -1709,7 +1709,7 @@ conflict with a built-in command, and scripts can call other scripts.
 **Commit:** `84bd7d4` (`chore: add standard verification script`) pushed to
 `origin/main`.
 
-### Iteration 51 - in progress (2026-06-09)
+### Iteration 51 - done (2026-06-09)
 
 **Goal:** Simplify root UI providers and remove an unused theme dependency.
 
@@ -1737,7 +1737,7 @@ pnpm docs for `pnpm remove`.
 - Dependency check: `rg -n "next-themes" src package.json pnpm-lock.yaml` and
   `rg -n "TooltipProvider" src/main.tsx src/App.tsx src/AppRouter.tsx src/components/ui/tooltip.tsx`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/hooks/useTaskNotificationToast.test.tsx src/hooks/useAppUpdateToast.test.tsx`
@@ -1748,6 +1748,39 @@ pnpm docs for `pnpm remove`.
 - `rg -n "next-themes" src package.json pnpm-lock.yaml` returned no matches.
 - `rg -n "TooltipProvider" src/main.tsx src/App.tsx src/AppRouter.tsx src/components/ui/tooltip.tsx`
   shows the provider only in `App` and the tooltip primitive export.
+
+**Commit:** `58042af` (`refactor(ui): simplify root providers`) pushed to
+`origin/main`.
+
+### Iteration 52 - in progress (2026-06-09)
+
+**Goal:** Remove the last unnecessary React namespace import from the root entry.
+
+**Rationale:** After Iteration 51, `src/main.tsx` uses the React namespace only
+for `React.StrictMode`. The current React docs import `StrictMode` directly from
+`react` for root rendering, which keeps the entry file aligned with the API it
+actually uses.
+
+**Docs checked:** Context7 React docs for `StrictMode` root rendering examples.
+
+**Claimed files:**
+- `src/main.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused type/build check: `pnpm build`.
+- Root import check: `rg -n "React\\.StrictMode|import React from" src/main.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- `pnpm build` passed.
+- `rg -n "React\\.StrictMode|import React from" src/main.tsx` returned no
+  matches.
+- `pnpm verify` passed: frontend tests (59 files / 353 tests), frontend build,
+  Rust tests (240 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
 
 ---
 
