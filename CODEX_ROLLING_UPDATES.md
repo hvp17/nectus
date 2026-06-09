@@ -3185,7 +3185,7 @@ is to mount Query-backed hook tests with a `QueryClientProvider` and an isolated
 **Commit:** `a07086b` (`test(ui): cover task status attention cleanup`) pushed to
 `origin/main`.
 
-### Iteration 88 - in progress (2026-06-09)
+### Iteration 88 - done (2026-06-09)
 
 **Goal:** Cover the remaining task metadata action cache contracts.
 
@@ -3208,7 +3208,7 @@ current Vitest guidance supports hoisted `vi.mock` module mocks, typed access vi
   focused test; the rename test should fail.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Focused green `pnpm vitest run src/hooks/useTaskActions.test.tsx` passed:
@@ -3220,6 +3220,50 @@ current Vitest guidance supports hoisted `vi.mock` module mocks, typed access vi
   passed: 1 file / 4 tests.
 - `pnpm verify` passed: frontend tests (65 files / 397 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `f6fcf38` (`test(ui): cover task metadata actions`) pushed to
+`origin/main`.
+
+### Iteration 89 - in progress (2026-06-09)
+
+**Goal:** Cover settings action cache updates and bootstrap invalidation.
+
+**Rationale:** `useSettingsActions` owns two high-leverage writes: app settings
+and agent-profile saves. The app-settings path writes the settings cache, updates
+the selected default agent, then invalidates all bootstrap reads; the profile path
+upserts the saved profile into the profile cache. Both are central to the
+settings screen and shell bootstrap behavior.
+
+**Docs checked:** Context7 `/tanstack/query` mutation/cache docs. Current
+guidance is to write mutation responses with `queryClient.setQueryData` and
+invalidate related queries after mutation success, returning/awaiting the
+invalidation work when subsequent code depends on refreshed state.
+
+**Claimed files:**
+- `src/hooks/useSettingsActions.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused green: `pnpm vitest run src/hooks/useSettingsActions.test.tsx`.
+- Red check: temporarily remove the app-settings `refresh()` call and rerun the
+  focused test; the bootstrap invalidation assertions should fail.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Focused green `pnpm vitest run src/hooks/useSettingsActions.test.tsx` passed:
+  1 file / 2 tests.
+- Red check failed as expected after temporarily removing the app-settings
+  `refresh()` call; the bootstrap invalidation assertion saw
+  `isInvalidated === false`.
+- Restored focused green `pnpm vitest run src/hooks/useSettingsActions.test.tsx`
+  passed: 1 file / 2 tests.
+- The first full gate caught a TypeScript fixture issue (`id` specified twice in
+  the test helper); destructuring `id` out of the helper overrides fixed it.
+- `pnpm verify` passed after the fixture fix: frontend tests (66 files /
+  399 tests), frontend build, Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
 ---
