@@ -1671,7 +1671,7 @@ official rustfmt/Cargo Book guidance from Iteration 46.
 **Commit:** `0dc281a` (`docs: sync tracking verification gates`) pushed to
 `origin/main`.
 
-### Iteration 50 - in progress (2026-06-09)
+### Iteration 50 - done (2026-06-09)
 
 **Goal:** Add a single `pnpm verify` script for the standard verification gate
 and update docs to point to it.
@@ -1697,7 +1697,7 @@ conflict with a built-in command, and scripts can call other scripts.
 - Full: `pnpm verify`.
 - Docs check: `rg -n "pnpm verify" package.json README.md AGENTS.md docs/architecture.md docs/tracking-and-debugging.md`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm verify` passed: frontend tests (59 files / 353 tests), frontend build,
@@ -1705,6 +1705,49 @@ conflict with a built-in command, and scripts can call other scripts.
   `cargo clippy --all-targets -- -D warnings`.
 - `rg -n "pnpm verify" package.json README.md AGENTS.md docs/architecture.md docs/tracking-and-debugging.md`
   shows the root verification script in every updated verification doc.
+
+**Commit:** `84bd7d4` (`chore: add standard verification script`) pushed to
+`origin/main`.
+
+### Iteration 51 - in progress (2026-06-09)
+
+**Goal:** Simplify root UI providers and remove an unused theme dependency.
+
+**Rationale:** `App` already owns the app-wide `TooltipProvider`, while
+`main.tsx` wraps the app in a second one. `AppRouter` already passes the
+Nectus-owned setting (`settings?.theme ?? "system"`) into `Toaster`, so
+`src/components/ui/sonner.tsx` does not need `next-themes` to derive theme state.
+Removing both keeps the root provider graph and dependency set aligned with the
+actual app architecture.
+
+**Docs checked:** Context7 shadcn/ui docs for Sonner and Tooltip, Context7 Sonner
+docs for the explicit `theme` prop (`"light" | "dark" | "system"`), and Context7
+pnpm docs for `pnpm remove`.
+
+**Claimed files:**
+- `src/main.tsx`
+- `src/components/ui/sonner.tsx`
+- `package.json`
+- `pnpm-lock.yaml`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused toast tests: `pnpm vitest run src/hooks/useTaskNotificationToast.test.tsx src/hooks/useAppUpdateToast.test.tsx`.
+- Full gate: `pnpm verify`.
+- Dependency check: `rg -n "next-themes" src package.json pnpm-lock.yaml` and
+  `rg -n "TooltipProvider" src/main.tsx src/App.tsx src/AppRouter.tsx src/components/ui/tooltip.tsx`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- `pnpm vitest run src/hooks/useTaskNotificationToast.test.tsx src/hooks/useAppUpdateToast.test.tsx`
+  passed: 2 files / 8 tests.
+- `pnpm verify` passed: frontend tests (59 files / 353 tests), frontend build,
+  Rust tests (240 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+- `rg -n "next-themes" src package.json pnpm-lock.yaml` returned no matches.
+- `rg -n "TooltipProvider" src/main.tsx src/App.tsx src/AppRouter.tsx src/components/ui/tooltip.tsx`
+  shows the provider only in `App` and the tooltip primitive export.
 
 ---
 
