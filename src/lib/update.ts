@@ -1,6 +1,7 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
+import { isTauriRuntime } from "./tauriRuntime";
 
 export interface UpdateInfo {
   version: string;
@@ -22,7 +23,7 @@ export interface UpdateCheckResult {
 /** The updater only works inside the Tauri runtime; everywhere else (browser
  * preview, Vitest) every call below no-ops so the UI degrades cleanly. */
 export function isUpdaterAvailable(): boolean {
-  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+  return isTauriRuntime();
 }
 
 export async function getAppVersion(): Promise<string | null> {

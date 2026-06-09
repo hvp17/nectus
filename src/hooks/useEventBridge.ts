@@ -4,7 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../queries/keys";
 import { useTasksQuery } from "../queries/core";
 import { useAppStore } from "../store/appStore";
-import { isTauriRuntime, notifySessionEvent } from "../sessionNotifications";
+import { isTauriRuntime } from "../lib/tauriRuntime";
+import { notifySessionEvent } from "../sessionNotifications";
 import { clearTaskAttention, upsertTaskAttention } from "../sessionAttention";
 import {
   sessionIdleContent,

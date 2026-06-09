@@ -25,7 +25,7 @@ const eventTestState = vi.hoisted(() => ({
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({ listen: eventTestState.listen }));
-vi.mock("../sessionNotifications", () => ({ isTauriRuntime: () => true }));
+vi.mock("../lib/tauriRuntime", () => ({ isTauriRuntime: () => true }));
 vi.mock("../api", () => ({
   api: {
     taskDiffSummary: vi.fn(),

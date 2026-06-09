@@ -3,6 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { formatNotificationBody } from "./notificationText";
+import { isTauriRuntime } from "./lib/tauriRuntime";
 import {
   isBrowserPreview,
   seedGithubStatus,
@@ -46,8 +47,6 @@ import type {
   TaskSummary,
   Workspace,
 } from "./types";
-
-const isTauriRuntime = () => "__TAURI_INTERNALS__" in window;
 
 const browserFallbackProfiles: AgentProfile[] = [
   {

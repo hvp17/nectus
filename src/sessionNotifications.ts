@@ -1,11 +1,6 @@
 import { api } from "./api";
+import { isTauriRuntime } from "./lib/tauriRuntime";
 import { formatNotificationBody } from "./notificationText";
-
-export function isTauriRuntime() {
-  return "__TAURI_INTERNALS__" in window;
-}
-
-export const isTauri = isTauriRuntime();
 
 export async function notifySessionEvent(title: string, body: string) {
   if (!isTauriRuntime()) return;

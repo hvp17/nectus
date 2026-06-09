@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { isTauriRuntime } from "../sessionNotifications";
+import { isTauriRuntime } from "../lib/tauriRuntime";
 
 interface UseTauriEventOptions {
   /** Skip subscribing while false (e.g. a panel that isn't open yet). */

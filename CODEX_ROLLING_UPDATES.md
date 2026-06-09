@@ -831,7 +831,7 @@ paths, which matches the shared-checkout rule in this rolling log.
 **Commit:** `0358ad6` (`docs(rolling): clean stale codex coordination status`)
 pushed to `origin/main`.
 
-### Iteration 25 - in progress (2026-06-09)
+### Iteration 25 - done (2026-06-09)
 
 **Goal:** Make the frontend Tauri runtime check dynamic and simplify API tests.
 
@@ -853,10 +853,51 @@ change keeps those documented command-call semantics intact.
 - Focused: `pnpm vitest run src/api.test.ts`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/api.test.ts` passed (19 tests).
+- `pnpm test` passed (59 files, 352 tests).
+- `pnpm build` passed.
+
+**Commit:** `a2d7a53` (`refactor(api): check tauri runtime dynamically`) pushed
+to `origin/main`.
+
+### Iteration 26 - in progress (2026-06-09)
+
+**Goal:** Move Tauri runtime detection into a neutral shared helper.
+
+**Rationale:** Generic Tauri event/terminal code imported `isTauriRuntime` from
+`sessionNotifications`, coupling unrelated infrastructure to the notification
+module. A tiny `src/lib/tauriRuntime.ts` helper keeps runtime detection in one
+neutral place and lets notifications, API wrappers, updater code, terminal, and
+event hooks depend on the same boundary.
+
+**Docs checked:** Context7 Tauri 2 docs for frontend event `listen`; listeners
+return an `UnlistenFn` that should be called when a listener goes out of scope.
+The existing hook keeps that cleanup, while the runtime guard moves to a shared
+location.
+
+**Claimed files:**
+- `src/lib/tauriRuntime.ts`
+- `src/api.ts`
+- `src/lib/update.ts`
+- `src/sessionNotifications.ts`
+- `src/TerminalPane.tsx`
+- `src/hooks/useTauriEvent.ts`
+- `src/hooks/useEventBridge.ts`
+- `src/hooks/useTaskDiff.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/api.test.ts src/lib/update.test.ts src/sessionNotifications.test.ts src/hooks/useTaskDiff.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `pnpm vitest run src/api.test.ts src/lib/update.test.ts src/sessionNotifications.test.ts src/hooks/useTaskDiff.test.tsx`
+  passed (4 files, 36 tests).
 - `pnpm test` passed (59 files, 352 tests).
 - `pnpm build` passed.
 

@@ -9,7 +9,7 @@ import { useEffect, useRef } from "react";
 import { api } from "./api";
 import { openExternal } from "./lib/openExternal";
 import { readTerminalTheme } from "./lib/terminalTheme";
-import { isTauriRuntime } from "./sessionNotifications";
+import { isTauriRuntime } from "./lib/tauriRuntime";
 import type { SessionExitedEvent, SessionOutputEvent } from "./types";
 
 interface TerminalPaneProps {
