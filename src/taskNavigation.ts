@@ -1,12 +1,13 @@
-// src/taskNavigation.ts
-export type AppView = "mission" | "board" | "workspace" | "settings" | "reviews" | "jira";
+import type { AppView } from "./store/slices/navigationSlice";
+
+type TaskSurfaceView = Exclude<AppView, "settings" | "reviews" | "jira">;
 
 export interface TaskFocusPlan {
   // Repo to select, or undefined to leave the current selection alone.
   repoId?: number;
   // View to land on. A task workspace renders over Mission Control, a project
   // board, or a workspace board; any secondary view is routed to the board.
-  view: "mission" | "board" | "workspace";
+  view: TaskSurfaceView;
   // Whether to close the New Task composer, which otherwise overlays the
   // viewport and hides the task workspace.
   dismissComposer: boolean;

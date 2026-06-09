@@ -1377,7 +1377,7 @@ identity pass-through values.
 **Commit:** `a068a98` (`refactor(task-workspace): remove noop memo`) pushed to
 `origin/main`.
 
-### Iteration 41 - in progress (2026-06-09)
+### Iteration 41 - done (2026-06-09)
 
 **Goal:** Remove unnecessary `useMemo` wrappers from `TaskDiffView`.
 
@@ -1401,10 +1401,44 @@ bar.
 - Focused: `pnpm vitest run src/components/TaskDiffView.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/components/TaskDiffView.test.tsx` passed (1 file, 6 tests).
+- `pnpm test` passed (59 files, 353 tests).
+- `pnpm build` passed.
+
+**Commit:** `904fff6` (`refactor(diff): remove unnecessary memo wrappers`) pushed
+to `origin/main`.
+
+### Iteration 42 - in progress (2026-06-09)
+
+**Goal:** Centralize the app-view union and derive narrower navigation view
+types from it.
+
+**Rationale:** `navigationSlice.ts` and `taskNavigation.ts` both defined the same
+`AppView` union, while `IconRail.tsx` separately defined the rail subset. Keeping
+one owner for the top-level view set prevents drift when a view is added or
+removed, and deriving the task-surface / rail subsets documents which surfaces
+intentionally exclude secondary or workspace views.
+
+**Docs checked:** Context7 TypeScript docs for `import type` and `Exclude`.
+Type-only imports keep this refactor out of runtime output, and `Exclude` is the
+standard utility for deriving a subset union.
+
+**Claimed files:**
+- `src/taskNavigation.ts`
+- `src/components/IconRail.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/taskNavigation.test.ts src/App.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `pnpm vitest run src/taskNavigation.test.ts src/App.test.tsx` passed (2 files, 55 tests).
 - `pnpm test` passed (59 files, 353 tests).
 - `pnpm build` passed.
 

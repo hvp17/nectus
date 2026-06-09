@@ -1,7 +1,8 @@
 import { FolderGit2, GitPullRequest, Plus, Radio, Search, Settings, SquareKanban } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import type { AppView } from "../store/slices/navigationSlice";
 
-export type RailView = "mission" | "board" | "jira" | "reviews" | "settings";
+export type RailView = Exclude<AppView, "workspace">;
 
 interface IconRailProps {
   active: RailView;
