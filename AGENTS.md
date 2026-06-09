@@ -35,6 +35,7 @@ The app is local-first. GitHub work shells out to the `gh` CLI the same way it s
 - Keep documentation concrete and repo-grounded. Prefer exact commands, file paths, table names, event names, and known caveats over general prose.
 - Do not add placeholder docs such as `TODO`, `TBD`, or speculative behavior unless it is clearly marked as a future idea outside current behavior.
 - `.claude/` is a local working area for Claude settings and nested worktrees; keep it ignored and never stage files from inside it. Vite and Vitest also exclude it so copied worktrees do not wake the dev server or duplicate the test suite.
+- `design-mockups/` is local scratch output for Claude Design prototypes; keep it ignored unless the user explicitly asks to commit a specific design artifact.
 - Fresh git worktrees usually start without `node_modules`. Before running `pnpm exec shadcn ...`, `pnpm test`, `pnpm build`, or other package-backed commands, check whether dependencies are hydrated and run `pnpm install` first when they are missing.
 - If `pnpm exec shadcn ...` starts dependency hydration or fails with missing packages such as `vite`, stop repeating shadcn probes and run one `pnpm install`; if the install is blocked by sandboxed network or DNS, request escalation for `pnpm install` rather than retrying multiple shadcn commands.
 
