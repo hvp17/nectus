@@ -4305,7 +4305,7 @@ invalidating after mutation settlement for server truth.
   cached destination status when available.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready for collision check and commit.
+**Status:** verified and committed.
 
 **Evidence so far:**
 - Red check `pnpm vitest run src/hooks/useJira.test.ts` failed as expected
@@ -4314,6 +4314,50 @@ invalidating after mutation settlement for server truth.
 - Focused green `pnpm vitest run src/hooks/useJira.test.ts` passed:
   1 file / 9 tests.
 - `pnpm verify` passed: frontend tests (71 files / 424 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `4715601` (`fix(jira): sync optimistic transition category`) pushed
+to `origin/main`.
+
+### Iteration 114 - in progress (2026-06-09)
+
+**Goal:** Disable PR-review submission unless the selected/default reviewer
+resolves to a loaded agent profile.
+
+**Rationale:** `ReviewsPage` now blocks submission when no reviewer is available,
+but the guard still treats a raw `defaultReviewerProfileId` as sufficient. If that
+id is stale or profiles have not loaded, the button can enable and the submit
+handler can send an unresolved reviewer id instead of waiting for an actual
+loaded profile.
+
+**Docs checked:** Context7 `/reactjs/react.dev` form-state docs. Current React
+docs show deriving button disabled state from the current validated form state
+and guarding the submit handler with the same state.
+
+**Claimed files:**
+- `src/components/ReviewsPage.tsx`
+- `src/components/ReviewsPage.test.tsx`
+- `docs/features.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add a ReviewsPage test with no loaded profiles and a stale default
+  reviewer id; run `pnpm vitest run src/components/ReviewsPage.test.tsx` and see
+  the submit action still enabled/submitting.
+- Focused green: rerun that suite after deriving a single resolved fallback
+  reviewer id and using it for both disabled state and submit.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready for collision check and commit.
+
+**Evidence so far:**
+- Red check `pnpm vitest run src/components/ReviewsPage.test.tsx` failed as
+  expected before implementation; the Review PR button was enabled when
+  `defaultReviewerProfileId` was `99` but no profiles were loaded.
+- Focused green `pnpm vitest run src/components/ReviewsPage.test.tsx` passed:
+  1 file / 8 tests.
+- `pnpm verify` passed: frontend tests (71 files / 425 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

@@ -65,22 +65,24 @@ export function ReviewsPage({
   const [prUrl, setPrUrl] = useState("");
   const [selectedReviewerIds, setSelectedReviewerIds] = useState<number[]>(() => {
     const initial = resolveAgentProfileId(agentProfiles, defaultReviewerProfileId);
-    return initial ? [initial] : [];
+    return initial !== undefined ? [initial] : [];
   });
   const [rounds, setRounds] = useState(DEFAULT_ROUNDS);
+  const availableReviewerIds = new Set(agentProfiles.map((profile) => profile.id));
+  const fallbackReviewerId = resolveAgentProfileId(agentProfiles, defaultReviewerProfileId);
+  const activeReviewerIds = selectedReviewerIds.filter((id) => availableReviewerIds.has(id));
 
   // The lazy initializer captures `[]` when profiles haven't loaded at mount;
   // seed the default once it becomes available, but only while the selection is
   // still empty so a user pick is never clobbered.
   useEffect(() => {
-    const initial = resolveAgentProfileId(agentProfiles, defaultReviewerProfileId);
-    if (initial === undefined) return;
-    setSelectedReviewerIds((current) => (current.length === 0 ? [initial] : current));
-  }, [defaultReviewerProfileId, agentProfiles]);
+    if (fallbackReviewerId === undefined) return;
+    setSelectedReviewerIds((current) => (current.length === 0 ? [fallbackReviewerId] : current));
+  }, [fallbackReviewerId]);
 
   // Two or more reviewers turns the review into a multi-model consensus run.
-  const consensus = selectedReviewerIds.length >= 2;
-  const hasReviewer = selectedReviewerIds.length > 0 || defaultReviewerProfileId !== undefined;
+  const consensus = activeReviewerIds.length >= 2;
+  const hasReviewer = activeReviewerIds.length > 0 || fallbackReviewerId !== undefined;
 
   const toggleReviewer = (id: number) => {
     setSelectedReviewerIds((current) =>
@@ -95,10 +97,10 @@ export function ReviewsPage({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const trimmed = prUrl.trim();
-    const reviewers = selectedReviewerIds.length
-      ? selectedReviewerIds
-      : defaultReviewerProfileId
-        ? [defaultReviewerProfileId]
+    const reviewers = activeReviewerIds.length
+      ? activeReviewerIds
+      : fallbackReviewerId !== undefined
+        ? [fallbackReviewerId]
         : [];
     if (!trimmed || creatingReview || reviewers.length === 0) return;
     onCreateReview(trimmed, reviewers, consensus ? rounds : undefined);

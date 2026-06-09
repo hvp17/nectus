@@ -154,6 +154,28 @@ it("does not submit a PR review when no reviewer profile is available", () => {
   expect(onCreateReview).not.toHaveBeenCalled();
 });
 
+it("does not submit a PR review when the default reviewer id is unresolved", () => {
+  const onCreateReview = vi.fn();
+  renderPage({
+    prReviews: [],
+    selectedPrReview: undefined,
+    selectedPrReviewId: undefined,
+    agentProfiles: [],
+    defaultReviewerProfileId: 99,
+    onCreateReview,
+  });
+
+  fireEvent.change(screen.getByLabelText("Pull request URL"), {
+    target: { value: "https://github.com/owner/repo/pull/9" },
+  });
+
+  expect(screen.getByRole("button", { name: /review pull request/i })).toBeDisabled();
+
+  fireEvent.submit(screen.getByRole("form", { name: /start a pr review/i }));
+
+  expect(onCreateReview).not.toHaveBeenCalled();
+});
+
 it("offers an empty state when there are no reviews", () => {
   renderPage({ prReviews: [], selectedPrReview: undefined, selectedPrReviewId: undefined });
 
