@@ -35,6 +35,12 @@ export function useJiraBoardView({ active, settings, setSettings, setMessage }: 
   const [selectedItem, setSelectedItem] = useState<JiraWorkItem | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const run = useGuardedAction(setMessage);
+  const {
+    clearApiToken,
+    create: createJiraWorkItem,
+    refresh: refreshJira,
+    setApiToken,
+  } = jira;
 
   // Keep the docked work-item panel in lockstep with the board: a panel-driven
   // transition/assign mutates `jira.items` and refreshes, so re-read the selected
@@ -63,9 +69,9 @@ export function useJiraBoardView({ active, settings, setSettings, setMessage }: 
           jiraFilterStatuses: partial.statuses ?? settings.jiraFilterStatuses,
         });
         setSettings(updated);
-        await jira.refresh();
+        await refreshJira();
       }),
-    [jira.refresh, run, setSettings, settings],
+    [refreshJira, run, setSettings, settings],
   );
 
   // Connecting/disconnecting a token writes jira_site_url / jira_rest_email
@@ -74,17 +80,17 @@ export function useJiraBoardView({ active, settings, setSettings, setMessage }: 
   // clobber the REST account, orphaning the Keychain token.
   const saveToken = useCallback(
     async (site: string, email: string, token: string) => {
-      const status = await jira.setApiToken(site, email, token);
+      const status = await setApiToken(site, email, token);
       setSettings(await api.getAppSettings());
       return status;
     },
-    [jira, setSettings],
+    [setApiToken, setSettings],
   );
 
   const disconnect = useCallback(async () => {
-    await jira.clearApiToken();
+    await clearApiToken();
     setSettings(await api.getAppSettings());
-  }, [jira, setSettings]);
+  }, [clearApiToken, setSettings]);
 
   // The create panel and the view panel share the board's dock slot, so opening
   // one closes the other.
@@ -111,14 +117,14 @@ export function useJiraBoardView({ active, settings, setSettings, setMessage }: 
       assignee?: string;
       labels?: string;
     }) => {
-      const item = await jira.create(input);
+      const item = await createJiraWorkItem(input);
       if (item) {
         setCreateOpen(false);
         setSelectedItem(item);
       }
       return item;
     },
-    [jira],
+    [createJiraWorkItem],
   );
 
   return {

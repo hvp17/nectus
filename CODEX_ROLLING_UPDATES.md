@@ -3527,7 +3527,7 @@ unchanged.
 **Commit:** `2137d8d` (`refactor(ui): stabilize workspace action callbacks`)
 pushed to `origin/main`.
 
-### Iteration 96 - in progress (2026-06-09)
+### Iteration 96 - done (2026-06-09)
 
 **Goal:** Stabilize the settings action callbacks returned by
 `useSettingsActions`.
@@ -3556,7 +3556,7 @@ dependencies so the callbacks are reused while those dependencies are unchanged.
   returned actions in `useCallback`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useSettingsActions.test.tsx` failed as
@@ -3565,6 +3565,52 @@ dependencies so the callbacks are reused while those dependencies are unchanged.
 - Focused green `pnpm vitest run src/hooks/useSettingsActions.test.tsx` passed:
   1 file / 3 tests.
 - `pnpm verify` passed: frontend tests (69 files / 408 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `dabe121` (`refactor(ui): stabilize settings action callbacks`)
+pushed to `origin/main`.
+
+### Iteration 97 - in progress (2026-06-09)
+
+**Goal:** Narrow `useJiraBoardView` callback dependencies to stable JIRA action
+functions.
+
+**Rationale:** `useJiraBoardView` already wraps its board actions in
+`useCallback`, but `saveToken`, `disconnect`, and `createWorkItem` depend on the
+whole `jira` return object. `useJira` returns a fresh object each render, so those
+callbacks are recreated even when the underlying action functions are stable.
+Depending on the specific function fields preserves behavior while avoiding
+unnecessary callback churn.
+
+**Docs checked:** Context7 `/reactjs/react.dev` `useCallback` / `useMemo` docs.
+Current guidance shows caching functions with the specific dependencies they use,
+and memoizing object values when object identity itself is part of the contract.
+
+**Claimed files:**
+- `src/hooks/useJiraBoardView.ts`
+- `src/hooks/useJiraBoardView.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add a test where `useJira` returns a fresh wrapper object with
+  stable action functions and run
+  `pnpm vitest run src/hooks/useJiraBoardView.test.tsx`; it should fail while
+  callbacks depend on the whole object.
+- Focused green: rerun
+  `pnpm vitest run src/hooks/useJiraBoardView.test.tsx` after depending on the
+  specific JIRA action functions.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useJiraBoardView.test.tsx` failed as
+  expected before implementation; `saveToken` changed identity when `useJira`
+  returned a fresh wrapper object.
+- Focused green `pnpm vitest run src/hooks/useJiraBoardView.test.tsx` passed:
+  1 file / 2 tests.
+- `pnpm verify` passed: frontend tests (69 files / 409 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

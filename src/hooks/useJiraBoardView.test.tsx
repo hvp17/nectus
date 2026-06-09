@@ -58,4 +58,31 @@ describe("useJiraBoardView", () => {
 
     expect(result.current.setBoardConfig).toBe(firstSetBoardConfig);
   });
+
+  it("keeps board actions stable when the jira wrapper object changes", () => {
+    const jira = jiraState();
+    mockedUseJira.mockImplementation(() => ({ ...jira }));
+    const settings = appSettingsFixture({ jiraBoardProject: "SCRUM" });
+    const setSettings = vi.fn();
+    const setMessage = vi.fn();
+
+    const { result, rerender } = renderHook(
+      () =>
+        useJiraBoardView({
+          active: true,
+          settings,
+          setSettings,
+          setMessage,
+        }),
+    );
+    const firstSaveToken = result.current.saveToken;
+    const firstDisconnect = result.current.disconnect;
+    const firstCreateWorkItem = result.current.createWorkItem;
+
+    rerender();
+
+    expect(result.current.saveToken).toBe(firstSaveToken);
+    expect(result.current.disconnect).toBe(firstDisconnect);
+    expect(result.current.createWorkItem).toBe(firstCreateWorkItem);
+  });
 });
