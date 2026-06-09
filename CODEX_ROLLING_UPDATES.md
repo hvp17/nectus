@@ -4592,7 +4592,7 @@ diff summary whose query key is meaningful only after a task id exists.
   `useQueries` array.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready for collision check and commit.
+**Status:** verified and committed.
 
 **Evidence so far:**
 - `git status --short --branch` was clean after pushing `50758aa`.
@@ -4611,6 +4611,66 @@ diff summary whose query key is meaningful only after a task id exists.
   `useQueries` array.
 - `pnpm verify` passed: frontend tests (72 files / 429 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `3df6c5c` (`fix(diff): avoid empty summary query`) pushed to
+`origin/main`.
+
+### Iteration 120 - in progress (2026-06-09)
+
+**Goal:** Stop allocating `undefined` GitHub PR read queries before a task is
+selected.
+
+**Rationale:** `useGithubPullRequestQuery` and
+`useGithubPullRequestDetectionQuery` use `skipToken` to avoid calling `gh`-backed
+commands without a selected task, but they still allocate cache entries keyed by
+`queryKeys.github.pullRequest(undefined)` and
+`queryKeys.github.pullRequestDetection(undefined)`. The existing GitHub query
+test only guards the old `-1` sentinel, so the cache catalog still admits the
+current no-task placeholder shape.
+
+**Docs checked:** Context7 `/tanstack/query` docs. Current docs show
+`enabled`/`skipToken` as conditional execution tools and dynamic `useQueries`
+with an empty `queries` array when dependent ids do not exist. The GitHub PR
+status/detection keys are task-owned, so they should not exist until a task id
+exists.
+
+**Claimed files:**
+- `src/queries/github.ts`
+- `src/queries/github.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: extend the GitHub query test to expect no
+  `queryKeys.github.pullRequest(undefined)` or
+  `queryKeys.github.pullRequestDetection(undefined)` entries with no selected
+  task; run `pnpm vitest run src/queries/github.test.tsx`.
+- Focused green: rerun that suite after moving each PR read to a dynamic
+  `useQueries` array and returning only the data/loading surface its consumers use.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready for collision check and commit.
+
+**Evidence so far:**
+- `git status --short --branch` was clean after pushing `3df6c5c`.
+- `git log --oneline --decorate -10` shows `3df6c5c` at both local and
+  `origin/main`.
+- `CLAUDE_ROLLING_UPDATES.md` remains on older coverage/documentation work and
+  does not claim the GitHub query files.
+- Context7 docs checked for TanStack Query dependent queries and dynamic
+  `useQueries`.
+- Red check `pnpm vitest run src/queries/github.test.tsx` failed as expected
+  before implementation: the no-task PR-status query still created
+  `queryKeys.github.pullRequest(undefined)`.
+- Focused green `pnpm vitest run src/queries/github.test.tsx` passed: 1 file /
+  3 tests.
+- `pnpm build` passed after moving the PR status/detection reads to memoized
+  dynamic `useQueries` arrays.
+- First `pnpm verify` hit a transient `src/App.test.tsx` Settings navigation
+  failure while the GitHub query suite itself was green. A targeted
+  `pnpm vitest run src/App.test.tsx` immediately passed: 1 file / 50 tests.
+- Final `pnpm verify` passed: frontend tests (72 files / 429 tests), frontend
+  build, Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
 ---

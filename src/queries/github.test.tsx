@@ -100,5 +100,7 @@ describe("useGithubPullRequestDetectionQuery", () => {
 
     expect(client.getQueryCache().find({ queryKey: queryKeys.github.pullRequest(-1) })).toBeUndefined();
     expect(client.getQueryCache().find({ queryKey: queryKeys.github.pullRequestDetection(-1) })).toBeUndefined();
+    expect(client.getQueryCache().find({ queryKey: queryKeys.github.pullRequest(undefined) })).toBeUndefined();
+    expect(client.getQueryCache().find({ queryKey: queryKeys.github.pullRequestDetection(undefined) })).toBeUndefined();
   });
 });
