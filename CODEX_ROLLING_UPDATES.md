@@ -1411,7 +1411,7 @@ bar.
 **Commit:** `904fff6` (`refactor(diff): remove unnecessary memo wrappers`) pushed
 to `origin/main`.
 
-### Iteration 42 - in progress (2026-06-09)
+### Iteration 42 - done (2026-06-09)
 
 **Goal:** Centralize the app-view union and derive narrower navigation view
 types from it.
@@ -1435,10 +1435,43 @@ standard utility for deriving a subset union.
 - Focused: `pnpm vitest run src/taskNavigation.test.ts src/App.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/taskNavigation.test.ts src/App.test.tsx` passed (2 files, 55 tests).
+- `pnpm test` passed (59 files, 353 tests).
+- `pnpm build` passed.
+
+**Commit:** `d5b6d1b` (`refactor(navigation): centralize app view types`) pushed
+to `origin/main`.
+
+### Iteration 43 - in progress (2026-06-09)
+
+**Goal:** Remove a dead local from the GitHub read hook.
+
+**Rationale:** A TypeScript unused-symbol audit
+(`pnpm exec tsc --noEmit --noUnusedLocals --noUnusedParameters`) found one issue:
+`useGithub.ts` declared `selectedTaskId` but never read it. The hook already
+passes `selectedTask` into the GitHub query helpers and reads task ids directly
+inside `refreshPullRequest`, so the local adds no behavior or clarity.
+
+**Docs checked:** Context7 TypeScript docs for `noUnusedLocals`: TS6133 reports
+locals whose values are never read, including write-only locals.
+
+**Claimed files:**
+- `src/hooks/useGithub.ts`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Audit: `pnpm exec tsc --noEmit --noUnusedLocals --noUnusedParameters`.
+- Focused: `pnpm vitest run src/queries/github.test.tsx src/components/TaskWorkspaceOverlay.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `pnpm exec tsc --noEmit --noUnusedLocals --noUnusedParameters` passed.
+- `pnpm vitest run src/queries/github.test.tsx src/components/TaskWorkspaceOverlay.test.tsx` passed (2 files, 4 tests).
 - `pnpm test` passed (59 files, 353 tests).
 - `pnpm build` passed.
 

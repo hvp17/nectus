@@ -36,7 +36,6 @@ export function useGithub({ selectedTask, applyTask }: UseGithubInput) {
   const pullRequest = pullRequestQuery.data ?? null;
   const pullRequestLoading = pullRequestQuery.isLoading;
 
-  const selectedTaskId = selectedTask?.id;
   const selectedPrUrl = selectedTask?.prUrl ?? null;
 
   // When a worktree task has no linked PR yet, ask gh whether one already exists for
