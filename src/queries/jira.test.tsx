@@ -31,7 +31,7 @@ describe("useJiraProjectStatusesQuery", () => {
     renderHook(() => useJiraProjectStatusesQuery(null, true), { wrapper: makeWrapper(client) });
 
     expect(client.getQueryCache().find({ queryKey: queryKeys.jira.projectStatuses("") })).toBeUndefined();
-    expect(client.getQueryCache().find({ queryKey: queryKeys.jira.projectStatuses(null) })).toBeUndefined();
+    expect(client.getQueryCache().find({ queryKey: ["jira", "project-statuses", null] })).toBeUndefined();
     expect(api.jiraProjectStatuses).not.toHaveBeenCalled();
   });
 });

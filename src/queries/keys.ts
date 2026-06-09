@@ -18,28 +18,28 @@ export const queryKeys = {
   github: {
     status: () => ["github", "status"] as const,
     /** Best-effort branch PR detection for a worktree task with no linked PR. */
-    pullRequestDetection: (taskId: number | undefined) => ["github", "pull-request-detection", taskId] as const,
+    pullRequestDetection: (taskId: number) => ["github", "pull-request-detection", taskId] as const,
     /** Live PR status for one task (checks/review decision); polled while open. */
-    pullRequest: (taskId: number | undefined) => ["github", "pull-request", taskId] as const,
+    pullRequest: (taskId: number) => ["github", "pull-request", taskId] as const,
   },
 
   task: {
     /** Changed-file summary for a task's diff; refetched on the task's `session_idle`. */
-    diffSummary: (taskId: number | undefined) => ["task", "diff-summary", taskId] as const,
-    reviewLoop: (taskId: number | undefined) => ["task", "review-loop", taskId] as const,
-    reviewRuns: (taskId: number | undefined) => ["task", "review-runs", taskId] as const,
+    diffSummary: (taskId: number) => ["task", "diff-summary", taskId] as const,
+    reviewLoop: (taskId: number) => ["task", "review-loop", taskId] as const,
+    reviewRuns: (taskId: number) => ["task", "review-runs", taskId] as const,
   },
 
   prReviews: {
     list: () => ["pr-reviews"] as const,
-    runs: (reviewId: number | undefined) => ["pr-reviews", reviewId, "runs"] as const,
+    runs: (reviewId: number) => ["pr-reviews", reviewId, "runs"] as const,
   },
 
   jira: {
     status: () => ["jira", "status"] as const,
     restStatus: () => ["jira", "rest-status"] as const,
     projects: () => ["jira", "projects"] as const,
-    projectStatuses: (project: string | null) => ["jira", "project-statuses", project] as const,
+    projectStatuses: (project: string) => ["jira", "project-statuses", project] as const,
     board: () => ["jira", "board"] as const,
   },
 } as const;

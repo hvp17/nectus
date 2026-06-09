@@ -4881,7 +4881,7 @@ exists, so the null cache cell is not useful state.
   and rerun `pnpm vitest run src/queries/jira.test.tsx src/queries/optional.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready for collision check and commit.
+**Status:** verified and committed.
 
 **Evidence so far:**
 - `git status --short --branch` was clean after pushing `a53d11f`.
@@ -4904,6 +4904,70 @@ exists, so the null cache cell is not useful state.
 - Pre-commit collision check: `git fetch origin main` completed, `git log
   HEAD..origin/main` was empty, and `CLAUDE_ROLLING_UPDATES.md` still does not
   claim the JIRA query files.
+
+**Commit:** `398c00b` (`fix(jira): avoid empty project status query`) pushed
+to `origin/main`.
+
+### Iteration 125 - in progress (2026-06-09)
+
+**Goal:** Tighten query-key factory parameter types now that optional reads no
+longer create nullish placeholder cache entries.
+
+**Rationale:** `queryKeys.github.*`, `queryKeys.task.*`, `queryKeys.prReviews.runs`,
+and `queryKeys.jira.projectStatuses` still accept `undefined`/`null`, which made
+sense while disabled `skipToken` queries used nullish keys. After Iterations
+122-124, production code only calls these factories after the id/project exists,
+so the catalog should express that invariant and tests should use raw invalid
+keys when asserting those cache entries are absent.
+
+**Docs checked:** Context7 `/tanstack/query` query-key docs. Current docs say a
+query key should include each variable the query function depends on and note
+that keys are deterministically hashed.
+
+**Claimed files:**
+- `src/queries/keys.ts`
+- `src/queries/github.test.tsx`
+- `src/hooks/useTaskDiff.test.tsx`
+- `src/hooks/useTaskReviewLoop.test.tsx`
+- `src/hooks/usePrReviews.test.ts`
+- `src/queries/jira.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red/type check: narrow the query-key factory parameter types first, then run
+  `pnpm build` and observe TypeScript failures where tests still call key
+  factories with `undefined`/`null`.
+- Green: update those cache-absence assertions to use explicit raw invalid keys
+  instead of typed factories, then run the focused affected tests plus
+  `pnpm build`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready for collision check and commit.
+
+**Evidence so far:**
+- `git status --short --branch` was clean after pushing `398c00b`.
+- `git log --oneline --decorate -8` shows `398c00b` at both local and
+  `origin/main`.
+- `CLAUDE_ROLLING_UPDATES.md` remains on older coverage/documentation work and
+  does not claim query-key catalog files.
+- `rg` found no remaining `skipToken` imports after the JIRA cleanup; the only
+  nullish query-key factory calls are cache-absence assertions in tests.
+- Context7 docs checked for TanStack Query query-key dependency guidance.
+- Red/type check `pnpm build` failed after narrowing the query-key factory types:
+  TypeScript flagged every remaining test call that passed `undefined`/`null` to
+  a factory now typed for real ids/projects only.
+- Green `pnpm build` passed after changing those absence assertions to raw
+  invalid query-key arrays and removing two now-unused test imports.
+- Focused green
+  `pnpm vitest run src/queries/github.test.tsx src/hooks/usePrReviews.test.ts src/hooks/useTaskDiff.test.tsx src/hooks/useTaskReviewLoop.test.tsx src/queries/jira.test.tsx`
+  passed: 5 files / 23 tests.
+- Full `pnpm verify` passed: frontend tests (73 files / 431 tests), frontend
+  production build, Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+- Pre-commit collision check: `git fetch origin main` completed, `git log
+  HEAD..origin/main` was empty, `CLAUDE_ROLLING_UPDATES.md` still does not claim
+  the query-key files, and `rg` found no remaining nullish calls through the
+  typed query-key factories.
 
 ---
 

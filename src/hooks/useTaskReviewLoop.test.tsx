@@ -107,8 +107,8 @@ describe("useTaskReviewLoop", () => {
 
     expect(client.getQueryCache().find({ queryKey: queryKeys.task.reviewLoop(-1) })).toBeUndefined();
     expect(client.getQueryCache().find({ queryKey: queryKeys.task.reviewRuns(-1) })).toBeUndefined();
-    expect(client.getQueryCache().find({ queryKey: queryKeys.task.reviewLoop(undefined) })).toBeUndefined();
-    expect(client.getQueryCache().find({ queryKey: queryKeys.task.reviewRuns(undefined) })).toBeUndefined();
+    expect(client.getQueryCache().find({ queryKey: ["task", "review-loop", undefined] })).toBeUndefined();
+    expect(client.getQueryCache().find({ queryKey: ["task", "review-runs", undefined] })).toBeUndefined();
   });
 
   it("streams review output chunks for the selected task", async () => {

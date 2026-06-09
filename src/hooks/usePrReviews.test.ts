@@ -4,7 +4,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { usePrReviews } from "./usePrReviews";
 import { createQueryClient } from "../queries/queryClient";
-import { queryKeys } from "../queries/keys";
 import { api } from "../api";
 import type { PrReview } from "../types";
 
@@ -59,7 +58,7 @@ it("does not allocate a placeholder runs query before a review is selected", asy
   await waitFor(() => expect(api.listPrReviews).toHaveBeenCalled());
 
   expect(client.getQueryCache().find({ queryKey: ["pr-reviews", "none", "runs"] })).toBeUndefined();
-  expect(client.getQueryCache().find({ queryKey: queryKeys.prReviews.runs(undefined) })).toBeUndefined();
+  expect(client.getQueryCache().find({ queryKey: ["pr-reviews", undefined, "runs"] })).toBeUndefined();
   expect(api.listPrReviewRuns).not.toHaveBeenCalled();
 });
 

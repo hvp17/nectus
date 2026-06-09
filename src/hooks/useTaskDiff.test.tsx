@@ -4,7 +4,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
 import { createQueryClient } from "../queries/queryClient";
-import { queryKeys } from "../queries/keys";
 import { deferred } from "../test/testUtils";
 import { useTaskDiff } from "./useTaskDiff";
 import type { TaskDiffSummary } from "../types";
@@ -58,13 +57,13 @@ describe("useTaskDiff", () => {
     renderHook(() => useTaskDiff(undefined), { wrapper: makeWrapper(client) });
 
     expect(client.getQueryCache().find({ queryKey: ["task", "diff-summary", "none"] })).toBeUndefined();
-    expect(client.getQueryCache().find({ queryKey: queryKeys.task.diffSummary(undefined) })).toBeUndefined();
+    expect(client.getQueryCache().find({ queryKey: ["task", "diff-summary", undefined] })).toBeUndefined();
     expect(mockedApi.taskDiffSummary).not.toHaveBeenCalled();
   });
 
   it("hides cached summary data while no task is selected", () => {
     const client = createQueryClient();
-    client.setQueryData(queryKeys.task.diffSummary(undefined), summary);
+    client.setQueryData(["task", "diff-summary", undefined], summary);
 
     const { result } = renderHook(() => useTaskDiff(undefined), { wrapper: makeWrapper(client) });
 
