@@ -1580,7 +1580,7 @@ checks formatting and exits non-zero when rustfmt would change files.
 **Commit:** `67344d4` (`style(rust): format backend sources`) pushed to
 `origin/main`.
 
-### Iteration 47 - in progress (2026-06-09)
+### Iteration 47 - done (2026-06-09)
 
 **Goal:** Broaden the documented Clippy gate from test targets to all Cargo
 targets.
@@ -1602,12 +1602,41 @@ Tauri binary target or future examples outside the lint surface.
 - Rust lint: `cd native && cargo clippy --all-targets -- -D warnings`.
 - Docs check: `rg -n "cargo clippy --all-targets -- -D warnings" AGENTS.md README.md`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `cd native && cargo clippy --all-targets -- -D warnings` passed.
 - `rg -n "cargo clippy --all-targets -- -D warnings" AGENTS.md README.md` shows
   the all-target Clippy gate in both docs.
+
+**Commit:** `bd66bd4` (`docs: broaden rust clippy gate`) pushed to `origin/main`.
+
+### Iteration 48 - in progress (2026-06-09)
+
+**Goal:** Bring the architecture verification snippet in line with the new Rust
+format/lint gates.
+
+**Rationale:** After Iterations 45-47, README and AGENTS list `cargo fmt
+--check` and `cargo clippy --all-targets -- -D warnings`, but
+`docs/architecture.md` still showed only `cargo test` for Rust verification. The
+architecture doc is an entry-point reference, so it should point future agents
+at the same standard gate instead of drifting.
+
+**Docs checked:** Context7 Cargo Book docs for `--all-targets`, plus the
+official rustfmt/Cargo Book guidance from Iteration 46.
+
+**Claimed files:**
+- `docs/architecture.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Docs check: `rg -n "cargo fmt --check|cargo clippy --all-targets -- -D warnings" docs/architecture.md AGENTS.md README.md`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `rg -n "cargo fmt --check|cargo clippy --all-targets -- -D warnings" docs/architecture.md AGENTS.md README.md`
+  shows the Rust format and all-target Clippy gates in all three docs.
 
 ---
 
