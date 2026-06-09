@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
@@ -55,7 +55,7 @@ const firstRun: ReviewRun = {
 };
 
 function Harness({ selectedTaskId }: { selectedTaskId?: number }) {
-  const { selectedReviewLoop, selectedReviewRuns, message } = useTaskReviewLoop({
+  const { selectedReviewLoop, selectedReviewRuns, liveReviewOutput, message } = useTaskReviewLoop({
     selectedTaskId,
   });
 
@@ -63,6 +63,7 @@ function Harness({ selectedTaskId }: { selectedTaskId?: number }) {
     <>
       <output data-testid="status">{selectedReviewLoop?.status ?? "none"}</output>
       <output data-testid="runs">{selectedReviewRuns.length}</output>
+      <output data-testid="live-output">{liveReviewOutput}</output>
       <output data-testid="message">{message ?? ""}</output>
     </>
   );
@@ -108,5 +109,62 @@ describe("useTaskReviewLoop", () => {
     expect(client.getQueryCache().find({ queryKey: queryKeys.task.reviewRuns(-1) })).toBeUndefined();
     expect(client.getQueryCache().find({ queryKey: queryKeys.task.reviewLoop(undefined) })).toBeDefined();
     expect(client.getQueryCache().find({ queryKey: queryKeys.task.reviewRuns(undefined) })).toBeDefined();
+  });
+
+  it("streams review output chunks for the selected task", async () => {
+    renderWithClient(<Harness selectedTaskId={21} />);
+
+    await waitFor(() => {
+      expect(eventTestState.handlers.has("review_output")).toBe(true);
+    });
+
+    act(() => {
+      eventTestState.handlers.get("review_output")?.({
+        payload: { taskId: 21, data: "first", startOffset: 0 },
+      });
+    });
+    expect(screen.getByTestId("live-output").textContent).toBe("first");
+
+    act(() => {
+      eventTestState.handlers.get("review_output")?.({
+        payload: { taskId: 21, data: " second", startOffset: 5 },
+      });
+    });
+    expect(screen.getByTestId("live-output").textContent).toBe("first second");
+  });
+
+  it("starts a fresh live review output buffer at offset zero", async () => {
+    renderWithClient(<Harness selectedTaskId={21} />);
+
+    await waitFor(() => {
+      expect(eventTestState.handlers.has("review_output")).toBe(true);
+    });
+
+    act(() => {
+      eventTestState.handlers.get("review_output")?.({
+        payload: { taskId: 21, data: "old output", startOffset: 0 },
+      });
+      eventTestState.handlers.get("review_output")?.({
+        payload: { taskId: 21, data: "new output", startOffset: 0 },
+      });
+    });
+
+    expect(screen.getByTestId("live-output").textContent).toBe("new output");
+  });
+
+  it("ignores review output for other tasks", async () => {
+    renderWithClient(<Harness selectedTaskId={21} />);
+
+    await waitFor(() => {
+      expect(eventTestState.handlers.has("review_output")).toBe(true);
+    });
+
+    act(() => {
+      eventTestState.handlers.get("review_output")?.({
+        payload: { taskId: 99, data: "other task", startOffset: 0 },
+      });
+    });
+
+    expect(screen.getByTestId("live-output").textContent).toBe("");
   });
 });

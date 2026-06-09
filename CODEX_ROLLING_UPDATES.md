@@ -2420,7 +2420,7 @@ goes out of scope, such as component unmount.
 **Commit:** `5e79481` (`test(ui): cover terminal drag cleanup race`) pushed to
 `origin/main`.
 
-### Iteration 70 - in progress (2026-06-09)
+### Iteration 70 - done (2026-06-09)
 
 **Goal:** Make ReviewTerminalPane output replay prefix-aware.
 
@@ -2452,7 +2452,7 @@ for replacement replay and only changes the delta decision.
   `pnpm vitest run src/lib/reviewTerminalOutput.test.ts src/components/TaskWorkspace.test.tsx src/components/TaskWorkspaceOverlay.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/lib/reviewTerminalOutput.test.ts` failed as
@@ -2463,6 +2463,49 @@ for replacement replay and only changes the delta decision.
   `pnpm vitest run src/lib/reviewTerminalOutput.test.ts src/components/TaskWorkspace.test.tsx src/components/TaskWorkspaceOverlay.test.tsx`
   passed: 3 files / 31 tests.
 - `pnpm verify` passed: frontend tests (60 files / 368 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `8d132ba` (`fix(ui): reset replaced review output`) pushed to
+`origin/main`.
+
+### Iteration 71 - in progress (2026-06-09)
+
+**Goal:** Cover the live review-output event stream.
+
+**Rationale:** After making `ReviewTerminalPane` replacement-aware, the source
+hook feeding it still lacked focused tests for the `review_output` event stream.
+`useTaskReviewLoop` has three small but important behaviors: stream chunks for
+the selected task, replace the buffer when a new run starts at offset `0`, and
+ignore events for other tasks. Locking these down protects the read-only Review
+pane without changing production code.
+
+**Docs checked:** Context7 `/websites/v2_tauri_app` docs for the frontend
+`listen()` API, confirming event handlers receive an object with `payload` and
+the listener returns an unlisten function. The tests use the existing
+`useTauriEvent` mock path and fire `{ payload: ... }` events directly.
+
+**Claimed files:**
+- `src/hooks/useTaskReviewLoop.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: temporarily change the hook to always append chunks and run
+  `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx`; the offset-zero test
+  should fail.
+- Focused green test: restore production hook and run
+  `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx` failed as
+  expected with `old outputnew output` instead of `new output` after temporarily
+  changing offset-zero handling to append.
+- Focused green `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx` passed:
+  1 file / 6 tests.
+- `pnpm verify` passed: frontend tests (60 files / 371 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
