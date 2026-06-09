@@ -2751,7 +2751,7 @@ show `downloadAndInstall()` events and the Rust event model uses
 **Commit:** `5bb5911` (`test(ui): cover indeterminate updater progress`) pushed
 to `origin/main`.
 
-### Iteration 78 - in progress (2026-06-09)
+### Iteration 78 - done (2026-06-09)
 
 **Goal:** Cover updater wrapper indeterminate progress events.
 
@@ -2778,7 +2778,7 @@ reaches UI state.
   `pnpm vitest run src/lib/update.test.ts`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/lib/update.test.ts` failed as expected after
@@ -2787,6 +2787,57 @@ reaches UI state.
 - Focused green `pnpm vitest run src/lib/update.test.ts` passed: 1 file /
   7 tests.
 - `pnpm verify` passed: frontend tests (60 files / 375 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `2440c0d` (`test(ui): cover updater wrapper progress`) pushed to
+`origin/main`.
+
+### Iteration 79 - in progress (2026-06-09)
+
+**Goal:** Extract the duplicated minute tick into a shared hook.
+
+**Rationale:** `MissionControl` and `ProjectPanel` both owned the same
+`Date.now()` state, one-minute interval, and cleanup effect so elapsed agent
+times keep advancing. A small `useMinuteNow` hook keeps that lifecycle in one
+place and removes duplicate effect code from both components.
+
+**Docs checked:** Context7 `/reactjs/react.dev` docs for `useEffect` interval
+cleanup. The current docs show setting up `setInterval` inside an effect and
+returning `clearInterval(id)` from cleanup.
+
+**Claimed files:**
+- `src/hooks/useMinuteNow.ts`
+- `src/hooks/useMinuteNow.test.tsx`
+- `src/components/MissionControl.tsx`
+- `src/components/ProjectPanel.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: `pnpm vitest run src/hooks/useMinuteNow.test.tsx` should fail before
+  the hook exists.
+- Focused green tests:
+  `pnpm vitest run src/hooks/useMinuteNow.test.tsx src/lib/agentState.test.ts src/lib/sidebarAgents.test.ts`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useMinuteNow.test.tsx` failed before the
+  hook existed with an unresolved import for `./useMinuteNow`.
+- First focused run caught a test bug: `vi.setSystemTime()` followed by
+  `vi.advanceTimersByTime(60_000)` advanced the fake clock to `00:02`, not
+  `00:01`; the test now relies on timer advancement from the initial clock.
+- Focused green
+  `pnpm vitest run src/hooks/useMinuteNow.test.tsx src/lib/agentState.test.ts src/lib/sidebarAgents.test.ts`
+  passed: 3 files / 14 tests.
+- Initial full `pnpm verify` caught a real refactor miss:
+  `ProjectPanel` still used `useState` in `WorkspaceInfo` after the interval
+  state moved out; restored the `useState` import.
+- Targeted rerun
+  `pnpm vitest run src/hooks/useMinuteNow.test.tsx src/lib/agentState.test.ts src/lib/sidebarAgents.test.ts src/App.test.tsx`
+  passed: 4 files / 63 tests.
+- `pnpm verify` passed: frontend tests (61 files / 377 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

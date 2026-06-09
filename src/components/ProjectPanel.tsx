@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronRight, FolderGit2, Info, Plus, Settings2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { SidebarAgentRow } from "./SidebarAgentRow";
+import { useMinuteNow } from "../hooks/useMinuteNow";
 import { AGENT_STATE_META } from "../lib/agentState";
 import { buildSidebarAgents, dominantState } from "../lib/sidebarAgents";
 import type { AgentRow } from "../lib/agentState";
@@ -59,12 +60,7 @@ export function ProjectPanel({
   busy,
   loading,
 }: ProjectPanelProps) {
-  // The panel is always mounted, so it owns the elapsed-time tick (like Mission Control).
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 60_000);
-    return () => window.clearInterval(id);
-  }, []);
+  const now = useMinuteNow();
 
   const repoNames = useMemo(() => new Map(repos.map((repo) => [repo.id, repo.name])), [repos]);
   const { byRepo, byWorkspace } = useMemo(

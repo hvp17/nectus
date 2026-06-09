@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { CheckCheck, GitBranch, GitPullRequest, MessageSquareReply, RefreshCw, Radio, Terminal } from "lucide-react";
 import { Button } from "./ui/button";
 import { AgentLogo } from "./AgentBrand";
+import { useMinuteNow } from "../hooks/useMinuteNow";
 import {
   ACTIVE_AGENT_STATES,
   AGENT_STATE_META,
@@ -39,13 +40,7 @@ export function MissionControl({
   onOpenPr,
   onRefresh,
 }: MissionControlProps) {
-  // Tick once a minute so the relative elapsed times ("2m", "1h") keep advancing
-  // even when nothing else re-renders.
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 60_000);
-    return () => window.clearInterval(id);
-  }, []);
+  const now = useMinuteNow();
 
   const repoNames = useMemo(() => new Map(repos.map((repo) => [repo.id, repo.name])), [repos]);
   const rows = useMemo(
