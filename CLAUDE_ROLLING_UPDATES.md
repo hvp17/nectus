@@ -503,6 +503,28 @@ direct inspection of `resolveAgentProfileId`/`deriveColumns`/`useOptionalQuery`)
 three simplifications (stepper, ReviewsPage reviewer logic, JIRA options) targeted the
 clear deep-nested-ternary / duplication in files Codex maintains.
 
+## Goal 3 — fix unrequested styling regressions (2026-06-09)
+
+### G3.1 — buttons turned purple → restore the teal brand hue
+
+`42314fd` ("adopt Command design tokens, phase 0", a prior session) changed
+`--primary` from the original teal (`oklch(0.56 0.118 199)`) to purple
+(`oklch(0.55 0.20 277)`, hue 277). The Command *mockup* did specify purple, but the
+user did not want purple buttons. Fix: shifted the **hue 277 → 199** across all 16
+primary-family tokens (light+dark: `--primary`, `--accent`, `--accent-foreground`,
+`--ring`, `--chart-1`, `--sidebar-primary`, `--sidebar-accent`,
+`--sidebar-accent-foreground`, `--sidebar-ring`), keeping each token's lightness/
+chroma. Buttons/focus/selection now read as the teal brand color again. Left the
+neutral grays (hue 285) and the distinct review-status/chart-3 violet (hue 300) as-is
+(intentional, not the button color). `oklch(0.55 0.20 199)` gamut-clamps to a vivid
+in-gamut teal ≈ the original brand teal.
+
+**Audit of other styling:** no stray purple elsewhere; the only hex colors are
+intentional (JIRA official priority-icon colors in `jiraVisuals.tsx`, white badge
+text) — not theme tokens, not regressions.
+
+**Verification:** `pnpm build` (ok); `pnpm test` (432). **Status:** committed; release bump to follow.
+
 ## Backlog / future work (deeper investigation — no quick wins left)
 
 - Targeted coverage for any *new* untested logic as it lands (watch the diff).
