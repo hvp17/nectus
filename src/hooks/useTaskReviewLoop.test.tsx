@@ -101,14 +101,14 @@ describe("useTaskReviewLoop", () => {
     expect(mockedApi.listTaskReviewRuns).not.toHaveBeenCalled();
   });
 
-  it("does not allocate -1 review cache entries without a selected task", () => {
+  it("does not allocate review cache entries without a selected task", () => {
     const client = createQueryClient();
     renderWithClient(<Harness selectedTaskId={undefined} />, client);
 
     expect(client.getQueryCache().find({ queryKey: queryKeys.task.reviewLoop(-1) })).toBeUndefined();
     expect(client.getQueryCache().find({ queryKey: queryKeys.task.reviewRuns(-1) })).toBeUndefined();
-    expect(client.getQueryCache().find({ queryKey: queryKeys.task.reviewLoop(undefined) })).toBeDefined();
-    expect(client.getQueryCache().find({ queryKey: queryKeys.task.reviewRuns(undefined) })).toBeDefined();
+    expect(client.getQueryCache().find({ queryKey: queryKeys.task.reviewLoop(undefined) })).toBeUndefined();
+    expect(client.getQueryCache().find({ queryKey: queryKeys.task.reviewRuns(undefined) })).toBeUndefined();
   });
 
   it("streams review output chunks for the selected task", async () => {

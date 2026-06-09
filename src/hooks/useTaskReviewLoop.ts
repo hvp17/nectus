@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "../queries/keys";
+import { useOptionalQuery } from "../queries/optional";
 import { useTauriEvent } from "./useTauriEvent";
 import type { ReviewLoop, ReviewOutputEvent, ReviewRun } from "../types";
 
@@ -19,10 +20,6 @@ const EMPTY_RUNS: ReviewRun[] = [];
  * `stopPairLoop` keep working unchanged. The `review_loop_updated` subscription
  * keeps the cache + the task-board summary live; `review_output` streams the
  * reviewer's stdout into the ephemeral `liveReviewOutput` buffer (never cached).
- *
- * The optional-id key shared by the queries and the setters means an imperative
- * `setSelectedReviewLoop(...)` made while no task is selected still lands in the
- * same disabled cache cell, preserving the immediate "reviewing" affordance.
  */
 export function useTaskReviewLoop({ selectedTaskId, onMessage }: UseTaskReviewLoopArgs) {
   const queryClient = useQueryClient();
@@ -50,16 +47,24 @@ export function useTaskReviewLoop({ selectedTaskId, onMessage }: UseTaskReviewLo
     [onMessage],
   );
 
-  const loopQuery = useQuery({
-    queryKey: queryKeys.task.reviewLoop(selectedTaskId),
-    queryFn: selectedTaskId !== undefined ? () => api.getTaskReviewLoop(selectedTaskId) : skipToken,
-    staleTime: 0,
-  });
-  const runsQuery = useQuery({
-    queryKey: queryKeys.task.reviewRuns(selectedTaskId),
-    queryFn: selectedTaskId !== undefined ? () => api.listTaskReviewRuns(selectedTaskId) : skipToken,
-    staleTime: 0,
-  });
+  const loopQuery = useOptionalQuery<ReviewLoop | null>(
+    selectedTaskId === undefined
+      ? null
+      : {
+          queryKey: queryKeys.task.reviewLoop(selectedTaskId),
+          queryFn: () => api.getTaskReviewLoop(selectedTaskId),
+          staleTime: 0,
+        },
+  );
+  const runsQuery = useOptionalQuery<ReviewRun[]>(
+    selectedTaskId === undefined
+      ? null
+      : {
+          queryKey: queryKeys.task.reviewRuns(selectedTaskId),
+          queryFn: () => api.listTaskReviewRuns(selectedTaskId),
+          staleTime: 0,
+        },
+  );
 
   // Surface a load failure via `onMessage`, matching the old try/catch.
   useEffect(() => {
@@ -72,13 +77,17 @@ export function useTaskReviewLoop({ selectedTaskId, onMessage }: UseTaskReviewLo
 
   const setSelectedReviewLoop = useCallback(
     (loop: ReviewLoop | null) => {
-      queryClient.setQueryData(queryKeys.task.reviewLoop(selectedTaskIdRef.current), loop);
+      const taskId = selectedTaskIdRef.current;
+      if (taskId === undefined) return;
+      queryClient.setQueryData(queryKeys.task.reviewLoop(taskId), loop);
     },
     [queryClient],
   );
   const setSelectedReviewRuns = useCallback(
     (runs: ReviewRun[]) => {
-      queryClient.setQueryData(queryKeys.task.reviewRuns(selectedTaskIdRef.current), runs);
+      const taskId = selectedTaskIdRef.current;
+      if (taskId === undefined) return;
+      queryClient.setQueryData(queryKeys.task.reviewRuns(taskId), runs);
     },
     [queryClient],
   );

@@ -4755,7 +4755,7 @@ dependent ids are unavailable.
   `pnpm vitest run src/queries/optional.test.tsx src/hooks/usePrReviews.test.ts src/hooks/useTaskDiff.test.tsx src/queries/github.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready for staging and commit.
+**Status:** verified and committed.
 
 **Evidence so far:**
 - `git status --short --branch` was clean after pushing `dd07fba`.
@@ -4791,6 +4791,64 @@ dependent ids are unavailable.
 - Pre-commit collision check: `git fetch origin main` completed, `git log
   HEAD..origin/main` was empty, and `CLAUDE_ROLLING_UPDATES.md` remains on older
   coverage/doc-audit work with no claim on these files.
+
+**Commit:** `ec630a9` (`refactor(queries): share optional query helper`) pushed
+to `origin/main`.
+
+### Iteration 123 - in progress (2026-06-09)
+
+**Goal:** Remove the remaining task review-loop `undefined` placeholder query
+entries and route its optional reads through `useOptionalQuery`.
+
+**Rationale:** Iteration 122 centralized the app's "no id yet, create no query"
+policy for optional dynamic reads. `useTaskReviewLoop` still uses `skipToken`
+with `queryKeys.task.reviewLoop(undefined)` and `queryKeys.task.reviewRuns(undefined)`,
+which leaves placeholder cache cells even though the hook's setters track the
+current selected task via `selectedTaskIdRef`.
+
+**Docs checked:** Context7 `/tanstack/query` docs. Current docs describe
+`skipToken` as type-safe disabling for a fixed `useQuery`, and `useQueries` with
+an empty `queries` array for dependent dynamic queries when ids are unavailable.
+
+**Claimed files:**
+- `src/hooks/useTaskReviewLoop.ts`
+- `src/hooks/useTaskReviewLoop.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: change the no-selected-task test to expect no
+  `reviewLoop(undefined)` / `reviewRuns(undefined)` cache entries, then run
+  `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx` and observe failure.
+- Focused green: refactor the two reads to `useOptionalQuery`, keep selected-task
+  behavior and live-output behavior unchanged, then rerun
+  `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready for collision check and commit.
+
+**Evidence so far:**
+- `git status --short --branch` was clean after pushing `ec630a9`.
+- `git log --oneline --decorate -8` shows `ec630a9` at both local and
+  `origin/main`.
+- `CLAUDE_ROLLING_UPDATES.md` remains on older coverage/documentation work and
+  does not claim `useTaskReviewLoop`.
+- Context7 docs checked for TanStack Query `skipToken` and dynamic `useQueries`
+  dependent-query patterns.
+- Red check `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx` failed on the
+  new no-placeholder assertion: the current `skipToken` query created a disabled
+  `["task","review-loop",undefined]` cache entry.
+- Green `pnpm vitest run src/hooks/useTaskReviewLoop.test.tsx` passed after
+  moving the two optional reads to `useOptionalQuery` and guarding the imperative
+  setters when no task is selected: 1 file / 8 tests.
+- Focused green
+  `pnpm vitest run src/queries/optional.test.tsx src/hooks/useTaskReviewLoop.test.tsx`
+  passed: 2 files / 10 tests.
+- Full `pnpm verify` passed: frontend tests (73 files / 431 tests), frontend
+  production build, Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+- Pre-commit collision check: `git fetch origin main` completed, `git log
+  HEAD..origin/main` was empty, and `CLAUDE_ROLLING_UPDATES.md` still does not
+  claim the review-loop files.
 
 ---
 
