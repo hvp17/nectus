@@ -81,6 +81,17 @@ describe("useSettingsActions", () => {
     vi.clearAllMocks();
   });
 
+  it("keeps settings actions stable when dependencies are stable", () => {
+    const { result, rerender } = setup();
+
+    const firstSaveAppSettings = result.current.saveAppSettings;
+    const firstSaveAgentProfile = result.current.saveAgentProfile;
+    rerender();
+
+    expect(result.current.saveAppSettings).toBe(firstSaveAppSettings);
+    expect(result.current.saveAgentProfile).toBe(firstSaveAgentProfile);
+  });
+
   it("stores saved settings, selects the returned default agent, and invalidates bootstrap reads", async () => {
     const input = settingsInput();
     const updated = appSettingsFixture({

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "../queries/keys";
@@ -26,34 +26,38 @@ export function useSettingsActions() {
     [queryClient],
   );
 
-  const saveAppSettings = (input: AppSettingsInput) =>
-    run(
-      async () => {
-        const updated = await api.updateAppSettings(input);
-        setSettings(updated);
-        // The default agent may have changed; reflect it. useShellBootstrap's
-        // getState() guard keeps the bootstrap default-agent effect from
-        // re-overriding this pick.
-        setSelectedAgentProfileId(updated.defaultAgentProfileId ?? undefined);
-        setMessage("Settings saved");
-        await refresh();
-        return updated;
-      },
-      { busy: true, rethrow: true },
-    );
+  const saveAppSettings = useCallback(
+    (input: AppSettingsInput) =>
+      run(
+        async () => {
+          const updated = await api.updateAppSettings(input);
+          setSettings(updated);
+          // The default agent may have changed; reflect it. useShellBootstrap's
+          // getState() guard keeps the bootstrap default-agent effect from
+          // re-overriding this pick.
+          setSelectedAgentProfileId(updated.defaultAgentProfileId ?? undefined);
+          setMessage("Settings saved");
+          await refresh();
+          return updated;
+        },
+        { busy: true, rethrow: true },
+      ),
+    [refresh, run, setMessage, setSelectedAgentProfileId, setSettings],
+  );
 
-  const saveAgentProfile = (
-    profile: Partial<AgentProfile> & Pick<AgentProfile, "name" | "agentKind" | "command">,
-  ) =>
-    run(
-      async () => {
-        const saved = await api.upsertAgentProfile(profile);
-        setAgentProfiles((current) => upsertById(current, saved));
-        setMessage(`Saved ${saved.name}`);
-        return saved;
-      },
-      { busy: true, rethrow: true },
-    );
+  const saveAgentProfile = useCallback(
+    (profile: Partial<AgentProfile> & Pick<AgentProfile, "name" | "agentKind" | "command">) =>
+      run(
+        async () => {
+          const saved = await api.upsertAgentProfile(profile);
+          setAgentProfiles((current) => upsertById(current, saved));
+          setMessage(`Saved ${saved.name}`);
+          return saved;
+        },
+        { busy: true, rethrow: true },
+      ),
+    [run, setAgentProfiles, setMessage],
+  );
 
   return { saveAppSettings, saveAgentProfile };
 }

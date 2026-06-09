@@ -3482,7 +3482,7 @@ change.
 **Commit:** `b526c2b` (`refactor(ui): stabilize project add callback`) pushed
 to `origin/main`.
 
-### Iteration 95 - in progress (2026-06-09)
+### Iteration 95 - done (2026-06-09)
 
 **Goal:** Stabilize the workspace action callbacks returned by
 `useWorkspaceActions`.
@@ -3512,7 +3512,7 @@ unchanged.
   returned actions in `useCallback`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useWorkspaceActions.test.tsx` failed as
@@ -3521,6 +3521,50 @@ unchanged.
 - Focused green `pnpm vitest run src/hooks/useWorkspaceActions.test.tsx` passed:
   1 file / 4 tests.
 - `pnpm verify` passed: frontend tests (69 files / 407 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `2137d8d` (`refactor(ui): stabilize workspace action callbacks`)
+pushed to `origin/main`.
+
+### Iteration 96 - in progress (2026-06-09)
+
+**Goal:** Stabilize the settings action callbacks returned by
+`useSettingsActions`.
+
+**Rationale:** `useSettingsActions` exposes `saveAppSettings` and
+`saveAgentProfile` as hook API actions, but both are recreated on every render.
+React's custom-hook guidance recommends wrapping returned functions in
+`useCallback`; doing the same here makes the settings action API consistent with
+the project, workspace, and JIRA action hooks.
+
+**Docs checked:** Context7 `/reactjs/react.dev` `useCallback` docs. Current
+guidance recommends wrapping functions returned from custom hooks and supplying
+dependencies so the callbacks are reused while those dependencies are unchanged.
+
+**Claimed files:**
+- `src/hooks/useSettingsActions.ts`
+- `src/hooks/useSettingsActions.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add a callback-stability test and run
+  `pnpm vitest run src/hooks/useSettingsActions.test.tsx`; it should fail while
+  the settings actions are inline functions.
+- Focused green: rerun
+  `pnpm vitest run src/hooks/useSettingsActions.test.tsx` after wrapping the
+  returned actions in `useCallback`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useSettingsActions.test.tsx` failed as
+  expected before implementation; `saveAppSettings` had a new function identity
+  after rerender.
+- Focused green `pnpm vitest run src/hooks/useSettingsActions.test.tsx` passed:
+  1 file / 3 tests.
+- `pnpm verify` passed: frontend tests (69 files / 408 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
