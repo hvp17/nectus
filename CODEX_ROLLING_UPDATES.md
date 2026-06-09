@@ -2115,7 +2115,7 @@ dependencies change and when a component unmounts.
 **Commit:** `d65a065` (`test(ui): cover theme listener cleanup`) pushed to
 `origin/main`.
 
-### Iteration 62 - in progress (2026-06-09)
+### Iteration 62 - done (2026-06-09)
 
 **Goal:** Avoid unnecessary system color-scheme queries for explicit themes.
 
@@ -2140,7 +2140,7 @@ browser APIs using setup/cleanup, and cleanup on dependency changes/unmount.
 - Focused green test: `pnpm vitest run src/hooks/useAppTheme.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useAppTheme.test.tsx` failed as expected:
@@ -2149,6 +2149,44 @@ browser APIs using setup/cleanup, and cleanup on dependency changes/unmount.
 - Focused green test `pnpm vitest run src/hooks/useAppTheme.test.tsx` passed:
   1 file / 6 tests.
 - `pnpm verify` passed: frontend tests (59 files / 358 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `5b01f16` (`refactor(ui): avoid explicit theme media query`) pushed
+to `origin/main`.
+
+### Iteration 63 - in progress (2026-06-09)
+
+**Goal:** Cover the Tauri event helper's async cleanup and error contract.
+
+**Rationale:** `useTauriEvent` is the shared frontend wrapper around Tauri's
+`listen` API. Its comment promises two important lifecycle guarantees: if the
+component unmounts before `listen()` resolves, the late unlisten callback is
+called immediately, and rejected subscriptions surface through `onError` while
+mounted. Those are exactly the memory-leak/error-surfacing edges the helper was
+created to centralize, but the current tests cover only the already-resolved
+unmount path and the latest-handler path.
+
+**Docs checked:** Context7 Tauri v2 event docs for `listen`: it returns an
+unlisten function, and that function must be called when the listener goes out of
+scope, such as when a component unmounts.
+
+**Claimed files:**
+- `src/hooks/useTauriEvent.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused test: `pnpm vitest run src/hooks/useTauriEvent.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Initial full `pnpm verify` caught a TypeScript-only issue in the deferred
+  `listen()` mock shape; the mock now returns the same unlisten spy type as the
+  shared hoisted mock.
+- `pnpm vitest run src/hooks/useTauriEvent.test.tsx` passed: 1 file / 7 tests.
+- `pnpm verify` passed: frontend tests (59 files / 360 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

@@ -48,6 +48,29 @@ describe("useTauriEvent", () => {
     expect(unlistens[0]).toHaveBeenCalledTimes(1);
   });
 
+  it("unsubscribes when listen resolves after unmount", async () => {
+    const unlisten = vi.fn(() => listeners.delete("ping"));
+    let resolveListen: ((unlistenCallback: typeof unlisten) => void) | undefined;
+    listenMock.mockImplementationOnce((name: string, handler: (event: { payload: unknown }) => void) => {
+      listeners.set(name, handler);
+      unlistens.push(unlisten);
+      return new Promise<typeof unlisten>((resolve) => {
+        resolveListen = resolve;
+      });
+    });
+
+    const { unmount } = renderHook(() => useTauriEvent("ping", vi.fn()));
+
+    unmount();
+
+    await act(async () => {
+      resolveListen?.(unlisten);
+    });
+
+    expect(unlisten).toHaveBeenCalledTimes(1);
+    expect(listeners.has("ping")).toBe(false);
+  });
+
   it("does not subscribe while disabled", () => {
     renderHook(() => useTauriEvent("ping", vi.fn(), { enabled: false }));
     expect(listenMock).not.toHaveBeenCalled();
@@ -73,5 +96,15 @@ describe("useTauriEvent", () => {
     expect(first).not.toHaveBeenCalled();
     expect(second).toHaveBeenCalledWith(1);
     expect(listenMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces subscription failures through onError", async () => {
+    const error = new Error("listen failed");
+    const onError = vi.fn();
+    listenMock.mockRejectedValueOnce(error);
+
+    renderHook(() => useTauriEvent("ping", vi.fn(), { onError }));
+
+    await waitFor(() => expect(onError).toHaveBeenCalledWith(error));
   });
 });
