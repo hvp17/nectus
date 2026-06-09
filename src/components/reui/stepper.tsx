@@ -132,7 +132,6 @@ function Stepper({
     [
       currentStep,
       handleSetActiveStep,
-      children,
       orientation,
       registerTrigger,
       triggerNodes,
@@ -213,7 +212,7 @@ function StepperTrigger({
   tabIndex,
   ...props
 }: StepperTriggerProps) {
-  const { state, isLoading } = useStepItem()
+  const { state, isLoading, step, isDisabled } = useStepItem()
   const stepperCtx = useStepper()
   const {
     setActiveStep,
@@ -225,7 +224,6 @@ function StepperTrigger({
     focusFirst,
     focusLast,
   } = stepperCtx
-  const { step, isDisabled } = useStepItem()
   const isSelected = activeStep === step
   const id = `stepper-tab-${step}`
   const panelId = `stepper-panel-${step}`

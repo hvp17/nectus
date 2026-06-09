@@ -972,7 +972,7 @@ rendering components actually consume.
 **Commit:** `3061a78` (`refactor(stepper): remove unused step count context`)
 pushed to `origin/main`.
 
-### Iteration 29 - in progress (2026-06-09)
+### Iteration 29 - done (2026-06-09)
 
 **Goal:** Trim unused workflow stepper subcomponents from the local `reui` file.
 
@@ -995,11 +995,42 @@ the app actually composes.
 - Focused: `pnpm vitest run src/components/TaskWorkspace.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `rg -n "StepperSeparator|StepperPanel|StepperContent|StepperContentProps" src docs README.md AGENTS.md`
   returned no matches.
+- `pnpm vitest run src/components/TaskWorkspace.test.tsx` passed (26 tests).
+- `pnpm test` passed (59 files, 352 tests).
+- `pnpm build` passed.
+
+**Commit:** `22bcf6d` (`refactor(stepper): remove unused local subcomponents`)
+pushed to `origin/main`.
+
+### Iteration 30 - in progress (2026-06-09)
+
+**Goal:** Remove stale stepper memo dependencies and duplicate context reads.
+
+**Rationale:** After removing `stepsCount`, the stepper context memo no longer
+reads `children`, but still included it in the dependency list. The trigger also
+called `useStepItem()` twice in one render. Removing both keeps the component
+logic aligned to the values it actually reads.
+
+**Docs checked:** Context7 React `useMemo` docs for dependency arrays: include
+the reactive values referenced by the calculation so memo work does not re-run
+unnecessarily.
+
+**Claimed files:**
+- `src/components/reui/stepper.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/components/TaskWorkspace.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
 - `pnpm vitest run src/components/TaskWorkspace.test.tsx` passed (26 tests).
 - `pnpm test` passed (59 files, 352 tests).
 - `pnpm build` passed.
