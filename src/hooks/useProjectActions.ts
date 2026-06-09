@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { api } from "../api";
 import { useRefreshData } from "../queries/core";
 import { useGuardedAction } from "./useGuardedAction";
@@ -11,20 +12,23 @@ export function useProjectActions() {
   const run = useGuardedAction(setMessage, setBusy);
   const refresh = useRefreshData();
 
-  const addProject = () =>
-    run(
-      async () => {
-        const selected = await api.pickRepositoryFolder();
-        if (!selected) return;
-        const repo = await api.addRepo(selected);
-        // Select the new repo before the refetch lands so the default-repo effect
-        // doesn't override it.
-        setSelectedRepoId(repo.id);
-        await refresh();
-        setMessage(`Added ${repo.name}`);
-      },
-      { busy: true },
-    );
+  const addProject = useCallback(
+    () =>
+      run(
+        async () => {
+          const selected = await api.pickRepositoryFolder();
+          if (!selected) return;
+          const repo = await api.addRepo(selected);
+          // Select the new repo before the refetch lands so the default-repo effect
+          // doesn't override it.
+          setSelectedRepoId(repo.id);
+          await refresh();
+          setMessage(`Added ${repo.name}`);
+        },
+        { busy: true },
+      ),
+    [refresh, run, setMessage, setSelectedRepoId],
+  );
 
   return { addProject };
 }

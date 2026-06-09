@@ -3396,7 +3396,7 @@ invalid and refetches active ones by default, which matches the shared
 **Commit:** `df27b98` (`test(ui): share bootstrap query helpers`) pushed to
 `origin/main`.
 
-### Iteration 93 - in progress (2026-06-09)
+### Iteration 93 - done (2026-06-09)
 
 **Goal:** Stabilize the JIRA board config action callback.
 
@@ -3423,7 +3423,7 @@ guidance explicitly recommends wrapping functions returned from custom hooks.
   `useCallback`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useJiraBoardView.test.tsx` failed as
@@ -3432,6 +3432,50 @@ guidance explicitly recommends wrapping functions returned from custom hooks.
 - Focused green `pnpm vitest run src/hooks/useJiraBoardView.test.tsx` passed:
   1 file / 1 test.
 - `pnpm verify` passed: frontend tests (69 files / 405 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `bb8d91d` (`refactor(ui): stabilize jira board config action`)
+pushed to `origin/main`.
+
+### Iteration 94 - in progress (2026-06-09)
+
+**Goal:** Stabilize the project-add action callback returned by
+`useProjectActions`.
+
+**Rationale:** `useProjectActions` exposes `addProject` to shell/UI consumers but
+currently recreates the function on every render. React's custom-hook guidance
+recommends wrapping returned functions in `useCallback`, which keeps the hook API
+friendlier to memoized consumers and effects without changing behavior.
+
+**Docs checked:** Context7 `/reactjs/react.dev` `useCallback` docs. Current
+guidance recommends wrapping functions returned from custom hooks and using a
+complete dependency array so the cached function is reused until dependencies
+change.
+
+**Claimed files:**
+- `src/hooks/useProjectActions.ts`
+- `src/hooks/useProjectActions.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add a callback-stability test and run
+  `pnpm vitest run src/hooks/useProjectActions.test.tsx`; it should fail while
+  `addProject` is an inline function.
+- Focused green: rerun
+  `pnpm vitest run src/hooks/useProjectActions.test.tsx` after wrapping
+  `addProject` in `useCallback`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useProjectActions.test.tsx` failed as
+  expected before implementation; `addProject` had a new function identity after
+  rerender.
+- Focused green `pnpm vitest run src/hooks/useProjectActions.test.tsx` passed:
+  1 file / 3 tests.
+- `pnpm verify` passed: frontend tests (69 files / 406 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

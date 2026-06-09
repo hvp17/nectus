@@ -47,6 +47,15 @@ describe("useProjectActions", () => {
     vi.clearAllMocks();
   });
 
+  it("keeps addProject stable when dependencies are stable", () => {
+    const { result, rerender } = setup();
+
+    const firstAddProject = result.current.addProject;
+    rerender();
+
+    expect(result.current.addProject).toBe(firstAddProject);
+  });
+
   it("does not add or refresh when folder selection is cancelled", async () => {
     mockedApi.pickRepositoryFolder.mockResolvedValue(null);
     useAppStore.setState({ selectedRepoId: 9 });
