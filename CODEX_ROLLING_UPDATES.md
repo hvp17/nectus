@@ -2623,7 +2623,7 @@ pattern.
 **Commit:** `bcab60a` (`test(ui): type task notification fixture`) pushed to
 `origin/main`.
 
-### Iteration 75 - in progress (2026-06-09)
+### Iteration 75 - done (2026-06-09)
 
 **Goal:** Narrow the updater install surface.
 
@@ -2649,7 +2649,7 @@ what the app actually uses.
   `pnpm vitest run src/lib/update.test.ts src/hooks/useAppUpdate.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Focused green
@@ -2659,6 +2659,49 @@ what the app actually uses.
   `useAppUpdate.ts` still stored the pending update as the full plugin `Update`
   type. Root cause fixed by typing that ref as `InstallableUpdate`.
 - `pnpm build` passed after the hook type fix.
+- `pnpm verify` passed: frontend tests (60 files / 373 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `9866466` (`refactor(ui): narrow updater install type`) pushed to
+`origin/main`.
+
+### Iteration 76 - in progress (2026-06-09)
+
+**Goal:** Cover updater install progress while the install is still in flight.
+
+**Rationale:** `useAppUpdate` maps Tauri updater progress events into a
+user-visible `progress` ratio during the `downloading` state, then forces
+progress to `1` when the install completes. The existing hook test only asserted
+the final `ready` state, so a regression that stopped surfacing the intermediate
+ratio could pass. Holding the mocked install open lets the test assert both
+states directly.
+
+**Docs checked:** Context7 `/websites/v2_tauri_app` updater docs for `check()`
+and `update.downloadAndInstall()` progress events. The documented JavaScript
+flow reports `Started` with `contentLength`, then `Progress` with
+`chunkLength`, then `Finished`.
+
+**Claimed files:**
+- `src/hooks/useAppUpdate.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: temporarily break the hook's progress ratio and run
+  `pnpm vitest run src/hooks/useAppUpdate.test.tsx`; the progress assertion
+  should fail.
+- Focused green test: restore the hook and run
+  `pnpm vitest run src/hooks/useAppUpdate.test.tsx`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useAppUpdate.test.tsx` failed as expected
+  after temporarily changing the hook to report `0` for known-length downloads:
+  the new assertion expected `0.5` while `downloading`.
+- Focused green `pnpm vitest run src/hooks/useAppUpdate.test.tsx` passed: 1 file /
+  6 tests.
 - `pnpm verify` passed: frontend tests (60 files / 373 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.

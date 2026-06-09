@@ -53,17 +53,30 @@ describe("useAppUpdate", () => {
 
   it("downloads then becomes ready, reporting progress", async () => {
     lib.checkForUpdate.mockResolvedValue(fakeResult());
+    let finishInstall: (() => void) | undefined;
     lib.installUpdate.mockImplementation(
       async (_u: unknown, onProgress: (p: { downloaded: number; contentLength: number | null }) => void) => {
         onProgress({ downloaded: 50, contentLength: 100 });
+        await new Promise<void>((resolve) => {
+          finishInstall = resolve;
+        });
       },
     );
     render(<Probe />);
     await waitFor(() => expect(latest.status).toBe("available"));
     await act(async () => {
-      await latest.installUpdate();
+      void latest.installUpdate();
     });
-    expect(latest.status).toBe("ready");
+    await waitFor(() => {
+      expect(latest.status).toBe("downloading");
+      expect(latest.progress).toBe(0.5);
+      expect(finishInstall).toBeDefined();
+    });
+    await act(async () => {
+      finishInstall?.();
+    });
+    await waitFor(() => expect(latest.status).toBe("ready"));
+    expect(latest.progress).toBe(1);
     expect(lib.installUpdate).toHaveBeenCalledTimes(1);
   });
 
