@@ -460,6 +460,7 @@ Current behavior:
 - Paste a pull request URL (`https://github.com/owner/repo/pull/123`) and pick a
   reviewer profile (shown as selectable chips), then start the review. Selecting
   **two or more** reviewers runs a multi-model **consensus** review (see below).
+  If no reviewer profile is available, the start action stays disabled.
 - Nectus resolves the PR's `owner/repo` to a project already added to Nectus by
   matching its git remote (`origin`). If no project matches, the action reports that
   the repository must be added as a project first. No filesystem scanning is done.

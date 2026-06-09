@@ -132,6 +132,28 @@ it("runs a consensus review when two or more reviewers are selected", () => {
   expect(onCreateReview).toHaveBeenCalledWith("https://github.com/owner/repo/pull/9", [1, 2], 3);
 });
 
+it("does not submit a PR review when no reviewer profile is available", () => {
+  const onCreateReview = vi.fn();
+  renderPage({
+    prReviews: [],
+    selectedPrReview: undefined,
+    selectedPrReviewId: undefined,
+    agentProfiles: [],
+    defaultReviewerProfileId: undefined,
+    onCreateReview,
+  });
+
+  fireEvent.change(screen.getByLabelText("Pull request URL"), {
+    target: { value: "https://github.com/owner/repo/pull/9" },
+  });
+
+  expect(screen.getByRole("button", { name: /review pull request/i })).toBeDisabled();
+
+  fireEvent.submit(screen.getByRole("form", { name: /start a pr review/i }));
+
+  expect(onCreateReview).not.toHaveBeenCalled();
+});
+
 it("offers an empty state when there are no reviews", () => {
   renderPage({ prReviews: [], selectedPrReview: undefined, selectedPrReviewId: undefined });
 

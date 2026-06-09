@@ -80,6 +80,7 @@ export function ReviewsPage({
 
   // Two or more reviewers turns the review into a multi-model consensus run.
   const consensus = selectedReviewerIds.length >= 2;
+  const hasReviewer = selectedReviewerIds.length > 0 || defaultReviewerProfileId !== undefined;
 
   const toggleReviewer = (id: number) => {
     setSelectedReviewerIds((current) =>
@@ -94,12 +95,12 @@ export function ReviewsPage({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const trimmed = prUrl.trim();
-    if (!trimmed || creatingReview) return;
     const reviewers = selectedReviewerIds.length
       ? selectedReviewerIds
       : defaultReviewerProfileId
         ? [defaultReviewerProfileId]
         : [];
+    if (!trimmed || creatingReview || reviewers.length === 0) return;
     onCreateReview(trimmed, reviewers, consensus ? rounds : undefined);
     setPrUrl("");
   };
@@ -132,7 +133,11 @@ export function ReviewsPage({
             value={prUrl}
             onChange={(event) => setPrUrl(event.target.value)}
           />
-          <Button type="submit" disabled={creatingReview || !prUrl.trim()} aria-label="Review pull request">
+          <Button
+            type="submit"
+            disabled={creatingReview || !prUrl.trim() || !hasReviewer}
+            aria-label="Review pull request"
+          >
             {creatingReview ? (
               <LoaderCircle data-icon="inline-start" className="animate-spin" />
             ) : (

@@ -4165,7 +4165,7 @@ that can be monitored with a `change` event.
   defaulting the missing theme to `system`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useAppTheme.test.tsx` failed as expected
@@ -4174,6 +4174,51 @@ that can be monitored with a `change` event.
 - Focused green `pnpm vitest run src/hooks/useAppTheme.test.tsx` passed:
   1 file / 7 tests.
 - `pnpm verify` passed: frontend tests (70 files / 421 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `09744f7` (`fix(ui): honor system theme before settings load`) pushed
+to `origin/main`.
+
+### Iteration 111 - in progress (2026-06-09)
+
+**Goal:** Prevent PR-review form submission when no reviewer profile is
+available.
+
+**Rationale:** `ReviewsPage` can call `onCreateReview` with an empty reviewer
+list if the URL is filled but the frontend has no selectable reviewer profile.
+The backend has a fallback/default guard, but the controlled form already knows
+the submission cannot be satisfied from the UI and should leave the submit action
+disabled/no-op.
+
+**Docs checked:** Context7 `/reactjs/react.dev` form state examples. Current
+React docs show submit handlers calling `preventDefault()` and controlled forms
+driving button disabled state from component state such as empty input or
+submitting status.
+
+**Claimed files:**
+- `src/components/ReviewsPage.tsx`
+- `src/components/ReviewsPage.test.tsx`
+- `docs/features.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: add a ReviewsPage test with no agent profiles and a filled PR URL;
+  run `pnpm vitest run src/components/ReviewsPage.test.tsx` and see the button
+  remain enabled / submit call happen.
+- Focused green: rerun `pnpm vitest run src/components/ReviewsPage.test.tsx`
+  after deriving a reviewer-available guard for the button and submit handler.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/components/ReviewsPage.test.tsx` failed as
+  expected before implementation; the Review PR submit button was enabled with
+  no reviewer profiles available.
+- Focused green `pnpm vitest run src/components/ReviewsPage.test.tsx` passed:
+  1 file / 7 tests.
+- `pnpm verify` passed: frontend tests (70 files / 422 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
