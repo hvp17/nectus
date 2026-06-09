@@ -55,7 +55,7 @@ your own files and never capture the other agent's in-progress work:
 
 ## Iteration log
 
-### Iteration 1 — done (2026-06-09) · commit pending
+### Iteration 1 — done (2026-06-09)
 
 **Goal:** Remove the unused `@tanstack/react-router` dependency.
 
@@ -78,7 +78,7 @@ removal does not cascade.
 
 ---
 
-### Iteration 2 — done (2026-06-09) · commit pending
+### Iteration 2 — done (2026-06-09)
 
 **Goal (directive 2 — simplicity):** Replace `UpdateCard`'s 5-level nested ternary
 (`detail`) with a readable `detailMessage()` helper using early returns, mirroring
@@ -106,7 +106,7 @@ top-to-bottom. No behavior change — same strings, same order.
 - `kbd.tsx` is vendored but unused; tooltip CSS targets `data-[slot=kbd]`. Leave it
   (it composes with Tooltip; removing reduces the palette, against directive 1).
 
-### Iteration 3 — done (2026-06-09) · commit pending
+### Iteration 3 — done (2026-06-09)
 
 **Goal (directive 2 — simplicity):** Replace the dense 4-way nested ternary that
 computed `workflowStep` in `TaskWorkspace.tsx` with a named `currentWorkflowStep()`
@@ -129,7 +129,7 @@ directive-1 exception ("don't force shadcn where it adds complexity").
 
 **Status:** committed.
 
-### Iteration 4 — done (2026-06-09) · commit pending
+### Iteration 4 — done (2026-06-09)
 
 **Goal (directive 2 + best practices):** Clarify the model-mapping logic in
 `toProfileDraft` and cover its untested branches.
@@ -146,7 +146,7 @@ directive-1 exception ("don't force shadcn where it adds complexity").
 
 **Status:** committed.
 
-### Iteration 5 — done (2026-06-09) · commit pending
+### Iteration 5 — done (2026-06-09)
 
 **Goal (directive 2 — simplicity):** Replace the 5-branch nested ternary that built
 `createPullRequestDescription` in `TaskWorkspace.tsx` with a named
@@ -166,7 +166,7 @@ order — no behavior change.
 radio, or `<input>` outside `components/ui` (all form controls use shadcn). Future
 shadcn work needs careful per-surface theme judgment, not blanket swaps.
 
-### Iteration 6 — done (2026-06-09) · commit pending
+### Iteration 6 — done (2026-06-09)
 
 **Goal (directive 2 — simplicity):** Replace the nested ternary that built the board
 heading in `Workspace.tsx` with a named `boardHeaderTitle()` helper (early returns).
@@ -190,7 +190,7 @@ non-Codex docs, or a researched shadcn enhancement) rather than mining ternaries
 
 **Status:** committed.
 
-### Iteration 7 — done (2026-06-09) · commit pending
+### Iteration 7 — done (2026-06-09)
 
 **Goal (best practices — coverage):** Add `src/lib/composerForm.test.ts` covering
 the worktree branch-name helpers, which had zero tests.
@@ -213,7 +213,7 @@ pure test-file addition cannot break other suites.
 
 **Status:** committed.
 
-### Iteration 8 — done (2026-06-09) · commit pending
+### Iteration 8 — done (2026-06-09)
 
 **Goal (best practices — coverage):** Cover `formatAttentionReason` and
 `getTaskAttention` in `sessionAttention.test.ts` — the existing suite tested
@@ -231,7 +231,7 @@ found/absent test. Pure test addition — **no production change**.
 
 **Status:** committed.
 
-### Iteration 9 — done (2026-06-09) · commit pending
+### Iteration 9 — done (2026-06-09)
 
 **Goal (directive 1 — shadcn alignment):** Replace the hand-rolled disclosure in
 `PullRequestChecks` with the default shadcn `Collapsible` primitive.
@@ -263,7 +263,7 @@ package.json/lock change since radix-ui already bundles Collapsible).
 
 **Status:** committed.
 
-### Iteration 10 — done (2026-06-09) · commit pending
+### Iteration 10 — done (2026-06-09)
 
 **Goal (best practices — coverage):** Add `src/statusLabels.test.ts` for the two
 untested functions in `statusLabels.ts`.
@@ -287,7 +287,7 @@ addition — no production change.
 is incremental: targeted coverage of untested pure logic + real doc-drift fixes.
 Cadence should slow to deliberate, genuinely-valuable changes — avoid churn.
 
-### Iteration 11 — done (2026-06-09) · commit pending
+### Iteration 11 — done (2026-06-09)
 
 **Goal (docs accuracy):** Fix real command-reference drift in
 `docs/tracking-and-debugging.md` (the doc that bills itself as the "authoritative,
@@ -331,7 +331,7 @@ frontend and Rust sides; the obvious wins are harvested. Remaining value is
 incremental and requires deeper investigation per pass — cadence should stay
 deliberate, not churn.
 
-### Iteration 13 — done (2026-06-09) · commit pending
+### Iteration 13 — done (2026-06-09)
 
 **Goal (best practices — coverage of critical infra):** Add
 `src/hooks/useGuardedAction.test.ts`. `useGuardedAction` is the app's central
@@ -354,7 +354,7 @@ addition — no production change.
 `run()`, have `.catch` reverts, or are intentionally non-critical) — no
 silent-failure fixes warranted. Error handling across the app is disciplined.
 
-### Iteration 14 — done (2026-06-09) · commit pending
+### Iteration 14 — done (2026-06-09)
 
 **Goal (best practices — failure-path coverage):** Add
 `src/hooks/useSidebarCollapse.test.tsx` for the recently-shipped sidebar-collapse
@@ -373,7 +373,7 @@ project's `createQueryClient` + `QueryClientProvider` + mocked `api` pattern.
 
 **Status:** committed.
 
-### Iteration 15 — done (2026-06-09) · commit pending
+### Iteration 15 — done (2026-06-09)
 
 **Goal (best practices — safety-path coverage):** Add
 `src/hooks/useTaskDeletion.test.tsx` for the deletion *safety* logic the happy-path
@@ -429,6 +429,24 @@ palette always-mounted.
 **Verification:** full `pnpm test` (74 files, 432 tests), `pnpm build`.
 
 **Status:** committed.
+
+### Rolling-doc audit (2026-06-09, user request)
+
+Reviewed both rolling docs for correctness against ground truth:
+- **Factual claims — all accurate.** Every referenced commit hash (128 unique) is a
+  real commit; all **124** structured `Commit:` hash↔subject pairs in the Codex doc
+  match `git log` exactly; all **16** Claude iteration commits match this doc.
+- **Structural claims verified:** inter font removed from `package.json`; the two
+  obsolete doc trackers deleted; `src/lib/tauriRuntime.ts` created; all 7 newly-named
+  test files exist; every `exhaustive-deps` suppression is gone (iters 9/10/12).
+- **One substantive inaccuracy (already fixed):** Codex iter 36 (`ce99fbc`
+  `perf(router): lazy-load on-demand overlays`) is logged as "verified," but it
+  shipped the ⌘K regression (palette lazy-mounted → its in-component shortcut listener
+  could not open it from closed). Codex iter ~56 (`e2583bb` "cover command palette
+  shortcut") then *masked* it by testing the palette always-mounted. Both resolved by
+  Claude iter 16 (`983f47f`) — global shortcut moved to `useCommandPaletteShortcut`
+  with a correct hook test.
+- Fixed the stale "· commit pending" sub-labels on already-committed iterations above.
 
 ## Backlog / future work (deeper investigation — no quick wins left)
 
