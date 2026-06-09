@@ -487,6 +487,22 @@ commits (`6c88c61`, `c39fda5`) but sit in Codex-maintained files and are exactly
 **Verification:** `pnpm vitest run src/components/ReviewsPage.test.tsx` (8/8);
 `pnpm build` (ok). **Status:** committed.
 
+### S3 — `JiraWorkItemDialog.tsx`: extract `transitionStatusOptions`
+
+The transition-dropdown `options` was a 3-deep nested ternary needing a 4-line
+comment. Extracted a module-level `transitionStatusOptions(currentStatus,
+restConnected, restOptions, boardOptions)` helper with early returns (REST path →
+deduped legal moves; board path already has current → as-is; else prepend current);
+the call site is now one line. Behavior identical.
+
+**Verification:** `pnpm vitest run src/components/JiraWorkItemDialog.test.tsx`
+(4/4); `pnpm build` (ok). **Status:** committed.
+
+**Goal-2 wrap:** Codex's own added code is clean (confirmed by two Explore sweeps +
+direct inspection of `resolveAgentProfileId`/`deriveColumns`/`useOptionalQuery`). The
+three simplifications (stepper, ReviewsPage reviewer logic, JIRA options) targeted the
+clear deep-nested-ternary / duplication in files Codex maintains.
+
 ## Backlog / future work (deeper investigation — no quick wins left)
 
 - Targeted coverage for any *new* untested logic as it lands (watch the diff).

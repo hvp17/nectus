@@ -39,6 +39,25 @@ export interface JiraWorkItemPanelProps {
 }
 
 /**
+ * The status options for the transition dropdown. Once the issue's legal REST
+ * transitions have loaded (`restOptions` non-null — an empty array is a valid
+ * "no legal moves" result), use those; while loading or after a REST failure,
+ * fall back to the board-derived options (the same set shown without a token).
+ */
+function transitionStatusOptions(
+  currentStatus: string,
+  restConnected: boolean,
+  restOptions: string[] | null,
+  boardOptions: string[],
+): string[] {
+  if (restConnected && restOptions !== null) {
+    return Array.from(new Set([currentStatus, ...restOptions]));
+  }
+  if (boardOptions.includes(currentStatus)) return boardOptions;
+  return [currentStatus, ...boardOptions];
+}
+
+/**
  * De-modaled JIRA work item: an inline side panel docked beside the board (the
  * board stays visible). Same fields/handlers as the old dialog, plus a bottom
  * launch row to go from story → running agent in one move.
@@ -88,16 +107,7 @@ export function JiraWorkItemPanel({
     };
   }, [restConnected, item.key, onListTransitions]);
 
-  // Use the issue's legal REST transitions only once they have loaded successfully
-  // (an empty array is a valid "no legal moves" result, so it still uses the REST
-  // path). While loading or after a REST failure (`restOptions === null`), fall back
-  // to the board-derived options — the same set shown when no token is connected.
-  const options =
-    restConnected && restOptions !== null
-      ? Array.from(new Set([item.statusName, ...restOptions]))
-      : statusOptions.includes(item.statusName)
-        ? statusOptions
-        : [item.statusName, ...statusOptions];
+  const options = transitionStatusOptions(item.statusName, restConnected, restOptions, statusOptions);
 
   const launchAgentId = resolveAgentProfileId(agentProfiles, selectedAgentProfileId);
   const launchAgent = agentProfiles.find((profile) => profile.id === launchAgentId);
