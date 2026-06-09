@@ -10,8 +10,7 @@ import { clearTaskAttention, upsertTaskAttention } from "../sessionAttention";
 import {
   sessionIdleContent,
   sessionNeedsInputContent,
-  taskFinishedToast,
-  taskNeedsInputToast,
+  taskToastFromContent,
 } from "../taskNotification";
 import { upsertById, upsertNewestById } from "../lib/listState";
 import type {
@@ -76,27 +75,27 @@ export function useEventBridge() {
       await add<SessionIdleEvent>("session_idle", (payload) => {
         const store = useAppStore.getState();
         const task = tasksRef.current.find((item) => item.id === payload.taskId);
-        const { title, body } = sessionIdleContent(task, payload);
+        const content = sessionIdleContent(task, payload);
         if (task) {
           store.setTaskAttention((current) => upsertTaskAttention(current, task, payload));
-          store.setTaskToast(taskFinishedToast(task, payload));
+          store.setTaskToast(taskToastFromContent(task, content, "success"));
         } else {
-          store.setMessage(`${title}: ${body}`);
+          store.setMessage(`${content.title}: ${content.body}`);
         }
-        void notifySessionEvent(title, body);
+        void notifySessionEvent(content.title, content.body);
       });
 
       await add<SessionNeedsInputEvent>("session_needs_input", (payload) => {
         const store = useAppStore.getState();
         const task = tasksRef.current.find((item) => item.id === payload.taskId);
-        const { title, body } = sessionNeedsInputContent(task, payload);
+        const content = sessionNeedsInputContent(task, payload);
         if (task) {
           store.setTaskAttention((current) => upsertTaskAttention(current, task, payload));
-          store.setTaskToast(taskNeedsInputToast(task, payload));
+          store.setTaskToast(taskToastFromContent(task, content, "info"));
         } else {
-          store.setMessage(`${title} for ${body}`);
+          store.setMessage(`${content.title} for ${content.body}`);
         }
-        void notifySessionEvent(title, body);
+        void notifySessionEvent(content.title, content.body);
       });
 
       await add<SessionActivityEvent>("session_activity", (payload) => {

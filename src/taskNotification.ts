@@ -12,6 +12,11 @@ export interface TaskToast {
   agentKind: AgentKind;
 }
 
+export interface SessionNotificationContent {
+  title: string;
+  body: string;
+}
+
 function agentName(task: TaskSummary | undefined) {
   return task?.agentName ?? "Codex";
 }
@@ -26,23 +31,33 @@ function agentKind(task: TaskSummary): AgentKind {
  * fallback message (see useEventBridge) so the three renderings never drift.
  * `task` may be undefined when the event arrives before its task is cached.
  */
-export function sessionIdleContent(task: TaskSummary | undefined, payload: SessionIdleEvent) {
+export function sessionIdleContent(task: TaskSummary | undefined, payload: SessionIdleEvent): SessionNotificationContent {
   const detail = payload.message ? ` ${payload.message}` : "";
   return { title: `${agentName(task)} finished`, body: `${task?.title ?? "task is waiting"}${detail}` };
 }
 
-export function sessionNeedsInputContent(task: TaskSummary | undefined, payload: SessionNeedsInputEvent) {
+export function sessionNeedsInputContent(
+  task: TaskSummary | undefined,
+  payload: SessionNeedsInputEvent,
+): SessionNotificationContent {
   const reason = payload.reason ? ` (${payload.reason})` : "";
   const prompt = payload.prompt ? `: ${payload.prompt}` : "";
   return { title: `${agentName(task)} needs input`, body: `${task?.title ?? "a task"}${reason}${prompt}` };
 }
 
+export function taskToastFromContent(
+  task: TaskSummary,
+  content: SessionNotificationContent,
+  kind: TaskToast["kind"],
+): TaskToast {
+  const { title, body } = content;
+  return { taskId: task.id, title, body: formatNotificationBody(body), kind, agentKind: agentKind(task) };
+}
+
 export function taskFinishedToast(task: TaskSummary, payload: SessionIdleEvent): TaskToast {
-  const { title, body } = sessionIdleContent(task, payload);
-  return { taskId: task.id, title, body: formatNotificationBody(body), kind: "success", agentKind: agentKind(task) };
+  return taskToastFromContent(task, sessionIdleContent(task, payload), "success");
 }
 
 export function taskNeedsInputToast(task: TaskSummary, payload: SessionNeedsInputEvent): TaskToast {
-  const { title, body } = sessionNeedsInputContent(task, payload);
-  return { taskId: task.id, title, body: formatNotificationBody(body), kind: "info", agentKind: agentKind(task) };
+  return taskToastFromContent(task, sessionNeedsInputContent(task, payload), "info");
 }

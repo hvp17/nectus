@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { taskFinishedToast, taskNeedsInputToast } from "./taskNotification";
+import { taskFinishedToast, taskNeedsInputToast, taskToastFromContent } from "./taskNotification";
 import type { SessionIdleEvent, SessionNeedsInputEvent, TaskSummary } from "./types";
 
 const task = (overrides: Partial<TaskSummary> = {}): TaskSummary =>
@@ -60,5 +60,23 @@ describe("taskNeedsInputToast", () => {
     const payload: SessionNeedsInputEvent = { sessionId: "s1", taskId: 7, reason: "permission" };
 
     expect(taskNeedsInputToast(task(), payload).body).toBe("Wire up auth (permission)");
+  });
+});
+
+describe("taskToastFromContent", () => {
+  it("formats an already-derived notification body and preserves the toast kind", () => {
+    expect(
+      taskToastFromContent(
+        task({ agentKind: "codex" }),
+        { title: "Codex needs input", body: "**Wire up auth** with `token`" },
+        "info",
+      ),
+    ).toEqual({
+      taskId: 7,
+      title: "Codex needs input",
+      body: "Wire up auth with token",
+      kind: "info",
+      agentKind: "codex",
+    });
   });
 });

@@ -1069,7 +1069,7 @@ reactive values they use.
 **Commit:** `763cb91` (`fix(stepper): clean up trigger registration`) pushed to
 `origin/main`.
 
-### Iteration 32 - in progress (2026-06-09)
+### Iteration 32 - done (2026-06-09)
 
 **Goal:** Simplify workflow stepper keyboard navigation guards.
 
@@ -1091,11 +1091,47 @@ to update when the registered trigger list changes.
 - Focused: `pnpm vitest run src/components/TaskWorkspace.test.tsx`.
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm vitest run src/components/TaskWorkspace.test.tsx` passed (26 tests).
 - `pnpm test` passed (59 files, 352 tests).
+- `pnpm build` passed.
+
+**Commit:** `61741f0` (`refactor(stepper): simplify keyboard navigation guards`)
+pushed to `origin/main`.
+
+### Iteration 33 - in progress (2026-06-09)
+
+**Goal:** Reuse derived session notification content when creating task toasts.
+
+**Rationale:** `useEventBridge` already derives the raw title/body for
+`session_idle` and `session_needs_input` so it can update the no-task fallback
+and send the macOS notification. For known tasks it then calls a toast helper
+that derives the same content a second time. A small content-to-toast helper keeps
+the wording source of truth in `taskNotification.ts` while avoiding duplicated
+derivation in the event bridge.
+
+**Docs checked:** Context7 React docs for calculating derived data during render
+instead of adding extra synchronization. This change keeps session event content
+as a derived value at the event boundary and passes it into the toast conversion.
+
+**Claimed files:**
+- `src/taskNotification.ts`
+- `src/taskNotification.test.ts`
+- `src/hooks/useEventBridge.ts`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused: `pnpm vitest run src/taskNotification.test.ts src/hooks/useEventBridge.test.tsx`.
+- Full: `pnpm test`, `pnpm build`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `pnpm vitest run src/taskNotification.test.ts src/hooks/useEventBridge.test.tsx`
+  passed (2 files, 12 tests).
+- `pnpm test` passed (59 files, 353 tests).
 - `pnpm build` passed.
 
 ---
