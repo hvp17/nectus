@@ -1478,7 +1478,7 @@ locals whose values are never read, including write-only locals.
 **Commit:** `17680ef` (`refactor(github): remove unused selected task id`) pushed
 to `origin/main`.
 
-### Iteration 44 - in progress (2026-06-09)
+### Iteration 44 - done (2026-06-09)
 
 **Goal:** Promote the successful unused-symbol audit into the standard
 TypeScript build gate.
@@ -1500,11 +1500,44 @@ expectation before they commit frontend changes.
 **Verification plan:**
 - Full: `pnpm test`, `pnpm build`.
 
-**Status:** verified and ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `pnpm test` passed (59 files, 353 tests).
 - `pnpm build` passed with `noUnusedLocals` and `noUnusedParameters` enabled.
+
+**Commit:** `d6449c4` (`chore(types): enforce unused symbol checks`) pushed to
+`origin/main`.
+
+### Iteration 45 - in progress (2026-06-09)
+
+**Goal:** Add the verified Rust Clippy command to the documented verification
+gate.
+
+**Rationale:** The frontend now has a stricter unused-symbol compiler gate. The
+backend already has a strong `cargo test` gate, but Clippy catches style and
+correctness issues that tests can miss. The audit passed cleanly with warnings
+denied, so the concrete improvement is to document the same command in the
+developer guide and README instead of leaving it as ad hoc knowledge.
+
+**Docs checked:** Context7 Rust Clippy stable docs; `cargo clippy -- -D warnings`
+is the relevant local/CI-style gate because warnings become failures.
+
+**Claimed files:**
+- `AGENTS.md`
+- `README.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Rust lint gate: `cd native && cargo clippy --tests -- -D warnings`.
+- Docs check: `rg -n "cargo clippy --tests -- -D warnings" AGENTS.md README.md`.
+
+**Status:** verified and ready to commit.
+
+**Evidence:**
+- `cd native && cargo clippy --tests -- -D warnings` passed.
+- `rg -n "cargo clippy --tests -- -D warnings" AGENTS.md README.md` shows the
+  gate in both docs.
 
 ---
 

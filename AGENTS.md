@@ -173,12 +173,20 @@ cd native
 cargo test
 ```
 
+Run Rust linting:
+
+```bash
+cd native
+cargo clippy --tests -- -D warnings
+```
+
 Run the standard verification set before claiming work is complete:
 
 ```bash
 pnpm test
 pnpm build
 cd native && cargo test
+cd native && cargo clippy --tests -- -D warnings
 ```
 
 For release-impacting changes, also run:
