@@ -3146,7 +3146,7 @@ callback identity is reused while dependencies are `Object.is`-equal.
 **Commit:** `837d598` (`refactor(ui): stabilize session attention callbacks`)
 pushed to `origin/main`.
 
-### Iteration 87 - in progress (2026-06-09)
+### Iteration 87 - done (2026-06-09)
 
 **Goal:** Cover task metadata cache updates and attention clearing.
 
@@ -3169,7 +3169,7 @@ is to mount Query-backed hook tests with a `QueryClientProvider` and an isolated
   and rerun the focused test; the new test should fail.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Focused green `pnpm vitest run src/hooks/useTaskActions.test.tsx` passed:
@@ -3179,6 +3179,46 @@ is to mount Query-backed hook tests with a `QueryClientProvider` and an isolated
 - Restored focused green `pnpm vitest run src/hooks/useTaskActions.test.tsx`
   passed: 1 file / 1 test.
 - `pnpm verify` passed: frontend tests (65 files / 394 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `a07086b` (`test(ui): cover task status attention cleanup`) pushed to
+`origin/main`.
+
+### Iteration 88 - in progress (2026-06-09)
+
+**Goal:** Cover the remaining task metadata action cache contracts.
+
+**Rationale:** After the status/attention path, `useTaskActions` still had two
+user-visible metadata actions without focused coverage: title renames and JIRA
+link attach/detach. Both update the central tasks TanStack Query cache that
+Mission Control, boards, and task workspaces read.
+
+**Docs checked:** Context7 `/vitest-dev/vitest/v4.1.6` mock-function docs. The
+current Vitest guidance supports hoisted `vi.mock` module mocks, typed access via
+`vi.mocked`, and per-test mock-state cleanup before assertions.
+
+**Claimed files:**
+- `src/hooks/useTaskActions.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused green: `pnpm vitest run src/hooks/useTaskActions.test.tsx`.
+- Red check: temporarily remove the title `trim()` behavior and rerun the
+  focused test; the rename test should fail.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Focused green `pnpm vitest run src/hooks/useTaskActions.test.tsx` passed:
+  1 file / 4 tests.
+- Red check failed as expected after temporarily removing the title `trim()`;
+  the rename test saw the untrimmed API payload and the blank-title guard test
+  saw an unwanted API call.
+- Restored focused green `pnpm vitest run src/hooks/useTaskActions.test.tsx`
+  passed: 1 file / 4 tests.
+- `pnpm verify` passed: frontend tests (65 files / 397 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
