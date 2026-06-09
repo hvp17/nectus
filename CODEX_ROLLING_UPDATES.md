@@ -3225,7 +3225,7 @@ current Vitest guidance supports hoisted `vi.mock` module mocks, typed access vi
 **Commit:** `f6fcf38` (`test(ui): cover task metadata actions`) pushed to
 `origin/main`.
 
-### Iteration 89 - in progress (2026-06-09)
+### Iteration 89 - done (2026-06-09)
 
 **Goal:** Cover settings action cache updates and bootstrap invalidation.
 
@@ -3250,7 +3250,7 @@ invalidation work when subsequent code depends on refreshed state.
   focused test; the bootstrap invalidation assertions should fail.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Focused green `pnpm vitest run src/hooks/useSettingsActions.test.tsx` passed:
@@ -3264,6 +3264,48 @@ invalidation work when subsequent code depends on refreshed state.
   the test helper); destructuring `id` out of the helper overrides fixed it.
 - `pnpm verify` passed after the fixture fix: frontend tests (66 files /
   399 tests), frontend build, Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `42d4e1e` (`test(ui): cover settings action cache updates`) pushed
+to `origin/main`.
+
+### Iteration 90 - in progress (2026-06-09)
+
+**Goal:** Cover workspace action focus and refresh contracts.
+
+**Rationale:** The workspace manager has UI coverage for create/update form
+flows, but `useWorkspaceActions` owns the hook-level state contract: create
+focuses the returned workspace, update/delete refresh bootstrap data, and delete
+only clears `activeWorkspaceId` when the deleted workspace is currently focused.
+
+**Docs checked:** Context7 `/tanstack/query` invalidation docs. Current guidance
+is to invalidate related queries on mutation success and await the invalidation
+work when the mutation flow depends on the cache being marked stale.
+
+**Claimed files:**
+- `src/hooks/useWorkspaceActions.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused green: `pnpm vitest run src/hooks/useWorkspaceActions.test.tsx`.
+- Red check: temporarily remove the active-workspace clear in `deleteWorkspace`
+  and rerun the focused test; the delete-focus assertion should fail.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Initial focused run exposed a test-seed issue: `setQueryData(..., undefined)`
+  did not create a settings query state, so the invalidation helper saw no
+  settings query. Fixed by seeding a concrete settings fixture.
+- Focused green `pnpm vitest run src/hooks/useWorkspaceActions.test.tsx`
+  passed: 1 file / 3 tests.
+- Red check failed as expected after temporarily removing the active-workspace
+  clear in `deleteWorkspace`; `activeWorkspaceId` remained `5`.
+- Restored focused green `pnpm vitest run src/hooks/useWorkspaceActions.test.tsx`
+  passed: 1 file / 3 tests.
+- `pnpm verify` passed: frontend tests (67 files / 402 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
 ---
