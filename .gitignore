@@ -4,6 +4,7 @@ target
 native/target
 .DS_Store
 .superpowers/
+.claude/
 
 # Local Tauri updater signing secrets (private key / password) — never commit.
 # The signing key authorizes auto-updates to every installed copy.

@@ -1897,7 +1897,7 @@ child-process environment override behavior.
 **Commit:** `e1e29f4` (`fix(git): resolve git with augmented path`) pushed to
 `origin/main`.
 
-### Iteration 56 - in progress (2026-06-09)
+### Iteration 56 - done (2026-06-09)
 
 **Goal:** Add regression coverage for the git command builder.
 
@@ -1918,12 +1918,51 @@ environment before any future refactor changes it accidentally.
 - Rust format: `cd native && cargo fmt --check`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `cd native && cargo fmt --check` passed.
 - `cd native && cargo test git_command_uses_resolved_binary_and_augmented_path`
   passed: 1 test.
+- `pnpm verify` passed: frontend tests (59 files / 353 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `eb66a2e` (`test(git): cover resolved git command builder`) pushed
+to `origin/main`.
+
+### Iteration 57 - in progress (2026-06-09)
+
+**Goal:** Keep local Claude worktrees out of git status.
+
+**Rationale:** The repo already excludes `.claude/` from Vitest because it can
+hold full nested worktree copies. Git still reported `.claude/` as an untracked
+folder, which adds noise to every selective-staging pass and increases the risk
+of accidentally staging local settings or copied worktree files. Ignoring only
+`.claude/` aligns git hygiene with the existing test policy while leaving
+`design-mockups/` untouched because it has no established local-only rule.
+
+**Docs checked:** Context7 Git docs for `.gitignore` pattern format; trailing
+slashes match directories only, and patterns are relative to the `.gitignore`
+file location.
+
+**Claimed files:**
+- `.gitignore`
+- `AGENTS.md`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Ignore check: `git check-ignore -v .claude .claude/worktrees/opencode`.
+- Status check: `git status --short --branch` should no longer list `.claude/`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- `git check-ignore -v .claude .claude/worktrees/opencode` shows both paths
+  matched by `.gitignore:7:.claude/`.
+- `git status --short --branch` no longer lists `.claude/`; only the existing
+  untracked `design-mockups/` remains outside this change.
 - `pnpm verify` passed: frontend tests (59 files / 353 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
