@@ -113,6 +113,32 @@ describe("useJira", () => {
     expect(result.current.columns).toBe(firstColumns);
   });
 
+  it("ignores cached project statuses when REST is disconnected", async () => {
+    const setMessage = vi.fn();
+    const client = createQueryClient();
+    client.setQueryData<JiraStatusDef[]>(queryKeys.jira.projectStatuses("A"), [
+      { id: "1", name: "To Do", category: "to_do" },
+      { id: "2", name: "Done", category: "done" },
+    ]);
+    const { result } = renderHook(
+      () =>
+        useJira({
+          active: true,
+          configured: true,
+          project: "A",
+          statusFilter: [],
+          setMessage,
+        }),
+      { wrapper: makeWrapper(client) },
+    );
+
+    await waitFor(() => expect(mockedApi.jiraSearchBoard).toHaveBeenCalledTimes(1));
+
+    expect(result.current.restConnected).toBe(false);
+    expect(result.current.projectStatuses).toEqual([]);
+    expect(result.current.columns.map((column) => column.statusName)).toEqual(["To Do"]);
+  });
+
   it("cancels in-flight board queries before an optimistic transition", async () => {
     const setMessage = vi.fn();
     const client = createQueryClient();

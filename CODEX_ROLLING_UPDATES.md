@@ -3702,7 +3702,7 @@ queries before snapshotting and writing optimistic cache state.
 **Commit:** `03856f2` (`fix(ui): guard jira optimistic transitions`) pushed to
 `origin/main`.
 
-### Iteration 100 - in progress (2026-06-09)
+### Iteration 100 - done (2026-06-09)
 
 **Goal:** Roll back failed JIRA optimistic transitions when no board snapshot
 existed.
@@ -3732,7 +3732,7 @@ uses that snapshot in the error path to restore cache state.
   removing the optimistic cache entry when no previous snapshot existed.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/hooks/useJira.test.ts` failed as expected
@@ -3741,6 +3741,48 @@ uses that snapshot in the error path to restore cache state.
 - Focused green `pnpm vitest run src/hooks/useJira.test.ts` passed:
   1 file / 7 tests.
 - `pnpm verify` passed: frontend tests (69 files / 412 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `bb7ff16` (`fix(ui): roll back empty jira optimistic cache`) pushed
+to `origin/main`.
+
+### Iteration 101 - in progress (2026-06-09)
+
+**Goal:** Ignore cached JIRA project-status skeletons while REST is disconnected.
+
+**Rationale:** TanStack Query returns cached data for a disabled query. `useJira`
+disables the project-status query when the optional REST token is disconnected,
+but still reads `.data`, so a previously cached status skeleton can keep
+rendering empty REST-only columns after disconnect. The board should derive
+columns from visible items only unless REST is currently connected.
+
+**Docs checked:** Context7 `/tanstack/query` disabled-query docs. Current
+guidance states that disabled queries initialize in success state when cached
+data exists, even though they do not fetch.
+
+**Claimed files:**
+- `src/hooks/useJira.ts`
+- `src/hooks/useJira.test.ts`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Red check: seed cached project statuses while `jiraRestStatus` is disconnected
+  and run `pnpm vitest run src/hooks/useJira.test.ts`; it should fail while the
+  disabled query data is still consumed.
+- Focused green: rerun `pnpm vitest run src/hooks/useJira.test.ts` after gating
+  project status data on `restConnected`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Red check `pnpm vitest run src/hooks/useJira.test.ts` failed as expected
+  before implementation; cached project statuses were still exposed while
+  `restConnected` was false.
+- Focused green `pnpm vitest run src/hooks/useJira.test.ts` passed:
+  1 file / 8 tests.
+- `pnpm verify` passed: frontend tests (69 files / 413 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 

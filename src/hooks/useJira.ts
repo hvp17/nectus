@@ -115,8 +115,8 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
   const restConnected = Boolean(restStatus?.connected);
 
   const projects = useJiraProjectsQuery(active && ready).data ?? EMPTY_PROJECTS;
-  const projectStatuses =
-    useJiraProjectStatusesQuery(project, active && ready && restConnected).data ?? EMPTY_STATUSES;
+  const projectStatusesQuery = useJiraProjectStatusesQuery(project, active && ready && restConnected);
+  const projectStatuses = restConnected ? (projectStatusesQuery.data ?? EMPTY_STATUSES) : EMPTY_STATUSES;
   const boardQuery = useJiraBoardQuery(active && ready && configured);
   const items = boardQuery.data ?? EMPTY_ITEMS;
   const loading = boardQuery.isLoading;
