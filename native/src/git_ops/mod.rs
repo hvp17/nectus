@@ -392,6 +392,7 @@ mod tests {
     use super::*;
     use crate::models::{DiffChangeKind, DiffFileEntry};
     use std::collections::HashMap;
+    use std::ffi::OsStr;
     use std::fs;
     use tempfile::tempdir;
 
@@ -409,6 +410,25 @@ mod tests {
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
+    }
+
+    #[test]
+    fn git_command_uses_resolved_binary_and_augmented_path() {
+        let dir = tempdir().unwrap();
+        let command = git_command(dir.path());
+        let expected_program = crate::process_util::resolve_executable("git");
+        let expected_path = crate::process_util::augmented_path();
+
+        assert_eq!(command.get_program(), expected_program.as_os_str());
+
+        let args: Vec<&OsStr> = command.get_args().collect();
+        assert_eq!(args, &[OsStr::new("-C"), dir.path().as_os_str()]);
+
+        let path_env = command
+            .get_envs()
+            .find_map(|(key, value)| (key == OsStr::new("PATH")).then_some(value))
+            .flatten();
+        assert_eq!(path_env, Some(expected_path.as_os_str()));
     }
 
     #[test]

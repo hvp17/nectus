@@ -1855,7 +1855,7 @@ consistent while leaving test setup calls alone.
 **Commit:** `d0c1ecf` (`refactor(git): centralize repo command builder`) pushed
 to `origin/main`.
 
-### Iteration 55 - in progress (2026-06-09)
+### Iteration 55 - done (2026-06-09)
 
 **Goal:** Route production git commands through the shared external-CLI resolver.
 
@@ -1881,7 +1881,7 @@ child-process environment override behavior.
 - Docs/code check: `rg -n "resolve_executable\\(\"git\"\\)|git invocations resolve" native/src/git_ops/mod.rs AGENTS.md`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - `cd native && cargo fmt --check` passed.
@@ -1892,6 +1892,40 @@ child-process environment override behavior.
   shows the git builder and AGENTS call-site entry.
 - `pnpm verify` passed: frontend tests (59 files / 353 tests), frontend build,
   Rust tests (240 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `e1e29f4` (`fix(git): resolve git with augmented path`) pushed to
+`origin/main`.
+
+### Iteration 56 - in progress (2026-06-09)
+
+**Goal:** Add regression coverage for the git command builder.
+
+**Rationale:** Iteration 55 moved production git commands onto the shared
+external-CLI resolver and augmented PATH. A small non-spawning unit test can lock
+that contract by inspecting the built `Command` program, args, and explicit PATH
+environment before any future refactor changes it accidentally.
+
+**Docs checked:** Context7 Rust standard library docs for `Command::get_program`,
+`Command::get_args`, and `Command::get_envs`.
+
+**Claimed files:**
+- `native/src/git_ops/mod.rs`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused Rust test: `cd native && cargo test git_command_uses_resolved_binary_and_augmented_path`.
+- Rust format: `cd native && cargo fmt --check`.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- `cd native && cargo fmt --check` passed.
+- `cd native && cargo test git_command_uses_resolved_binary_and_augmented_path`
+  passed: 1 test.
+- `pnpm verify` passed: frontend tests (59 files / 353 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
 ---
