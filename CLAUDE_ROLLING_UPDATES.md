@@ -448,6 +448,27 @@ Reviewed both rolling docs for correctness against ground truth:
   with a correct hook test.
 - Fixed the stale "· commit pending" sub-labels on already-committed iterations above.
 
+## Goal 2 — simplify code Codex added (2026-06-09)
+
+A focused Explore sweep of Codex's production files (queries/hooks/stepper/git_ops,
+excluding tests) found Codex's code mostly already clean — its iterations were
+themselves simplifications. The clear targets were in `src/components/reui/stepper.tsx`
+(a file Codex actively cleaned up across iters 28–32).
+
+### S1 — `stepper.tsx`: de-duplicate the indicator + drop a dead intermediate
+
+- `StepperIndicator` evaluated the same 4-way `(state/isLoading && indicators.X)` OR
+  chain **twice** (once as a ternary condition, then verbatim as the value), behind a
+  redundant `indicators &&` guard (`indicators` defaults to `{}`, never null). Compute
+  it once into `indicator` and render `{indicator || children}` — same behavior, ~8
+  fewer lines.
+- `StepperTrigger` did `const stepperCtx = useStepper()` then destructured from
+  `stepperCtx` (used nowhere else). Destructure straight from `useStepper()`.
+
+**Verification:** `pnpm vitest run src/components/TaskWorkspace.test.tsx` (26/26,
+exercises the stepper); `pnpm build` (ok — `noUnusedLocals` would catch a stale
+`stepperCtx`). **Status:** committed.
+
 ## Backlog / future work (deeper investigation — no quick wins left)
 
 - Targeted coverage for any *new* untested logic as it lands (watch the diff).

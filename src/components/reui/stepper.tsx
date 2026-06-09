@@ -216,7 +216,6 @@ function StepperTrigger({
   ...props
 }: StepperTriggerProps) {
   const { state, isLoading, step, isDisabled } = useStepItem()
-  const stepperCtx = useStepper()
   const {
     setActiveStep,
     activeStep,
@@ -227,7 +226,7 @@ function StepperTrigger({
     focusPrev,
     focusFirst,
     focusLast,
-  } = stepperCtx
+  } = useStepper()
   const isSelected = activeStep === step
   const id = `stepper-tab-${step}`
   const panelId = `stepper-panel-${step}`
@@ -322,6 +321,13 @@ function StepperIndicator({
   const { state, isLoading } = useStepItem()
   const { indicators } = useStepper()
 
+  // The indicator for the current state, if one was provided; otherwise `children`.
+  const indicator =
+    (isLoading && indicators.loading) ||
+    (state === "completed" && indicators.completed) ||
+    (state === "active" && indicators.active) ||
+    (state === "inactive" && indicators.inactive)
+
   return (
     <div
       data-slot="stepper-indicator"
@@ -332,18 +338,7 @@ function StepperIndicator({
         className
       )}
     >
-      <div className="absolute">
-        {indicators &&
-        ((isLoading && indicators.loading) ||
-          (state === "completed" && indicators.completed) ||
-          (state === "active" && indicators.active) ||
-          (state === "inactive" && indicators.inactive))
-          ? (isLoading && indicators.loading) ||
-            (state === "completed" && indicators.completed) ||
-            (state === "active" && indicators.active) ||
-            (state === "inactive" && indicators.inactive)
-          : children}
-      </div>
+      <div className="absolute">{indicator || children}</div>
     </div>
   )
 }
