@@ -2926,7 +2926,7 @@ shortcuts and call `preventDefault()` before toggling the dialog.
 **Commit:** `e2583bb` (`test(ui): cover command palette shortcut`) pushed to
 `origin/main`.
 
-### Iteration 82 - in progress (2026-06-09)
+### Iteration 82 - done (2026-06-09)
 
 **Goal:** Cover command palette item selection ordering.
 
@@ -2951,7 +2951,7 @@ actions inside command lists/dialogs.
   `pnpm vitest run src/components/CommandPalette.test.tsx`.
 - Full gate: `pnpm verify`.
 
-**Status:** verified; ready to commit.
+**Status:** verified and committed.
 
 **Evidence:**
 - Red check `pnpm vitest run src/components/CommandPalette.test.tsx` failed as
@@ -2960,6 +2960,48 @@ actions inside command lists/dialogs.
 - Focused green `pnpm vitest run src/components/CommandPalette.test.tsx`
   passed: 1 file / 4 tests.
 - `pnpm verify` passed: frontend tests (62 files / 382 tests), frontend build,
+  Rust tests (241 tests), `cargo fmt --check`, and
+  `cargo clippy --all-targets -- -D warnings`.
+
+**Commit:** `3527f7f` (`test(ui): cover command palette selection`) pushed to
+`origin/main`.
+
+### Iteration 83 - in progress (2026-06-09)
+
+**Goal:** Cover shell bootstrap default selection and stale workspace cleanup.
+
+**Rationale:** `useShellBootstrap` is mounted once at the app root and silently
+chooses the initial agent/repo selections while clearing a focused workspace that
+was deleted elsewhere. Those rules are central to the shell's startup behavior
+but currently have no direct hook tests.
+
+**Docs checked:** Context7 `/tanstack/query` React testing docs. The current
+guidance is to test Query-backed hooks with a `QueryClientProvider` wrapper and
+an isolated `QueryClient`; retries should be disabled for deterministic tests,
+which matches the repo's `createQueryClient` factory.
+
+**Claimed files:**
+- `src/hooks/useShellBootstrap.test.tsx`
+- `CODEX_ROLLING_UPDATES.md`
+
+**Verification plan:**
+- Focused test: `pnpm vitest run src/hooks/useShellBootstrap.test.tsx`.
+- Red check: temporarily break one bootstrap effect and rerun the focused test
+  to confirm the new assertions fail.
+- Full gate: `pnpm verify`.
+
+**Status:** verified; ready to commit.
+
+**Evidence:**
+- Focused green `pnpm vitest run src/hooks/useShellBootstrap.test.tsx` passed:
+  1 file / 4 tests.
+- Red check `pnpm vitest run src/hooks/useShellBootstrap.test.tsx` failed as
+  expected after temporarily disabling the default-agent assignment in
+  `useShellBootstrap`; the default and fallback agent tests observed
+  `selectedAgentProfileId === undefined`.
+- Restored focused green `pnpm vitest run src/hooks/useShellBootstrap.test.tsx`
+  passed: 1 file / 4 tests.
+- `pnpm verify` passed: frontend tests (63 files / 386 tests), frontend build,
   Rust tests (241 tests), `cargo fmt --check`, and
   `cargo clippy --all-targets -- -D warnings`.
 
