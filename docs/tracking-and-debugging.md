@@ -334,6 +334,16 @@ mode rather than streaming plain text, the "Watch reviewer" live output arrives 
 one chunk when the command completes, not token-by-token. This affects the task
 Review tab and the PR review detail's live pane.
 
+**Reviewer failure diagnostics**: when a reviewer exits non-zero,
+`run_reviewer_command` reports the most specific detail it can find, in order:
+the child's `stderr`, then a parsed error event, then the raw stdout tail
+(capped). The JSON-event reviewers (Codex `error` events, OpenCode `type:"error"`
+events) report failures — bad/missing model, auth errors, sandbox denials — on
+**stdout** with an empty stderr, so without this fallback the review status would
+read only `Reviewer exited with exit status: 1`. `reviewer_output.rs` parses those
+error events; the raw-stdout tail is the catch-all when no structured event is
+recognized.
+
 Inspect stored ids:
 
 ```bash

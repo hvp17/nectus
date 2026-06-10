@@ -116,12 +116,17 @@ pub(super) fn run_reviewer_command(
     let mut collector = ReviewerOutputCollector::new(wire, preset_session_id);
     let mut streamed_len: u64 = 0;
     let mut read_error = None;
+    // Keep the raw stdout too: JSON-wire reviewers (Codex/OpenCode) report a
+    // failure on stdout and exit non-zero with an empty stderr, so this is the
+    // last-resort diagnostic when no structured error event was recognized.
+    let mut raw_stdout = String::new();
     if let Some(mut stdout) = child.stdout.take() {
         let mut buffer = [0_u8; 8192];
         loop {
             match stdout.read(&mut buffer) {
                 Ok(0) => break,
                 Ok(count) => {
+                    raw_stdout.push_str(&String::from_utf8_lossy(&buffer[..count]));
                     let delta = collector.push(&buffer[..count]);
                     if !delta.is_empty() {
                         if let Some(sink) = stream {
@@ -160,15 +165,39 @@ pub(super) fn run_reviewer_command(
     if let Some(error) = read_error {
         return Err(error);
     }
-    let (text, session_id) = collector.finish();
+    let (text, session_id, errors) = collector.finish();
     if !status.success() {
-        return Err(if stderr.is_empty() {
-            format!("Reviewer exited with {status}")
-        } else {
-            format!("Reviewer exited with {status}: {stderr}")
+        // Surface whatever the reviewer actually reported. stderr is the natural
+        // home, but the JSON-wire reviewers leave it empty and report failures on
+        // stdout, so fall back to the parsed error event, then the raw output.
+        let detail = first_non_empty([stderr.as_str(), errors.as_str(), raw_stdout.trim()]);
+        return Err(match detail {
+            Some(detail) => format!("Reviewer exited with {status}: {}", truncate_detail(detail)),
+            None => format!("Reviewer exited with {status}"),
         });
     }
     Ok(ReviewerRunOutput { text, session_id })
+}
+
+/// First non-empty (after trimming) candidate, used to pick the most specific
+/// failure detail to report.
+fn first_non_empty<'a>(candidates: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
+    candidates
+        .into_iter()
+        .map(str::trim)
+        .find(|s| !s.is_empty())
+}
+
+/// Cap a raw-output diagnostic so a chatty reviewer's stdout can't flood the
+/// error message; keep the tail, where the failure usually is.
+fn truncate_detail(detail: &str) -> String {
+    const MAX: usize = 2000;
+    let chars: Vec<char> = detail.chars().collect();
+    if chars.len() <= MAX {
+        return detail.to_string();
+    }
+    let tail: String = chars[chars.len() - MAX..].iter().collect();
+    format!("…{tail}")
 }
 
 /// Argv and stdin handling for launching a reviewer CLI headlessly.
@@ -452,5 +481,28 @@ mod tests {
         let b = new_reviewer_session_id();
         assert_eq!(a.len(), 36);
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn first_non_empty_prefers_the_first_meaningful_candidate() {
+        // stderr wins when present.
+        assert_eq!(first_non_empty(["boom", "parsed", "raw"]), Some("boom"));
+        // Blank/whitespace-only candidates are skipped (the JSON-wire case where
+        // stderr is empty but a parsed error event exists).
+        assert_eq!(
+            first_non_empty(["", "  \n ", "parsed error", "raw"]),
+            Some("parsed error")
+        );
+        assert_eq!(first_non_empty(["", "   "]), None);
+    }
+
+    #[test]
+    fn truncate_detail_keeps_short_output_and_tails_long_output() {
+        assert_eq!(truncate_detail("short"), "short");
+        let long: String = "x".repeat(2500);
+        let truncated = truncate_detail(&long);
+        assert!(truncated.starts_with('…'));
+        // The tail (where the failure usually is) is preserved, capped at MAX.
+        assert_eq!(truncated.chars().filter(|c| *c == 'x').count(), 2000);
     }
 }
