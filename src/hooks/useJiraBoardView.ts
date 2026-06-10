@@ -6,6 +6,8 @@ import { useGuardedAction } from "./useGuardedAction";
 import { useJira } from "./useJira";
 import type { AppSettings, JiraWorkItem } from "../types";
 
+export type JiraViewMode = "board" | "sprint";
+
 interface UseJiraBoardViewArgs {
   /** Whether the JIRA board view is active (gates the board/project loads). */
   active: boolean;
@@ -24,11 +26,15 @@ interface UseJiraBoardViewArgs {
  * because it drives the create-task form.
  */
 export function useJiraBoardView({ active, settings, setSettings, setMessage }: UseJiraBoardViewArgs) {
+  // Board (status columns) vs Sprint (sprint lanes grouped by epic). Ephemeral UI
+  // state — not persisted; the board reopens in Board mode.
+  const [viewMode, setViewMode] = useState<JiraViewMode>("board");
   const jira = useJira({
     active,
     configured: Boolean(settings?.jiraBoardProject),
     project: settings?.jiraBoardProject ?? null,
     statusFilter: settings?.jiraFilterStatuses ?? [],
+    sprintMode: viewMode === "sprint",
     setMessage,
   });
 
@@ -139,6 +145,8 @@ export function useJiraBoardView({ active, settings, setSettings, setMessage }: 
 
   return {
     jira,
+    viewMode,
+    setViewMode,
     selectedItem,
     setSelectedItem,
     createOpen,

@@ -162,6 +162,28 @@ export interface JiraWorkItem {
   assignee?: string | null;
   url?: string | null;
   description?: string | null;
+  /** Parent epic key, when known (the Agile sprint path populates it; null on the
+   * plain acli board path). */
+  epicKey?: string | null;
+  /** Parent epic name/summary, when known. */
+  epicName?: string | null;
+}
+
+/** A sprint from the Agile REST API (`/rest/agile/1.0/board/{id}/sprint`). */
+export interface JiraSprint {
+  id: number;
+  name: string;
+  /** `active`, `future`, or `closed`. */
+  state: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  goal?: string | null;
+}
+
+/** One sprint-board lane: a sprint and its issues, or the backlog (`sprint: null`). */
+export interface JiraSprintLane {
+  sprint: JiraSprint | null;
+  items: JiraWorkItem[];
 }
 
 /** A legal transition for a work item (from `GET /issue/{key}/transitions`). */

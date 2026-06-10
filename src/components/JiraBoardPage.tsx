@@ -1,4 +1,4 @@
-import { ListFilter, Plus, RefreshCw } from "lucide-react";
+import { LayoutGrid, ListFilter, Plus, RefreshCw, Rows3 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import {
@@ -17,13 +17,16 @@ import {
 } from "./ui/select";
 import { Skeleton } from "./ui/skeleton";
 import { BoardBody } from "./JiraBoardBody";
+import { SprintBody } from "./JiraSprintBody";
 import { JiraWorkItemPanel } from "./JiraWorkItemDialog";
 import { JiraCreateWorkItemPanel } from "./JiraCreateWorkItemPanel";
 import { isCliConnected } from "../lib/connection";
 import type { JiraColumn } from "../hooks/useJira";
+import type { JiraViewMode } from "../hooks/useJiraBoardView";
 import type {
   AgentProfile,
   JiraProject,
+  JiraSprintLane,
   JiraStatus,
   JiraTransition,
   JiraWorkItem,
@@ -51,6 +54,9 @@ export interface JiraBoardConfigChange {
 /** Sentinel Select value for "no epic filter" (Select items can't be empty). */
 const ALL_EPICS_VALUE = "__all_epics";
 
+/** Stable empty default so an unset `sprintLanes` prop doesn't churn renders. */
+const NO_LANES: JiraSprintLane[] = [];
+
 interface JiraBoardPageProps {
   status: JiraStatus | undefined;
   projects: JiraProject[];
@@ -60,6 +66,13 @@ interface JiraBoardPageProps {
   filters: JiraBoardFilters;
   columns: JiraColumn[];
   loading: boolean;
+  /** Board (status columns) vs Sprint (sprint lanes grouped by epic). Defaults to board. */
+  viewMode?: JiraViewMode;
+  onChangeViewMode?: (mode: JiraViewMode) => void;
+  /** Sprint view data (loaded only in Sprint mode, REST-gated). */
+  sprintLanes?: JiraSprintLane[];
+  sprintLoading?: boolean;
+  sprintError?: string | null;
   onChangeConfig: (partial: JiraBoardConfigChange) => void;
   onRefresh: () => void;
   onTransition: (item: JiraWorkItem, statusName: string) => void;
@@ -105,6 +118,11 @@ export function JiraBoardPage({
   filters,
   columns,
   loading,
+  viewMode = "board",
+  onChangeViewMode = () => {},
+  sprintLanes = NO_LANES,
+  sprintLoading = false,
+  sprintError = null,
   onChangeConfig,
   onRefresh,
   onTransition,
@@ -148,6 +166,9 @@ export function JiraBoardPage({
       ? [{ key: filters.epic, summary: "" } as JiraWorkItem, ...epicList]
       : epicList;
 
+  const sprintView = viewMode === "sprint";
+  const busy = sprintView ? sprintLoading : loading;
+
   // Group local tasks by the JIRA story they are attached to, so each card can
   // list its own sessions without re-scanning the whole task list per render.
   const tasksByKey = new Map<string, TaskSummary[]>();
@@ -188,6 +209,36 @@ export function JiraBoardPage({
       />
     ) : null;
 
+  const body = sprintView ? (
+    <SprintBody
+      status={status}
+      project={project}
+      restConnected={Boolean(restConnected)}
+      loading={sprintLoading}
+      error={sprintError}
+      lanes={sprintLanes}
+      tasksByKey={tasksByKey}
+      selectedKey={selectedItem?.key}
+      onOpenItem={onOpenItem}
+      onOpenTask={onOpenTask}
+      onCreateTask={onCreateTask}
+    />
+  ) : (
+    <BoardBody
+      status={status}
+      project={project}
+      loading={loading}
+      columns={columns}
+      itemsByKey={itemsByKey}
+      tasksByKey={tasksByKey}
+      selectedKey={selectedItem?.key}
+      onTransition={onTransition}
+      onOpenItem={onOpenItem}
+      onOpenTask={onOpenTask}
+      onCreateTask={onCreateTask}
+    />
+  );
+
   return (
     <div className="nx-jira" data-testid="jira-board">
       <header className="nx-jira-head">
@@ -198,10 +249,10 @@ export function JiraBoardPage({
           variant="outline"
           size="sm"
           onClick={onRefresh}
-          disabled={!ready || !project || loading}
+          disabled={!ready || !project || busy}
           className="gap-2"
         >
-          <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`size-4 ${busy ? "animate-spin" : ""}`} />
           Refresh
         </Button>
       </header>
@@ -224,6 +275,31 @@ export function JiraBoardPage({
             </SelectContent>
           </Select>
 
+          <div className="nx-seg" role="group" aria-label="View mode">
+            <button
+              type="button"
+              data-on={!sprintView}
+              aria-pressed={!sprintView}
+              onClick={() => onChangeViewMode("board")}
+              className="gap-1.5"
+            >
+              <LayoutGrid className="size-3.5" />
+              Board
+            </button>
+            <button
+              type="button"
+              data-on={sprintView}
+              aria-pressed={sprintView}
+              onClick={() => onChangeViewMode("sprint")}
+              className="gap-1.5"
+            >
+              <Rows3 className="size-3.5" />
+              Sprint
+            </button>
+          </div>
+
+          {!sprintView && (
+          <>
           <div className="nx-seg" role="group" aria-label="Board filters">
             <button
               type="button"
@@ -316,6 +392,8 @@ export function JiraBoardPage({
               ))}
             </SelectContent>
           </Select>
+          </>
+          )}
 
           {onOpenCreate && (
             <Button
@@ -334,36 +412,11 @@ export function JiraBoardPage({
 
       {dockedPanel ? (
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_372px] overflow-hidden">
-          <div className="flex min-h-0 flex-col overflow-hidden">
-            <BoardBody
-              status={status}
-              project={project}
-              loading={loading}
-              columns={columns}
-              itemsByKey={itemsByKey}
-              tasksByKey={tasksByKey}
-              selectedKey={selectedItem?.key}
-              onTransition={onTransition}
-              onOpenItem={onOpenItem}
-              onOpenTask={onOpenTask}
-              onCreateTask={onCreateTask}
-            />
-          </div>
+          <div className="flex min-h-0 flex-col overflow-hidden">{body}</div>
           {dockedPanel}
         </div>
       ) : (
-        <BoardBody
-          status={status}
-          project={project}
-          loading={loading}
-          columns={columns}
-          itemsByKey={itemsByKey}
-          tasksByKey={tasksByKey}
-          onTransition={onTransition}
-          onOpenItem={onOpenItem}
-          onOpenTask={onOpenTask}
-          onCreateTask={onCreateTask}
-        />
+        body
       )}
     </div>
   );

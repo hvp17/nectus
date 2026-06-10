@@ -170,6 +170,7 @@ Current commands:
 | `jira_list_projects` | List visible JIRA projects for the board's project picker (`acli jira project list --json`). |
 | `jira_search_board` | Load board work items; the JQL is built from the structured board config (project + filter flags + epic), so no JQL is typed. |
 | `jira_list_epics` | List a project's epics (`issuetype = Epic`) for the board's epic-filter picker. |
+| `jira_sprint_board` | Load the sprint view (active/future sprints + backlog, issues carrying their epic) via the Agile REST API. REST-token-gated; errors without a token. |
 | `jira_get_work_item` | Fetch a single work item (e.g. to backfill a story description). |
 | `jira_create_work_item` | Create a JIRA work item from project/type/summary (+ optional description, assignee, labels) via `acli jira workitem create`; returns the new item. |
 | `jira_transition_work_item` | Transition a work item to a target status. REST-aware: with a connected token it resolves the status to a legal transition and POSTs it; otherwise falls back to optimistic `acli` transition. |

@@ -104,6 +104,66 @@ struct RawFields {
     issuetype: Option<RawNamed>,
     priority: Option<RawNamed>,
     assignee: Option<RawAssignee>,
+    // Populated only when the caller requests them (the Agile sprint path asks for
+    // `epic` and `parent`); the plain acli board search omits both. `epic` is the
+    // classic Agile epic object; `parent` covers next-gen, where the epic is the
+    // issue's parent.
+    epic: Option<RawEpic>,
+    parent: Option<RawParent>,
+}
+
+/// Classic Agile `epic` field: `{ key, name, summary }` (the epic's "Epic Name" is
+/// `name`; `summary` is the fallback).
+#[derive(Debug, Deserialize)]
+struct RawEpic {
+    key: Option<String>,
+    name: Option<String>,
+    summary: Option<String>,
+}
+
+/// Next-gen `parent` field: the parent issue, used as the epic when its issue type
+/// is an Epic. `fields.summary` carries the parent's title.
+#[derive(Debug, Deserialize)]
+struct RawParent {
+    key: Option<String>,
+    fields: Option<RawParentFields>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawParentFields {
+    summary: Option<String>,
+    issuetype: Option<RawNamed>,
+}
+
+/// Resolve `(epic_key, epic_name)` from the issue's `epic`/`parent` fields. Prefers
+/// the explicit Agile `epic` object; falls back to `parent` only when the parent is
+/// itself an Epic (so a story's task-parent is never mistaken for an epic).
+fn extract_epic(fields: Option<&RawFields>) -> (Option<String>, Option<String>) {
+    let Some(fields) = fields else {
+        return (None, None);
+    };
+    if let Some(epic) = fields.epic.as_ref() {
+        if let Some(key) = epic.key.clone() {
+            let name = epic.name.clone().or_else(|| epic.summary.clone());
+            return (Some(key), name);
+        }
+    }
+    if let Some(parent) = fields.parent.as_ref() {
+        let is_epic = parent
+            .fields
+            .as_ref()
+            .and_then(|f| f.issuetype.as_ref())
+            .and_then(|t| t.name.as_deref())
+            .map(|name| name.eq_ignore_ascii_case("epic"))
+            .unwrap_or(false);
+        if is_epic {
+            if let Some(key) = parent.key.clone() {
+                let name = parent.fields.as_ref().and_then(|f| f.summary.clone());
+                return (Some(key), name);
+            }
+        }
+    }
+    (None, None)
 }
 
 /// Deserialize a JIRA rich-text field that may arrive as a plain string, `null`,
@@ -234,6 +294,7 @@ fn work_item_from_raw(raw: RawWorkItem) -> Option<JiraWorkItem> {
                 .or_else(|| a.account_id.clone())
         });
     let description = fields.as_ref().and_then(|f| f.description.clone());
+    let (epic_key, epic_name) = extract_epic(fields.as_ref());
     Some(JiraWorkItem {
         key,
         summary,
@@ -244,6 +305,8 @@ fn work_item_from_raw(raw: RawWorkItem) -> Option<JiraWorkItem> {
         assignee,
         url: raw.url,
         description,
+        epic_key,
+        epic_name,
     })
 }
 
@@ -567,6 +630,32 @@ mod tests {
         assert_eq!(items[1].status_category, JiraStatusCategory::Done);
         // A literal "None" priority is treated as unset.
         assert_eq!(items[1].priority, None);
+    }
+
+    #[test]
+    fn extracts_epic_from_agile_fields() {
+        // Classic Agile `epic` object wins; `name` is preferred over `summary`.
+        let classic = r#"[{"key":"PROJ-1","fields":{"summary":"Story","status":{"name":"To Do","statusCategory":{"key":"new"}},"epic":{"key":"PROJ-9","name":"Checkout","summary":"Checkout flow"}}}]"#;
+        let items = parse_work_items(classic).unwrap();
+        assert_eq!(items[0].epic_key.as_deref(), Some("PROJ-9"));
+        assert_eq!(items[0].epic_name.as_deref(), Some("Checkout"));
+
+        // Next-gen: epic comes from `parent` when the parent is itself an Epic.
+        let nextgen = r#"[{"key":"PROJ-2","fields":{"summary":"Story","status":{"name":"To Do","statusCategory":{"key":"new"}},"parent":{"key":"PROJ-5","fields":{"summary":"Billing","issuetype":{"name":"Epic"}}}}}]"#;
+        let items = parse_work_items(nextgen).unwrap();
+        assert_eq!(items[0].epic_key.as_deref(), Some("PROJ-5"));
+        assert_eq!(items[0].epic_name.as_deref(), Some("Billing"));
+
+        // A non-epic parent (e.g. a subtask's task-parent) is not treated as an epic.
+        let subtask = r#"[{"key":"PROJ-3","fields":{"summary":"Sub","status":{"name":"To Do","statusCategory":{"key":"new"}},"parent":{"key":"PROJ-4","fields":{"summary":"Parent task","issuetype":{"name":"Task"}}}}}]"#;
+        let items = parse_work_items(subtask).unwrap();
+        assert_eq!(items[0].epic_key, None);
+
+        // The plain board path (no epic/parent) leaves both None.
+        let plain = r#"[{"key":"PROJ-6","fields":{"summary":"x","status":{"name":"To Do","statusCategory":{"key":"new"}}}}]"#;
+        let items = parse_work_items(plain).unwrap();
+        assert_eq!(items[0].epic_key, None);
+        assert_eq!(items[0].epic_name, None);
     }
 
     #[test]

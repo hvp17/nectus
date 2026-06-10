@@ -585,7 +585,30 @@
 .nx-jira-card:focus-within .nx-jira-create { display: flex; }
 .nx-jira-create:hover { border-color: var(--primary); color: var(--primary); }
 .nx-jira-create svg { width: 13px; height: 13px; }
-.nx-jira-empty { margin: auto; color: var(--muted-foreground); font-size: 13px; text-align: center; padding: 40px; }
+.nx-jira-empty { margin: auto; color: var(--muted-foreground); font-size: 13px; text-align: center; padding: 40px; max-width: 460px; line-height: 1.5; }
+
+/* ---------- JIRA sprint view (sprint lanes split into epic swimlanes) ---------- */
+.nx-jira-sprints { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 16px; padding: 16px 22px; overflow-y: auto; }
+.nx-jira-sprint { border: 1px solid var(--border); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--muted) 28%, transparent); overflow: hidden; flex: none; }
+.nx-jira-sprint[data-state="active"] { border-color: color-mix(in oklch, var(--primary) 40%, var(--border)); }
+.nx-jira-sprint-head { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--card) 55%, transparent); }
+.nx-jira-sprint-name { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
+.nx-jira-sprint-state { font-size: 10px; }
+.nx-jira-sprint-range { font-size: 11.5px; color: var(--muted-foreground); font-family: var(--font-mono); }
+.nx-jira-sprint-count { margin-left: auto; }
+.nx-jira-sprint-goal { padding: 8px 14px 0; font-size: 12px; color: var(--muted-foreground); font-style: italic; }
+.nx-jira-sprint-body { display: flex; flex-direction: column; gap: 14px; padding: 14px; }
+.nx-jira-sprint-emptylane { font-size: 12.5px; color: var(--muted-foreground); padding: 6px 2px; }
+.nx-jira-swimlane { display: flex; flex-direction: column; gap: 9px; }
+.nx-jira-swimlane-head { display: flex; align-items: center; gap: 7px; color: var(--muted-foreground); }
+.nx-jira-swimlane-head svg { color: var(--muted-foreground); }
+.nx-jira-swimlane-name { font-size: 12px; font-weight: 700; color: var(--foreground); }
+.nx-jira-swimlane-key { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--muted-foreground); }
+.nx-jira-swimlane-count { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--muted-foreground); }
+.nx-jira-swimlane-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.nx-jira-statuspill { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 70%, transparent); color: var(--muted-foreground); white-space: nowrap; }
+.nx-jira-statuspill[data-cat="in_progress"] { background: color-mix(in oklch, var(--primary) 16%, transparent); color: var(--primary); }
+.nx-jira-statuspill[data-cat="done"] { background: color-mix(in oklch, var(--status-success) 18%, transparent); color: var(--status-success); }
 
 /* ---------- semantic badge variants (data-variant set by shadcn Badge) ---------- */
 [data-slot="badge"][data-variant="success"] { background: color-mix(in srgb, var(--status-success) 16%, transparent); color: var(--status-success); }

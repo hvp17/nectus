@@ -42,6 +42,8 @@ search, create, assign, and comment.
     unioned across issue types), so empty statuses still render.
   - **Board status filter** — a multi-select in the board header (options from the
     project status set) compiled into the board JQL as `status in (...)`.
+  - **Sprint view** — the Board/Sprint toggle's sprint layout (sprints + backlog,
+    grouped by epic) via the Agile API; see *Sprint view* below.
 - **Degradation:** with no token, behavior is exactly as before (item-derived columns,
   acli transition). The status filter still works token-free, but its options fall back
   to the statuses currently present on the board.
@@ -76,6 +78,31 @@ The board is entirely UI-driven; no JQL is ever typed.
 - The board refreshes when the view becomes active, when the project/filters change,
   when create/transition/assign/comment actions succeed, and via the `Refresh`
   button. There is no background polling or webhook.
+
+## Sprint view (grouped by epic)
+
+The JIRA view has a **Board / Sprint** toggle in its header (sharing the project
+picker). Sprint view renders JIRA's sprint/backlog layout: each **active** then
+**future** sprint as a section, followed by the **Backlog**, with every section split
+into **epic swimlanes**.
+
+- **REST-gated.** Sprints, boards, and the backlog are Agile-board concepts that
+  `acli` does not expose, so Sprint view requires the optional JIRA API token (see
+  *Optional REST layer*). Without a token it shows a "Connect a JIRA API token" prompt;
+  Board view is unaffected. Data comes from the Agile API (`/rest/agile/1.0`): the
+  project's first **Scrum** board (`/board?projectKeyOrId=<key>&type=scrum`) → its
+  active+future sprints (`/board/{id}/sprint?state=active,future`) → each sprint's
+  issues (`/board/{id}/sprint/{id}/issue`) and the `/board/{id}/backlog`. A project with
+  no Scrum board reports that Sprint view needs one.
+- **Epic grouping.** Each issue carries its epic (the Agile `epic` field, or `parent`
+  when the parent is an Epic — covering team- and company-managed projects), and
+  `groupByEpic` (`src/lib/jiraSprints.ts`) buckets a lane's issues into swimlanes,
+  first-seen epic order with a trailing "No epic" group.
+- **Read-only (v1).** Cards open the work-item panel, create a task from a story, and
+  open in JIRA, and each shows a status pill (there are no status columns). There is no
+  drag-to-transition and no moving issues between sprints in this view; use Board view
+  to transition. The Agile board is fetched fresh on open, on project change, and via
+  Refresh — no background polling.
 
 ## Creating a work item
 
@@ -165,7 +192,9 @@ All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
 
 ## Key files
 
-- Board view: `src/components/JiraBoardPage.tsx`
+- Board view (incl. the Board/Sprint toggle): `src/components/JiraBoardPage.tsx`
+- Sprint view body (sprint sections + epic swimlanes): `src/components/JiraSprintBody.tsx`;
+  epic-grouping helper: `src/lib/jiraSprints.ts`
 - Work item management dialog: `src/components/JiraWorkItemDialog.tsx`
 - New-work-item create panel: `src/components/JiraCreateWorkItemPanel.tsx`
 - Linked-story inspector panel: `src/components/JiraPanel.tsx`
@@ -179,7 +208,8 @@ All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
   `list_epics` for the epic picker), and the create argument builder/key parser:
   `native/src/jira.rs`
 - Optional REST layer: client + fixture-tested parsers (`parse_transitions`,
-  `parse_project_statuses`) in `native/src/jira_rest.rs`; Keychain token store in
+  `parse_project_statuses`) plus the Agile-API sprint layer (`find_scrum_board`,
+  `parse_sprints`, `sprint_board`) in `native/src/jira_rest.rs`; Keychain token store in
   `native/src/jira_secret.rs`; the token/transitions/statuses commands and the
   REST-aware `jira_transition_work_item` in `native/src/lib.rs`. Settings token card:
   `src/components/settings/JiraConnectionCard.tsx`.
@@ -189,9 +219,9 @@ All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
   ADF `description`) so a struct/CLI drift fails a test instead of users. Refresh
   via `native/src/jira_fixtures/scrub.py` per that directory's `README.md`.
 - Backend commands: `jira_status`, `jira_list_projects`, `jira_search_board`,
-  `jira_list_epics`, `jira_get_work_item`, `jira_transition_work_item`,
-  `jira_assign_work_item`, `jira_comment_work_item`, `jira_create_work_item`,
-  `set_task_jira_link` (registered in `native/src/lib.rs`)
+  `jira_list_epics`, `jira_sprint_board`, `jira_get_work_item`,
+  `jira_transition_work_item`, `jira_assign_work_item`, `jira_comment_work_item`,
+  `jira_create_work_item`, `set_task_jira_link` (registered in `native/src/lib.rs`)
 - Link persistence: the `jira_issue_key`, `jira_issue_summary`, and `jira_issue_url`
   columns on the `tasks` table; board config in `jira_board_project`, the
   `jira_filter_*` flags, and `jira_filter_epic` on `app_settings`

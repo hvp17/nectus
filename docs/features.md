@@ -585,6 +585,16 @@ cards/rows and a detachable panel in the task inspector, and — the other direc
 each board card lists the tasks attached to that story (agent logo, title, live/
 status), each click-through opening that task.
 
+**Sprint view (optional REST token).** A **Board / Sprint** toggle in the header
+switches the same project between the status-column board and JIRA's sprint layout:
+each active then future sprint, then the backlog, every section split into **epic
+swimlanes** (grouped by each issue's epic). Because sprints/boards/backlog are
+Agile-board concepts `acli` can't read, Sprint view is gated on the optional API
+token (it prompts to connect one otherwise) and loads from the Agile REST API
+(`/rest/agile/1.0`). v1 is read-only: cards open the work-item panel, create a task
+from a story, and show a status pill, but there's no drag — transition from Board
+view.
+
 **Custom workflows (optional REST token).** Because `acli` can't enumerate a
 project's statuses or an issue's valid transitions, an optional API-token layer
 (Settings → JIRA, stored in the macOS Keychain) unlocks custom-workflow support

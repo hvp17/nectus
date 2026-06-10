@@ -9,11 +9,13 @@ import {
   useJiraProjectStatusesQuery,
   useJiraBoardQuery,
   useJiraEpicsQuery,
+  useJiraSprintBoardQuery,
 } from "../queries/jira";
 import { isCliConnected } from "../lib/connection";
 import type {
   JiraProject,
   JiraRestStatus,
+  JiraSprintLane,
   JiraStatusCategory,
   JiraStatusDef,
   JiraWorkItem,
@@ -92,12 +94,15 @@ interface UseJiraInput {
   project: string | null;
   /** Board status-filter selection; narrows the rendered columns. */
   statusFilter: string[];
+  /** Whether Sprint view is active — gates the (REST-only) sprint board load. */
+  sprintMode?: boolean;
   setMessage: (message: string | null) => void;
 }
 
 const EMPTY_PROJECTS: JiraProject[] = [];
 const EMPTY_STATUSES: JiraStatusDef[] = [];
 const EMPTY_ITEMS: JiraWorkItem[] = [];
+const EMPTY_LANES: JiraSprintLane[] = [];
 
 /**
  * Owns JIRA connection state, the project list, and the board work items — backed
@@ -107,7 +112,14 @@ const EMPTY_ITEMS: JiraWorkItem[] = [];
  * is an optimistic cache write with snapshot rollback; the board JQL is built
  * backend-side from the structured config, so no JQL is typed here.
  */
-export function useJira({ active, configured, project, statusFilter, setMessage }: UseJiraInput) {
+export function useJira({
+  active,
+  configured,
+  project,
+  statusFilter,
+  sprintMode = false,
+  setMessage,
+}: UseJiraInput) {
   const queryClient = useQueryClient();
 
   const jiraStatus = useJiraStatusQuery().data;
@@ -122,10 +134,23 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
   const items = boardQuery.data ?? EMPTY_ITEMS;
   const loading = boardQuery.isLoading;
   const epics = useJiraEpicsQuery(project, active && ready).data ?? EMPTY_ITEMS;
+  // Sprint view is REST-only (acli exposes no sprint/board data), so the sprint
+  // board loads only with a connected token and Sprint mode active.
+  const sprintBoardQuery = useJiraSprintBoardQuery(
+    project,
+    active && ready && restConnected && sprintMode,
+  );
+  const sprintLanes = sprintBoardQuery.data ?? EMPTY_LANES;
+  const sprintLoading = sprintBoardQuery.isLoading;
+  const sprintError = sprintBoardQuery.error ? String(sprintBoardQuery.error) : null;
 
   const refresh = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.jira.board() });
   }, [queryClient]);
+
+  const refreshSprintBoard = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.jira.sprintBoard(project ?? "") });
+  }, [queryClient, project]);
 
   const transition = useCallback(
     async (item: JiraWorkItem, statusName: string) => {
@@ -243,7 +268,11 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
     epics,
     columns,
     loading,
+    sprintLanes,
+    sprintLoading,
+    sprintError,
     refresh,
+    refreshSprintBoard,
     transition,
     assign,
     comment,

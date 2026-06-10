@@ -644,8 +644,13 @@ function JiraView() {
       }}
       columns={jira.columns}
       loading={jira.loading}
+      viewMode={jiraBoard.viewMode}
+      onChangeViewMode={jiraBoard.setViewMode}
+      sprintLanes={jira.sprintLanes}
+      sprintLoading={jira.sprintLoading}
+      sprintError={jira.sprintError}
       onChangeConfig={jiraBoard.setBoardConfig}
-      onRefresh={jira.refresh}
+      onRefresh={jiraBoard.viewMode === "sprint" ? jira.refreshSprintBoard : jira.refresh}
       onTransition={jira.transition}
       onOpenItem={jiraBoard.openItem}
       onCreateTask={(item, agentProfileId) => {

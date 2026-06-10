@@ -10,6 +10,7 @@ import {
   seedJiraBoard,
   seedJiraEpics,
   seedJiraProjects,
+  seedJiraSprintBoard,
   seedJiraStatus,
   seedPrReviews,
   seedPrReviewRuns,
@@ -31,6 +32,7 @@ import type {
   GithubStatus,
   JiraProject,
   JiraRestStatus,
+  JiraSprintLane,
   JiraStatus,
   JiraStatusDef,
   JiraTransition,
@@ -262,6 +264,11 @@ export const api = {
   async jiraProjectStatuses(project: string): Promise<JiraStatusDef[]> {
     if (isBrowserPreview) return [];
     return invoke("jira_project_statuses", { project });
+  },
+  async jiraSprintBoard(project: string): Promise<JiraSprintLane[]> {
+    if (isBrowserPreview) return seedJiraSprintBoard;
+    if (!isTauriRuntime()) return [];
+    return invoke("jira_sprint_board", { project });
   },
   async jiraCreateWorkItem(input: {
     project: string;

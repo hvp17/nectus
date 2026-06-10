@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
-import type { JiraStatusDef, JiraWorkItem } from "../types";
+import type { JiraSprintLane, JiraStatusDef, JiraWorkItem } from "../types";
 import { queryKeys } from "./keys";
 import { useOptionalQuery } from "./optional";
 
@@ -66,6 +66,19 @@ export function useJiraEpicsQuery(project: string | null, enabled: boolean) {
           queryKey: queryKeys.jira.epics(project),
           queryFn: () => api.jiraListEpics(project),
           staleTime: 10 * 60_000,
+        }
+      : null,
+  );
+}
+
+export function useJiraSprintBoardQuery(project: string | null, enabled: boolean) {
+  const shouldLoad = enabled && project != null;
+  return useOptionalQuery<JiraSprintLane[]>(
+    shouldLoad
+      ? {
+          queryKey: queryKeys.jira.sprintBoard(project),
+          queryFn: () => api.jiraSprintBoard(project),
+          staleTime: 30_000,
         }
       : null,
   );

@@ -11,6 +11,7 @@ import type {
   DiffFileEntry,
   GithubStatus,
   JiraProject,
+  JiraSprintLane,
   JiraStatus,
   JiraWorkItem,
   PrReview,
@@ -203,6 +204,30 @@ export const seedJiraBoard: JiraWorkItem[] = [
 export const seedJiraEpics: JiraWorkItem[] = [
   { key: "WEB-400", summary: "Session persistence & resume", statusName: "In Progress", statusCategory: "in_progress", issueType: "Epic", priority: "High", assignee: "You" },
   { key: "WEB-380", summary: "Auth hardening", statusName: "To Do", statusCategory: "to_do", issueType: "Epic", priority: "Medium", assignee: "M. Reyes" },
+];
+
+export const seedJiraSprintBoard: JiraSprintLane[] = [
+  {
+    sprint: { id: 1, name: "WEB Sprint 24", state: "active", startDate: ago(7 * 24 * 60), endDate: ago(-7 * 24 * 60), goal: "Stabilize sessions & sign-in" },
+    items: [
+      { key: "WEB-412", summary: "Fix OAuth redirect loop on sign-in", statusName: "In Progress", statusCategory: "in_progress", issueType: "Bug", priority: "Highest", assignee: "You", epicKey: "WEB-380", epicName: "Auth hardening" },
+      { key: "WEB-405", summary: "Reduce SQLite write contention under parallel agents", statusName: "In Review", statusCategory: "in_progress", issueType: "Task", priority: "High", assignee: "M. Reyes", epicKey: "WEB-400", epicName: "Session persistence & resume" },
+      { key: "WEB-418", summary: "Persist terminal scrollback per session so refresh keeps context", statusName: "To Do", statusCategory: "to_do", issueType: "Story", priority: "High", assignee: "You", epicKey: "WEB-400", epicName: "Session persistence & resume" },
+    ],
+  },
+  {
+    sprint: { id: 2, name: "WEB Sprint 25", state: "future", startDate: ago(-7 * 24 * 60), endDate: ago(-21 * 24 * 60), goal: null },
+    items: [
+      { key: "WEB-421", summary: "Worktree cleanup leaves dangling lockfiles on force-quit", statusName: "To Do", statusCategory: "to_do", issueType: "Bug", priority: "Medium", assignee: "R. Okafor" },
+    ],
+  },
+  {
+    sprint: null,
+    items: [
+      { key: "WEB-398", summary: "Resume Codex sessions from saved session id", statusName: "To Do", statusCategory: "to_do", issueType: "Story", priority: "Low", assignee: "K. Fowler", epicKey: "WEB-400", epicName: "Session persistence & resume" },
+      { key: "WEB-377", summary: "Audit log for token connect/disconnect", statusName: "To Do", statusCategory: "to_do", issueType: "Task", priority: "Low", assignee: "M. Reyes", epicKey: "WEB-380", epicName: "Auth hardening" },
+    ],
+  },
 ];
 
 const consensusOutput = `**Blocking: writer starvation risk.** Enabling WAL without re-setting busy_timeout means concurrent task writers can fail with SQLITE_BUSY under the parallel-agent workload.

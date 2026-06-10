@@ -11,10 +11,10 @@ mod sessions;
 use crate::db::Database;
 use crate::models::{
     AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings, AppSettingsInput,
-    GithubStatus, JiraProject, JiraRestStatus, JiraStatus, JiraStatusDef, JiraTransition,
-    JiraWorkItem, PrReview, PrReviewMode, PrReviewRun, PullRequestInfo, Repo, ReviewLoop,
-    ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskDiffSummary, TaskStatus,
-    TaskSummary, Workspace,
+    GithubStatus, JiraProject, JiraRestStatus, JiraSprintLane, JiraStatus, JiraStatusDef,
+    JiraTransition, JiraWorkItem, PrReview, PrReviewMode, PrReviewRun, PullRequestInfo, Repo,
+    ReviewLoop, ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskDiffSummary,
+    TaskStatus, TaskSummary, Workspace,
 };
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
@@ -702,6 +702,23 @@ async fn jira_project_statuses(
     .map_err(Into::into)
 }
 
+/// Load the sprint board (active/future sprints + backlog, issues carrying their
+/// epic) via the Agile REST API. Errors when no token is connected — Sprint view is
+/// REST-gated, since acli exposes no sprint/board data.
+#[tauri::command]
+async fn jira_sprint_board(
+    state: State<'_, AppState>,
+    project: String,
+) -> AppResult<Vec<JiraSprintLane>> {
+    let (site, email, token) = rest_credentials(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        jira_rest::sprint_board(&site, &email, &token, &project)
+    })
+    .await
+    .map_err(|error| AppError::from(format!("Failed to load sprint board: {error}")))?
+    .map_err(Into::into)
+}
+
 /// Set or clear the local JIRA story link on a task. Never writes to JIRA.
 #[tauri::command]
 fn set_task_jira_link(
@@ -1124,6 +1141,7 @@ pub fn run() {
             clear_jira_api_token,
             jira_list_transitions,
             jira_project_statuses,
+            jira_sprint_board,
             set_task_jira_link,
             create_pr_review,
             list_pr_reviews,

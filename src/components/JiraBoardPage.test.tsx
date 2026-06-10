@@ -2,7 +2,7 @@ import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { renderWithTooltipProvider } from "../test/testUtils";
 import type { JiraColumn } from "../hooks/useJira";
-import type { JiraStatus, JiraWorkItem, TaskSummary } from "../types";
+import type { JiraSprintLane, JiraStatus, JiraWorkItem, TaskSummary } from "../types";
 import { JiraBoardPage } from "./JiraBoardPage";
 
 const status: JiraStatus = {
@@ -305,5 +305,70 @@ describe("JiraBoardPage epic filter", () => {
     fireEvent.click(await screen.findByRole("option", { name: "All epics" }));
 
     expect(onChangeConfig).toHaveBeenCalledWith({ epic: null });
+  });
+});
+
+describe("JiraBoardPage sprint view", () => {
+  const lanes: JiraSprintLane[] = [
+    {
+      sprint: { id: 1, name: "Sprint 7", state: "active", startDate: null, endDate: null, goal: "Ship it" },
+      items: [
+        { key: "SCRUM-10", summary: "Login flow", statusName: "In Progress", statusCategory: "in_progress", epicKey: "SCRUM-1", epicName: "Auth" },
+        { key: "SCRUM-11", summary: "Loose end", statusName: "To Do", statusCategory: "to_do" },
+      ],
+    },
+    { sprint: null, items: [{ key: "SCRUM-12", summary: "Backlog item", statusName: "To Do", statusCategory: "to_do", epicKey: "SCRUM-1", epicName: "Auth" }] },
+  ];
+
+  function renderSprint(overrides: Partial<React.ComponentProps<typeof JiraBoardPage>> = {}) {
+    renderWithTooltipProvider(
+      <JiraBoardPage
+        status={status}
+        projects={[{ key: "SCRUM", name: "Scrum" }]}
+        tasks={[]}
+        project="SCRUM"
+        filters={{ myIssues: false, unresolved: true, currentSprint: false, statuses: [], epic: null }}
+        columns={columns}
+        loading={false}
+        viewMode="sprint"
+        onChangeViewMode={vi.fn()}
+        sprintLanes={lanes}
+        sprintLoading={false}
+        sprintError={null}
+        restConnected
+        onChangeConfig={vi.fn()}
+        onRefresh={vi.fn()}
+        onTransition={vi.fn()}
+        onOpenItem={vi.fn()}
+        onOpenTask={vi.fn()}
+        onCreateTask={vi.fn()}
+        {...overrides}
+      />,
+    );
+  }
+
+  it("renders sprint sections, epic swimlanes, and the backlog", () => {
+    renderSprint();
+    expect(screen.getByText("Sprint 7")).toBeInTheDocument();
+    expect(screen.getByText("Backlog")).toBeInTheDocument();
+    // Epic swimlane header + the "No epic" bucket for the un-epic'd item.
+    expect(screen.getAllByText("Auth").length).toBeGreaterThan(0);
+    expect(screen.getByText("No epic")).toBeInTheDocument();
+    expect(screen.getByText("Login flow")).toBeInTheDocument();
+    expect(screen.getByText("Backlog item")).toBeInTheDocument();
+  });
+
+  it("prompts to connect a token when REST is not connected", () => {
+    renderSprint({ restConnected: false });
+    expect(screen.getByText(/needs a JIRA API token/i)).toBeInTheDocument();
+    // The sprint data is not rendered without a token.
+    expect(screen.queryByText("Sprint 7")).not.toBeInTheDocument();
+  });
+
+  it("toggles between Board and Sprint", () => {
+    const onChangeViewMode = vi.fn();
+    renderSprint({ viewMode: "board", onChangeViewMode });
+    fireEvent.click(screen.getByRole("button", { name: "Sprint" }));
+    expect(onChangeViewMode).toHaveBeenCalledWith("sprint");
   });
 });

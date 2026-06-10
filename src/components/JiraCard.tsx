@@ -9,6 +9,7 @@ export function JiraCard({
   done,
   selected,
   linkedTasks,
+  showStatus,
   onOpen,
   onOpenTask,
   onCreateTask,
@@ -17,6 +18,8 @@ export function JiraCard({
   done: boolean;
   selected?: boolean;
   linkedTasks: TaskSummary[];
+  /** Show the item's status as a pill (used in Sprint view, which has no status columns). */
+  showStatus?: boolean;
   onOpen: () => void;
   onOpenTask: (taskId: number) => void;
   onCreateTask: () => void;
@@ -42,6 +45,11 @@ export function JiraCard({
       <div className="nx-jira-foot">
         <JiraIssueTypeIcon type={item.issueType} className="nx-jtype" />
         <span className={`nx-jira-key${done ? " done" : ""}`}>{item.key}</span>
+        {showStatus && (
+          <span className="nx-jira-statuspill" data-cat={item.statusCategory}>
+            {item.statusName}
+          </span>
+        )}
         <span className="nx-jira-foot-right">
           <JiraPriorityIcon priority={item.priority} className="nx-jprio" />
           <JiraAvatar name={item.assignee} className={item.assignee ? "nx-java" : "nx-java empty"} />

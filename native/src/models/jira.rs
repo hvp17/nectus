@@ -41,6 +41,37 @@ pub struct JiraWorkItem {
     pub assignee: Option<String>,
     pub url: Option<String>,
     pub description: Option<String>,
+    /// Parent epic key, when known. Populated by the Agile-API sprint path (and any
+    /// search that requests the `epic`/`parent` fields); `None` on the plain acli
+    /// board path, which does not carry it.
+    #[serde(default)]
+    pub epic_key: Option<String>,
+    /// Parent epic name/summary, when known. Same provenance as `epic_key`.
+    #[serde(default)]
+    pub epic_name: Option<String>,
+}
+
+/// A sprint from the Agile REST API (`/rest/agile/1.0/board/{id}/sprint`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct JiraSprint {
+    pub id: i64,
+    pub name: String,
+    /// JIRA sprint state: `active`, `future`, or `closed`.
+    pub state: String,
+    pub start_date: Option<String>,
+    pub end_date: Option<String>,
+    pub goal: Option<String>,
+}
+
+/// One row of the sprint board: a sprint and its issues, or the backlog when
+/// `sprint` is `None`. Issues carry their `epic_key`/`epic_name` so the UI can
+/// group each lane into epic swimlanes.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct JiraSprintLane {
+    pub sprint: Option<JiraSprint>,
+    pub items: Vec<JiraWorkItem>,
 }
 
 impl JiraStatusCategory {
