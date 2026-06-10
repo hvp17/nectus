@@ -186,10 +186,20 @@ found, Nectus offers a one-click install followed by an app relaunch.
 
 ### First-run Gatekeeper note
 
-Nectus is not yet Apple-notarized, so the **first** download triggers a
-Gatekeeper "cannot verify" / "damaged" warning. Clear it once by right-clicking
-the app and choosing **Open**. Notarization is a future add-on and does not
-affect update integrity, which is minisign-secured end to end.
+Nectus is ad-hoc code-signed (`bundle.macOS.signingIdentity: "-"`) but not yet
+Apple-notarized, so the **first** download triggers a Gatekeeper "unidentified
+developer" warning. Clear it once by right-clicking the app and choosing
+**Open** (or System Settings → Privacy & Security → **Open Anyway**).
+
+If macOS still reports the app as **"damaged and can't be opened"**, the
+download's quarantine flag is the cause — strip it once with:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Nectus Desktop.app"
+```
+
+Notarization is a future add-on and does not affect update integrity, which is
+minisign-secured end to end.
 
 ## Verification
 

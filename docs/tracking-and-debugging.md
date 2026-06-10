@@ -655,9 +655,13 @@ Relevant code:
 Nectus ships a Tauri 2 auto-updater for the Apple Silicon (aarch64) build. The
 public repo `github.com/hvp17/nectus` hosts releases, so the updater reads them
 directly with no token. Integrity is secured by Tauri minisign signing
-(independent of Apple); the app is not yet Apple-notarized, so the **first**
-download triggers a Gatekeeper "cannot verify"/"damaged" warning the user clears
-with right-click → Open. Notarization is a future add-on, out of scope here.
+(independent of Apple); the app is ad-hoc code-signed
+(`bundle.macOS.signingIdentity: "-"`) but not yet Apple-notarized, so the
+**first** download triggers a Gatekeeper "unidentified developer" warning the
+user clears with right-click → Open. If macOS reports the app as **"damaged"**,
+the download's quarantine flag is the cause — strip it with
+`xattr -dr com.apple.quarantine "/Applications/Nectus Desktop.app"`.
+Notarization is a future add-on, out of scope here.
 
 The update state machine lives in `src/hooks/useAppUpdate.ts`, with the
 Tauri-guarded wrapper in `src/lib/update.ts` (all no-ops outside Tauri). It runs

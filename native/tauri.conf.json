@@ -29,7 +29,10 @@
     "active": true,
     "targets": "all",
     "icon": ["icons/icon.png"],
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": true,
+    "macOS": {
+      "signingIdentity": "-"
+    }
   },
   "plugins": {
     "updater": {

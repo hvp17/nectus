@@ -643,9 +643,12 @@ Current behavior:
 - If checks overlap, only the latest check is allowed to update the visible
   status or install target; slower earlier responses are ignored.
 - Update integrity is secured by **Tauri minisign signing** (independent of
-  Apple); the public key is committed in `native/tauri.conf.json`. The app is not
-  Apple-notarized, so the **first** download trips a Gatekeeper "cannot
-  verify"/"damaged" warning the user clears with right-click → **Open**.
+  Apple); the public key is committed in `native/tauri.conf.json`. The app is
+  ad-hoc code-signed (`bundle.macOS.signingIdentity: "-"`) but not
+  Apple-notarized, so the **first** download trips a Gatekeeper "unidentified
+  developer" warning the user clears with right-click → **Open** (a "damaged"
+  report means the quarantine flag — strip it with
+  `xattr -dr com.apple.quarantine "/Applications/Nectus Desktop.app"`).
   Notarization is a future add-on, out of scope.
 
 The update lifecycle is a small state machine (`UpdateStatus`:
