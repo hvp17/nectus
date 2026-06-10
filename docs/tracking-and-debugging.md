@@ -25,7 +25,7 @@ Core tables:
 | `workspaces` | Durable, named groups of repos (VSCode-workspace style). `collapsed` is the sidebar fold state of the workspace's nested agent list (UI preference). |
 | `workspace_repos` | Workspace membership: `(workspace_id, repo_id, position)`. Many-to-many, so a repo can belong to several workspaces; cascade-deletes with either side. |
 | `agent_profiles` | CLI agent configuration, including command, model, args, and env. |
-| `app_settings` | Default agent, worktree pattern, branch prefix, theme, density, and the JIRA board config (selected project + filter flags + `jira_filter_statuses`; the JQL is built from these). Also the non-secret JIRA REST account email (`jira_rest_email`); the REST API token itself lives in the macOS Keychain, never here. |
+| `app_settings` | Default agent, worktree pattern, branch prefix, theme, density, and the JIRA board config (selected project + filter flags + `jira_filter_statuses` + `jira_filter_epic`; the JQL is built from these). Also the non-secret JIRA REST account email (`jira_rest_email`); the REST API token itself lives in the macOS Keychain, never here. |
 | `tasks` | Primary work item, status, prompt, optional worktree, active session, saved session, the persisted `attention` signal (`needs_input`/NULL), optional JIRA story link, and optional `workspace_id` (the workspace a cross-repo task was created in). For a cross-repo task the `repo_id`/`branch_name`/`worktree_path`/`pr_url` columns describe the **primary** repo. |
 | `task_repos` | Per-repo working state for a task (Increment B): `(task_id, repo_id, branch_name, worktree_path, pr_url, position)`. The complete repo set; a single-repo task has one row mirroring `tasks`. Unique on `worktree_path` and on `(repo_id, branch_name)`. Cascade-deletes with the task or repo. |
 | `review_loops` | Current review configuration and status per task. Includes `reviewer_session_id` (the active reviewer's session id for resume; reset to `NULL` when the loop is restarted via `start_pair_loop`). |
@@ -168,7 +168,8 @@ Current commands:
 | `detect_github_pull_request` | Check whether a worktree task's branch already has a PR (`gh pr view`) and backfill its URL. |
 | `jira_status` | Report whether `acli` is installed, authenticated, and the active site. |
 | `jira_list_projects` | List visible JIRA projects for the board's project picker (`acli jira project list --json`). |
-| `jira_search_board` | Load board work items; the JQL is built from the structured board config (project + filter flags), so no JQL is typed. |
+| `jira_search_board` | Load board work items; the JQL is built from the structured board config (project + filter flags + epic), so no JQL is typed. |
+| `jira_list_epics` | List a project's epics (`issuetype = Epic`) for the board's epic-filter picker. |
 | `jira_get_work_item` | Fetch a single work item (e.g. to backfill a story description). |
 | `jira_create_work_item` | Create a JIRA work item from project/type/summary (+ optional description, assignee, labels) via `acli jira workitem create`; returns the new item. |
 | `jira_transition_work_item` | Transition a work item to a target status. REST-aware: with a connected token it resolves the status to a legal transition and POSTs it; otherwise falls back to optimistic `acli` transition. |
@@ -279,8 +280,8 @@ worktree tasks have both.
 Additive columns (such as the `jira_*` task fields above and the `app_settings` JIRA
 board config — `jira_board_project`, `jira_filter_my_issues`, `jira_filter_unresolved`,
 `jira_filter_current_sprint`, the REST `jira_rest_email`, the JSON-encoded
-`jira_filter_statuses` status filter, plus the legacy `jira_board_jql` /
-`jira_site_url`) are introduced by `run_migrations` in `native/src/db/schema.rs`, which
+`jira_filter_statuses` status filter, the `jira_filter_epic` epic filter, plus the
+legacy `jira_board_jql` / `jira_site_url`) are introduced by `run_migrations` in `native/src/db/schema.rs`, which
 `ALTER TABLE`s any missing column on every open so existing databases upgrade in place.
 The JIRA REST API token is **not** a column — it lives in the macOS Keychain
 (`native/src/jira_secret.rs`).

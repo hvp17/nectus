@@ -56,9 +56,18 @@ export function useJiraBoardView({ active, settings, setSettings, setMessage }: 
       unresolved?: boolean;
       currentSprint?: boolean;
       statuses?: string[];
+      epic?: string | null;
     }) =>
       run(async () => {
         if (!settings) return;
+        // Switching projects clears the epic filter (an epic key belongs to one
+        // project), unless the same change explicitly sets a new epic.
+        const epic =
+          partial.epic !== undefined
+            ? partial.epic
+            : partial.project !== undefined && partial.project !== settings.jiraBoardProject
+              ? null
+              : settings.jiraFilterEpic ?? null;
         const updated = await api.updateAppSettings({
           ...toSettingsInput(settings),
           jiraBoardProject:
@@ -67,6 +76,7 @@ export function useJiraBoardView({ active, settings, setSettings, setMessage }: 
           jiraFilterUnresolved: partial.unresolved ?? settings.jiraFilterUnresolved,
           jiraFilterCurrentSprint: partial.currentSprint ?? settings.jiraFilterCurrentSprint,
           jiraFilterStatuses: partial.statuses ?? settings.jiraFilterStatuses,
+          jiraFilterEpic: epic,
         });
         setSettings(updated);
         await refreshJira();

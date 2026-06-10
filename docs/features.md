@@ -556,10 +556,11 @@ The JIRA Board is a first-class view (icon rail, alongside PR Reviews) backed
 by the official Atlassian CLI (`acli`), so Nectus stores no tokens and runs no
 OAuth. The board is global and fully UI-driven — **no JQL is typed**: pick a JIRA
 project from a dropdown (populated by `acli jira project list`) and toggle filters
-(My issues / Hide done / Current sprint). Nectus builds the query behind the scenes
-(`jira::build_board_jql`, stored as `jira_board_project` + `jira_filter_*` flags) and
-loads work items into **auto-derived columns** grouped by status and ordered by JIRA
-status category.
+(My issues / Hide done / Current sprint), narrow to a status set, or pick an **Epic**
+to show only that epic's children (`parent = "<key>"`). Nectus builds the query behind
+the scenes (`jira::build_board_jql`, stored as `jira_board_project` + `jira_filter_*`
+flags + `jira_filter_epic`) and loads work items into **auto-derived columns** grouped
+by status and ordered by JIRA status category.
 
 It is a full management surface: create a new work item, drag a card between
 columns to transition it (optimistic — reverted if JIRA's workflow rejects the

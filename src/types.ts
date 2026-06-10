@@ -300,6 +300,8 @@ export interface AppSettings {
   jiraRestEmail?: string | null;
   /** Board status filter selection; empty means no filter. */
   jiraFilterStatuses: string[];
+  /** Board epic filter (an epic key); null/absent means no epic filter. */
+  jiraFilterEpic?: string | null;
   theme: ThemeMode;
   density: DensityMode;
   updatedAt: string;
@@ -316,6 +318,7 @@ export interface AppSettingsInput {
   jiraFilterUnresolved: boolean;
   jiraFilterCurrentSprint: boolean;
   jiraFilterStatuses: string[];
+  jiraFilterEpic?: string | null;
   theme: ThemeMode;
   density: DensityMode;
 }

@@ -104,6 +104,7 @@ export function defineAppSmokeTests() {
         jiraFilterUnresolved: true,
         jiraFilterCurrentSprint: false,
         jiraFilterStatuses: [],
+        jiraFilterEpic: null,
         theme: "dark",
         density: "compact",
       });

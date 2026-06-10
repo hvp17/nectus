@@ -63,7 +63,7 @@ function renderBoard(tasks: TaskSummary[], onOpenTask = vi.fn()) {
       projects={[{ key: "SCRUM", name: "Scrum" }]}
       tasks={tasks}
       project="SCRUM"
-      filters={{ myIssues: false, unresolved: true, currentSprint: false, statuses: [] }}
+      filters={{ myIssues: false, unresolved: true, currentSprint: false, statuses: [], epic: null }}
       columns={columns}
       loading={false}
       onChangeConfig={vi.fn()}
@@ -98,7 +98,7 @@ function renderCreatable(
       projects={[{ key: "SCRUM", name: "Scrum" }]}
       tasks={[]}
       project={overrides.project === undefined ? "SCRUM" : overrides.project}
-      filters={{ myIssues: false, unresolved: true, currentSprint: false, statuses: [] }}
+      filters={{ myIssues: false, unresolved: true, currentSprint: false, statuses: [], epic: null }}
       columns={columns}
       loading={false}
       onChangeConfig={vi.fn()}
@@ -204,7 +204,7 @@ describe("JiraBoardPage status filter", () => {
         projects={[{ key: "SCRUM", name: "Scrum" }]}
         tasks={[]}
         project="SCRUM"
-        filters={{ myIssues: false, unresolved: true, currentSprint: false, statuses: [] }}
+        filters={{ myIssues: false, unresolved: true, currentSprint: false, statuses: [], epic: null }}
         columns={columns}
         loading={false}
         onChangeConfig={onChangeConfig}
@@ -234,7 +234,7 @@ describe("JiraBoardPage status filter", () => {
         projects={[{ key: "SCRUM", name: "Scrum" }]}
         tasks={[]}
         project="SCRUM"
-        filters={{ myIssues: false, unresolved: true, currentSprint: false, statuses: ["Done"] }}
+        filters={{ myIssues: false, unresolved: true, currentSprint: false, statuses: ["Done"], epic: null }}
         columns={[]}
         loading={false}
         onChangeConfig={onChangeConfig}
@@ -253,5 +253,57 @@ describe("JiraBoardPage status filter", () => {
     fireEvent.click(doneItem);
 
     expect(onChangeConfig).toHaveBeenCalledWith({ statuses: [] });
+  });
+});
+
+describe("JiraBoardPage epic filter", () => {
+  const epics: JiraWorkItem[] = [
+    { key: "SCRUM-1", summary: "Auth hardening", statusName: "To Do", statusCategory: "to_do" },
+    { key: "SCRUM-2", summary: "Billing", statusName: "To Do", statusCategory: "to_do" },
+  ];
+
+  function renderEpicBoard(
+    onChangeConfig: () => void,
+    epic: string | null,
+    epicList: JiraWorkItem[] = epics,
+  ) {
+    renderWithTooltipProvider(
+      <JiraBoardPage
+        status={status}
+        projects={[{ key: "SCRUM", name: "Scrum" }]}
+        tasks={[]}
+        project="SCRUM"
+        filters={{ myIssues: false, unresolved: true, currentSprint: false, statuses: [], epic }}
+        columns={columns}
+        loading={false}
+        onChangeConfig={onChangeConfig}
+        onRefresh={vi.fn()}
+        onTransition={vi.fn()}
+        onOpenItem={vi.fn()}
+        onOpenTask={vi.fn()}
+        onCreateTask={vi.fn()}
+        epics={epicList}
+      />,
+    );
+  }
+
+  it("persists the chosen epic key", async () => {
+    const onChangeConfig = vi.fn();
+    renderEpicBoard(onChangeConfig, null);
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Filter by epic" }));
+    fireEvent.click(await screen.findByRole("option", { name: /SCRUM-2/ }));
+
+    expect(onChangeConfig).toHaveBeenCalledWith({ epic: "SCRUM-2" });
+  });
+
+  it("clears the epic filter via 'All epics'", async () => {
+    const onChangeConfig = vi.fn();
+    renderEpicBoard(onChangeConfig, "SCRUM-1");
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Filter by epic" }));
+    fireEvent.click(await screen.findByRole("option", { name: "All epics" }));
+
+    expect(onChangeConfig).toHaveBeenCalledWith({ epic: null });
   });
 });

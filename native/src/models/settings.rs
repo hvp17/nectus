@@ -40,6 +40,9 @@ pub struct AppSettings {
     pub jira_rest_email: Option<String>,
     /// Board status filter selection (the statuses to show); empty means no filter.
     pub jira_filter_statuses: Vec<String>,
+    /// Board epic filter: when set, narrows the board to children of this epic
+    /// (JQL `parent = "<key>"`). `None`/empty means no epic filter.
+    pub jira_filter_epic: Option<String>,
     pub theme: ThemeMode,
     pub density: DensityMode,
     pub updated_at: String,
@@ -65,6 +68,8 @@ pub struct AppSettingsInput {
     pub jira_filter_current_sprint: bool,
     #[serde(default)]
     pub jira_filter_statuses: Vec<String>,
+    #[serde(default)]
+    pub jira_filter_epic: Option<String>,
     pub theme: ThemeMode,
     pub density: DensityMode,
 }

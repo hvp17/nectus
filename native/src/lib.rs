@@ -474,9 +474,19 @@ async fn jira_search_board(state: State<'_, AppState>) -> AppResult<Vec<JiraWork
             settings.jira_filter_unresolved,
             settings.jira_filter_current_sprint,
             &settings.jira_filter_statuses,
+            settings.jira_filter_epic.as_deref(),
         )
     };
     blocking("Failed to load JIRA board", move || jira::search(&jql, 200)).await
+}
+
+/// List a project's epics, to populate the board's epic-filter picker.
+#[tauri::command]
+async fn jira_list_epics(project: String) -> AppResult<Vec<JiraWorkItem>> {
+    blocking("Failed to list JIRA epics", move || {
+        jira::list_epics(&project)
+    })
+    .await
 }
 
 /// Fetch a single work item (e.g. to backfill a story description on attach).
@@ -1103,6 +1113,7 @@ pub fn run() {
             jira_status,
             jira_list_projects,
             jira_search_board,
+            jira_list_epics,
             jira_get_work_item,
             jira_transition_work_item,
             jira_assign_work_item,

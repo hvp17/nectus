@@ -8,6 +8,7 @@ import {
   isBrowserPreview,
   seedGithubStatus,
   seedJiraBoard,
+  seedJiraEpics,
   seedJiraProjects,
   seedJiraStatus,
   seedPrReviews,
@@ -227,6 +228,11 @@ export const api = {
     if (!isTauriRuntime()) return [];
     return invoke("jira_search_board");
   },
+  async jiraListEpics(project: string): Promise<JiraWorkItem[]> {
+    if (isBrowserPreview) return seedJiraEpics;
+    if (!isTauriRuntime()) return [];
+    return invoke("jira_list_epics", { project });
+  },
   async jiraGetWorkItem(key: string): Promise<JiraWorkItem> {
     return invoke("jira_get_work_item", { key });
   },
@@ -366,6 +372,7 @@ export const api = {
         jiraFilterUnresolved: true,
         jiraFilterCurrentSprint: false,
         jiraFilterStatuses: [],
+        jiraFilterEpic: null,
         theme: "system",
         density: "comfortable",
         updatedAt: new Date().toISOString(),

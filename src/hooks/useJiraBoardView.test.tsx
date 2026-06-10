@@ -19,6 +19,7 @@ function jiraState(): ReturnType<typeof useJira> {
     projects: [],
     projectStatuses: [],
     items: [],
+    epics: [],
     columns: [],
     loading: false,
     refresh: vi.fn(),

@@ -200,6 +200,11 @@ export const seedJiraBoard: JiraWorkItem[] = [
   { key: "WEB-398", summary: "Resume Codex sessions from saved session id", statusName: "Done", statusCategory: "done", issueType: "Story", priority: "Low", assignee: "K. Fowler" },
 ];
 
+export const seedJiraEpics: JiraWorkItem[] = [
+  { key: "WEB-400", summary: "Session persistence & resume", statusName: "In Progress", statusCategory: "in_progress", issueType: "Epic", priority: "High", assignee: "You" },
+  { key: "WEB-380", summary: "Auth hardening", statusName: "To Do", statusCategory: "to_do", issueType: "Epic", priority: "Medium", assignee: "M. Reyes" },
+];
+
 const consensusOutput = `**Blocking: writer starvation risk.** Enabling WAL without re-setting busy_timeout means concurrent task writers can fail with SQLITE_BUSY under the parallel-agent workload.
 
 Add \`PRAGMA busy_timeout=5000\` and a write retry, then re-review.`;

@@ -41,5 +41,6 @@ export const queryKeys = {
     projects: () => ["jira", "projects"] as const,
     projectStatuses: (project: string) => ["jira", "project-statuses", project] as const,
     board: () => ["jira", "board"] as const,
+    epics: (project: string) => ["jira", "epics", project] as const,
   },
 } as const;

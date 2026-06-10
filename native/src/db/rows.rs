@@ -170,6 +170,7 @@ pub(super) fn app_settings_from_row(row: &Row<'_>) -> rusqlite::Result<AppSettin
         jira_rest_email: row.get(12)?,
         jira_filter_statuses: serde_json::from_str::<Vec<String>>(&row.get::<_, String>(13)?)
             .unwrap_or_default(),
+        jira_filter_epic: row.get(14)?,
     })
 }
 

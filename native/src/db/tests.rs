@@ -195,6 +195,7 @@ fn seeds_and_updates_global_app_settings() {
             jira_filter_unresolved: true,
             jira_filter_current_sprint: false,
             jira_filter_statuses: vec![],
+            jira_filter_epic: None,
             theme: ThemeMode::Dark,
             density: DensityMode::Compact,
         })
@@ -266,6 +267,7 @@ fn persists_jira_link_and_board_settings() {
             jira_filter_unresolved: false,
             jira_filter_current_sprint: true,
             jira_filter_statuses: vec![],
+            jira_filter_epic: None,
             theme: base.theme,
             density: base.density,
         })
@@ -301,6 +303,7 @@ fn persists_jira_filter_statuses_and_rest_account() {
         jira_filter_unresolved: true,
         jira_filter_current_sprint: false,
         jira_filter_statuses: vec!["To Do".into(), "Done".into()],
+        jira_filter_epic: Some("ENG-1".into()),
         theme: base.theme,
         density: base.density,
     })
@@ -310,6 +313,7 @@ fn persists_jira_filter_statuses_and_rest_account() {
 
     let reloaded = db.get_app_settings().unwrap();
     assert_eq!(reloaded.jira_filter_statuses, vec!["To Do", "Done"]);
+    assert_eq!(reloaded.jira_filter_epic.as_deref(), Some("ENG-1"));
     assert_eq!(reloaded.jira_rest_email.as_deref(), Some("a@b.com"));
     assert_eq!(
         reloaded.jira_site_url.as_deref(),
@@ -351,6 +355,7 @@ fn updated_worktree_root_pattern_applies_to_existing_and_new_repos() {
         jira_filter_unresolved: true,
         jira_filter_current_sprint: false,
         jira_filter_statuses: vec![],
+        jira_filter_epic: None,
         theme: ThemeMode::System,
         density: DensityMode::Comfortable,
     })

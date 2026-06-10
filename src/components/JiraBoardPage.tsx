@@ -35,6 +35,8 @@ export interface JiraBoardFilters {
   unresolved: boolean;
   currentSprint: boolean;
   statuses: string[];
+  /** Selected epic key, or null for no epic filter. */
+  epic: string | null;
 }
 
 export interface JiraBoardConfigChange {
@@ -43,7 +45,11 @@ export interface JiraBoardConfigChange {
   unresolved?: boolean;
   currentSprint?: boolean;
   statuses?: string[];
+  epic?: string | null;
 }
+
+/** Sentinel Select value for "no epic filter" (Select items can't be empty). */
+const ALL_EPICS_VALUE = "__all_epics";
 
 interface JiraBoardPageProps {
   status: JiraStatus | undefined;
@@ -83,6 +89,8 @@ interface JiraBoardPageProps {
   onListTransitions?: (key: string) => Promise<JiraTransition[]>;
   /** Statuses offered in the board's status filter (project set when connected). */
   filterableStatuses?: string[];
+  /** Epics offered in the board's epic filter (from the selected project). */
+  epics?: JiraWorkItem[];
   onAssign?: (key: string, assignee: string) => void;
   onComment?: (key: string, body: string) => void;
   onPickAgent?: (profileId: number) => void;
@@ -115,6 +123,7 @@ export function JiraBoardPage({
   restConnected,
   onListTransitions,
   filterableStatuses,
+  epics,
   onAssign,
   onComment,
   onPickAgent,
@@ -129,6 +138,15 @@ export function JiraBoardPage({
   const statusFilterOptions = Array.from(
     new Set([...(filterableStatuses ?? []), ...filters.statuses]),
   );
+
+  // Epic options for the picker. Keep the currently-selected epic listed even if
+  // it isn't (yet) in the fetched epics (still loading, or filtered out), so the
+  // active selection always renders rather than collapsing to the placeholder.
+  const epicList = epics ?? [];
+  const epicOptions =
+    filters.epic && !epicList.some((epic) => epic.key === filters.epic)
+      ? [{ key: filters.epic, summary: "" } as JiraWorkItem, ...epicList]
+      : epicList;
 
   // Group local tasks by the JIRA story they are attached to, so each card can
   // list its own sessions without re-scanning the whole task list per render.
@@ -278,6 +296,26 @@ export function JiraBoardPage({
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <Select
+            value={filters.epic ?? ALL_EPICS_VALUE}
+            onValueChange={(value) =>
+              onChangeConfig({ epic: value === ALL_EPICS_VALUE ? null : value })
+            }
+            disabled={!project}
+          >
+            <SelectTrigger className="h-9 w-52" aria-label="Filter by epic">
+              <SelectValue placeholder="All epics" />
+            </SelectTrigger>
+            <SelectContent className="max-h-72">
+              <SelectItem value={ALL_EPICS_VALUE}>All epics</SelectItem>
+              {epicOptions.map((epic) => (
+                <SelectItem key={epic.key} value={epic.key}>
+                  {epic.summary ? `${epic.key} · ${epic.summary}` : epic.key}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           {onOpenCreate && (
             <Button

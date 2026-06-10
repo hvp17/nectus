@@ -55,6 +55,14 @@ The board is entirely UI-driven; no JQL is ever typed.
   a few filters: **My issues** (`assignee = currentUser()`), **Hide done**
   (`statusCategory != Done`, on by default), and **Current sprint**
   (`sprint in openSprints()`).
+- **Epic filter** — an **Epic** dropdown in the header narrows the board to a single
+  epic's children. Its options are the project's epics, loaded via
+  `acli jira workitem search --jql 'project = "<key>" AND issuetype = Epic ORDER BY
+  summary ASC'` (the `jira_list_epics` command); selecting one compiles into the board
+  JQL as `parent = "<EPIC-KEY>"` (JIRA Cloud's unified `parent` field covers the
+  epic→story link in both team- and company-managed projects). "All epics" clears it,
+  and switching projects resets it (an epic key belongs to one project). The selection
+  persists in `app_settings.jira_filter_epic`.
 - Nectus builds the JQL from that structured config in `jira::build_board_jql`
   (e.g. `project = "PROJ" AND statusCategory != Done ORDER BY updated DESC`). The
   config is stored as `app_settings.jira_board_project` plus the three
@@ -166,8 +174,9 @@ All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
 - Create-from-story / create-task handlers: `src/hooks/useComposer.ts`
   (`createTaskFromStory`, `createTask`); board-config persistence: `src/hooks/useJira.ts`
 - Frontend API: `src/api.ts`
-- `acli` shell-out, JSON parsing, the JQL builder (`build_board_jql`, incl. the
-  `status in (...)` filter clause), and the create argument builder/key parser:
+- `acli` shell-out, JSON parsing, the JQL builders (`build_board_jql`, incl. the
+  `status in (...)` and `parent = "<epic>"` filter clauses; `build_epics_jql` +
+  `list_epics` for the epic picker), and the create argument builder/key parser:
   `native/src/jira.rs`
 - Optional REST layer: client + fixture-tested parsers (`parse_transitions`,
   `parse_project_statuses`) in `native/src/jira_rest.rs`; Keychain token store in
@@ -180,9 +189,9 @@ All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
   ADF `description`) so a struct/CLI drift fails a test instead of users. Refresh
   via `native/src/jira_fixtures/scrub.py` per that directory's `README.md`.
 - Backend commands: `jira_status`, `jira_list_projects`, `jira_search_board`,
-  `jira_get_work_item`, `jira_transition_work_item`, `jira_assign_work_item`,
-  `jira_comment_work_item`, `jira_create_work_item`, `set_task_jira_link`
-  (registered in `native/src/lib.rs`)
+  `jira_list_epics`, `jira_get_work_item`, `jira_transition_work_item`,
+  `jira_assign_work_item`, `jira_comment_work_item`, `jira_create_work_item`,
+  `set_task_jira_link` (registered in `native/src/lib.rs`)
 - Link persistence: the `jira_issue_key`, `jira_issue_summary`, and `jira_issue_url`
-  columns on the `tasks` table; board config in `jira_board_project` and the
-  `jira_filter_*` flags on `app_settings`
+  columns on the `tasks` table; board config in `jira_board_project`, the
+  `jira_filter_*` flags, and `jira_filter_epic` on `app_settings`

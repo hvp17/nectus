@@ -640,6 +640,7 @@ function JiraView() {
         unresolved: settings?.jiraFilterUnresolved ?? true,
         currentSprint: settings?.jiraFilterCurrentSprint ?? false,
         statuses: settings?.jiraFilterStatuses ?? [],
+        epic: settings?.jiraFilterEpic ?? null,
       }}
       columns={jira.columns}
       loading={jira.loading}
@@ -667,6 +668,7 @@ function JiraView() {
           ? jira.projectStatuses.map((status) => status.name)
           : jira.columns.map((column) => column.statusName)
       }
+      epics={jira.epics}
       onAssign={jira.assign}
       onComment={jira.comment}
       onPickAgent={setNewTaskAgentProfileId}

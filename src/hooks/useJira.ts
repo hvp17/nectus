@@ -8,6 +8,7 @@ import {
   useJiraProjectsQuery,
   useJiraProjectStatusesQuery,
   useJiraBoardQuery,
+  useJiraEpicsQuery,
 } from "../queries/jira";
 import { isCliConnected } from "../lib/connection";
 import type {
@@ -120,6 +121,7 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
   const boardQuery = useJiraBoardQuery(active && ready && configured);
   const items = boardQuery.data ?? EMPTY_ITEMS;
   const loading = boardQuery.isLoading;
+  const epics = useJiraEpicsQuery(project, active && ready).data ?? EMPTY_ITEMS;
 
   const refresh = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.jira.board() });
@@ -238,6 +240,7 @@ export function useJira({ active, configured, project, statusFilter, setMessage 
     projects,
     projectStatuses,
     items,
+    epics,
     columns,
     loading,
     refresh,

@@ -12,6 +12,7 @@ pub fn build_board_jql(
     unresolved: bool,
     current_sprint: bool,
     statuses: &[String],
+    epic: Option<&str>,
 ) -> String {
     let mut clauses = vec![format!("project = {}", jql_quote(project))];
     if my_issues {
@@ -34,7 +35,23 @@ pub fn build_board_jql(
     if !statuses.is_empty() {
         clauses.push(format!("status in ({})", statuses.join(", ")));
     }
+    // Epic filter: narrow to the epic's children via the unified `parent` field
+    // (JIRA Cloud's parent covers the epic→story link in both team- and
+    // company-managed projects). A blank/whitespace key adds no clause.
+    if let Some(epic) = epic.map(str::trim).filter(|key| !key.is_empty()) {
+        clauses.push(format!("parent = {}", jql_quote(epic)));
+    }
     format!("{} ORDER BY updated DESC", clauses.join(" AND "))
+}
+
+/// Build the JQL that lists a project's epics, so the board's epic-filter picker
+/// can be populated without the user typing JQL. Ordered by summary for a stable,
+/// scannable dropdown.
+pub fn build_epics_jql(project: &str) -> String {
+    format!(
+        "project = {} AND issuetype = Epic ORDER BY summary ASC",
+        jql_quote(project)
+    )
 }
 
 /// Quote a value for a JQL string literal, escaping backslashes first and then
@@ -426,6 +443,13 @@ pub fn search(jql: &str, limit: u32) -> Result<Vec<JiraWorkItem>, String> {
     parse_work_items(&String::from_utf8_lossy(&output.stdout))
 }
 
+/// List a project's epics, to populate the board's epic-filter picker (so no JQL
+/// has to be typed). Returns the epics as work items (key + summary are what the
+/// picker shows).
+pub fn list_epics(project: &str) -> Result<Vec<JiraWorkItem>, String> {
+    search(&build_epics_jql(project), 200)
+}
+
 /// List the JIRA projects visible to the user, to populate the board's project
 /// picker (so no JQL has to be typed).
 pub fn list_projects() -> Result<Vec<JiraProject>, String> {
@@ -675,7 +699,7 @@ mod tests {
     #[test]
     fn builds_board_jql_from_project_only() {
         assert_eq!(
-            build_board_jql("ENG", false, false, false, &[]),
+            build_board_jql("ENG", false, false, false, &[], None),
             "project = \"ENG\" ORDER BY updated DESC"
         );
     }
@@ -683,7 +707,7 @@ mod tests {
     #[test]
     fn builds_board_jql_with_all_filters() {
         assert_eq!(
-            build_board_jql("ENG", true, true, true, &[]),
+            build_board_jql("ENG", true, true, true, &[], None),
             "project = \"ENG\" AND assignee = currentUser() AND statusCategory != Done AND sprint in openSprints() ORDER BY updated DESC"
         );
     }
@@ -691,7 +715,7 @@ mod tests {
     #[test]
     fn builds_board_jql_escapes_quotes_in_project_key() {
         assert_eq!(
-            build_board_jql("A\"B", false, true, false, &[]),
+            build_board_jql("A\"B", false, true, false, &[], None),
             "project = \"A\\\"B\" AND statusCategory != Done ORDER BY updated DESC"
         );
     }
@@ -701,7 +725,7 @@ mod tests {
         // A status ending in a backslash must escape the backslash first, so it
         // can't escape the closing quote and break (400) the whole query.
         assert_eq!(
-            build_board_jql("ENG", false, false, false, &["weird\\".into()]),
+            build_board_jql("ENG", false, false, false, &["weird\\".into()], None),
             "project = \"ENG\" AND status in (\"weird\\\\\") ORDER BY updated DESC"
         );
     }
@@ -714,7 +738,8 @@ mod tests {
                 false,
                 false,
                 false,
-                &["To Do".into(), "In Progress".into()]
+                &["To Do".into(), "In Progress".into()],
+                None
             ),
             "project = \"ENG\" AND status in (\"To Do\", \"In Progress\") ORDER BY updated DESC"
         );
@@ -725,8 +750,41 @@ mod tests {
         // Blank/whitespace entries are filtered out, so an effectively-empty
         // selection adds no clause.
         assert_eq!(
-            build_board_jql("ENG", false, false, false, &["  ".into()]),
+            build_board_jql("ENG", false, false, false, &["  ".into()], None),
             "project = \"ENG\" ORDER BY updated DESC"
+        );
+    }
+
+    #[test]
+    fn builds_board_jql_with_epic_filter() {
+        // A selected epic narrows the board to its children via `parent = "<key>"`.
+        assert_eq!(
+            build_board_jql("ENG", false, false, false, &[], Some("ENG-42")),
+            "project = \"ENG\" AND parent = \"ENG-42\" ORDER BY updated DESC"
+        );
+    }
+
+    #[test]
+    fn builds_board_jql_blank_epic_adds_no_clause() {
+        assert_eq!(
+            build_board_jql("ENG", false, false, false, &[], Some("   ")),
+            "project = \"ENG\" ORDER BY updated DESC"
+        );
+    }
+
+    #[test]
+    fn builds_board_jql_combines_status_and_epic() {
+        assert_eq!(
+            build_board_jql("ENG", false, true, false, &["To Do".into()], Some("ENG-7")),
+            "project = \"ENG\" AND statusCategory != Done AND status in (\"To Do\") AND parent = \"ENG-7\" ORDER BY updated DESC"
+        );
+    }
+
+    #[test]
+    fn builds_epics_jql_for_project() {
+        assert_eq!(
+            build_epics_jql("ENG"),
+            "project = \"ENG\" AND issuetype = Epic ORDER BY summary ASC"
         );
     }
 
