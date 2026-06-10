@@ -131,7 +131,13 @@ All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
 ## Requirements
 
 - The Atlassian CLI (`acli`) must be installed and authenticated
-  (`acli jira auth login`).
+  (`acli jira auth login`). Resolution captures the user's login-shell `PATH`
+  (see the External-CLI PATH rule in
+  [`AGENTS.md`](../AGENTS.md#spawning-external-clis-macos-gui-path)), so `acli` is
+  found at any prefix — `~/homebrew`, mise/asdf shims, `~/bin`. If the card still
+  shows "not installed" while `which acli` works in a terminal, the binary's
+  parent dir is missing from your login-shell `PATH`; fix the shell config or
+  symlink it into `~/.local/bin`.
 - A project must be chosen from the picker in the JIRA view header to load work
   items. No JQL is required.
 

@@ -229,7 +229,7 @@ Important backend files:
 - `native/src/jira.rs`: `acli` (Atlassian CLI) integration — connection status, project list, work-item search/view/create/transition/assign/comment with tolerant JSON parsing, the structured-config JQL builder (`build_board_jql`, incl. the `status in (...)` filter clause, so the UI never types JQL), and the create argument builder + new-key parser (`build_create_args`, `parse_created_key`); no OAuth, no stored tokens
 - `native/src/jira_rest.rs`: **optional** JIRA Cloud REST layer (`ureq`, Basic auth) for what `acli` cannot do — fixture-tested parsers `parse_transitions` / `parse_project_statuses`, plus `verify` (`/myself`), `list_transitions`, `project_statuses`, `perform_transition`. Additive to `acli`, gated on a user API token; powers the legal-transition dropdown, the board status filter, and all status columns (incl. empty)
 - `native/src/jira_secret.rs`: macOS Keychain store for the optional JIRA API token (`keyring`; service = the app identifier, account = `jira-api-token:{site}`). The token never touches SQLite — only the non-secret site/email persist in `app_settings`
-- `native/src/process_util.rs`: shared command helpers — binary resolution (`resolve_executable`), child `PATH` augmentation (`augmented_path`), the install-dir source of truth (`third_party_bin_dirs`), and `command_error` stderr formatting. See [Spawning External CLIs](#spawning-external-clis-macos-gui-path).
+- `native/src/process_util.rs`: shared command helpers — binary resolution (`resolve_executable`), child `PATH` augmentation (`augmented_path`), the captured **login-shell PATH** (`login_shell_path`, run once and cached so any install prefix — `~/homebrew`, mise/asdf/volta shims, `~/bin` — is found, not just the fixed `third_party_bin_dirs`), the install-dir source of truth (`third_party_bin_dirs`), and `command_error` stderr formatting. See [Spawning External CLIs](#spawning-external-clis-macos-gui-path).
 - `native/src/sessions/`: PTY lifecycle, terminal event emission, Codex JSONL watching, Claude Code hook event bridge (`claude.rs`), OpenCode local-server `/event` watching (`opencode.rs`), agent command setup, and the task review-loop / external PR-review runtimes (`review_loop.rs`, `pr_review.rs`, `pr_consensus.rs`). The append-only event-log tail loop shared by the Codex and Claude watchers (`watch_event_log` in `mod.rs`) keeps line-tailing in one place: it tails **incrementally** by byte offset (reading only appended bytes, not re-reading the whole growing file each tick) while still deferring a partial trailing line until its newline arrives. Per-provider session-lifecycle facts live in one descriptor, `provider.rs` (`provider_session(kind)`: `needs_local_server`, `emits_structured_activity`, `sends_prompt_in_args`, `cleanup_event_sink`, and which `WatcherKind` to spawn) — the lifecycle sites in `mod.rs` consume it instead of re-deriving an `if Codex … else if Claude …` ladder; `resolve_resumable_metadata` is the shared post-exit probe. Each provider watcher also feeds the live `session_activity` line via `SessionSignal::Activity` from its structured stream (Codex `agent_reasoning`/`agent_message`, Claude `PreToolUse` hook, OpenCode `message.part.updated`), normalized/throttled/de-duplicated by `emit_activity_line`; the raw-PTY `latest_activity_line` scraper is reserved for Gemini/custom agents (gated by `provider_session(kind).emits_structured_activity`), since on a full-screen TUI it only surfaced statusline chrome and echoed keystrokes. The headless reviewer-CLI launcher shared by all three reviewing surfaces lives in `reviewer.rs`; it owns the session-resume contract: `run_reviewer_command(reviewer, cwd, prompt, resume: Option<&str>, stream) -> Result<ReviewerRunOutput, String>`, `reviewer_supports_resume(AgentKind)` (true for Claude/Codex/OpenCode), and `new_reviewer_session_id()`. Per-provider reviewer stdout decoding — plain text for Claude/Gemini/custom, newline-delimited JSON events for Codex (`exec --json`) and OpenCode (`run --format json`) with session-id extraction — lives in `reviewer_output.rs`. The PTY submission helper is in `terminal_io.rs`. The single + consensus PR runtimes share one ephemeral-worktree scaffold (`pr_worktree.rs`: unique per-review branch/path + guaranteed teardown). The agent-verdict contract is shared app-wide in `verdict.rs` (the `NECTUS_VERDICT:` marker + `VerdictToken` enum + parse/strip helper); `pr_verdict.rs` (PR reviews) and `review_loop.rs` (task loop) are thin adapters mapping the token to their own domain enums — no natural-language fallback
 - `native/src/sessions/agents/`: provider-specific Codex, Claude, Gemini, and OpenCode command arguments and fallback locations
 - `native/src/models/`: shared serializable data types, split by domain (`error`, `task`, `review`, `agent`, `github`, `jira`, `settings`, `session`, `workspace`) and re-exported flat from `mod.rs`, so every `crate::models::Foo` path still resolves
@@ -251,13 +251,20 @@ single source of truth rather than re-listing commands here.
 A macOS app launched from Finder/Dock (or the packaged `.app`) inherits only a
 minimal PATH — `/usr/bin:/bin:/usr/sbin:/sbin` — with no Homebrew or user bin
 directories. This breaks externally-spawned CLIs in two distinct ways. Both are
-handled in `native/src/process_util.rs`, whose `third_party_bin_dirs` is the
-single source of truth for the extra locations
-(`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, `~/.cargo/bin`, …):
+handled in `native/src/process_util.rs`. Resolution searches three layers in
+order: the process PATH, the user's **captured login-shell PATH**
+(`login_shell_path` — run their `$SHELL -lic 'printf … "$PATH"'` once at first
+use, cached, 3s-bounded, stderr discarded; sources `.zprofile`/`.zshrc` so any
+install prefix is picked up: a no-sudo `~/homebrew`, `mise`/`asdf`/`volta` shims,
+`~/bin`, …), then the fixed `third_party_bin_dirs` backstop
+(`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, `~/.cargo/bin`, …). The
+login-shell layer is what handles install locations the fixed list can't
+enumerate; `third_party_bin_dirs` remains the source of truth for the common
+defaults:
 
 1. **Finding the CLI itself.** Resolve the binary with `resolve_executable` (for
    `gh` and general tools) or `resolve_agent_command` (for agent profiles); both
-   search PATH first, then the common install dirs.
+   search the layers above (PATH → login-shell PATH → common install dirs).
 2. **Tools the CLI then spawns.** A resolved absolute path is not enough —
    node-based CLIs such as Codex and OpenCode exec `node` themselves, which must be on the
    child process's PATH. Set `command.env("PATH", process_util::augmented_path())`

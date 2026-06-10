@@ -152,6 +152,13 @@ after a re-review) and is not persisted as "posted"; success surfaces a message.
 ## Requirements
 
 - The GitHub CLI (`gh`) must be installed and authenticated (`gh auth login`).
+  Resolution captures the user's login-shell `PATH` (see the External-CLI PATH
+  rule in [`AGENTS.md`](../AGENTS.md#spawning-external-clis-macos-gui-path)), so
+  `gh` is found at any prefix — `~/homebrew`, mise/asdf shims, `~/bin`. If the
+  card still shows "not installed" while `which gh` works in a terminal, the
+  binary's parent dir is missing from your login-shell `PATH` (it was added only
+  by an interactive alias, not exported) — fix the shell config, or symlink it
+  into `~/.local/bin`.
 - Creating a PR needs a worktree-backed task with at least one commit ahead of the
   repository's default branch and a GitHub remote (`origin`).
 - Reviewing an external PR needs the repository added to Nectus as a project and a
