@@ -6,7 +6,7 @@ back to the UI, and where to go to change any given thing. Read this first, then
 follow the [doc index](#documentation-index) to the deep references.
 
 Nectus Desktop is a Mac-first **Tauri 2** app for running parallel Codex / Claude /
-Gemini / OpenCode agents across local git projects and worktrees. It is
+Antigravity / OpenCode agents across local git projects and worktrees. It is
 **local-first**: the React frontend never shells out. Every OS, git, SQLite, PTY,
 and external-CLI (`gh`, `acli`) operation happens in the Rust backend and is
 reached through a typed Tauri command boundary.

@@ -1,6 +1,6 @@
 //! Per-provider reviewer stdout decoding.
 //!
-//! Plain-text reviewer CLIs (Claude, Gemini, custom) emit the review on stdout
+//! Plain-text reviewer CLIs (Claude, Antigravity, custom) emit the review on stdout
 //! verbatim. The JSON-event CLIs report the review text AND their session id
 //! inside a newline-delimited event stream (Codex `exec --json`, OpenCode
 //! `run --format json`); this module extracts both so the launcher can treat
@@ -25,7 +25,7 @@ impl ReviewerWire {
         match kind {
             AgentKind::Codex => ReviewerWire::CodexJson,
             AgentKind::OpenCode => ReviewerWire::OpenCodeJson,
-            AgentKind::Claude | AgentKind::Gemini | AgentKind::Custom => ReviewerWire::Plain,
+            AgentKind::Claude | AgentKind::Antigravity | AgentKind::Custom => ReviewerWire::Plain,
         }
     }
 }

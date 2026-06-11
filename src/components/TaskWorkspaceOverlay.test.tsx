@@ -28,7 +28,7 @@ const mockedApi = vi.mocked(api, true);
 const agentProfiles: AgentProfile[] = [
   { id: 1, name: "Codex", agentKind: "codex", command: "codex", model: null, args: [], env: {}, createdAt: "", updatedAt: "" },
   { id: 2, name: "Claude Review", agentKind: "claude", command: "claude", model: null, args: ["--print"], env: {}, createdAt: "", updatedAt: "" },
-  { id: 3, name: "Gemini", agentKind: "gemini", command: "gemini", model: null, args: [], env: {}, createdAt: "", updatedAt: "" },
+  { id: 3, name: "Antigravity", agentKind: "antigravity", command: "agy", model: null, args: [], env: {}, createdAt: "", updatedAt: "" },
 ];
 
 const reviewTask: TaskSummary = {

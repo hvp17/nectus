@@ -1343,7 +1343,7 @@ const ACTIVITY_LINE_MAX: usize = 200;
 
 /// Resolve a finished session's resumable thread id + label, provider-specific:
 /// Codex reads its rollout file, OpenCode queries its local server, and providers
-/// with no resumable thread (Claude/Gemini/Custom) return `None`. Shared by the
+/// with no resumable thread (Claude/Antigravity/Custom) return `None`. Shared by the
 /// reader-thread EOF teardown and `stop()` so the per-provider probe lives once.
 fn resolve_resumable_metadata(
     agent_kind: AgentKind,
@@ -1358,7 +1358,7 @@ fn resolve_resumable_metadata(
         AgentKind::OpenCode => opencode_port
             .and_then(|port| latest_opencode_session_metadata_from_server(port, cwd))
             .map(|meta| (meta.id, meta.label)),
-        AgentKind::Claude | AgentKind::Gemini | AgentKind::Custom => None,
+        AgentKind::Claude | AgentKind::Antigravity | AgentKind::Custom => None,
     }
 }
 

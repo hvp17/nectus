@@ -1,18 +1,18 @@
 import { Bot } from "lucide-react";
 import claudeLogo from "../assets/logos/claude.svg";
 import codexLogo from "../assets/logos/codex.svg";
-import geminiLogo from "../assets/logos/gemini.svg";
+import antigravityLogo from "../assets/logos/antigravity.svg";
 import opencodeLogo from "../assets/logos/opencode.svg";
 import { cn } from "../lib/utils";
 import type { AgentKind } from "../types";
 
-type BrandKey = "codex" | "claude" | "gemini" | "opencode" | "custom";
+type BrandKey = "codex" | "claude" | "antigravity" | "opencode" | "custom";
 type LogoSize = "xs" | "sm" | "md" | "lg";
 
 const brandLabels: Record<BrandKey, string> = {
   codex: "Codex",
   claude: "Claude",
-  gemini: "Gemini",
+  antigravity: "Antigravity",
   opencode: "OpenCode",
   custom: "Custom model",
 };
@@ -20,7 +20,7 @@ const brandLabels: Record<BrandKey, string> = {
 const brandLogos: Partial<Record<BrandKey, string>> = {
   codex: codexLogo,
   claude: claudeLogo,
-  gemini: geminiLogo,
+  antigravity: antigravityLogo,
   opencode: opencodeLogo,
 };
 
@@ -82,8 +82,8 @@ function brandForAgentKind(agentKind: AgentKind): BrandKey {
       return "codex";
     case "claude":
       return "claude";
-    case "gemini":
-      return "gemini";
+    case "antigravity":
+      return "antigravity";
     case "opencode":
       return "opencode";
     case "custom":
@@ -99,8 +99,8 @@ function brandForModel(agentKind: AgentKind, model?: string | null): BrandKey {
   if (normalized.includes("claude") || normalized.includes("sonnet") || normalized.includes("opus") || normalized.includes("haiku")) {
     return "claude";
   }
-  if (normalized.includes("gemini")) {
-    return "gemini";
+  if (normalized.includes("antigravity") || normalized.includes("agy") || normalized.includes("gemini")) {
+    return "antigravity";
   }
   if (normalized.startsWith("opencode/") || normalized.includes("opencode")) {
     return "opencode";

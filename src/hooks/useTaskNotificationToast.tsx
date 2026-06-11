@@ -13,7 +13,7 @@ interface UseTaskNotificationToastParams {
 // action focuses that task's workspace. OS notifications cannot be made
 // clickable on desktop (the plugin's desktop show() is fire-and-forget), so the
 // in-app toast is the navigable surface. The toast's icon is the provider logo
-// (Claude/Codex/Gemini/OpenCode) so you can tell at a glance which agent the update is from.
+// (Claude/Codex/Antigravity/OpenCode) so you can tell at a glance which agent the update is from.
 export function useTaskNotificationToast({
   notification,
   onOpenTask,

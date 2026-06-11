@@ -306,6 +306,15 @@ impl Database {
         // The original started_at of the last session, so a tmux reattach can
         // re-spawn the Codex rollout watcher with the real session start.
         self.add_column_if_missing("tasks", "last_session_started_at", "TEXT")?;
+        // Google retired the Gemini CLI in favor of the Antigravity CLI (`agy`);
+        // migrate any existing Gemini profile in place. The stored model may be
+        // a legacy Gemini-CLI name — left as-is for the user to update.
+        self.conn
+            .execute(
+                "UPDATE agent_profiles SET agent_kind = 'antigravity', command = 'agy', name = CASE WHEN name = 'Gemini' AND NOT EXISTS (SELECT 1 FROM agent_profiles other WHERE other.name = 'Antigravity' AND other.id != agent_profiles.id) THEN 'Antigravity' ELSE name END WHERE agent_kind = 'gemini'",
+                [],
+            )
+            .map_err(|error| format!("Failed to migrate Gemini profiles: {error}"))?;
         // Opt-in tmux-backed persistent sessions (survive app quit + reattach).
         self.add_column_if_missing(
             "app_settings",
@@ -374,7 +383,7 @@ impl Database {
         for (name, kind, command) in [
             ("Codex", AgentKind::Codex, "codex"),
             ("Claude", AgentKind::Claude, "claude"),
-            ("Gemini", AgentKind::Gemini, "gemini"),
+            ("Antigravity", AgentKind::Antigravity, "agy"),
             ("OpenCode", AgentKind::OpenCode, "opencode"),
         ] {
             self.conn

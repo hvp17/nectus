@@ -10,7 +10,7 @@ use strum::{Display, EnumString, IntoStaticStr};
 pub enum AgentKind {
     Codex,
     Claude,
-    Gemini,
+    Antigravity,
     #[serde(rename = "opencode")]
     #[strum(serialize = "opencode")]
     OpenCode,

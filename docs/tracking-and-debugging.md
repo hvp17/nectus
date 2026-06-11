@@ -221,7 +221,7 @@ Backend-to-frontend events:
 | Event | Payload | Source |
 | --- | --- | --- |
 | `session_output` | PTY output chunk and stream offset. The backend decodes PTY bytes to UTF-8 before emitting: split multi-byte sequences are carried to the next read, genuinely invalid bytes become `U+FFFD`, and `start_offset` is computed after appending the decoded text to the bounded session buffer. | `native/src/sessions/mod.rs` (`decode_pty_chunk`, PTY reader loop) |
-| `session_activity` | Task id, session id, and the agent's latest human-readable activity line (throttled and de-duplicated). Parsed from each provider's structured event stream — Codex `agent_reasoning`/`agent_message`, Claude `PreToolUse` hook, OpenCode `message.part.updated` — so it reads as real progress ("Editing App.tsx", "Running npm test") rather than TUI chrome. Gemini and custom agents fall back to an ANSI-stripped tail of the PTY output. | `native/src/sessions/mod.rs` (`emit_activity_line`), driven by `codex.rs`, `claude.rs`, `opencode.rs` |
+| `session_activity` | Task id, session id, and the agent's latest human-readable activity line (throttled and de-duplicated). Parsed from each provider's structured event stream — Codex `agent_reasoning`/`agent_message`, Claude `PreToolUse` hook, OpenCode `message.part.updated` — so it reads as real progress ("Editing App.tsx", "Running npm test") rather than TUI chrome. Antigravity and custom agents fall back to an ANSI-stripped tail of the PTY output. | `native/src/sessions/mod.rs` (`emit_activity_line`), driven by `codex.rs`, `claude.rs`, `opencode.rs` |
 | `session_exited` | Session id and optional exit code. | `native/src/sessions/mod.rs`, `native/src/lib.rs` |
 | `session_idle` | Task id, session id, turn id, optional message. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL), `claude.rs` (hooks), and `opencode.rs` (local server `/event` `session.idle`) |
 | `session_needs_input` | Task id, session id, reason, optional prompt. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL), `claude.rs` (hooks), and `opencode.rs` (local server `/event` permission/question asks) |
@@ -312,7 +312,7 @@ and a customized pattern is left untouched.
 Claude, Codex, and OpenCode reviewers resume their prior conversation rather than
 starting from scratch on each pass. The rule everywhere is "capture once, keep":
 store the resolved id from the first successful run and pass it to the reviewer on
-every subsequent run. Gemini and Custom reviewers always run fresh.
+every subsequent run. Antigravity and Custom reviewers always run fresh.
 
 **Per-provider mechanics** (`native/src/sessions/reviewer.rs`,
 `native/src/sessions/reviewer_output.rs`):
@@ -721,7 +721,7 @@ Check:
   127 with `env: node: No such file or directory` is the minimal-PATH problem —
   see *Agent Command Fails To Start* above; the reviewer launch sets
   `process_util::augmented_path()` to fix it.
-- Claude and Gemini reviewer profiles run headless with `-p`; Codex reviewers run
+- Claude and Antigravity reviewer profiles run headless with `-p`; Codex reviewers run
   non-interactively with `codex exec`; OpenCode reviewers run with `opencode run`;
   custom reviewers read the generated prompt from stdin. An exit status 1 with
   `Error: stdin is not a terminal` means a Codex reviewer was launched as the

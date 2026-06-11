@@ -67,11 +67,11 @@ fn seeds_default_agent_profiles() {
     assert_eq!(profiles.len(), 4);
     assert_eq!(profiles[0].command, "codex");
     assert_eq!(profiles[1].command, "claude");
-    assert_eq!(profiles[2].command, "gemini");
+    assert_eq!(profiles[2].command, "agy");
     assert_eq!(profiles[3].command, "opencode");
     assert_eq!(profiles[0].agent_kind, AgentKind::Codex);
     assert_eq!(profiles[1].agent_kind, AgentKind::Claude);
-    assert_eq!(profiles[2].agent_kind, AgentKind::Gemini);
+    assert_eq!(profiles[2].agent_kind, AgentKind::Antigravity);
     assert_eq!(profiles[3].agent_kind, AgentKind::OpenCode);
 }
 
@@ -1762,4 +1762,26 @@ fn refuses_to_archive_a_task_with_a_running_session() {
 
     let error = db.set_task_archived(task.id, true).unwrap_err();
     assert!(error.contains("running session"), "{error}");
+}
+
+#[test]
+fn migrates_legacy_gemini_profiles_to_antigravity() {
+    let db = Database::open_in_memory().unwrap();
+    // Simulate a pre-Antigravity profile row, then re-run migrations.
+    db.conn
+        .execute(
+            "INSERT INTO agent_profiles (name, agent_kind, command, model, args_json, env_json, created_at, updated_at)
+             VALUES ('Gemini', 'gemini', 'gemini', 'gemini-pro', '[]', '{}', '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+    db.create_schema().unwrap();
+
+    // Listing succeeds (no unparseable 'gemini' kind remains) and the legacy row
+    // migrated to the Antigravity CLI. Its name keeps "Gemini" here because the
+    // fresh DB already seeded an "Antigravity" profile (names are unique).
+    let profiles = db.list_agent_profiles().unwrap();
+    let migrated = profiles.iter().find(|p| p.name == "Gemini").unwrap();
+    assert_eq!(migrated.agent_kind, AgentKind::Antigravity);
+    assert_eq!(migrated.command, "agy");
 }

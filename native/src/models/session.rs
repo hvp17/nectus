@@ -71,7 +71,7 @@ pub struct SessionNeedsInputEvent {
 /// de-duplicated) so task cards can show what a running session is doing without
 /// subscribing to the raw terminal stream. Sourced from each provider's
 /// structured event stream (Codex reasoning/messages, Claude tool-use hooks,
-/// OpenCode message parts); Gemini and custom agents fall back to a best-effort
+/// OpenCode message parts); Antigravity and custom agents fall back to a best-effort
 /// scrape of the live PTY output.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

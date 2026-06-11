@@ -1,6 +1,6 @@
 export type TaskStatus = "planned" | "in_progress" | "review" | "done";
 export type SessionState = "running" | "stopped";
-export type AgentKind = "codex" | "claude" | "gemini" | "opencode" | "custom";
+export type AgentKind = "codex" | "claude" | "antigravity" | "opencode" | "custom";
 export type ThemeMode = "system" | "light" | "dark";
 export type DensityMode = "comfortable" | "compact";
 export type ReviewLoopStatus = "running" | "reviewing" | "passed" | "feedback_sent" | "error" | "stopped";

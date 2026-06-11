@@ -31,7 +31,7 @@ const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOSt
 export const seedProfiles: AgentProfile[] = [
   { id: 1, name: "Codex", agentKind: "codex", command: "codex", model: null, args: [], env: {}, createdAt: ago(9000), updatedAt: ago(9000) },
   { id: 2, name: "Claude Sonnet", agentKind: "claude", command: "claude", model: "sonnet", args: [], env: {}, createdAt: ago(9000), updatedAt: ago(9000) },
-  { id: 3, name: "Gemini", agentKind: "gemini", command: "gemini", model: null, args: [], env: {}, createdAt: ago(9000), updatedAt: ago(9000) },
+  { id: 3, name: "Antigravity", agentKind: "antigravity", command: "agy", model: null, args: [], env: {}, createdAt: ago(9000), updatedAt: ago(9000) },
   { id: 4, name: "OpenCode", agentKind: "opencode", command: "opencode", model: null, args: [], env: {}, createdAt: ago(9000), updatedAt: ago(9000) },
 ];
 
@@ -108,7 +108,7 @@ export const seedTasks: TaskSummary[] = [
     activeSessionId: "s-5", lastSessionId: "s-5", updatedAt: ago(2),
   }),
   task({
-    id: 6, repoId: 1, title: "Reduce SQLite write contention", status: "review", agentProfileId: 3, agentName: "Gemini", agentKind: "gemini",
+    id: 6, repoId: 1, title: "Reduce SQLite write contention", status: "review", agentProfileId: 3, agentName: "Antigravity", agentKind: "antigravity",
     branchName: "perf/sqlite-wal", worktreePath: "/Users/you/dev/web-app-worktrees/sqlite-wal", reviewLoopStatus: "passed",
     jiraIssueKey: "WEB-405", jiraIssueSummary: "Reduce SQLite write contention under parallel agents", updatedAt: ago(22),
   }),
@@ -245,7 +245,7 @@ export const seedPrReviews: PrReview[] = [
     reviewers: [
       { reviewerProfileId: 2, reviewerName: "Claude Sonnet" },
       { reviewerProfileId: 1, reviewerName: "Codex" },
-      { reviewerProfileId: 3, reviewerName: "Gemini" },
+      { reviewerProfileId: 3, reviewerName: "Antigravity" },
     ],
     createdAt: ago(200), updatedAt: ago(190),
   },
@@ -257,7 +257,7 @@ export const seedPrReviews: PrReview[] = [
     mode: "consensus", maxRounds: 2, roundsCompleted: 1, converged: null,
     reviewers: [
       { reviewerProfileId: 1, reviewerName: "Codex" },
-      { reviewerProfileId: 3, reviewerName: "Gemini" },
+      { reviewerProfileId: 3, reviewerName: "Antigravity" },
     ],
     createdAt: ago(6), updatedAt: ago(2),
   },
@@ -287,14 +287,14 @@ const prReviewRunsByReview: Record<number, PrReviewRun[]> = {
   2: [
     run(1, 2, 2, "Claude Sonnet", 1, "blockers", "WAL alone leaves writers exposed to SQLITE_BUSY under parallel agents."),
     run(2, 2, 1, "Codex", 1, "blockers", "No busy_timeout/retry — concurrent writers will fail intermittently."),
-    run(3, 2, 3, "Gemini", 1, "inconclusive", "Likely fine for low concurrency; need to see the writer path."),
+    run(3, 2, 3, "Antigravity", 1, "inconclusive", "Likely fine for low concurrency; need to see the writer path."),
     run(4, 2, 2, "Claude Sonnet", 2, "blockers", "Confirmed after seeing round 1: add busy_timeout + retry before merge."),
     run(5, 2, 1, "Codex", 2, "blockers", "Agree with Claude; this is a blocker."),
-    run(6, 2, 3, "Gemini", 2, "blockers", "Persuaded by the contention trace — blocking."),
+    run(6, 2, 3, "Antigravity", 2, "blockers", "Persuaded by the contention trace — blocking."),
   ],
   3: [
     run(7, 3, 1, "Codex", 1, "passed", "Clean --json surface; matches the documented schema."),
-    run(8, 3, 3, "Gemini", 1, "blockers", "Non-zero exit still prints human text on stderr; breaks --json consumers."),
+    run(8, 3, 3, "Antigravity", 1, "blockers", "Non-zero exit still prints human text on stderr; breaks --json consumers."),
   ],
 };
 

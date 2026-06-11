@@ -2,9 +2,9 @@ use crate::models::{AgentKind, AgentProfile};
 use portable_pty::CommandBuilder;
 use std::path::{Path, PathBuf};
 
+mod antigravity;
 mod claude;
 mod codex;
-mod gemini;
 mod opencode;
 
 pub(super) fn configure_agent_command(
@@ -18,7 +18,7 @@ pub(super) fn configure_agent_command(
     match agent.agent_kind {
         AgentKind::Codex => codex::configure(command, agent, session_id, resume),
         AgentKind::Claude => claude::configure(command, agent, session_id, resume),
-        AgentKind::Gemini => gemini::configure(command, agent),
+        AgentKind::Antigravity => antigravity::configure(command, agent),
         AgentKind::OpenCode => {
             let port = opencode_port.ok_or_else(|| {
                 "OpenCode sessions require a reserved local server port".to_string()
@@ -35,7 +35,7 @@ pub(super) fn fallback_agent_candidates(command: &str, home: Option<&Path>) -> V
     match command {
         "codex" => candidates.extend(codex::fallback_candidates(home)),
         "claude" => candidates.extend(claude::fallback_candidates(home)),
-        "gemini" => candidates.extend(gemini::fallback_candidates(home)),
+        "agy" => candidates.extend(antigravity::fallback_candidates(home)),
         "opencode" => candidates.extend(opencode::fallback_candidates(home)),
         _ => {}
     }
@@ -150,11 +150,11 @@ mod tests {
     }
 
     #[test]
-    fn configures_gemini_model_and_custom_args_only() {
-        let mut command = CommandBuilder::new(OsString::from("gemini"));
+    fn configures_antigravity_model_and_custom_args_only() {
+        let mut command = CommandBuilder::new(OsString::from("agy"));
         configure_agent_command(
             &mut command,
-            &agent(AgentKind::Gemini, Some("gemini-pro"), &["--yolo"]),
+            &agent(AgentKind::Antigravity, Some("gemini-3.1-pro"), &["--yolo"]),
             "unused-session",
             false,
             None,
@@ -162,10 +162,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(
-            argv(&command),
-            ["gemini", "--model", "gemini-pro", "--yolo"]
-        );
+        assert_eq!(argv(&command), ["agy", "-m", "gemini-3.1-pro", "--yolo"]);
     }
 
     #[test]
