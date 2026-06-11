@@ -78,6 +78,45 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install
 
+      # Optional Apple Developer ID signing + notarization. Activates only when
+      # the APPLE_* secrets are configured; otherwise the build keeps today's
+      # ad-hoc signing (Gatekeeper right-click → Open). Required secrets:
+      #   APPLE_CERTIFICATE            base64 of the Developer ID Application .p12
+      #   APPLE_CERTIFICATE_PASSWORD   the .p12 password
+      #   APPLE_SIGNING_IDENTITY       e.g. "Developer ID Application: Name (TEAMID)"
+      #   APPLE_ID / APPLE_PASSWORD    Apple ID + app-specific password
+      #   APPLE_TEAM_ID                the 10-char team id
+      # The signing identity must also replace tauri.conf.json's ad-hoc "-", so
+      # this step emits a config overlay (later --config wins) and exports the
+      # env vars tauri-bundler reads for cert import + notarytool.
+      - name: Enable Apple notarization when credentials exist
+        id: apple
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ] || [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+            echo "No Apple credentials configured; keeping ad-hoc signing."
+            echo "extra_config=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
+            echo "APPLE_CERTIFICATE=$APPLE_CERTIFICATE"
+            echo "APPLE_CERTIFICATE_PASSWORD=$APPLE_CERTIFICATE_PASSWORD"
+            echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY"
+            echo "APPLE_ID=$APPLE_ID"
+            echo "APPLE_PASSWORD=$APPLE_PASSWORD"
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
+          } >> "$GITHUB_ENV"
+          printf '{"bundle":{"macOS":{"signingIdentity":"%s"}}}' "$APPLE_SIGNING_IDENTITY" \
+            > "$RUNNER_TEMP/apple-signing.json"
+          echo "extra_config=--config $RUNNER_TEMP/apple-signing.json" >> "$GITHUB_OUTPUT"
+          echo "Apple credentials found; release will be Developer ID signed and notarized."
+
       # tauri-action creates the v<version> tag at this commit and publishes the
       # GitHub Release with the signed bundle + updater artifacts. The bundle
       # version comes from tauri.conf.json -> ../package.json.
@@ -93,4 +132,4 @@ jobs:
           releaseBody: "Download the .dmg to install, or let an installed copy auto-update."
           releaseDraft: false
           prerelease: false
-          args: --config native/tauri.conf.json --target aarch64-apple-darwin
+          args: --config native/tauri.conf.json ${{ steps.apple.outputs.extra_config }} --target aarch64-apple-darwin

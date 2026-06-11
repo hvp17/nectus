@@ -186,10 +186,17 @@ found, Nectus offers a one-click install followed by an app relaunch.
 
 ### First-run Gatekeeper note
 
-Nectus is ad-hoc code-signed (`bundle.macOS.signingIdentity: "-"`) but not yet
-Apple-notarized, so the **first** download triggers a Gatekeeper "unidentified
-developer" warning. Clear it once by right-clicking the app and choosing
-**Open** (or System Settings → Privacy & Security → **Open Anyway**).
+By default Nectus is ad-hoc code-signed (`bundle.macOS.signingIdentity: "-"`)
+and not Apple-notarized, so the **first** download triggers a Gatekeeper
+"unidentified developer" warning. Clear it once by right-clicking the app and
+choosing **Open** (or System Settings → Privacy & Security → **Open Anyway**).
+
+Releases become Developer ID signed **and notarized** (no Gatekeeper prompt)
+once the Apple credentials are configured as repo secrets — `APPLE_CERTIFICATE`
+(base64 .p12), `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`,
+`APPLE_ID`, `APPLE_PASSWORD` (app-specific), and `APPLE_TEAM_ID`;
+`release.yml` picks them up automatically and falls back to ad-hoc signing
+when they are absent.
 
 If macOS still reports the app as **"damaged and can't be opened"**, the
 download's quarantine flag is the cause — strip it once with:
