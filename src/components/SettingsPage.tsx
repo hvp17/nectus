@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { Bot, GitBranch, Github, Info, KanbanSquare, Palette, Plus, Save, Terminal } from "lucide-react";
+import { Activity, Bot, GitBranch, Github, Info, KanbanSquare, Palette, Plus, Save, Terminal } from "lucide-react";
 import { AgentLogo } from "./AgentBrand";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -14,6 +14,7 @@ import { JiraConnectionCard } from "./settings/JiraConnectionCard";
 import { SegmentedRadioGroup } from "./settings/SegmentedRadioGroup";
 import { SettingsOverviewItem } from "./settings/SettingsOverviewItem";
 import { UpdateCard } from "./settings/UpdateCard";
+import { DiagnosticsCard } from "./settings/DiagnosticsCard";
 import type { AppUpdateState } from "../hooks/useAppUpdate";
 import {
   createProfileDraft,
@@ -44,7 +45,7 @@ interface SettingsPageProps {
   onDisconnectJira: () => Promise<void>;
 }
 
-type SettingsSectionId = "profiles" | "projects" | "github" | "jira" | "appearance" | "about";
+type SettingsSectionId = "profiles" | "projects" | "github" | "jira" | "appearance" | "diagnostics" | "about";
 
 export function SettingsPage({
   settings,
@@ -90,6 +91,7 @@ export function SettingsPage({
     { id: "github", icon: <Github />, label: "GitHub" },
     { id: "jira", icon: <KanbanSquare />, label: "JIRA" },
     { id: "appearance", icon: <Palette />, label: "Appearance" },
+    { id: "diagnostics", icon: <Activity />, label: "Diagnostics" },
     { id: "about", icon: <Info />, label: "About" },
   ];
 
@@ -348,6 +350,20 @@ export function SettingsPage({
                 onChange={(density) => setSettingsDraft((current) => ({ ...current, density }))}
               />
             </FieldGroup>
+          </div>
+        </section>
+
+        <section id="settings-section-diagnostics" className="nx-set-section">
+          <div className="nx-set-sec-head">
+            <Activity />
+            <h3>Diagnostics</h3>
+          </div>
+          <div className="nx-set-sec-body">
+            <p className="nx-set-sec-note">
+              Live backend log (the same output Rust prints to the console). Streams while the app runs, so
+              you can see exactly where a hang occurs. Use Copy to share it when reporting an issue.
+            </p>
+            <DiagnosticsCard />
           </div>
         </section>
 

@@ -59,6 +59,7 @@ vi.mock("./api", () => ({
     setJiraApiToken: vi.fn(),
     clearJiraApiToken: vi.fn(),
     setTaskJiraLink: vi.fn(),
+    getDiagnosticLogs: vi.fn().mockResolvedValue([]),
   },
 }));
 

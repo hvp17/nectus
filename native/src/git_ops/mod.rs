@@ -37,7 +37,10 @@ fn git_command(repo_path: &Path) -> Command {
     // Respect a user-provided GIT_SSH_COMMAND (their terminal already works with
     // it); otherwise install a batch-mode default with a bounded connect timeout.
     if !has_git_ssh_command {
-        command.env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes -o ConnectTimeout=10");
+        command.env(
+            "GIT_SSH_COMMAND",
+            "ssh -o BatchMode=yes -o ConnectTimeout=10",
+        );
     }
     command.arg("-C").arg(repo_path);
     command
@@ -259,16 +262,30 @@ pub fn create_worktree(
     validate_branch_name(branch_name)?;
     prepare_worktree_path(worktree_path)?;
 
+    // Step-by-step timed tracing so the Diagnostics panel pinpoints a hang: a
+    // "starting" line with no matching "done" line is the command that stuck
+    // (the network steps below are the ones that can block on auth).
     let remote = default_remote(repo_path)?;
+    tracing::info!(repo = %repo_path.display(), %remote, branch = %branch_name, "create_worktree: resolving remote default branch (git ls-remote)");
+    let started = std::time::Instant::now();
     let default_branch = remote_default_branch(repo_path, &remote)?;
+    tracing::info!(%default_branch, elapsed_ms = started.elapsed().as_millis() as u64, "create_worktree: ls-remote done; fetching remote (git fetch)");
+    let started = std::time::Instant::now();
     fetch_remote(repo_path, &remote)?;
+    tracing::info!(
+        elapsed_ms = started.elapsed().as_millis() as u64,
+        "create_worktree: fetch done; adding worktree (git worktree add)"
+    );
     let base_ref = format!("refs/remotes/{remote}/{default_branch}");
+    let started = std::time::Instant::now();
     run_git_worktree_add(
         repo_path,
         worktree_path,
         &["--no-track", "-b", branch_name],
         &base_ref,
-    )
+    )?;
+    tracing::info!(worktree = %worktree_path.display(), elapsed_ms = started.elapsed().as_millis() as u64, "create_worktree: worktree add done");
+    Ok(())
 }
 
 /// Extract `(owner, repo)` from a git remote URL, handling the common GitHub

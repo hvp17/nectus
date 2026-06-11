@@ -1,4 +1,5 @@
 mod db;
+mod diagnostics;
 mod git_ops;
 mod github;
 mod jira;
@@ -21,6 +22,8 @@ use parking_lot::Mutex;
 use std::path::Path;
 use std::sync::Arc;
 use tauri::{Emitter, Manager, State};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
 pub struct AppState {
@@ -127,7 +130,13 @@ async fn create_task(
     // do it on a blocking thread rather than under the async runtime, mirroring
     // delete_task and keeping the symmetric create/delete paths consistent.
     tauri::async_runtime::spawn_blocking(move || -> Result<TaskSummary, String> {
+        tracing::info!(
+            repo_id,
+            has_worktree = has_worktree.unwrap_or(false),
+            "create_task: acquiring DB lock"
+        );
         let db = db.lock();
+        tracing::info!(repo_id, "create_task: DB lock held; creating task record");
         let task = db.create_task_record(
             repo_id,
             title,
@@ -167,7 +176,13 @@ async fn create_cross_repo_task(
 ) -> AppResult<TaskSummary> {
     let db = state.db.clone();
     blocking("Failed to create cross-repo task", move || {
-        db.lock().create_cross_repo_task(
+        tracing::info!(
+            repo_count = repo_ids.len(),
+            "create_cross_repo_task: acquiring DB lock"
+        );
+        let db = db.lock();
+        tracing::info!("create_cross_repo_task: DB lock held; creating worktrees");
+        db.create_cross_repo_task(
             workspace_id,
             repo_ids,
             title,
@@ -1083,6 +1098,9 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            // Stream captured log lines to the UI from here on; earlier lines stay
+            // in the buffer and are backfilled when the panel first opens.
+            diagnostics::attach_app_handle(app.handle().clone());
             let data_dir = app
                 .path()
                 .app_data_dir()
@@ -1162,7 +1180,8 @@ pub fn run() {
             resize_session,
             send_session_input,
             submit_session_input,
-            session_output_snapshot
+            session_output_snapshot,
+            get_diagnostic_logs
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -1171,10 +1190,28 @@ pub fn run() {
 fn init_tracing() {
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("nectus_desktop_lib=info"));
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(filter)
+    // Two sinks behind one filter: the usual console output, plus an in-memory
+    // buffer the Diagnostics panel reads/streams (ANSI off so the UI shows plain
+    // text). Both see exactly the lines that reach the console.
+    let stdout_layer = tracing_subscriber::fmt::layer().with_target(false);
+    let buffer_layer = tracing_subscriber::fmt::layer()
         .with_target(false)
+        .with_ansi(false)
+        .with_writer(diagnostics::DiagnosticsWriter::default());
+    let _ = tracing_subscriber::registry()
+        .with(filter)
+        .with(stdout_layer)
+        .with(buffer_layer)
         .try_init();
+}
+
+/// Return the buffered diagnostics log lines (oldest first) so a freshly opened
+/// panel can backfill before live `diagnostic_log` events take over. Reads the
+/// dedicated diagnostics buffer, never the DB lock, so it stays responsive even
+/// while a DB-bound command is stuck.
+#[tauri::command]
+fn get_diagnostic_logs() -> Vec<String> {
+    diagnostics::buffered_logs()
 }
 
 #[cfg(test)]
