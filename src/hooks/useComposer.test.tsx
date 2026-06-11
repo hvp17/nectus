@@ -97,7 +97,6 @@ describe("useComposer", () => {
   it("attaches the linked JIRA story to a cross-repo task created from a story", async () => {
     const created = { id: 500, title: story.summary, branchName: "feat/cross" } as TaskSummary;
     mockedApi.createCrossRepoTask.mockResolvedValue(created);
-    mockedApi.setTaskJiraLink.mockResolvedValue(created);
     mockedApi.startSession.mockResolvedValue({} as never);
     const { result } = setup();
 
@@ -116,13 +115,17 @@ describe("useComposer", () => {
       await result.current.createTask();
     });
 
+    // The JIRA link rides along on the create call itself (no follow-up
+    // setTaskJiraLink), matching the single-repo create path.
     expect(mockedApi.createCrossRepoTask).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceId: 1, repoIds: [7, 8] }),
+      expect.objectContaining({
+        workspaceId: 1,
+        repoIds: [7, 8],
+        jiraIssueKey: story.key,
+        jiraIssueSummary: story.summary,
+        jiraIssueUrl: "https://example.atlassian.net/browse/SCRUM-3",
+      }),
     );
-    // The JIRA link is attached to the workspace task (the cross-repo create API
-    // takes no JIRA fields, so it must be linked in a follow-up call).
-    expect(mockedApi.setTaskJiraLink).toHaveBeenCalledWith(
-      expect.objectContaining({ taskId: 500, key: story.key, summary: story.summary }),
-    );
+    expect(mockedApi.setTaskJiraLink).not.toHaveBeenCalled();
   });
 });

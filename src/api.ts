@@ -152,6 +152,9 @@ export const api = {
     prompt?: string | null;
     agentProfileId?: number | null;
     branchName?: string | null;
+    jiraIssueKey?: string | null;
+    jiraIssueSummary?: string | null;
+    jiraIssueUrl?: string | null;
   }): Promise<TaskSummary> {
     return invoke("create_cross_repo_task", {
       workspaceId: input.workspaceId ?? null,
@@ -160,6 +163,9 @@ export const api = {
       prompt: input.prompt ?? null,
       agentProfileId: input.agentProfileId ?? null,
       branchName: input.branchName ?? null,
+      jiraIssueKey: input.jiraIssueKey ?? null,
+      jiraIssueSummary: input.jiraIssueSummary ?? null,
+      jiraIssueUrl: input.jiraIssueUrl ?? null,
     });
   },
   async listWorkspaces(): Promise<Workspace[]> {

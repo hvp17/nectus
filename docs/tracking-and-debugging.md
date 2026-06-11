@@ -158,7 +158,7 @@ Current commands:
 | `get_app_settings` | Load global settings. |
 | `update_app_settings` | Save settings and refresh project worktree roots. |
 | `create_task` | Create a direct-edit task or create a git worktree-backed task (single repo). |
-| `create_cross_repo_task` | Create a task spanning ≥2 repos (Increment B): one worktree per repo as siblings under a shared parent, a single agent rooted in the primary repo's worktree, and a `task_repos` row per repo. Rolls back created worktrees on failure. |
+| `create_cross_repo_task` | Create a task spanning ≥2 repos (Increment B): one worktree per repo as siblings under a shared parent, a single agent rooted in the primary repo's worktree, and a `task_repos` row per repo. Accepts the same optional `jira_issue_key`/`jira_issue_summary`/`jira_issue_url` link as `create_task`. Rolls back created worktrees on failure. |
 | `list_tasks` | Load task summaries (each with its `taskRepos`) and per-repo dirty-state checks. |
 | `update_task_metadata` | Update title, status, or PR URL. |
 | `delete_task` | Delete a task and remove its worktree(s) when applicable. Takes a `force` flag: without it a worktree with uncommitted changes is preserved and an error is returned; with it (after the delete dialog's warning) the worktree is force-removed. The `git worktree remove` runs **off the DB lock** (plan under a brief lock → remove worktrees off-lock → delete the row under a brief lock). Each removal also runs `git worktree prune` (clears stale `.git/worktrees/<name>` admin entries, incl. when the dir was deleted out-of-band) and deletes the orphaned **local** `task-*` branch (`git branch -D`; the remote branch/PR is never touched). |
@@ -195,7 +195,7 @@ Current commands:
 | `stop_pair_loop` | Stop reviewer automation for a task. |
 | `get_task_review_loop` | Load a task's current review loop. |
 | `list_task_review_runs` | Load stored reviewer runs for a task. |
-| `create_pr_review` | Resolve a PR URL to a known project, queue a review, and start the background reviewer. Takes `reviewer_profile_ids` + `max_rounds`: one reviewer runs a single review, two or more run a consensus review. |
+| `create_pr_review` | Resolve a PR URL to a known project (matching each repo's remote off the DB lock, on the blocking pool), queue a review, and start the background reviewer. Takes `reviewer_profile_ids` + `max_rounds`: one reviewer runs a single review, two or more run a consensus review. |
 | `list_pr_reviews` | Load all PR reviews, newest first. |
 | `get_pr_review` | Load a single PR review by id. |
 | `list_pr_review_runs` | Load a consensus review's per-reviewer, per-round outputs (empty for single reviews). |

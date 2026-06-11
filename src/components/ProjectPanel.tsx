@@ -5,16 +5,14 @@ import { SidebarAgentRow } from "./SidebarAgentRow";
 import { useMinuteNow } from "../hooks/useMinuteNow";
 import { AGENT_STATE_META } from "../lib/agentState";
 import { buildSidebarAgents, dominantState } from "../lib/sidebarAgents";
+import { useAppStore } from "../store/appStore";
 import type { AgentRow } from "../lib/agentState";
-import type { TaskAttention } from "../sessionAttention";
 import type { Repo, TaskSummary, Workspace } from "../types";
 
 interface ProjectPanelProps {
   repos: Repo[];
   workspaces: Workspace[];
   tasks: TaskSummary[];
-  taskAttention: TaskAttention[];
-  liveLines: Record<number, string>;
   selectedRepoId?: number;
   /** The focused workspace whose board is open (none on Mission Control / project board). */
   selectedWorkspaceId?: number;
@@ -44,8 +42,6 @@ export function ProjectPanel({
   repos,
   workspaces,
   tasks,
-  taskAttention,
-  liveLines,
   selectedRepoId,
   selectedWorkspaceId,
   onSelectRepo,
@@ -61,6 +57,11 @@ export function ProjectPanel({
   loading,
 }: ProjectPanelProps) {
   const now = useMinuteNow();
+  // Subscribed here, not threaded through the shell: these are the hot runtime
+  // fields (`liveLines` changes on every agent output line), and only this panel
+  // among the persistent chrome displays them.
+  const taskAttention = useAppStore((s) => s.taskAttention);
+  const liveLines = useAppStore((s) => s.liveLines);
 
   const repoNames = useMemo(() => new Map(repos.map((repo) => [repo.id, repo.name])), [repos]);
   const { byRepo, byWorkspace } = useMemo(
@@ -111,6 +112,9 @@ export function ProjectPanel({
           <div className="nx-panel-sect">
             <div className="nx-panel-kick">
               <span>Workspaces</span>
+              <button type="button" aria-label="New workspace" onClick={onManageWorkspaces} disabled={busy}>
+                <Plus size={13} aria-hidden="true" />
+              </button>
             </div>
             {workspaces.map((workspace) => {
               // No "+" for a workspace whose members are all missing — there'd be no repo to seed.

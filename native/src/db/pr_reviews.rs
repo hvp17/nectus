@@ -1,12 +1,11 @@
 use super::rows::{pr_review_from_row, pr_review_reviewer_from_row, pr_review_run_from_row, rows};
 use super::{now, Database};
-use crate::git_ops;
 use crate::models::{
     PrReview, PrReviewMode, PrReviewReviewer, PrReviewRun, PrReviewRunInput, PrReviewStatus,
-    PrReviewVerdict, Repo,
+    PrReviewVerdict,
 };
 use rusqlite::{params, OptionalExtension};
-use std::path::Path;
+use std::collections::HashMap;
 
 /// Shared joined projection for `pr_reviews`, column order matching
 /// [`super::rows::pr_review_from_row`]. Repo name is required (inner join);
@@ -34,26 +33,6 @@ const PR_REVIEW_RUN_SELECT: &str = "
 ";
 
 impl Database {
-    /// Find the known project whose default remote matches `owner/repo`.
-    pub fn resolve_repo_for_owner_repo(
-        &self,
-        owner: &str,
-        repo: &str,
-    ) -> Result<Option<Repo>, String> {
-        for candidate in self.list_repos()? {
-            if let Some((remote_owner, remote_repo)) =
-                git_ops::remote_owner_repo(Path::new(&candidate.path))
-            {
-                if remote_owner.eq_ignore_ascii_case(owner)
-                    && remote_repo.eq_ignore_ascii_case(repo)
-                {
-                    return Ok(Some(candidate));
-                }
-            }
-        }
-        Ok(None)
-    }
-
     pub fn create_pr_review(
         &self,
         repo_id: i64,
@@ -98,12 +77,43 @@ impl Database {
             stmt.query_map([], pr_review_from_row)
                 .map_err(|error| error.to_string())?,
         )?;
+        // One bulk query for every consensus review's reviewers instead of one
+        // query per review.
+        let mut reviewers_by_review = self.pr_review_reviewers_by_review()?;
         for review in &mut reviews {
             if review.mode == PrReviewMode::Consensus {
-                review.reviewers = self.list_pr_review_reviewers(review.id)?;
+                review.reviewers = reviewers_by_review.remove(&review.id).unwrap_or_default();
             }
         }
         Ok(reviews)
+    }
+
+    /// Load every consensus review's reviewers in one query, grouped by review id
+    /// — the bulk companion to [`list_pr_review_reviewers`] used by
+    /// [`list_pr_reviews`].
+    fn pr_review_reviewers_by_review(&self) -> Result<HashMap<i64, Vec<PrReviewReviewer>>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "
+                SELECT prr.reviewer_profile_id, a.name, prr.pr_review_id
+                FROM pr_review_reviewers prr
+                LEFT JOIN agent_profiles a ON a.id = prr.reviewer_profile_id
+                ORDER BY prr.pr_review_id, prr.position
+                ",
+            )
+            .map_err(|error| error.to_string())?;
+        let mapped = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, i64>(2)?, pr_review_reviewer_from_row(row)?))
+            })
+            .map_err(|error| error.to_string())?;
+        let mut grouped: HashMap<i64, Vec<PrReviewReviewer>> = HashMap::new();
+        for entry in mapped {
+            let (review_id, reviewer) = entry.map_err(|error| error.to_string())?;
+            grouped.entry(review_id).or_default().push(reviewer);
+        }
+        Ok(grouped)
     }
 
     pub fn pr_review_by_id(&self, id: i64) -> Result<Option<PrReview>, String> {

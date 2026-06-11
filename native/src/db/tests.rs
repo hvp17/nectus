@@ -991,15 +991,16 @@ fn resolves_known_repo_for_pull_request_owner_and_name() {
     let (_dir, repo) = add_repo_with_github_remote(&db, "hvp17", "nectus");
 
     // Matching is case-insensitive on both owner and repo.
-    let resolved = db
-        .resolve_repo_for_owner_repo("HVP17", "Nectus")
-        .unwrap()
-        .unwrap();
+    let resolved =
+        crate::github::resolve_repo_for_owner_repo(db.list_repos().unwrap(), "HVP17", "Nectus")
+            .unwrap();
     assert_eq!(resolved.id, repo.id);
-    assert!(db
-        .resolve_repo_for_owner_repo("someone", "else")
-        .unwrap()
-        .is_none());
+    assert!(crate::github::resolve_repo_for_owner_repo(
+        db.list_repos().unwrap(),
+        "someone",
+        "else"
+    )
+    .is_none());
 }
 
 #[test]

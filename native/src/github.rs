@@ -1,6 +1,7 @@
+use crate::git_ops;
 use crate::models::{
     GithubCheckRun, GithubCheckRunState, GithubCheckState, GithubCheckSummary, GithubStatus,
-    PullRequestInfo, PullRequestReviewDecision, PullRequestState,
+    PullRequestInfo, PullRequestReviewDecision, PullRequestState, Repo,
 };
 use crate::process_util::{command_error, run_cli};
 use serde::Deserialize;
@@ -194,6 +195,19 @@ pub struct ParsedPrUrl {
     pub owner: String,
     pub repo: String,
     pub number: i64,
+}
+
+/// Find the known project whose default remote matches `owner/repo`. Runs one
+/// `git remote get-url` subprocess per candidate, so call it **off the DB lock**
+/// (load the repo list under a brief lock first).
+pub fn resolve_repo_for_owner_repo(repos: Vec<Repo>, owner: &str, repo: &str) -> Option<Repo> {
+    repos.into_iter().find(|candidate| {
+        git_ops::remote_owner_repo(Path::new(&candidate.path)).is_some_and(
+            |(remote_owner, remote_repo)| {
+                remote_owner.eq_ignore_ascii_case(owner) && remote_repo.eq_ignore_ascii_case(repo)
+            },
+        )
+    })
 }
 
 /// Parse a GitHub pull request URL into owner, repo, and number. Accepts

@@ -100,7 +100,11 @@ export function useEventBridge() {
   useTauriEvent<SessionActivityEvent>(
     "session_activity",
     (payload) => {
-      useAppStore.getState().setLiveLines((current) => ({ ...current, [payload.taskId]: payload.line }));
+      const store = useAppStore.getState();
+      // Skip the write (and the re-render fan-out) when the line is unchanged —
+      // in-place spinner/status redraws repeat the same line at a high rate.
+      if (store.liveLines[payload.taskId] === payload.line) return;
+      store.setLiveLines((current) => ({ ...current, [payload.taskId]: payload.line }));
     },
     { onError: handleSubscriptionError },
   );
