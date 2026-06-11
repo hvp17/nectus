@@ -1686,7 +1686,9 @@ fn renames_a_project_and_rejects_duplicates() {
     let (_dir_a, repo_a) = add_repo_with_remote(&db);
     let (_dir_b, repo_b) = add_repo_with_remote(&db);
 
-    let renamed = db.rename_repo(repo_a.id, "  Renamed App  ".to_string()).unwrap();
+    let renamed = db
+        .rename_repo(repo_a.id, "  Renamed App  ".to_string())
+        .unwrap();
     assert_eq!(renamed.name, "Renamed App");
     assert_eq!(renamed.path, repo_a.path, "path is untouched");
 

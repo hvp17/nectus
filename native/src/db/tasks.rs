@@ -284,7 +284,11 @@ impl Database {
     /// board/list read; `archived = true` is the explicit archive view. Keeping
     /// archived rows out of the default read also keeps them out of the
     /// command layer's per-worktree `git status` pass.
-    pub fn list_tasks(&self, repo_id: Option<i64>, archived: bool) -> Result<Vec<TaskSummary>, String> {
+    pub fn list_tasks(
+        &self,
+        repo_id: Option<i64>,
+        archived: bool,
+    ) -> Result<Vec<TaskSummary>, String> {
         let sql = "
             SELECT t.id, t.repo_id, t.title, t.prompt, t.status, t.pr_url, t.agent_profile_id, a.name, a.agent_kind,
                    t.has_worktree, t.branch_name, t.worktree_path, t.active_session_id,

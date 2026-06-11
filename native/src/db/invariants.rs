@@ -46,7 +46,11 @@ fn db_methods_never_spawn_subprocesses_under_the_lock() {
         if !name.ends_with(".rs") || name == "tests.rs" || name == "invariants.rs" {
             continue;
         }
-        scan_file(name, &fs::read_to_string(&path).expect("read source"), &mut violations);
+        scan_file(
+            name,
+            &fs::read_to_string(&path).expect("read source"),
+            &mut violations,
+        );
     }
 
     assert!(

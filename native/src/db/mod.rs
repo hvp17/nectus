@@ -186,7 +186,10 @@ impl Database {
         }
         let updated = self
             .conn
-            .execute("UPDATE repos SET name = ?1 WHERE id = ?2", params![name, id])
+            .execute(
+                "UPDATE repos SET name = ?1 WHERE id = ?2",
+                params![name, id],
+            )
             .map_err(|error| format!("Failed to rename project: {error}"))?;
         if updated == 0 {
             return Err("Repository not found".to_string());

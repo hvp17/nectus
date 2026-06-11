@@ -164,6 +164,66 @@ struct SessionMeta {
     initial_prompt: Option<String>,
 }
 
+/// The `codex-protocol` snapshot the vendored rollout types above mirror
+/// (`rust-v0.136.0`). Bump together with the types when re-syncing.
+const VENDORED_CODEX_PROTOCOL_VERSION: (u64, u64, u64) = (0, 136, 0);
+
+/// Warn once per app run when the installed Codex CLI is newer than the
+/// vendored protocol snapshot. Rollout parsing is tolerant, so protocol drift
+/// degrades **silently** (e.g. renamed turn events would stop driving the
+/// idle/needs-input attention flow) — this turns that into a diagnosable
+/// warning in Settings → Diagnostics instead. Runs `codex --version` on its
+/// own thread so watcher startup never waits on it.
+pub(super) fn warn_on_codex_protocol_drift() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        std::thread::spawn(|| {
+            let Some(installed) = installed_codex_version() else {
+                return;
+            };
+            if installed > VENDORED_CODEX_PROTOCOL_VERSION {
+                let (major, minor, patch) = installed;
+                let (vmajor, vminor, vpatch) = VENDORED_CODEX_PROTOCOL_VERSION;
+                tracing::warn!(
+                    installed = format!("{major}.{minor}.{patch}"),
+                    vendored = format!("{vmajor}.{vminor}.{vpatch}"),
+                    "Codex CLI is newer than the vendored rollout protocol snapshot; \
+                     session-log parsing may miss renamed/new event types — re-sync \
+                     the types in native/src/sessions/codex.rs"
+                );
+            }
+        });
+    });
+}
+
+fn installed_codex_version() -> Option<(u64, u64, u64)> {
+    let codex = crate::process_util::resolve_executable("codex");
+    let output = std::process::Command::new(codex)
+        .arg("--version")
+        .env("PATH", crate::process_util::augmented_path())
+        .output()
+        .ok()?;
+    parse_semver(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// First `x.y.z` triple in the text (`codex --version` prints e.g.
+/// "codex-cli 0.136.0"); tolerant of any surrounding wording.
+fn parse_semver(text: &str) -> Option<(u64, u64, u64)> {
+    for token in text.split_whitespace() {
+        let mut parts = token.trim_start_matches('v').splitn(3, '.');
+        let (Some(major), Some(minor), Some(patch)) = (parts.next(), parts.next(), parts.next())
+        else {
+            continue;
+        };
+        // Drop any non-numeric suffix on the patch ("0.136.0-beta.1" → "0").
+        let patch: String = patch.chars().take_while(char::is_ascii_digit).collect();
+        if let (Ok(major), Ok(minor), Ok(patch)) = (major.parse(), minor.parse(), patch.parse()) {
+            return Some((major, minor, patch));
+        }
+    }
+    None
+}
+
 pub(super) fn latest_codex_session_metadata(
     cwd: &Path,
     started_at: &str,
@@ -304,6 +364,7 @@ pub(super) fn spawn_codex_event_watcher(
     cwd: PathBuf,
     started_at: String,
 ) {
+    warn_on_codex_protocol_drift();
     std::thread::spawn(move || {
         let started_at = match chrono::DateTime::parse_from_rfc3339(&started_at) {
             Ok(value) => value,
@@ -525,5 +586,27 @@ fn request_user_input_prompt_from_value(value: &serde_json::Value) -> Option<Str
         None
     } else {
         prompt_preview(&prompts.join(" "))
+    }
+}
+
+#[cfg(test)]
+mod version_tests {
+    use super::parse_semver;
+
+    #[test]
+    fn parses_codex_version_output_shapes() {
+        assert_eq!(parse_semver("codex-cli 0.136.0"), Some((0, 136, 0)));
+        assert_eq!(parse_semver("codex 1.2.3\n"), Some((1, 2, 3)));
+        assert_eq!(parse_semver("v0.140.2-beta.1"), Some((0, 140, 2)));
+        assert_eq!(parse_semver("no version here"), None);
+    }
+
+    #[test]
+    fn newer_minor_or_major_trips_the_drift_comparison() {
+        let vendored = super::VENDORED_CODEX_PROTOCOL_VERSION;
+        assert!((0, 137, 0) > vendored);
+        assert!((1, 0, 0) > vendored);
+        assert!((0, 136, 0) <= vendored);
+        assert!((0, 135, 9) < vendored);
     }
 }
