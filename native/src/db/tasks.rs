@@ -425,6 +425,35 @@ impl Database {
             .ok_or_else(|| "Task not found after update".into())
     }
 
+    /// Set the per-repo PR URL on a cross-repo task's member row. The primary
+    /// repo's PR lives on `tasks.pr_url` (set via [`update_task_metadata`]); this
+    /// records a non-primary member's PR on its `task_repos` row.
+    pub fn set_task_repo_pr_url(
+        &self,
+        task_id: i64,
+        repo_id: i64,
+        pr_url: &str,
+    ) -> Result<TaskSummary, String> {
+        let updated = self
+            .conn
+            .execute(
+                "UPDATE task_repos SET pr_url = ?1 WHERE task_id = ?2 AND repo_id = ?3",
+                params![pr_url, task_id, repo_id],
+            )
+            .map_err(|error| format!("Failed to save repo PR URL: {error}"))?;
+        if updated == 0 {
+            return Err("Task has no entry for that repository".to_string());
+        }
+        self.conn
+            .execute(
+                "UPDATE tasks SET updated_at = ?1 WHERE id = ?2",
+                params![now(), task_id],
+            )
+            .map_err(|error| format!("Failed to touch task: {error}"))?;
+        self.task_by_id(task_id)?
+            .ok_or_else(|| "Task not found after update".into())
+    }
+
     /// Set (or clear, when all fields are `None`) the local JIRA story link on a
     /// task. Attaching never writes back to JIRA — this only updates local state.
     pub fn set_task_jira_link(

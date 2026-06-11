@@ -186,22 +186,24 @@ export const api = {
     if (!isTauriRuntime()) return;
     return invoke("set_workspace_collapsed", { id, collapsed });
   },
-  async taskDiffSummary(taskId: number): Promise<TaskDiffSummary> {
+  // `repoId` scopes a cross-repo task to one member repo (omit → primary).
+  async taskDiffSummary(taskId: number, repoId?: number): Promise<TaskDiffSummary> {
     if (isBrowserPreview) return seedTaskDiffSummary(taskId);
     if (!isTauriRuntime()) return { baseLabel: null, files: [] };
-    return invoke("task_diff_summary", { taskId });
+    return invoke("task_diff_summary", { taskId, repoId: repoId ?? null });
   },
-  async taskDiffFile(taskId: number, file: string): Promise<string> {
+  async taskDiffFile(taskId: number, file: string, repoId?: number): Promise<string> {
     if (isBrowserPreview) return seedTaskDiffFile(taskId, file);
     if (!isTauriRuntime()) return "";
-    return invoke("task_diff_file", { taskId, file });
+    return invoke("task_diff_file", { taskId, repoId: repoId ?? null, file });
   },
   async githubStatus(): Promise<GithubStatus> {
     if (isBrowserPreview) return seedGithubStatus;
     if (!isTauriRuntime()) return { installed: false, authenticated: false, account: null };
     return invoke("github_status");
   },
-  async githubPullRequestStatus(taskId: number): Promise<PullRequestInfo> {
+  // `repoId` scopes a cross-repo task to one member repo (omit → primary).
+  async githubPullRequestStatus(taskId: number, repoId?: number): Promise<PullRequestInfo> {
     if (isBrowserPreview) return seedPullRequest(taskId);
     if (!isTauriRuntime())
       return {
@@ -215,11 +217,11 @@ export const api = {
         checksState: "none",
         checkRuns: [],
       };
-    return invoke("github_pull_request_status", { taskId });
+    return invoke("github_pull_request_status", { taskId, repoId: repoId ?? null });
   },
-  async detectGithubPullRequest(taskId: number): Promise<TaskSummary | null> {
+  async detectGithubPullRequest(taskId: number, repoId?: number): Promise<TaskSummary | null> {
     if (!isTauriRuntime()) return null;
-    return invoke("detect_github_pull_request", { taskId });
+    return invoke("detect_github_pull_request", { taskId, repoId: repoId ?? null });
   },
   async jiraStatus(): Promise<JiraStatus> {
     if (isBrowserPreview) return seedJiraStatus;

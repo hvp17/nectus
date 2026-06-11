@@ -5,10 +5,32 @@ import type { MergeMethod } from "../types";
  * pull-request actions. The agent runs `git`/`gh` itself in the task worktree, so
  * it can push, rebase, resolve conflicts, and report back. These strings are the
  * single iteration surface for shipping behavior — tune wording here, not in Rust.
+ *
+ * `repoScope` targets one member repo of a cross-repo task: its sibling worktree
+ * is reachable from the agent's cwd, so the prompt scopes every command there.
  */
 
-export function createPrPrompt({ draft }: { draft: boolean }): string {
+export interface PrRepoScope {
+  repoName: string;
+  worktreePath: string;
+}
+
+function repoScopeLine(repoScope?: PrRepoScope | null): string[] {
+  if (!repoScope) return [];
   return [
+    `This action targets the ${repoScope.repoName} repository: run every command below inside its worktree at ${repoScope.worktreePath} (cd there first).`,
+  ];
+}
+
+export function createPrPrompt({
+  draft,
+  repoScope,
+}: {
+  draft: boolean;
+  repoScope?: PrRepoScope | null;
+}): string {
+  return [
+    ...repoScopeLine(repoScope),
     "Open a GitHub pull request for this task's branch using the `gh` CLI.",
     "- Commit any outstanding work with a Conventional Commit message and push the branch to its remote first.",
     "- Write the pull request title and description yourself from the actual changes on this branch — do not ask me for them.",
@@ -18,8 +40,9 @@ export function createPrPrompt({ draft }: { draft: boolean }): string {
   ].join("\n");
 }
 
-export function mergePrPrompt(method: MergeMethod): string {
+export function mergePrPrompt(method: MergeMethod, repoScope?: PrRepoScope | null): string {
   return [
+    ...repoScopeLine(repoScope),
     `Merge this task's pull request using \`gh pr merge --${method}\`.`,
     "- If the branch is behind its base or has merge conflicts, rebase it onto the base branch, resolve the conflicts, push, then merge.",
     "- Do not delete the branch.",
@@ -27,15 +50,17 @@ export function mergePrPrompt(method: MergeMethod): string {
   ].join("\n");
 }
 
-export function markReadyPrompt(): string {
+export function markReadyPrompt(repoScope?: PrRepoScope | null): string {
   return [
+    ...repoScopeLine(repoScope),
     "Mark this task's pull request ready for review using `gh pr ready`.",
     "Report the result here when you're done.",
   ].join("\n");
 }
 
-export function closePrPrompt(): string {
+export function closePrPrompt(repoScope?: PrRepoScope | null): string {
   return [
+    ...repoScopeLine(repoScope),
     "Close this task's pull request without merging it, using `gh pr close`.",
     "Do not delete the branch.",
     "Report the result here when you're done.",

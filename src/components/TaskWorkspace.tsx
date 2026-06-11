@@ -9,11 +9,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import { TaskRepoScopePicker } from "./taskWorkspace/TaskRepoScopePicker";
 import { TaskWorkspaceFactsRail } from "./taskWorkspace/TaskWorkspaceFactsRail";
 import { TaskWorkspaceStage, type WorkflowStep } from "./taskWorkspace/TaskWorkspaceStage";
 import { deriveAttentionPreview } from "./attentionPreview";
 import { isReviewLoopActive } from "../statusLabels";
 import { isCliConnected } from "../lib/connection";
+import { isCrossRepoTask } from "../lib/taskRepos";
 import { resolveReviewerProfileId } from "../lib/agentProfiles";
 import { useTaskDiff } from "../hooks/useTaskDiff";
 import { type TaskAttention } from "../sessionAttention";
@@ -45,6 +47,9 @@ export interface TaskWorkspaceProps {
   backLabel?: string;
   /** Project/repo name shown in the identity line ("{repo} · session {id}"). */
   repoName?: string;
+  /** Cross-repo scope: the member repo the Diff tab + GitHub panel target. */
+  activeRepoId?: number;
+  onSelectRepo?: (repoId: number | undefined) => void;
   onClose: () => void;
   onStopSession: (sessionId: string) => void;
   onResumeSession: (task: TaskSummary) => void;
@@ -115,6 +120,8 @@ export function TaskWorkspace({
   pullRequestBusy = false,
   backLabel = "Task board",
   repoName,
+  activeRepoId,
+  onSelectRepo,
   onClose,
   onStopSession,
   onResumeSession,
@@ -144,7 +151,7 @@ export function TaskWorkspace({
     setReviewerProfileId(reviewLoop?.reviewerProfileId ?? defaultReviewerProfileId);
   }, [defaultReviewerProfileId, reviewLoop?.reviewerProfileId]);
 
-  const diff = useTaskDiff(task?.id);
+  const diff = useTaskDiff(task?.id, activeRepoId);
   const { refresh: refreshDiff } = diff;
   const [stageTab, setStageTab] = useState<"terminal" | "diff" | "review">("terminal");
   const refreshDiffForOpenTab = useEffectEvent(() => {
@@ -167,6 +174,14 @@ export function TaskWorkspace({
   }, [reviewIsRunning]);
 
   if (!task) return null;
+
+  // One scope for both per-repo surfaces (Diff tab + GitHub panel). Built only
+  // for cross-repo tasks so consumers can fall back (e.g. the GitHub panel shows
+  // its auth badge when there is no picker).
+  const repoScopePicker =
+    onSelectRepo && isCrossRepoTask(task) ? (
+      <TaskRepoScopePicker task={task} activeRepoId={activeRepoId} onSelectRepo={onSelectRepo} />
+    ) : undefined;
 
   const latestReviewRun = reviewRuns.at(-1);
   // The Review pane shows the live stream while reviewing; once a run finishes it
@@ -353,6 +368,7 @@ export function TaskWorkspace({
         onRenameTask={onRenameTask}
         stageTab={stageTab}
         onStageTabChange={setStageTab}
+        repoScopePicker={repoScopePicker}
         diff={diff}
         diffFileCount={diffFileCount}
         diffTotals={diffTotals}
@@ -374,6 +390,8 @@ export function TaskWorkspace({
       <TaskWorkspaceFactsRail
         task={task}
         repoName={repoName}
+        activeRepoId={activeRepoId}
+        repoScopePicker={repoScopePicker}
         sessionId={sessionId}
         sessionAgentLabel={sessionAgentLabel}
         githubStatus={githubStatus}

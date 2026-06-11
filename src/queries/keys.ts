@@ -17,15 +17,21 @@ export const queryKeys = {
 
   github: {
     status: () => ["github", "status"] as const,
-    /** Best-effort branch PR detection for a worktree task with no linked PR. */
-    pullRequestDetection: (taskId: number) => ["github", "pull-request-detection", taskId] as const,
-    /** Live PR status for one task (checks/review decision); polled while open. */
-    pullRequest: (taskId: number) => ["github", "pull-request", taskId] as const,
+    /** Best-effort branch PR detection for a worktree task with no linked PR.
+     * `repoId` scopes a cross-repo task to one member repo (null → primary). */
+    pullRequestDetection: (taskId: number, repoId?: number) =>
+      ["github", "pull-request-detection", taskId, repoId ?? null] as const,
+    /** Live PR status for one task (checks/review decision); polled while open.
+     * `repoId` scopes a cross-repo task to one member repo (null → primary). */
+    pullRequest: (taskId: number, repoId?: number) =>
+      ["github", "pull-request", taskId, repoId ?? null] as const,
   },
 
   task: {
-    /** Changed-file summary for a task's diff; refetched on the task's `session_idle`. */
-    diffSummary: (taskId: number) => ["task", "diff-summary", taskId] as const,
+    /** Changed-file summary for a task's diff; refetched on the task's `session_idle`.
+     * `repoId` scopes a cross-repo task to one member repo (null → primary). */
+    diffSummary: (taskId: number, repoId?: number) =>
+      ["task", "diff-summary", taskId, repoId ?? null] as const,
     reviewLoop: (taskId: number) => ["task", "review-loop", taskId] as const,
     reviewRuns: (taskId: number) => ["task", "review-runs", taskId] as const,
   },

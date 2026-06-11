@@ -77,7 +77,7 @@ describe("useTaskDiff", () => {
     mockedApi.taskDiffSummary.mockResolvedValue(summary);
     const { result } = renderHook(() => useTaskDiff(1), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.summary).toEqual(summary));
-    expect(mockedApi.taskDiffSummary).toHaveBeenCalledWith(1);
+    expect(mockedApi.taskDiffSummary).toHaveBeenCalledWith(1, undefined);
   });
 
   it("reloads the summary on manual refresh", async () => {
@@ -98,7 +98,7 @@ describe("useTaskDiff", () => {
     await act(async () => {
       await result.current.loadFile("src/a.ts");
     });
-    expect(mockedApi.taskDiffFile).toHaveBeenCalledWith(1, "src/a.ts");
+    expect(mockedApi.taskDiffFile).toHaveBeenCalledWith(1, "src/a.ts", undefined);
     expect(result.current.files["src/a.ts"]).toMatchObject({ patch: "@@ -1 +1 @@\n+x", loading: false });
   });
 

@@ -7,11 +7,14 @@ import {
 } from "../queries/github";
 import { queryKeys } from "../queries/keys";
 import { isCliConnected } from "../lib/connection";
+import { taskRepoPrUrl } from "../lib/taskRepos";
 import type { TaskSummary } from "../types";
 
 interface UseGithubInput {
   selectedTask: TaskSummary | undefined;
   applyTask: (task: TaskSummary) => void;
+  /** Scope a cross-repo task to one member repo (undefined → the primary repo). */
+  repoId?: number;
 }
 
 /**
@@ -26,25 +29,25 @@ interface UseGithubInput {
  * here: they are agent-driven now and owned by `useGithubShipActions`, which
  * submits a prompt into the task's running session instead of calling `gh`.
  */
-export function useGithub({ selectedTask, applyTask }: UseGithubInput) {
+export function useGithub({ selectedTask, applyTask, repoId }: UseGithubInput) {
   const queryClient = useQueryClient();
 
   const githubStatus = useGithubStatusQuery().data;
   const ghReady = isCliConnected(githubStatus);
-  const selectedPrUrl = selectedTask?.prUrl ?? null;
+  const selectedPrUrl = taskRepoPrUrl(selectedTask, repoId);
   const canReadPullRequest = ghReady && selectedTask?.id != null && Boolean(selectedPrUrl);
   const canDetectPullRequest =
     ghReady && selectedTask?.id != null && Boolean(selectedTask?.hasWorktree) && !selectedPrUrl;
 
-  const pullRequestQuery = useGithubPullRequestQuery(selectedTask, ghReady);
+  const pullRequestQuery = useGithubPullRequestQuery(selectedTask, ghReady, repoId);
   const pullRequest = canReadPullRequest ? (pullRequestQuery.data ?? null) : null;
   const pullRequestLoading = canReadPullRequest && pullRequestQuery.isLoading;
 
   // When a worktree task has no linked PR yet, ask gh whether one already exists for
   // its branch (e.g. opened from the terminal by the agent) and backfill it.
-  // Backfilling `prUrl` re-enables the PR-status query above, which then loads its
-  // checks.
-  const detectionQuery = useGithubPullRequestDetectionQuery(selectedTask, ghReady);
+  // Backfilling the PR URL re-enables the PR-status query above, which then loads
+  // its checks.
+  const detectionQuery = useGithubPullRequestDetectionQuery(selectedTask, ghReady, repoId);
   const detectedTask = canDetectPullRequest ? detectionQuery.data : undefined;
   useEffect(() => {
     if (detectedTask) applyTask(detectedTask);
@@ -52,10 +55,12 @@ export function useGithub({ selectedTask, applyTask }: UseGithubInput) {
 
   const refreshPullRequest = useCallback(
     (task: TaskSummary) => {
-      if (!task.prUrl) return;
-      void queryClient.invalidateQueries({ queryKey: queryKeys.github.pullRequest(task.id) });
+      if (!taskRepoPrUrl(task, repoId)) return;
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.github.pullRequest(task.id, repoId),
+      });
     },
-    [queryClient],
+    [queryClient, repoId],
   );
 
   return {

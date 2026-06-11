@@ -32,7 +32,7 @@ export interface TaskDiff {
  * still lazy-loaded on demand into a local map (cleared whenever the summary
  * (re)loads, since cached patches go stale with it).
  */
-export function useTaskDiff(taskId: number | undefined): TaskDiff {
+export function useTaskDiff(taskId: number | undefined, repoId?: number): TaskDiff {
   const queryClient = useQueryClient();
   const hasTask = taskId != null;
 
@@ -40,8 +40,8 @@ export function useTaskDiff(taskId: number | undefined): TaskDiff {
     taskId == null
       ? null
       : {
-          queryKey: queryKeys.task.diffSummary(taskId),
-          queryFn: () => api.taskDiffSummary(taskId),
+          queryKey: queryKeys.task.diffSummary(taskId, repoId),
+          queryFn: () => api.taskDiffSummary(taskId, repoId),
           staleTime: 0,
         },
   );
@@ -57,27 +57,27 @@ export function useTaskDiff(taskId: number | undefined): TaskDiff {
   // selection isn't wiped by the summary arriving a tick later.
   useEffect(() => {
     setFiles({});
-  }, [taskId]);
+  }, [taskId, repoId]);
 
   const loadFile = useCallback(
     async (file: string) => {
       if (taskId == null) return;
       setFiles((current) => ({ ...current, [file]: { ...current[file], loading: true } }));
       try {
-        const patch = await api.taskDiffFile(taskId, file);
+        const patch = await api.taskDiffFile(taskId, file, repoId);
         setFiles((current) => ({ ...current, [file]: { patch, loading: false, error: null } }));
       } catch (err) {
         setFiles((current) => ({ ...current, [file]: { loading: false, error: String(err) } }));
       }
     },
-    [taskId],
+    [taskId, repoId],
   );
 
   const refresh = useCallback(async () => {
     if (taskId == null) return;
     setFiles({}); // cached patches go stale once the summary is refetched
-    await queryClient.invalidateQueries({ queryKey: queryKeys.task.diffSummary(taskId) });
-  }, [queryClient, taskId]);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.task.diffSummary(taskId, repoId) });
+  }, [queryClient, taskId, repoId]);
 
   // A finished turn likely changed the diff; refresh to keep the badge current.
   useTauriEvent<SessionIdleEvent>(

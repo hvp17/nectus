@@ -1,7 +1,13 @@
 import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
 import { api } from "../api";
 import { clearTaskAttention, type TaskAttention } from "../sessionAttention";
-import { closePrPrompt, createPrPrompt, markReadyPrompt, mergePrPrompt } from "../lib/githubAgentPrompts";
+import {
+  closePrPrompt,
+  createPrPrompt,
+  markReadyPrompt,
+  mergePrPrompt,
+  type PrRepoScope,
+} from "../lib/githubAgentPrompts";
 import type { MergeMethod, TaskSummary } from "../types";
 
 const NO_SESSION_MESSAGE = "Start or resume the agent for this task to ship from here.";
@@ -9,6 +15,8 @@ const NO_SESSION_MESSAGE = "Start or resume the agent for this task to ship from
 interface UseGithubShipActionsInput {
   setMessage: (message: string | null) => void;
   setTaskAttention: Dispatch<SetStateAction<TaskAttention[]>>;
+  /** Target a non-primary member repo of a cross-repo task (null → primary). */
+  repoScope?: PrRepoScope | null;
 }
 
 /**
@@ -20,7 +28,11 @@ interface UseGithubShipActionsInput {
  * match the `on*PullRequest` props `GitHubPanel`/`PullRequestActions` already
  * expect, so the presentational layer is untouched.
  */
-export function useGithubShipActions({ setMessage, setTaskAttention }: UseGithubShipActionsInput) {
+export function useGithubShipActions({
+  setMessage,
+  setTaskAttention,
+  repoScope,
+}: UseGithubShipActionsInput) {
   const [creatingPullRequest, setCreatingPullRequest] = useState(false);
   const [pullRequestBusy, setPullRequestBusy] = useState(false);
 
@@ -50,44 +62,44 @@ export function useGithubShipActions({ setMessage, setTaskAttention }: UseGithub
     (task: TaskSummary, options?: { draft?: boolean }) =>
       dispatch(
         task,
-        createPrPrompt({ draft: options?.draft ?? false }),
+        createPrPrompt({ draft: options?.draft ?? false, repoScope }),
         `Asked the agent to open a pull request for ${task.title}`,
         setCreatingPullRequest,
       ),
-    [dispatch],
+    [dispatch, repoScope],
   );
 
   const mergePullRequest = useCallback(
     (task: TaskSummary, method: MergeMethod) =>
       dispatch(
         task,
-        mergePrPrompt(method),
+        mergePrPrompt(method, repoScope),
         `Asked the agent to merge the pull request for ${task.title}`,
         setPullRequestBusy,
       ),
-    [dispatch],
+    [dispatch, repoScope],
   );
 
   const setPullRequestReady = useCallback(
     (task: TaskSummary) =>
       dispatch(
         task,
-        markReadyPrompt(),
+        markReadyPrompt(repoScope),
         `Asked the agent to mark the pull request ready for ${task.title}`,
         setPullRequestBusy,
       ),
-    [dispatch],
+    [dispatch, repoScope],
   );
 
   const closePullRequest = useCallback(
     (task: TaskSummary) =>
       dispatch(
         task,
-        closePrPrompt(),
+        closePrPrompt(repoScope),
         `Asked the agent to close the pull request for ${task.title}`,
         setPullRequestBusy,
       ),
-    [dispatch],
+    [dispatch, repoScope],
   );
 
   return {

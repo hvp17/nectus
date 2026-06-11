@@ -345,9 +345,12 @@ async fn github_status() -> AppResult<GithubStatus> {
 }
 
 /// Fetch the live status of the pull request for the task's worktree branch.
+/// For a cross-repo task, `repo_id` selects which member repo's branch to
+/// inspect (`None` → the primary repo).
 #[tauri::command]
 async fn github_pull_request_status(
     task_id: i64,
+    repo_id: Option<i64>,
     state: State<'_, AppState>,
 ) -> AppResult<PullRequestInfo> {
     let db = state.db.clone();
@@ -357,8 +360,7 @@ async fn github_pull_request_status(
             let task = db
                 .task_by_id(task_id)?
                 .ok_or_else(|| "Task not found".to_string())?;
-            task.worktree_path
-                .ok_or_else(|| "Task has no worktree branch to inspect".to_string())?
+            task_repo_worktree(&task, repo_id)?
         };
         github::pull_request_status(Path::new(&worktree))
     })
@@ -369,30 +371,52 @@ async fn github_pull_request_status(
 
 /// Detect a pull request already open for the task's worktree branch (e.g. one
 /// opened from the terminal) and backfill its URL. Returns the updated task when a
-/// PR was found and linked, or `None` when the branch has no PR yet.
+/// PR was found and linked, or `None` when the branch has no PR yet. For a
+/// cross-repo task, `repo_id` selects the member repo: the primary repo's PR
+/// lands on `tasks.pr_url`, a non-primary repo's on its `task_repos.pr_url`.
 #[tauri::command]
 async fn detect_github_pull_request(
     task_id: i64,
+    repo_id: Option<i64>,
     state: State<'_, AppState>,
 ) -> AppResult<Option<TaskSummary>> {
     let db = state.db.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<Option<TaskSummary>, String> {
-        let worktree = {
+        let (worktree, target_repo_id, is_primary) = {
             let db = db.lock();
             let task = db
                 .task_by_id(task_id)?
                 .ok_or_else(|| "Task not found".to_string())?;
-            // Nothing to detect once a PR is linked, or without a worktree branch.
-            match task.worktree_path {
-                Some(path) if task.pr_url.is_none() => path,
-                _ => return Ok(None),
+            let target_repo_id = repo_id.unwrap_or(task.repo_id);
+            let is_primary = target_repo_id == task.repo_id;
+            // Nothing to detect once that repo's PR is linked, or without a
+            // worktree branch.
+            let already_linked = if is_primary {
+                task.pr_url.is_some()
+            } else {
+                task.task_repos
+                    .iter()
+                    .find(|task_repo| task_repo.repo_id == target_repo_id)
+                    .is_some_and(|task_repo| task_repo.pr_url.is_some())
+            };
+            if already_linked || !task.has_worktree {
+                return Ok(None);
             }
+            (
+                task_repo_worktree(&task, repo_id)?,
+                target_repo_id,
+                is_primary,
+            )
         };
         match github::find_pull_request(Path::new(&worktree))? {
             Some(info) => {
-                let mut task =
+                let mut task = if is_primary {
                     db.lock()
-                        .update_task_metadata(task_id, None, None, Some(info.url))?;
+                        .update_task_metadata(task_id, None, None, Some(info.url))?
+                } else {
+                    db.lock()
+                        .set_task_repo_pr_url(task_id, target_repo_id, &info.url)?
+                };
                 fill_task_dirtiness(&mut task);
                 Ok(Some(task))
             }
@@ -438,15 +462,18 @@ async fn post_pr_review_comment(review_id: i64, state: State<'_, AppState>) -> A
 
 /// Resolve the working directory a task's diff is computed in, plus whether it is a
 /// worktree task. Worktree tasks diff against their branch base; direct-edit tasks
-/// diff the working tree against `HEAD`.
-fn task_diff_target(db: &Database, task_id: i64) -> Result<(String, bool), String> {
+/// diff the working tree against `HEAD`. For a cross-repo task, `repo_id` selects
+/// which member repo's worktree to target (`None` → the primary repo).
+fn task_diff_target(
+    db: &Database,
+    task_id: i64,
+    repo_id: Option<i64>,
+) -> Result<(String, bool), String> {
     let task = db
         .task_by_id(task_id)?
         .ok_or_else(|| "Task not found".to_string())?;
     if task.has_worktree {
-        let path = task
-            .worktree_path
-            .ok_or_else(|| "Worktree task is missing its path".to_string())?;
+        let path = task_repo_worktree(&task, repo_id)?;
         Ok((path, true))
     } else {
         let repo = db
@@ -456,15 +483,37 @@ fn task_diff_target(db: &Database, task_id: i64) -> Result<(String, bool), Strin
     }
 }
 
+/// The worktree path for one of a task's member repos (`None` → the primary).
+/// Every worktree task has a `task_repos` row per member, each with its own
+/// sibling worktree, so the per-repo Diff/GitHub surfaces can target any of them.
+fn task_repo_worktree(task: &TaskSummary, repo_id: Option<i64>) -> Result<String, String> {
+    let repo_id = repo_id.unwrap_or(task.repo_id);
+    if repo_id == task.repo_id {
+        return task
+            .worktree_path
+            .clone()
+            .ok_or_else(|| "Task has no worktree branch to inspect".to_string());
+    }
+    task.task_repos
+        .iter()
+        .find(|task_repo| task_repo.repo_id == repo_id)
+        .and_then(|task_repo| task_repo.worktree_path.clone())
+        .ok_or_else(|| "Task has no worktree for that repository".to_string())
+}
+
 /// Summarize the files a task changed: its branch vs the base branch for worktree
 /// tasks, or the working tree vs `HEAD` for direct-edit tasks.
 #[tauri::command]
-async fn task_diff_summary(task_id: i64, state: State<'_, AppState>) -> AppResult<TaskDiffSummary> {
+async fn task_diff_summary(
+    task_id: i64,
+    repo_id: Option<i64>,
+    state: State<'_, AppState>,
+) -> AppResult<TaskDiffSummary> {
     let db = state.db.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<TaskDiffSummary, String> {
         let (path, has_worktree) = {
             let db = db.lock();
-            task_diff_target(&db, task_id)?
+            task_diff_target(&db, task_id, repo_id)?
         };
         let path = Path::new(&path);
         let base = if has_worktree {
@@ -487,6 +536,7 @@ async fn task_diff_summary(task_id: i64, state: State<'_, AppState>) -> AppResul
 #[tauri::command]
 async fn task_diff_file(
     task_id: i64,
+    repo_id: Option<i64>,
     file: String,
     state: State<'_, AppState>,
 ) -> AppResult<String> {
@@ -494,7 +544,7 @@ async fn task_diff_file(
     tauri::async_runtime::spawn_blocking(move || -> Result<String, String> {
         let (path, has_worktree) = {
             let db = db.lock();
-            task_diff_target(&db, task_id)?
+            task_diff_target(&db, task_id, repo_id)?
         };
         let path = Path::new(&path);
         let base = if has_worktree {

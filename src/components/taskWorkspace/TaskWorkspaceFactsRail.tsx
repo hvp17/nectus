@@ -27,6 +27,10 @@ const statusOrder: TaskStatus[] = ["planned", "in_progress", "review", "done"];
 export interface TaskWorkspaceFactsRailProps {
   task: TaskSummary;
   repoName?: string;
+  /** Cross-repo scope the GitHub panel targets (undefined → primary repo). */
+  activeRepoId?: number;
+  /** Cross-repo member switcher rendered in the GitHub panel header. */
+  repoScopePicker?: React.ReactNode;
   sessionId?: string | null;
   sessionAgentLabel: string;
   githubStatus?: GithubStatus;
@@ -63,6 +67,8 @@ export interface TaskWorkspaceFactsRailProps {
 export function TaskWorkspaceFactsRail({
   task,
   repoName,
+  activeRepoId,
+  repoScopePicker,
   sessionId,
   sessionAgentLabel,
   githubStatus,
@@ -205,6 +211,8 @@ export function TaskWorkspaceFactsRail({
         <div className="border-b px-4 py-3.5">
           <GitHubPanel
             task={task}
+            selectedRepoId={activeRepoId}
+            repoScopePicker={repoScopePicker}
             githubStatus={githubStatus}
             pullRequest={pullRequest}
             pullRequestLoading={pullRequestLoading}

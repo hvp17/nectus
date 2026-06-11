@@ -1,8 +1,9 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "../queries/keys";
 import { makeCacheSetter } from "../queries/cache";
+import { taskRepoName, taskRepoWorktreePath } from "../lib/taskRepos";
 import { useAgentProfilesQuery } from "../queries/core";
 import { useJiraStatusQuery } from "../queries/jira";
 import { useAppStore } from "../store/appStore";
@@ -54,8 +55,21 @@ export function TaskWorkspaceOverlay({ task, backLabel, repoName, onClose }: Tas
     [setTasks],
   );
 
-  const github = useGithub({ selectedTask: task, applyTask });
-  const ship = useGithubShipActions({ setMessage, setTaskAttention });
+  // Scope a cross-repo task's Diff tab + GitHub panel to one member repo
+  // (undefined → primary). Reset when another task opens.
+  const [activeRepoId, setActiveRepoId] = useState<number | undefined>(undefined);
+  useEffect(() => setActiveRepoId(undefined), [task.id]);
+  // Ship prompts must run inside the scoped repo's sibling worktree, not the
+  // session's primary cwd, when a non-primary repo is selected.
+  const repoScope = useMemo(() => {
+    if (activeRepoId == null || activeRepoId === task.repoId) return null;
+    const repoName = taskRepoName(task, activeRepoId);
+    const worktreePath = taskRepoWorktreePath(task, activeRepoId);
+    return repoName && worktreePath ? { repoName, worktreePath } : null;
+  }, [task, activeRepoId]);
+
+  const github = useGithub({ selectedTask: task, applyTask, repoId: activeRepoId });
+  const ship = useGithubShipActions({ setMessage, setTaskAttention, repoScope });
   const review = useTaskReviewLoop({ selectedTaskId: task.id, onMessage: setMessage });
   const { updateStatus, renameTask, setTaskJiraLink } = useTaskActions();
   const requestDeleteTask = useTaskDeletion();
@@ -97,6 +111,8 @@ export function TaskWorkspaceOverlay({ task, backLabel, repoName, onClose }: Tas
       pullRequestBusy={ship.pullRequestBusy}
       backLabel={backLabel}
       repoName={repoName}
+      activeRepoId={activeRepoId}
+      onSelectRepo={setActiveRepoId}
       onClose={onClose}
       onStopSession={session.stopSession}
       onResumeSession={session.resumeSession}

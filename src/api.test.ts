@@ -192,7 +192,7 @@ describe("api", () => {
     const info = await api.githubPullRequestStatus(9);
 
     expect(info.number).toBe(9);
-    expect(mockedInvoke).toHaveBeenCalledWith("github_pull_request_status", { taskId: 9 });
+    expect(mockedInvoke).toHaveBeenCalledWith("github_pull_request_status", { taskId: 9, repoId: null });
   });
 
   it("returns a disconnected pull request status outside Tauri", async () => {
@@ -220,7 +220,7 @@ describe("api", () => {
     const task = await api.detectGithubPullRequest(5);
 
     expect(task?.prUrl).toBe("https://github.com/hvp17/nectus/pull/9");
-    expect(mockedInvoke).toHaveBeenCalledWith("detect_github_pull_request", { taskId: 5 });
+    expect(mockedInvoke).toHaveBeenCalledWith("detect_github_pull_request", { taskId: 5, repoId: null });
   });
 
   it("returns no detected pull request outside Tauri", async () => {

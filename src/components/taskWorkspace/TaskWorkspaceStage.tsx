@@ -60,6 +60,8 @@ export interface TaskWorkspaceStageProps {
   onRenameTask: (task: TaskSummary, title: string) => void;
   stageTab: StageTab;
   onStageTabChange: (tab: StageTab) => void;
+  /** Cross-repo member switcher shown with the Diff controls (null for single-repo tasks). */
+  repoScopePicker?: React.ReactNode;
   diff: TaskDiff;
   diffFileCount: number;
   diffTotals: { additions: number; deletions: number };
@@ -89,6 +91,7 @@ export function TaskWorkspaceStage({
   onRenameTask,
   stageTab,
   onStageTabChange,
+  repoScopePicker,
   diff,
   diffFileCount,
   diffTotals,
@@ -222,18 +225,21 @@ export function TaskWorkspaceStage({
           </div>
 
           {stageTab === "diff" && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7"
-              aria-label="Refresh diff"
-              disabled={diff.loading}
-              onClick={() => void diff.refresh()}
-            >
-              <RotateCw data-icon="inline-start" className={cn(diff.loading && "animate-spin")} />
-              Refresh
-            </Button>
+            <>
+              {repoScopePicker}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7"
+                aria-label="Refresh diff"
+                disabled={diff.loading}
+                onClick={() => void diff.refresh()}
+              >
+                <RotateCw data-icon="inline-start" className={cn(diff.loading && "animate-spin")} />
+                Refresh
+              </Button>
+            </>
           )}
         </div>
 

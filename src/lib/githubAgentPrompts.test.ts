@@ -31,3 +31,24 @@ describe("githubAgentPrompts", () => {
     expect(prompt).toMatch(/do not delete the branch/i);
   });
 });
+
+describe("repo-scoped prompts (cross-repo tasks)", () => {
+  const repoScope = { repoName: "api-server", worktreePath: "/wt/branch/api-server" };
+
+  it("prefixes every builder with the member repo's worktree when scoped", () => {
+    for (const prompt of [
+      createPrPrompt({ draft: false, repoScope }),
+      mergePrPrompt("squash", repoScope),
+      markReadyPrompt(repoScope),
+      closePrPrompt(repoScope),
+    ]) {
+      expect(prompt.split("\n")[0]).toContain("api-server");
+      expect(prompt.split("\n")[0]).toContain("/wt/branch/api-server");
+    }
+  });
+
+  it("leaves prompts unscoped for the primary repo", () => {
+    expect(createPrPrompt({ draft: false })).not.toContain("cd there first");
+    expect(mergePrPrompt("squash")).not.toContain("cd there first");
+  });
+});

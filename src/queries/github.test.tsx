@@ -77,7 +77,7 @@ describe("useGithubPullRequestDetectionQuery", () => {
     });
 
     await waitFor(() => expect(result.current.data).toEqual(detectedTask));
-    expect(api.detectGithubPullRequest).toHaveBeenCalledWith(42);
+    expect(api.detectGithubPullRequest).toHaveBeenCalledWith(42, undefined);
   });
 
   it("stays idle when GitHub is disconnected or the task already has a PR", () => {

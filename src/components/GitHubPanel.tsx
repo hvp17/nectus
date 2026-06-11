@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ExternalLink, Github, GitPullRequest, LoaderCircle, RefreshCw, XCircle } from "lucide-react";
 import { openExternal } from "../lib/openExternal";
 import { isCliConnected } from "../lib/connection";
+import { taskRepoPrUrl } from "../lib/taskRepos";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -20,6 +21,10 @@ import type {
 
 export interface GitHubPanelProps {
   task: TaskSummary;
+  /** Cross-repo scope: which member repo's PR this panel shows (undefined → primary). */
+  selectedRepoId?: number;
+  /** Cross-repo member switcher rendered in the panel header. */
+  repoScopePicker?: React.ReactNode;
   githubStatus?: GithubStatus;
   pullRequest?: PullRequestInfo | null;
   pullRequestLoading?: boolean;
@@ -52,6 +57,8 @@ function prStateLabel(pr: PullRequestInfo): string {
 
 export function GitHubPanel({
   task,
+  selectedRepoId,
+  repoScopePicker,
   githubStatus,
   pullRequest,
   pullRequestLoading = false,
@@ -65,6 +72,9 @@ export function GitHubPanel({
 }: GitHubPanelProps) {
   const [draft, setDraft] = useState(false);
   const ghConnected = isCliConnected(githubStatus);
+  // For a cross-repo task the panel shows the scoped member repo's PR (the
+  // primary repo's PR is `task.prUrl`, a non-primary's its `taskRepos` entry).
+  const scopedPrUrl = taskRepoPrUrl(task, selectedRepoId);
 
   return (
     <section aria-label="GitHub" className="flex flex-col gap-2.5">
@@ -73,11 +83,12 @@ export function GitHubPanel({
           <GitPullRequest size={12} />
           Pull request
         </p>
-        {githubStatus?.authenticated && (
-          <Badge variant="outline" className="font-normal">
-            {githubStatus.account ?? "Connected"}
-          </Badge>
-        )}
+        {repoScopePicker ??
+          (githubStatus?.authenticated && (
+            <Badge variant="outline" className="font-normal">
+              {githubStatus.account ?? "Connected"}
+            </Badge>
+          ))}
       </div>
 
       <div>{renderBody()}</div>
@@ -87,8 +98,8 @@ export function GitHubPanel({
   function renderBody() {
     // A linked pull request is known from the task alone, so its card shows even
     // when the gh CLI is not connected (only the live checks need gh).
-    if (task.prUrl) {
-      return renderPullRequest(task.prUrl);
+    if (scopedPrUrl) {
+      return renderPullRequest(scopedPrUrl);
     }
     if (!githubStatus) {
       return <Skeleton className="h-9 w-full" />;

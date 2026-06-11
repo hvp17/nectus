@@ -1633,3 +1633,49 @@ fn task_attention_persists_and_clears() {
     let cleared = db.task_by_id(task.id).unwrap().unwrap();
     assert_eq!(cleared.attention, None);
 }
+
+#[test]
+fn sets_a_member_repo_pr_url_without_touching_the_primary() {
+    let db = Database::open_in_memory().unwrap();
+    let wt_root = tempdir().unwrap();
+    let (_dir_a, repo_a) = add_repo_with_remote(&db);
+    let (_dir_b, repo_b) = add_repo_with_remote(&db);
+    for repo in [&repo_a, &repo_b] {
+        db.conn
+            .execute(
+                "UPDATE repos SET default_worktree_root = ?1 WHERE id = ?2",
+                rusqlite::params![wt_root.path().join(&repo.name).to_string_lossy(), repo.id],
+            )
+            .unwrap();
+    }
+    let task = db
+        .create_cross_repo_task(
+            None,
+            vec![repo_a.id, repo_b.id],
+            "Cross".to_string(),
+            None,
+            None,
+            Some("feat/pr-url".to_string()),
+        )
+        .unwrap();
+
+    let updated = db
+        .set_task_repo_pr_url(task.id, repo_b.id, "https://github.com/a/b/pull/7")
+        .unwrap();
+    let member = updated
+        .task_repos
+        .iter()
+        .find(|task_repo| task_repo.repo_id == repo_b.id)
+        .unwrap();
+    assert_eq!(
+        member.pr_url.as_deref(),
+        Some("https://github.com/a/b/pull/7")
+    );
+    assert!(updated.pr_url.is_none(), "primary PR stays unset");
+
+    // An unknown member is rejected rather than silently ignored.
+    let error = db
+        .set_task_repo_pr_url(task.id, 9999, "https://github.com/a/b/pull/8")
+        .unwrap_err();
+    assert!(error.contains("no entry"), "{error}");
+}
