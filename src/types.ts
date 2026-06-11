@@ -334,6 +334,9 @@ export interface AppSettings {
   jiraFilterStatuses: string[];
   /** Board epic filter (an epic key); null/absent means no epic filter. */
   jiraFilterEpic?: string | null;
+  /** Opt-in tmux-backed sessions: keep agents running while the app is closed
+   * and reattach on the next launch. Requires tmux >= 3.2 on the machine. */
+  persistentSessions: boolean;
   theme: ThemeMode;
   density: DensityMode;
   updatedAt: string;
@@ -351,6 +354,7 @@ export interface AppSettingsInput {
   jiraFilterCurrentSprint: boolean;
   jiraFilterStatuses: string[];
   jiraFilterEpic?: string | null;
+  persistentSessions: boolean;
   theme: ThemeMode;
   density: DensityMode;
 }

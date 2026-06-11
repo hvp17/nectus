@@ -31,6 +31,7 @@ mod review_loop;
 mod reviewer;
 mod reviewer_output;
 mod terminal_io;
+mod tmux;
 mod verdict;
 
 use agents::configure_agent_command;
@@ -418,6 +419,9 @@ struct RunningSession {
     /// When that line was forwarded, for throttling.
     last_activity_at: Option<Instant>,
     opencode_port: Option<u16>,
+    /// Set when this PTY child is a tmux *client* (persistent sessions): the
+    /// agent itself runs in the named tmux session and survives the client.
+    tmux_session: Option<String>,
 }
 
 struct ReviewSessionTarget {
@@ -451,6 +455,7 @@ impl SessionManager {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn start(
         &self,
         app: AppHandle,
@@ -459,6 +464,7 @@ impl SessionManager {
         repo: Repo,
         agent: AgentProfile,
         resume: bool,
+        persistent: bool,
     ) -> Result<Session, String> {
         if task.active_session_id.is_some() {
             return Err("Task already has a running session".into());
@@ -529,6 +535,28 @@ impl SessionManager {
         let cwd_path = PathBuf::from(cwd);
         command.cwd(cwd);
 
+        // Opt-in persistence: run the agent inside a dedicated tmux server and
+        // make our PTY child a tmux client, so the agent survives app quit and
+        // the next launch reattaches. Falls back to a normal session (with a
+        // warning) when tmux is missing.
+        let tmux_session = if persistent {
+            if tmux::tmux_binary().is_some() {
+                Some(tmux::tmux_session_name(&session_id))
+            } else {
+                tracing::warn!(
+                    session_id = %session_id,
+                    "persistent sessions enabled but tmux was not found; starting a normal session"
+                );
+                None
+            }
+        } else {
+            None
+        };
+        let command = match &tmux_session {
+            Some(name) => wrap_in_tmux(command, name, cwd),
+            None => command,
+        };
+
         let mut child = pair
             .slave
             .spawn_command(command)
@@ -549,7 +577,7 @@ impl SessionManager {
                 return Err(format!("Failed to open PTY writer: {error}"));
             }
         };
-        let mut reader = match pair.master.try_clone_reader() {
+        let reader = match pair.master.try_clone_reader() {
             Ok(reader) => reader,
             Err(error) => {
                 reap(&mut child);
@@ -603,6 +631,7 @@ impl SessionManager {
             &agent.command,
             cwd,
             task.last_session_label.as_deref(),
+            &started_at,
         ) {
             reap(&mut child);
             return Err(error);
@@ -635,6 +664,7 @@ impl SessionManager {
                 last_activity_line: None,
                 last_activity_at: None,
                 opencode_port,
+                tmux_session,
             },
         );
 
@@ -672,159 +702,17 @@ impl SessionManager {
             WatcherKind::None => {}
         }
 
-        std::thread::spawn({
-            let app = app.clone();
-            let db = db.clone();
-            let sessions = self.sessions.clone();
-            let task_id = task.id;
-            let session_id = session_id.clone();
-            let agent_kind = agent.agent_kind;
-            let cwd = cwd_path;
-            let started_at = started_at.clone();
-            // For providers with a structured event watcher, that watcher owns the
-            // activity line; scraping the PTY here would only fight it with TUI
-            // chrome and echoed keystrokes (see `provider_session`).
-            let scrape_activity = !provider_session(agent_kind).emits_structured_activity;
-            move || {
-                let mut buffer = [0_u8; 8192];
-                // Trailing bytes of a multi-byte character split across a read
-                // boundary, carried to the next read so it decodes whole instead of
-                // as `�` (see decode_pty_chunk).
-                let mut utf8_carry: Vec<u8> = Vec::new();
-                loop {
-                    match reader.read(&mut buffer) {
-                        Ok(0) => {
-                            // EOF with a half-written multi-byte char still buffered:
-                            // surface it as a replacement rather than dropping the
-                            // bytes (matches from_utf8_lossy on a truncated tail).
-                            if !utf8_carry.is_empty() {
-                                let data = String::from_utf8_lossy(&utf8_carry).to_string();
-                                utf8_carry.clear();
-                                let start_offset = sessions
-                                    .lock()
-                                    .get_mut(&session_id)
-                                    .map_or(0, |running| append_output_buffer(running, &data));
-                                let _ = app.emit(
-                                    "session_output",
-                                    SessionOutputEvent {
-                                        session_id: session_id.clone(),
-                                        data,
-                                        start_offset,
-                                    },
-                                );
-                            }
-                            break;
-                        }
-                        Ok(count) => {
-                            let data = decode_pty_chunk(&mut utf8_carry, &buffer[..count]);
-                            // A read that delivered only the lead bytes of a
-                            // character yields no complete text yet; wait for the
-                            // rest rather than emit an empty frame.
-                            if data.is_empty() {
-                                continue;
-                            }
-                            let mut start_offset = 0;
-                            let mut activity_line = None;
-                            if let Some(running) = sessions.lock().get_mut(&session_id) {
-                                start_offset = append_output_buffer(running, &data);
-                                if scrape_activity {
-                                    activity_line = next_activity_line(running);
-                                }
-                            }
-                            let _ = app
-                                .emit(
-                                    "session_output",
-                                    SessionOutputEvent {
-                                        session_id: session_id.clone(),
-                                        data,
-                                        start_offset,
-                                    },
-                                )
-                                .inspect_err(|error| {
-                                    tracing::warn!(
-                                        ?error,
-                                        session_id = %session_id,
-                                        "failed to emit session output"
-                                    )
-                                });
-                            if let Some(line) = activity_line {
-                                let _ = app
-                                    .emit(
-                                        "session_activity",
-                                        SessionActivityEvent {
-                                            session_id: session_id.clone(),
-                                            task_id,
-                                            line,
-                                        },
-                                    )
-                                    .inspect_err(|error| {
-                                        tracing::warn!(
-                                            ?error,
-                                            session_id = %session_id,
-                                            "failed to emit session activity"
-                                        )
-                                    });
-                            }
-                        }
-                        Err(error) => {
-                            tracing::debug!(
-                                ?error,
-                                session_id = %session_id,
-                                "session reader stopped"
-                            );
-                            break;
-                        }
-                    }
-                }
-                // Remove from the map first (releasing the lock) so the blocking
-                // wait() below never holds the global sessions mutex. Whichever of
-                // this thread / stop() wins the remove owns reaping the child, so
-                // there is no double wait or double session_exited.
-                let removed = sessions.lock().remove(&session_id);
-                if let Some(mut running) = removed {
-                    // EOF means the child has exited; wait() reaps the zombie and
-                    // yields the real status so we can report a true exit code.
-                    let exit_code = running
-                        .child
-                        .wait()
-                        .ok()
-                        .map(|status| status.exit_code() as i32);
-                    if let Some((id, label)) = resolve_resumable_metadata(
-                        agent_kind,
-                        &cwd,
-                        &started_at,
-                        running.opencode_port,
-                    ) {
-                        let _ = db
-                            .lock()
-                            .set_last_session(task_id, &id, label.as_deref())
-                            .inspect_err(|error| {
-                                tracing::warn!(?error, task_id, "failed to save latest session")
-                            });
-                    }
-                    if provider_session(agent_kind).cleanup_event_sink {
-                        cleanup_event_sink(&session_id);
-                    }
-                    let _ = db
-                        .lock()
-                        .set_active_session(task_id, None)
-                        .inspect_err(|error| {
-                            tracing::warn!(?error, task_id, "failed to clear active session")
-                        });
-                    let _ = app
-                        .emit(
-                            "session_exited",
-                            SessionExitedEvent {
-                                session_id,
-                                exit_code,
-                            },
-                        )
-                        .inspect_err(|error| {
-                            tracing::warn!(?error, "failed to emit session_exited")
-                        });
-                }
-            }
-        });
+        spawn_session_reader(
+            app,
+            db,
+            self.sessions.clone(),
+            task.id,
+            session_id,
+            agent.agent_kind,
+            cwd_path,
+            started_at,
+            reader,
+        );
 
         Ok(session)
     }
@@ -860,6 +748,11 @@ impl SessionManager {
         let _ = running.child.kill();
         // Reap the just-killed child so it doesn't linger as a zombie until app exit.
         let _ = running.child.wait();
+        // For a persistent session the child was only the tmux client; Stop
+        // means stop, so kill the agent's tmux session as well.
+        if running.tmux_session.is_some() {
+            tmux::kill_session(&session_id);
+        }
         tracing::info!(
             session_id = %session_id,
             task_id = running.session.task_id,
@@ -984,9 +877,232 @@ impl SessionManager {
         Ok(())
     }
 
+    /// Session ids still alive on the dedicated Nectus tmux server — what the
+    /// boot path keeps when clearing stale `active_session_id` markers.
+    pub fn live_persistent_session_ids(&self) -> Vec<String> {
+        tmux::list_live_session_ids()
+    }
+
+    /// Reattach every surviving tmux-backed session found at boot: re-register
+    /// a tmux client PTY under the original session id, re-spawn the provider
+    /// watcher where possible, and kill orphaned tmux sessions whose task is
+    /// gone. Runs DB reads under brief locks only.
+    pub fn reattach_persistent_sessions(&self, app: AppHandle, db: Arc<Mutex<Database>>) {
+        for session_id in self.live_persistent_session_ids() {
+            let context = {
+                let db = db.lock();
+                match db.task_for_active_session(&session_id) {
+                    Ok(Some((task_id, started_at))) => match db.task_by_id(task_id) {
+                        Ok(Some(task)) => {
+                            let agent_kind = task.agent_kind.unwrap_or(AgentKind::Custom);
+                            Some((task, agent_kind, started_at))
+                        }
+                        _ => None,
+                    },
+                    _ => None,
+                }
+            };
+            let Some((task, agent_kind, started_at)) = context else {
+                tracing::info!(
+                    session_id = %session_id,
+                    "killing orphaned persistent tmux session (no matching task)"
+                );
+                tmux::kill_session(&session_id);
+                continue;
+            };
+            if let Err(error) = self.attach(
+                app.clone(),
+                db.clone(),
+                &task,
+                agent_kind,
+                session_id.clone(),
+                started_at,
+            ) {
+                tracing::warn!(
+                    ?error,
+                    session_id = %session_id,
+                    task_id = task.id,
+                    "failed to reattach persistent session"
+                );
+                let _ = db.lock().set_active_session(task.id, None);
+            } else {
+                tracing::info!(
+                    session_id = %session_id,
+                    task_id = task.id,
+                    "reattached persistent session"
+                );
+            }
+        }
+    }
+
+    /// Attach a new tmux client PTY to a surviving session, restoring the
+    /// running-session registration and (where possible) the provider watcher.
+    /// OpenCode's event watcher needs its per-launch local server port, which
+    /// does not survive a restart, so OpenCode reattaches without one (the
+    /// terminal works; idle/needs-input detection resumes on the next start).
+    fn attach(
+        &self,
+        app: AppHandle,
+        db: Arc<Mutex<Database>>,
+        task: &TaskSummary,
+        agent_kind: AgentKind,
+        session_id: String,
+        started_at: Option<String>,
+    ) -> Result<(), String> {
+        let tmux_bin = tmux::tmux_binary()
+            .ok_or_else(|| "tmux not found while reattaching".to_string())?
+            .clone();
+        let cwd = task
+            .last_session_cwd
+            .clone()
+            .or_else(|| task.worktree_path.clone())
+            .ok_or_else(|| "Task has no working directory to reattach in".to_string())?;
+        let cwd_path = PathBuf::from(&cwd);
+        let started_at = started_at.unwrap_or_else(|| Utc::now().to_rfc3339());
+
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: DEFAULT_PTY_ROWS,
+                cols: DEFAULT_PTY_COLS,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|error| format!("Failed to open PTY: {error}"))?;
+
+        let mut command = CommandBuilder::new(tmux_bin);
+        command.args([
+            "-L",
+            tmux::TMUX_SOCKET,
+            "attach-session",
+            "-t",
+            &tmux::tmux_session_name(&session_id),
+        ]);
+        command.env("TERM", "xterm-256color");
+        command.env("COLORTERM", "truecolor");
+        command.env("PATH", crate::process_util::augmented_path());
+        command.cwd(&cwd);
+
+        let mut child = pair
+            .slave
+            .spawn_command(command)
+            .map_err(|error| format!("Failed to attach tmux client: {error}"))?;
+        let pid = child.process_id();
+        let writer = match pair.master.take_writer() {
+            Ok(writer) => Arc::new(Mutex::new(writer)),
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("Failed to open PTY writer: {error}"));
+            }
+        };
+        let reader = match pair.master.try_clone_reader() {
+            Ok(reader) => reader,
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("Failed to create PTY reader: {error}"));
+            }
+        };
+
+        let session = Session {
+            id: session_id.clone(),
+            resumable_session_id: Some(session_id.clone()),
+            resumable_session_label: task.last_session_label.clone(),
+            task_id: task.id,
+            agent_profile_id: task.agent_profile_id.unwrap_or_default(),
+            state: SessionState::Running,
+            pid,
+            started_at: started_at.clone(),
+            stopped_at: None,
+        };
+        self.sessions.lock().insert(
+            session_id.clone(),
+            RunningSession {
+                session,
+                agent_kind,
+                cwd: cwd_path.clone(),
+                master: pair.master,
+                writer,
+                child,
+                output_buffer: String::new(),
+                output_truncated: false,
+                output_start_offset: 0,
+                output_end_offset: 0,
+                rows: DEFAULT_PTY_ROWS,
+                cols: DEFAULT_PTY_COLS,
+                last_activity_line: None,
+                last_activity_at: None,
+                opencode_port: None,
+                tmux_session: Some(tmux::tmux_session_name(&session_id)),
+            },
+        );
+
+        match provider_session(agent_kind).watcher {
+            WatcherKind::Codex => spawn_codex_event_watcher(
+                app.clone(),
+                db.clone(),
+                self.sessions.clone(),
+                task.id,
+                session_id.clone(),
+                cwd_path.clone(),
+                started_at.clone(),
+            ),
+            WatcherKind::Claude => spawn_claude_event_watcher(
+                app.clone(),
+                db.clone(),
+                self.sessions.clone(),
+                task.id,
+                session_id.clone(),
+                cwd_path.clone(),
+            ),
+            WatcherKind::OpenCode => {
+                tracing::warn!(
+                    session_id = %session_id,
+                    "reattached OpenCode session without its event watcher (server port does not survive restarts)"
+                );
+            }
+            WatcherKind::None => {}
+        }
+
+        spawn_session_reader(
+            app,
+            db,
+            self.sessions.clone(),
+            task.id,
+            session_id,
+            agent_kind,
+            cwd_path,
+            started_at,
+            reader,
+        );
+        Ok(())
+    }
+
     pub fn stop_all(&self, app: &AppHandle, db: Arc<Mutex<Database>>) {
         let ids: Vec<String> = self.sessions.lock().keys().cloned().collect();
         for session_id in ids {
+            // A tmux-backed session survives app quit: remove + kill only the
+            // tmux CLIENT (removing from the map first so the reader thread's
+            // EOF teardown becomes a no-op), keep `active_session_id` set so
+            // the next launch finds and reattaches it, and emit nothing.
+            let persistent = self
+                .sessions
+                .lock()
+                .get(&session_id)
+                .is_some_and(|running| running.tmux_session.is_some());
+            if persistent {
+                if let Some(mut running) = self.sessions.lock().remove(&session_id) {
+                    let _ = running.child.kill();
+                    let _ = running.child.wait();
+                    tracing::info!(
+                        session_id = %session_id,
+                        task_id = running.session.task_id,
+                        "left persistent session running in tmux"
+                    );
+                }
+                continue;
+            }
             if let Ok(session) = self.stop(db.clone(), session_id.clone()) {
                 let _ = app
                     .emit(
@@ -1010,6 +1126,215 @@ impl SessionManager {
             }
         }
     }
+}
+
+/// The PTY reader loop shared by `start()` and persistent-session `attach()`:
+/// streams output to the UI, scrapes the activity line for providers without a
+/// structured watcher, and owns the EOF teardown (reap, resumable probe, clear
+/// active session, `session_exited`). For a tmux-backed session the child here
+/// is the tmux *client*; its EOF still means the agent's tmux session ended
+/// (the client exits when the session dies), so the teardown semantics hold.
+#[allow(clippy::too_many_arguments)]
+fn spawn_session_reader(
+    app: AppHandle,
+    db: Arc<Mutex<Database>>,
+    sessions: Arc<Mutex<HashMap<String, RunningSession>>>,
+    task_id: i64,
+    session_id: String,
+    agent_kind: AgentKind,
+    cwd: PathBuf,
+    started_at: String,
+    mut reader: Box<dyn Read + Send>,
+) {
+    // For providers with a structured event watcher, that watcher owns the
+    // activity line; scraping the PTY here would only fight it with TUI
+    // chrome and echoed keystrokes (see `provider_session`).
+    let scrape_activity = !provider_session(agent_kind).emits_structured_activity;
+    std::thread::spawn(move || {
+        let mut buffer = [0_u8; 8192];
+        // Trailing bytes of a multi-byte character split across a read
+        // boundary, carried to the next read so it decodes whole instead of
+        // as a replacement char (see decode_pty_chunk).
+        let mut utf8_carry: Vec<u8> = Vec::new();
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) => {
+                    // EOF with a half-written multi-byte char still buffered:
+                    // surface it as a replacement rather than dropping the
+                    // bytes (matches from_utf8_lossy on a truncated tail).
+                    if !utf8_carry.is_empty() {
+                        let data = String::from_utf8_lossy(&utf8_carry).to_string();
+                        utf8_carry.clear();
+                        let start_offset = sessions
+                            .lock()
+                            .get_mut(&session_id)
+                            .map_or(0, |running| append_output_buffer(running, &data));
+                        let _ = app.emit(
+                            "session_output",
+                            SessionOutputEvent {
+                                session_id: session_id.clone(),
+                                data,
+                                start_offset,
+                            },
+                        );
+                    }
+                    break;
+                }
+                Ok(count) => {
+                    let data = decode_pty_chunk(&mut utf8_carry, &buffer[..count]);
+                    // A read that delivered only the lead bytes of a
+                    // character yields no complete text yet; wait for the
+                    // rest rather than emit an empty frame.
+                    if data.is_empty() {
+                        continue;
+                    }
+                    let mut start_offset = 0;
+                    let mut activity_line = None;
+                    if let Some(running) = sessions.lock().get_mut(&session_id) {
+                        start_offset = append_output_buffer(running, &data);
+                        if scrape_activity {
+                            activity_line = next_activity_line(running);
+                        }
+                    }
+                    let _ = app
+                        .emit(
+                            "session_output",
+                            SessionOutputEvent {
+                                session_id: session_id.clone(),
+                                data,
+                                start_offset,
+                            },
+                        )
+                        .inspect_err(|error| {
+                            tracing::warn!(
+                                ?error,
+                                session_id = %session_id,
+                                "failed to emit session output"
+                            )
+                        });
+                    if let Some(line) = activity_line {
+                        let _ = app
+                            .emit(
+                                "session_activity",
+                                SessionActivityEvent {
+                                    session_id: session_id.clone(),
+                                    task_id,
+                                    line,
+                                },
+                            )
+                            .inspect_err(|error| {
+                                tracing::warn!(
+                                    ?error,
+                                    session_id = %session_id,
+                                    "failed to emit session activity"
+                                )
+                            });
+                    }
+                }
+                Err(error) => {
+                    tracing::debug!(
+                        ?error,
+                        session_id = %session_id,
+                        "session reader stopped"
+                    );
+                    break;
+                }
+            }
+        }
+        // Remove from the map first (releasing the lock) so the blocking
+        // wait() below never holds the global sessions mutex. Whichever of
+        // this thread / stop() wins the remove owns reaping the child, so
+        // there is no double wait or double session_exited.
+        let removed = sessions.lock().remove(&session_id);
+        if let Some(mut running) = removed {
+            // EOF means the child has exited; wait() reaps the zombie and
+            // yields the real status so we can report a true exit code.
+            let exit_code = running
+                .child
+                .wait()
+                .ok()
+                .map(|status| status.exit_code() as i32);
+            if let Some((id, label)) =
+                resolve_resumable_metadata(agent_kind, &cwd, &started_at, running.opencode_port)
+            {
+                let _ = db
+                    .lock()
+                    .set_last_session(task_id, &id, label.as_deref())
+                    .inspect_err(|error| {
+                        tracing::warn!(?error, task_id, "failed to save latest session")
+                    });
+            }
+            if provider_session(agent_kind).cleanup_event_sink {
+                cleanup_event_sink(&session_id);
+            }
+            let _ = db
+                .lock()
+                .set_active_session(task_id, None)
+                .inspect_err(|error| {
+                    tracing::warn!(?error, task_id, "failed to clear active session")
+                });
+            let _ = app
+                .emit(
+                    "session_exited",
+                    SessionExitedEvent {
+                        session_id,
+                        exit_code,
+                    },
+                )
+                .inspect_err(|error| tracing::warn!(?error, "failed to emit session_exited"));
+        }
+    });
+}
+
+/// POSIX-quote one argv element for `sh -c` (tmux runs the session command via
+/// the shell): wrap in single quotes, escaping embedded single quotes.
+fn shell_quote(arg: &str) -> String {
+    let plain = !arg.is_empty()
+        && arg.bytes().all(|b| {
+            b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'/' | b'=' | b':' | b'@')
+        });
+    if plain {
+        return arg.to_string();
+    }
+    format!("'{}'", arg.replace('\'', "'\\''"))
+}
+
+/// Turn a fully-built agent `CommandBuilder` into a tmux-client command: the
+/// agent argv becomes a shell-quoted `new-session` command in the dedicated
+/// Nectus tmux server, the agent env rides along both on the client (it seeds
+/// the server env on first launch) and as `-e` overrides (tmux >= 3.2, so an
+/// already-running server still applies per-profile vars), and the status bar
+/// is disabled so xterm.js shows only the agent.
+fn wrap_in_tmux(agent: CommandBuilder, name: &str, cwd: &str) -> CommandBuilder {
+    let tmux_bin = tmux::tmux_binary().expect("caller checked tmux availability");
+    let shell_command = agent
+        .get_argv()
+        .iter()
+        .map(|arg| shell_quote(&arg.to_string_lossy()))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let mut wrapper = CommandBuilder::new(tmux_bin.clone());
+    wrapper.args([
+        "-L",
+        tmux::TMUX_SOCKET,
+        "-f",
+        "/dev/null",
+        "new-session",
+        "-A",
+        "-s",
+        name,
+        "-c",
+        cwd,
+    ]);
+    for (key, value) in agent.iter_extra_env_as_str() {
+        wrapper.env(key, value);
+        wrapper.args(["-e", &format!("{key}={value}")]);
+    }
+    wrapper.arg(shell_command);
+    wrapper.args([";", "set-option", "-g", "status", "off"]);
+    wrapper.cwd(cwd);
+    wrapper
 }
 
 /// Longest activity line we forward to the UI; the card truncates further with

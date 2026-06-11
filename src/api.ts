@@ -384,6 +384,7 @@ export const api = {
         jiraFilterUnresolved: true,
         jiraFilterCurrentSprint: false,
         jiraFilterStatuses: [],
+        persistentSessions: false,
         jiraFilterEpic: null,
         theme: "system",
         density: "comfortable",

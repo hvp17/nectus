@@ -1124,10 +1124,12 @@ async fn start_session(
     let sessions = state.sessions.clone();
     let db = state.db.clone();
     blocking("Failed to start session", move || {
-        let context = {
+        let (context, persistent) = {
             let db = db.lock();
-            task_session_context(&db, task_id, Some(agent_profile_id))
-                .map_err(|error| error.to_string())?
+            let context = task_session_context(&db, task_id, Some(agent_profile_id))
+                .map_err(|error| error.to_string())?;
+            let persistent = db.get_app_settings()?.persistent_sessions;
+            (context, persistent)
         };
         sessions.start(
             app,
@@ -1136,6 +1138,7 @@ async fn start_session(
             context.repo,
             context.agent,
             false,
+            persistent,
         )
     })
     .await
@@ -1150,7 +1153,7 @@ async fn resume_session(
     let sessions = state.sessions.clone();
     let db = state.db.clone();
     blocking("Failed to resume session", move || {
-        let context = {
+        let (context, persistent) = {
             let db = db.lock();
             let context =
                 task_session_context(&db, task_id, None).map_err(|error| error.to_string())?;
@@ -1160,7 +1163,8 @@ async fn resume_session(
             ) {
                 return Err("Agent profile does not support resume".into());
             }
-            context
+            let persistent = db.get_app_settings()?.persistent_sessions;
+            (context, persistent)
         };
         sessions.start(
             app,
@@ -1169,6 +1173,7 @@ async fn resume_session(
             context.repo,
             context.agent,
             true,
+            persistent,
         )
     })
     .await
@@ -1270,11 +1275,33 @@ pub fn run() {
                 .map_err(|error| format!("Failed to find app data directory: {error}"))?;
             tracing::info!(path = %data_dir.display(), "opening app data directory");
             let db = Database::open(data_dir.join("nectus.sqlite3"))?;
-            db.clear_active_sessions()?;
+            let sessions = SessionManager::new();
+            // Persistent sessions: keep the active-session markers whose tmux
+            // sessions survived the last quit; everything else is stale.
+            let persistent = db
+                .get_app_settings()
+                .map(|settings| settings.persistent_sessions)
+                .unwrap_or(false);
+            let live = if persistent {
+                sessions.live_persistent_session_ids()
+            } else {
+                Vec::new()
+            };
+            db.clear_active_sessions_except(&live)?;
             app.manage(AppState {
                 db: Arc::new(Mutex::new(db)),
-                sessions: SessionManager::new(),
+                sessions,
             });
+            if !live.is_empty() {
+                let state = app.state::<AppState>();
+                let sessions = state.sessions.clone();
+                let db = state.db.clone();
+                let handle = app.handle().clone();
+                // Off the setup path: each reattach spawns a PTY + tmux client.
+                std::thread::spawn(move || {
+                    sessions.reattach_persistent_sessions(handle, db);
+                });
+            }
             Ok(())
         })
         .on_window_event(|window, event| {

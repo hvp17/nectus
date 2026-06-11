@@ -303,6 +303,15 @@ impl Database {
         // default (and from their per-worktree `git status` cost); the rows, the
         // worktrees, and the branches all stay until the task is deleted.
         self.add_column_if_missing("tasks", "archived", "INTEGER NOT NULL DEFAULT 0")?;
+        // The original started_at of the last session, so a tmux reattach can
+        // re-spawn the Codex rollout watcher with the real session start.
+        self.add_column_if_missing("tasks", "last_session_started_at", "TEXT")?;
+        // Opt-in tmux-backed persistent sessions (survive app quit + reattach).
+        self.add_column_if_missing(
+            "app_settings",
+            "persistent_sessions",
+            "INTEGER NOT NULL DEFAULT 0",
+        )?;
         // Sidebar UI preference: fold away a project's / workspace's nested
         // in-flight agent list. A pure presentation flag, 1:1 with the entity.
         self.add_column_if_missing("repos", "collapsed", "INTEGER NOT NULL DEFAULT 0")?;

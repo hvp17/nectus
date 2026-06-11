@@ -31,7 +31,11 @@ The app shell is an always-collapsed icon rail plus a persistent navigator panel
     preselected to that project (Project mode). Each in-flight agent (Needs you /
     Running / Review; Done/Idle excluded) is nested inline under its project row as
     a compact card showing the agent logo, branch, latest line, elapsed time, and a
-    click-to-focus action.
+    click-to-focus action. A hover **⋯ menu** on each project row offers
+    **Rename project** (display name only; the path and worktree root are
+    untouched) and **Remove project** — local bookkeeping only: the backend
+    refuses while any task still references the repo, and the repository on
+    disk is never touched.
   - **Workspaces** — one row per workspace; clicking opens an **aggregated
     kanban** across all of that workspace's repos (the `workspace` view, reusing
     `Workspace.tsx`). Task cards on the workspace board carry a repo-name badge so
@@ -138,9 +142,13 @@ While this runs, the composer shows a live status — "Setting up worktree (fetc
 latest)…" then "Starting agent…" — instead of a blank spinner, and the full
 backend step timing is visible in Settings → Diagnostics.
 
-Current scope: the Diff tab and GitHub PR panel operate on the **primary** repo's
-worktree for a cross-repo task. Per-repo diffs and per-repo PRs are a planned
-follow-up; see `docs/superpowers/specs/2026-06-06-multi-repo-workspaces-design.md`.
+The Diff tab and GitHub PR panel are **per-repo** for a cross-repo task: a
+shared member-repo picker (in the diff toolbar and the GitHub panel header)
+scopes both surfaces to any of the task's repos. The primary repo's PR lives on
+the task (`tasks.pr_url`); a non-primary member's detected PR is backfilled
+onto its `task_repos.pr_url` row. Ship actions (create/merge/ready/close)
+submitted while a non-primary repo is scoped instruct the agent to run inside
+that repo's sibling worktree.
 
 The fan-out lives in the `create_cross_repo_task` backend flow, with per-repo state
 in the `task_repos` child table. File ownership: see [AGENTS.md](../AGENTS.md).
@@ -148,6 +156,25 @@ in the `task_repos` child table. File ownership: see [AGENTS.md](../AGENTS.md).
 ## Tasks
 
 Task is the primary work item. A task can be direct-edit or worktree-backed.
+
+**Archive**: a done task can be archived (facts-rail button; refused while a
+session is running). Archived tasks vanish from every live surface — boards,
+Mission Control, the sidebar — and from the per-worktree dirty checks, but keep
+their row, worktree, and branch until deleted. Both boards have an **Archived**
+toggle showing the read-only archive view, where cards offer **Restore** and
+**Delete** (archived cards do not open the task workspace).
+
+**Persistent sessions** (Settings → Projects & Worktrees, default off): when
+enabled and `tmux` ≥ 3.2 is installed, agent sessions run inside a dedicated
+tmux server (`tmux -L nectus`, isolated from any tmux you run yourself). The
+app's embedded terminal is then a tmux client: quitting the app leaves agents
+running, and the next launch reattaches their terminals automatically (sessions
+whose task was deleted in between are killed). **Stop** still stops the agent
+for real. OpenCode reattaches without its event watcher (its per-launch local
+server port does not survive a restart), so idle/needs-input detection for
+OpenCode resumes on the next fresh start; Codex and Claude watchers reattach
+fully. Without tmux installed the setting falls back to normal sessions with a
+logged warning.
 
 Direct-edit tasks:
 

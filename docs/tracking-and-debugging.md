@@ -31,8 +31,8 @@ Core tables:
 | `workspaces` | Durable, named groups of repos (VSCode-workspace style). `collapsed` is the sidebar fold state of the workspace's nested agent list (UI preference). |
 | `workspace_repos` | Workspace membership: `(workspace_id, repo_id, position)`. Many-to-many, so a repo can belong to several workspaces; cascade-deletes with either side. |
 | `agent_profiles` | CLI agent configuration, including command, model, args, and env. |
-| `app_settings` | Default agent, worktree pattern, branch prefix, theme, density, and the JIRA board config (selected project + filter flags + `jira_filter_statuses` + `jira_filter_epic`; the JQL is built from these). Also the non-secret JIRA REST account email (`jira_rest_email`); the REST API token itself lives in the macOS Keychain, never here. |
-| `tasks` | Primary work item, status, prompt, optional worktree, active session, saved session, the persisted `attention` signal (`needs_input`/NULL), optional JIRA story link, and optional `workspace_id` (the workspace a cross-repo task was created in). For a cross-repo task the `repo_id`/`branch_name`/`worktree_path`/`pr_url` columns describe the **primary** repo. |
+| `app_settings` | Default agent, worktree pattern, branch prefix, theme, density, the opt-in `persistent_sessions` flag (tmux-backed sessions that survive app quit), and the JIRA board config (selected project + filter flags + `jira_filter_statuses` + `jira_filter_epic`; the JQL is built from these). Also the non-secret JIRA REST account email (`jira_rest_email`); the REST API token itself lives in the macOS Keychain, never here. |
+| `tasks` | Primary work item, status, prompt, optional worktree, active session, saved session (incl. `last_session_started_at`, used by persistent-session reattach), the persisted `attention` signal (`needs_input`/NULL), the `archived` flag (archived tasks are excluded from default list reads), optional JIRA story link, and optional `workspace_id` (the workspace a cross-repo task was created in). For a cross-repo task the `repo_id`/`branch_name`/`worktree_path`/`pr_url` columns describe the **primary** repo. |
 | `task_repos` | Per-repo working state for a task (Increment B): `(task_id, repo_id, branch_name, worktree_path, pr_url, position)`. The complete repo set; a single-repo task has one row mirroring `tasks`. Unique on `worktree_path` and on `(repo_id, branch_name)`. Cascade-deletes with the task or repo. |
 | `review_loops` | Current review configuration and status per task. Includes `reviewer_session_id` (the active reviewer's session id for resume; reset to `NULL` when the loop is restarted via `start_pair_loop`). |
 | `review_runs` | Reviewer prompts, outputs, verdicts, and errors by review attempt. |
@@ -155,23 +155,26 @@ Current commands:
 | `add_repo` | Validate and save a local git project. |
 | `list_repos` | Load saved projects. |
 | `set_repo_collapsed` | Persist the sidebar fold state of a project's nested agent list (`repos.collapsed`). |
+| `rename_repo` | Rename a project's display name (path and worktree root untouched; duplicate names rejected case-insensitively). |
+| `remove_repo` | Remove a project from Nectus. Refused while any task references the repo; cascades only workspace membership and PR-review history. Never touches the repository on disk. |
 | `get_app_settings` | Load global settings. |
 | `update_app_settings` | Save settings and refresh project worktree roots. |
 | `create_task` | Create a direct-edit task or create a git worktree-backed task (single repo). |
 | `create_cross_repo_task` | Create a task spanning ≥2 repos (Increment B): one worktree per repo as siblings under a shared parent, a single agent rooted in the primary repo's worktree, and a `task_repos` row per repo. Accepts the same optional `jira_issue_key`/`jira_issue_summary`/`jira_issue_url` link as `create_task`. Rolls back created worktrees on failure. |
-| `list_tasks` | Load task summaries (each with its `taskRepos`) and per-repo dirty-state checks. |
+| `list_tasks` | Load task summaries (each with its `taskRepos`) and per-repo dirty-state checks. `archived: true` lists the archive view instead of the live boards. |
 | `update_task_metadata` | Update title, status, or PR URL. |
+| `set_task_archived` | Archive (or restore) a task: hidden from boards/lists, kept on disk until deleted. Refused while a session is running. |
 | `delete_task` | Delete a task and remove its worktree(s) when applicable. Takes a `force` flag: without it a worktree with uncommitted changes is preserved and an error is returned; with it (after the delete dialog's warning) the worktree is force-removed. The `git worktree remove` runs **off the DB lock** (plan under a brief lock → remove worktrees off-lock → delete the row under a brief lock). Each removal also runs `git worktree prune` (clears stale `.git/worktrees/<name>` admin entries, incl. when the dir was deleted out-of-band) and deletes the orphaned **local** `task-*` branch (`git branch -D`; the remote branch/PR is never touched). |
 | `list_workspaces` | Load workspaces, each with its ordered member `repoIds`. |
 | `create_workspace` | Create a named workspace from `name` + `repoIds` (membership written transactionally; duplicate ids dropped). |
 | `update_workspace` | Rename a workspace and replace its membership/order. |
 | `delete_workspace` | Delete a workspace (membership cascade-deletes). |
 | `set_workspace_collapsed` | Persist the sidebar fold state of a workspace's nested agent list (`workspaces.collapsed`; does not bump `updated_at`). |
-| `task_diff_summary` | List the files a task changed: a worktree task's branch vs the locally-resolved base (`origin/HEAD` merge-base, committed + uncommitted), or a direct-edit task's working tree vs `HEAD`. Returns the base label plus per-file change kind and `+/-` counts. |
+| `task_diff_summary` | List the files a task changed (optional `repo_id` scopes a cross-repo task to one member repo; default primary): a worktree task's branch vs the locally-resolved base (`origin/HEAD` merge-base, committed + uncommitted), or a direct-edit task's working tree vs `HEAD`. Returns the base label plus per-file change kind and `+/-` counts. |
 | `task_diff_file` | Return the unified patch for one file in a task's diff (lazy-loaded per file; untracked files diff against `/dev/null`). |
 | `github_status` | Report whether `gh` is installed, authenticated, and the active account. |
-| `github_pull_request_status` | Fetch live PR state, CI check rollup, and review decision via `gh pr view --json`. |
-| `detect_github_pull_request` | Check whether a worktree task's branch already has a PR (`gh pr view`) and backfill its URL. |
+| `github_pull_request_status` | Fetch live PR state, CI check rollup, and review decision via `gh pr view --json`. Optional `repo_id` targets a cross-repo member's branch. |
+| `detect_github_pull_request` | Check whether a worktree task's branch already has a PR (`gh pr view`) and backfill its URL — the primary repo's onto `tasks.pr_url`, a non-primary member's onto its `task_repos.pr_url` (`repo_id` selects the member). |
 | `jira_status` | Report whether `acli` is installed, authenticated, and the active site. |
 | `jira_list_projects` | List visible JIRA projects for the board's project picker (`acli jira project list --json`). |
 | `jira_search_board` | Load board work items; the JQL is built from the structured board config (project + filter flags + epic), so no JQL is typed. |
@@ -202,7 +205,7 @@ Current commands:
 | `post_pr_review_comment` | Post a finished PR review's stored output back to its pull request as a comment (errors if the review has no output yet). |
 | `rerun_pr_review` | Reset a PR review to queued and re-run it against the latest PR head (same single/consensus mode; clears prior rounds). |
 | `delete_pr_review` | Remove a PR review and any lingering ephemeral worktree. |
-| `start_session` | Start an agent in the task cwd. |
+| `start_session` | Start an agent in the task cwd. With the persistent-sessions setting on (and tmux ≥ 3.2 present), the agent runs inside the dedicated `tmux -L nectus` server and survives app quit; the next launch reattaches it. |
 | `resume_session` | Resume a Codex, Claude, or OpenCode saved session. |
 | `stop_session` | Stop a running PTY child process. |
 | `resize_session` | Resize the PTY. |

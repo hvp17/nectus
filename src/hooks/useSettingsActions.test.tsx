@@ -37,6 +37,7 @@ function settingsInput(overrides: Partial<AppSettingsInput> = {}): AppSettingsIn
     jiraFilterUnresolved: true,
     jiraFilterCurrentSprint: false,
     jiraFilterStatuses: [],
+    persistentSessions: false,
     theme: "dark",
     density: "compact",
     ...overrides,

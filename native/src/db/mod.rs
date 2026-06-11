@@ -93,7 +93,7 @@ impl Database {
             .to_string();
         let settings = self.get_app_settings()?;
         let default_root = git_ops::default_worktree_root_with_pattern(
-            &repo_path,
+            repo_path,
             &settings.default_worktree_root_pattern,
         )
         .to_string_lossy()

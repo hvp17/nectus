@@ -8,7 +8,7 @@ impl Database {
         self.conn
             .query_row(
                 "
-                SELECT default_agent_profile_id, default_worktree_root_pattern, default_branch_prefix, theme, density, updated_at, jira_board_jql, jira_site_url, jira_board_project, jira_filter_my_issues, jira_filter_unresolved, jira_filter_current_sprint, jira_rest_email, jira_filter_statuses, jira_filter_epic
+                SELECT default_agent_profile_id, default_worktree_root_pattern, default_branch_prefix, theme, density, updated_at, jira_board_jql, jira_site_url, jira_board_project, jira_filter_my_issues, jira_filter_unresolved, jira_filter_current_sprint, jira_rest_email, jira_filter_statuses, jira_filter_epic, persistent_sessions
                 FROM app_settings
                 WHERE id = 1
                 ",
@@ -76,7 +76,8 @@ impl Database {
                     jira_filter_unresolved = ?11,
                     jira_filter_current_sprint = ?12,
                     jira_filter_statuses = ?13,
-                    jira_filter_epic = ?14
+                    jira_filter_epic = ?14,
+                    persistent_sessions = ?15
                 WHERE id = 1
                 ",
                 params![
@@ -93,7 +94,8 @@ impl Database {
                     settings.jira_filter_unresolved,
                     settings.jira_filter_current_sprint,
                     jira_filter_statuses,
-                    jira_filter_epic
+                    jira_filter_epic,
+                    settings.persistent_sessions
                 ],
             )
             .map_err(|error| format!("Failed to update app settings: {error}"))?;

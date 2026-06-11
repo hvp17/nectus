@@ -196,6 +196,7 @@ fn seeds_and_updates_global_app_settings() {
             jira_filter_current_sprint: false,
             jira_filter_statuses: vec![],
             jira_filter_epic: None,
+            persistent_sessions: false,
             theme: ThemeMode::Dark,
             density: DensityMode::Compact,
         })
@@ -268,6 +269,7 @@ fn persists_jira_link_and_board_settings() {
             jira_filter_current_sprint: true,
             jira_filter_statuses: vec![],
             jira_filter_epic: None,
+            persistent_sessions: false,
             theme: base.theme,
             density: base.density,
         })
@@ -304,6 +306,7 @@ fn persists_jira_filter_statuses_and_rest_account() {
         jira_filter_current_sprint: false,
         jira_filter_statuses: vec!["To Do".into(), "Done".into()],
         jira_filter_epic: Some("ENG-1".into()),
+        persistent_sessions: false,
         theme: base.theme,
         density: base.density,
     })
@@ -356,6 +359,7 @@ fn updated_worktree_root_pattern_applies_to_existing_and_new_repos() {
         jira_filter_current_sprint: false,
         jira_filter_statuses: vec![],
         jira_filter_epic: None,
+        persistent_sessions: false,
         theme: ThemeMode::System,
         density: DensityMode::Comfortable,
     })
@@ -873,8 +877,15 @@ fn starting_and_stopping_session_preserves_last_session_snapshot() {
         )
         .unwrap();
 
-    db.start_session_record(task.id, "session-123", "codex", "/tmp/worktree", None)
-        .unwrap();
+    db.start_session_record(
+        task.id,
+        "session-123",
+        "codex",
+        "/tmp/worktree",
+        None,
+        "2026-06-11T00:00:00+00:00",
+    )
+    .unwrap();
     let running = db.task_by_id(task.id).unwrap().unwrap();
     assert_eq!(running.active_session_id.as_deref(), Some("session-123"));
     assert_eq!(running.last_session_id.as_deref(), Some("session-123"));
@@ -948,6 +959,7 @@ fn delete_task_rejects_active_session() {
         "codex",
         repo_dir.path().to_str().unwrap(),
         None,
+        "2026-06-11T00:00:00+00:00",
     )
     .unwrap();
 

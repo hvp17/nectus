@@ -120,6 +120,7 @@ describe("App", () => {
       jiraFilterUnresolved: true,
       jiraFilterCurrentSprint: false,
       jiraFilterStatuses: [],
+      persistentSessions: false,
       theme: "system",
       density: "comfortable",
       updatedAt: "2026-05-14T00:00:00.000Z",
