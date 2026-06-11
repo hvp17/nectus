@@ -638,6 +638,17 @@ table). After saving settings, the shell's selected agent is resolved against th
 loaded profile list before it is updated, so a stale default profile id in the
 returned settings cannot become the active launcher choice.
 
+Settings also has a **Diagnostics** section (section id `diagnostics`, with its
+own nav item) showing the backend log live — the same `tracing` output the Rust
+side prints to the console (under the `nectus_desktop_lib=info` filter). It
+backfills the buffered lines on open via `get_diagnostic_logs`, then streams each
+new line via the `diagnostic_log` event, with Refresh / Copy / Clear and tail
+auto-follow (follow pauses when you scroll up to read history). The log buffer is
+deliberately independent of the global database lock, so it keeps updating even
+while a command is stuck holding that lock — which is what makes it useful for
+diagnosing a hang (e.g. a slow/blocked `git fetch` during worktree creation). Use
+**Copy** to attach the log to a bug report.
+
 File ownership: see [AGENTS.md](../AGENTS.md).
 
 ## Auto-Update

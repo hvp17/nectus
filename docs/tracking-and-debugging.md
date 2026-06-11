@@ -203,6 +203,7 @@ Current commands:
 | `send_session_input` | Write keyboard input or terminal-dropped file paths into the PTY without appending an Enter sequence. |
 | `submit_session_input` | Submit an app-authored prompt into the PTY, flush it, then send a separate terminal Enter sequence shared with review feedback. The task workflow `Create PR` action uses this command to ask the running agent to open a pull request; Nectus does not call GitHub or store GitHub credentials for that flow. |
 | `session_output_snapshot` | Load buffered terminal output for a running session. |
+| `get_diagnostic_logs` | Return the buffered backend `tracing` log lines (oldest first) to backfill the Settings → Diagnostics panel. Reads the dedicated diagnostics ring buffer, never the DB lock, so it stays responsive even while a DB-bound command is stuck. |
 
 ## Events
 
@@ -219,6 +220,7 @@ Backend-to-frontend events:
 | `review_output` | Task id, a chunk of the task reviewer's live stdout, and the chunk's byte offset (a `0` offset starts a new run). Streamed by the task review loop. | `native/src/sessions/review_loop.rs` |
 | `pr_review_output` | Review id, a chunk of a single PR reviewer's live stdout, and the chunk's byte offset (a `0` offset starts a new run). Streamed by single PR reviews so the Reviews-view Terminal toggle can watch the reviewer live; consensus reviews keep their round matrix and do not stream. | `native/src/sessions/pr_review.rs` |
 | `pr_review_updated` | Updated external PR review (status, verdict, metadata, Markdown output), plus an optional `latest_run` carrying the consensus round output that triggered the update. | `native/src/sessions/pr_review.rs`, `native/src/sessions/pr_consensus.rs` |
+| `diagnostic_log` | One captured backend `tracing` line (the same text written to the console), streamed live to the Settings → Diagnostics panel. Emitted from the diagnostics ring buffer, which is independent of the DB lock so the stream keeps flowing during a hang. | `native/src/diagnostics.rs` |
 
 Frontend event listeners:
 
@@ -366,11 +368,20 @@ Run with more backend detail:
 RUST_LOG=nectus_desktop_lib=debug pnpm desktop:dev
 ```
 
+In-app: the same lines (under the same filter) are mirrored live into **Settings
+→ Diagnostics**, so you can read the backend log without a terminal — including
+while the app is hanging, since the diagnostics buffer is independent of the DB
+lock. Use its Copy button to attach the log to a bug report. Backed by
+`native/src/diagnostics.rs` (the `diagnostic_log` event + `get_diagnostic_logs`
+command).
+
 Useful backend log messages include:
 
 - Opening the app data directory.
 - Starting an agent session with task id, session id, agent, cwd, and resume
   flag.
+- Task creation acquiring/holding the DB lock, and each timed `create_worktree`
+  network step (so a hang during worktree creation is visible in the log).
 - Watching a Codex session log.
 - Failure to emit session or review events.
 - Review start, recorded verdict, reviewer output, and review-loop errors.
@@ -419,10 +430,24 @@ Check:
 - `git ls-remote --symref <remote> HEAD` can resolve the remote default branch.
 - `git fetch --prune <remote>` succeeds.
 
+If the **whole app freezes** (and only when creating a *worktree-backed* task —
+a no-worktree task is fine), the cause is almost always git blocking on
+authentication for one of those network steps. A Finder/Dock-launched app has no
+controlling terminal, so without guards git would hang forever waiting on a
+passphrase/credential prompt — and because worktree creation holds the global DB
+lock, that hang freezes every other command too. `git_command`
+(`native/src/git_ops/mod.rs`) defends against this by seeding the login-shell env
+(so `SSH_AUTH_SOCK` and the user's git/ssh config are present, exactly as in a
+terminal) and forcing non-interactive auth (`GIT_TERMINAL_PROMPT=0`,
+`GCM_INTERACTIVE=never`, batch-mode `GIT_SSH_COMMAND`). To see exactly where it
+gets stuck, open **Settings → Diagnostics**: `create_worktree` logs a timed line
+before each network step (`… ls-remote`, `… fetching`, `… worktree add`), so a
+"starting" line with no following "done" line pinpoints the stuck command.
+
 Relevant code:
 
 - `native/src/git_ops/mod.rs` (remote resolution, worktree create/remove/branch
-  lifecycle)
+  lifecycle, the non-interactive git env)
 - `native/src/db/mod.rs`
 
 ### Agent Command Fails To Start

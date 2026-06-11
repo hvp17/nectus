@@ -418,6 +418,12 @@ export const api = {
     }
     return invoke("session_output_snapshot", { sessionId });
   },
+  // Backfill the in-app Diagnostics panel with the buffered Rust log lines
+  // (oldest first); live lines then arrive via the `diagnostic_log` event.
+  async getDiagnosticLogs(): Promise<string[]> {
+    if (!isTauriRuntime()) return [];
+    return invoke("get_diagnostic_logs");
+  },
   async openExternalUrl(url: string): Promise<void> {
     if (!isTauriRuntime()) {
       window.open(url, "_blank", "noopener,noreferrer");
