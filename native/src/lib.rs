@@ -82,11 +82,17 @@ fn task_session_context(
 }
 
 // Adding a repo validates it with `git rev-parse` (a subprocess), so run it on
-// the blocking pool rather than the main UI thread.
+// the blocking pool — and OFF the DB lock; only the insert locks.
 #[tauri::command]
 async fn add_repo(path: String, state: State<'_, AppState>) -> AppResult<Repo> {
     let db = state.db.clone();
-    blocking("Failed to add repository", move || db.lock().add_repo(path)).await
+    blocking("Failed to add repository", move || {
+        let repo_path = std::fs::canonicalize(&path)
+            .map_err(|error| format!("Failed to resolve repository path: {error}"))?;
+        git_ops::validate_repo_path(&repo_path)?;
+        db.lock().insert_repo(&repo_path)
+    })
+    .await
 }
 
 #[tauri::command]

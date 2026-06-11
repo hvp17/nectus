@@ -71,10 +71,21 @@ impl Database {
         Ok(db)
     }
 
+    /// Validate-then-insert convenience for the DB tests. Production code (the
+    /// command layer) runs the `git rev-parse` validation OFF the lock and calls
+    /// [`insert_repo`] directly, so this is test-only.
+    #[cfg(test)]
     pub fn add_repo(&self, path: String) -> Result<Repo, String> {
         let repo_path = std::fs::canonicalize(&path)
             .map_err(|error| format!("Failed to resolve repository path: {error}"))?;
         git_ops::validate_repo_path(&repo_path)?;
+        self.insert_repo(&repo_path)
+    }
+
+    /// Insert (or refresh) a project row for an already-validated, canonical
+    /// repository path. **Pure SQLite** — the caller must have validated the
+    /// path off the lock (`git rev-parse` is a subprocess).
+    pub fn insert_repo(&self, repo_path: &std::path::Path) -> Result<Repo, String> {
         let name = repo_path
             .file_name()
             .and_then(|value| value.to_str())
@@ -235,5 +246,7 @@ fn generated_branch_name() -> String {
     format!("task-{}", Uuid::new_v4())
 }
 
+#[cfg(test)]
+mod invariants;
 #[cfg(test)]
 mod tests;
