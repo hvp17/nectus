@@ -172,11 +172,20 @@ fn send_worker_feedback(
     session_id: &str,
     feedback: &str,
 ) -> Result<(), String> {
-    let mut sessions = sessions.lock();
-    let running = sessions
-        .get_mut(session_id)
-        .ok_or_else(|| "Worker session stopped before review feedback could be sent".to_string())?;
-    write_agent_submission(running.writer.as_mut(), feedback)
+    // Clone the shared writer handle and release the sessions map lock before
+    // writing: a PTY write blocks until the agent drains stdin, and holding the
+    // map across it would stall every reader thread and session command.
+    let writer = {
+        let sessions = sessions.lock();
+        sessions
+            .get(session_id)
+            .map(|running| running.writer.clone())
+            .ok_or_else(|| {
+                "Worker session stopped before review feedback could be sent".to_string()
+            })?
+    };
+    let mut writer = writer.lock();
+    write_agent_submission(writer.as_mut(), feedback)
         .map_err(|error| format!("Failed to send review feedback to worker agent: {error}"))
 }
 

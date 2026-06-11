@@ -968,60 +968,68 @@ fn list_task_review_runs(task_id: i64, state: State<'_, AppState>) -> AppResult<
     app_result(state.db.lock().list_review_runs(task_id))
 }
 
+// Launching a session does blocking work — a DB lock wait, PTY open, process
+// spawn. Synchronous commands share the main UI thread with the Wry event loop
+// (see stop_session), so start/resume must run on the blocking pool: inline,
+// any stall here froze the entire app.
 #[tauri::command]
-fn start_session(
+async fn start_session(
     task_id: i64,
     agent_profile_id: i64,
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> AppResult<Session> {
-    let context = {
-        let db = state.db.lock();
-        task_session_context(&db, task_id, Some(agent_profile_id))?
-    };
-
-    state
-        .sessions
-        .start(
+    let sessions = state.sessions.clone();
+    let db = state.db.clone();
+    blocking("Failed to start session", move || {
+        let context = {
+            let db = db.lock();
+            task_session_context(&db, task_id, Some(agent_profile_id))
+                .map_err(|error| error.to_string())?
+        };
+        sessions.start(
             app,
-            state.db.clone(),
+            db.clone(),
             context.task,
             context.repo,
             context.agent,
             false,
         )
-        .map_err(Into::into)
+    })
+    .await
 }
 
 #[tauri::command]
-fn resume_session(
+async fn resume_session(
     task_id: i64,
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> AppResult<Session> {
-    let context = {
-        let db = state.db.lock();
-        let context = task_session_context(&db, task_id, None)?;
-        if !matches!(
-            context.agent.agent_kind,
-            AgentKind::Codex | AgentKind::Claude | AgentKind::OpenCode
-        ) {
-            return Err("Agent profile does not support resume".into());
-        }
-        context
-    };
-
-    state
-        .sessions
-        .start(
+    let sessions = state.sessions.clone();
+    let db = state.db.clone();
+    blocking("Failed to resume session", move || {
+        let context = {
+            let db = db.lock();
+            let context =
+                task_session_context(&db, task_id, None).map_err(|error| error.to_string())?;
+            if !matches!(
+                context.agent.agent_kind,
+                AgentKind::Codex | AgentKind::Claude | AgentKind::OpenCode
+            ) {
+                return Err("Agent profile does not support resume".into());
+            }
+            context
+        };
+        sessions.start(
             app,
-            state.db.clone(),
+            db.clone(),
             context.task,
             context.repo,
             context.agent,
             true,
         )
-        .map_err(Into::into)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -1065,22 +1073,32 @@ fn resize_session(
     app_result(state.sessions.resize(&session_id, rows, cols))
 }
 
+// PTY writes block until the agent drains stdin (the tty input buffer is tiny),
+// so input commands must also run on the blocking pool, never the main thread.
 #[tauri::command]
-fn send_session_input(
+async fn send_session_input(
     session_id: String,
     data: String,
     state: State<'_, AppState>,
 ) -> AppResult<()> {
-    app_result(state.sessions.write_input(&session_id, &data))
+    let sessions = state.sessions.clone();
+    blocking("Failed to write session input", move || {
+        sessions.write_input(&session_id, &data)
+    })
+    .await
 }
 
 #[tauri::command]
-fn submit_session_input(
+async fn submit_session_input(
     session_id: String,
     data: String,
     state: State<'_, AppState>,
 ) -> AppResult<()> {
-    app_result(state.sessions.submit_input(&session_id, &data))
+    let sessions = state.sessions.clone();
+    blocking("Failed to submit session input", move || {
+        sessions.submit_input(&session_id, &data)
+    })
+    .await
 }
 
 #[tauri::command]
