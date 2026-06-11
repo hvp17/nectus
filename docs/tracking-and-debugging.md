@@ -444,6 +444,11 @@ gets stuck, open **Settings → Diagnostics**: `create_worktree` logs a timed li
 before each network step (`… ls-remote`, `… fetching`, `… worktree add`), so a
 "starting" line with no following "done" line pinpoints the stuck command.
 
+If the log instead shows `create_task_record: task row + worktree committed` and
+then goes silent (no `started agent session`), the create finished and the hang
+was in the **session launch** — see
+[App Freezes / Goes Unresponsive When Starting, Stopping, Or Feeding A Session](#app-freezes--goes-unresponsive-when-starting-stopping-or-feeding-a-session).
+
 Relevant code:
 
 - `native/src/git_ops/mod.rs` (remote resolution, worktree create/remove/branch
@@ -587,34 +592,54 @@ Relevant code:
 - `native/src/sessions/codex.rs`
 - `docs/codex-session-jsonl.md`
 
-### App Freezes / Goes Unresponsive When Stopping A Session
+### App Freezes / Goes Unresponsive When Starting, Stopping, Or Feeding A Session
 
 Synchronous Tauri commands share the main UI thread with the Wry event loop, so
 any blocking work — or any `app.emit(...)` back into the webview — done inline in
-a `fn` command freezes the whole app until it returns. Stopping a session does
-blocking teardown (kill + reap the PTY child, DB writes, an OpenCode server probe)
-and then emits `session_exited`, so it must run off the main thread.
+a `fn` command freezes the whole app until it returns. Session lifecycle work is
+blocking in several ways: stopping kills + reaps the PTY child (plus DB writes
+and an OpenCode server probe); starting waits on the DB lock, opens a PTY, and
+spawns a process; and **any PTY write can block indefinitely** — the tty input
+buffer is ~1 KB and drains only as fast as the agent reads stdin, and a freshly
+spawned CLI can take seconds to start reading (Claude in a never-seen worktree
+sits at its folder-trust prompt and may not drain at all). Writing a multi-KB
+initial task prompt inline on the main thread froze the entire app the moment a
+worktree task launched Claude.
 
 Check:
 
-- `stop_session` is an `async` command that runs the teardown via
-  `tauri::async_runtime::spawn_blocking(...).await`, so the work and the
-  post-`.await` `session_exited` emit happen off the main thread (the same
-  background-emit pattern the reader thread uses on natural exit).
+- `start_session`, `resume_session`, `stop_session`, `send_session_input`, and
+  `submit_session_input` are all `async` commands that run their work via
+  `tauri::async_runtime::spawn_blocking(...)`, so nothing on these paths can
+  block the main thread (`stop_session`'s post-`.await` `session_exited` emit
+  also happens off-main, the same background-emit pattern the reader thread uses
+  on natural exit).
+- The initial task prompt is delivered to the agent PTY by a dedicated
+  background thread (`SessionManager::start`), never inline on the launch path.
+  If the agent never drains stdin, the cost is a logged
+  `failed to deliver initial prompt` warning — the session stays alive and
+  usable.
+- PTY writers live behind their own per-session lock
+  (`RunningSession.writer: Arc<Mutex<…>>`), and every writer (`write_input`,
+  `submit_input`, review-loop feedback, the prompt thread) clones that handle and
+  **releases the sessions map lock before writing** — a blocked write must never
+  stall the reader threads and other session commands behind the map.
 - `SessionManager::stop` removes the session from the map under the lock and then
   drops the `sessions` mutex before `child.kill()`/`child.wait()` and the metadata
   /DB work — holding it would stall every other session command and live reader
   thread behind the teardown.
 
-Rule: never do blocking teardown or `emit` inside a synchronous main-thread
-command. Offload to `spawn_blocking`, and never hold the global `sessions` mutex
-across `wait()`, network, or DB calls.
+Rule: never do blocking work or `emit` inside a synchronous main-thread command.
+Offload to `spawn_blocking`, and never hold the global `sessions` mutex across a
+PTY write, `wait()`, network, or DB calls.
 
 Relevant code:
 
-- `native/src/lib.rs` (`stop_session`)
-- `native/src/sessions/mod.rs` (`SessionManager::stop`, the reader thread's
-  matching off-lock `wait()`)
+- `native/src/lib.rs` (`start_session`, `resume_session`, `stop_session`,
+  `send_session_input`, `submit_session_input`)
+- `native/src/sessions/mod.rs` (`SessionManager::start` prompt thread,
+  `writer_for`, `SessionManager::stop`, the reader thread's matching off-lock
+  `wait()`)
 
 ### macOS Notifications Do Not Appear
 

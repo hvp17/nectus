@@ -401,7 +401,11 @@ struct RunningSession {
     agent_kind: AgentKind,
     cwd: PathBuf,
     master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
+    /// PTY writer behind its own lock, shared with the background initial-prompt
+    /// thread. PTY writes can block (the tty input buffer is ~1 KB and drains only
+    /// as fast as the agent reads stdin), so writers must be reachable without
+    /// holding the sessions map lock — see `writer_for`.
+    writer: Arc<Mutex<Box<dyn Write + Send>>>,
     child: Box<dyn Child + Send + Sync>,
     output_buffer: String,
     output_truncated: bool,
@@ -538,8 +542,8 @@ impl SessionManager {
             let _ = child.kill();
             let _ = child.wait();
         };
-        let mut writer = match pair.master.take_writer() {
-            Ok(writer) => writer,
+        let writer = match pair.master.take_writer() {
+            Ok(writer) => Arc::new(Mutex::new(writer)),
             Err(error) => {
                 reap(&mut child);
                 return Err(format!("Failed to open PTY writer: {error}"));
@@ -555,10 +559,27 @@ impl SessionManager {
 
         if !resume && !ps.sends_prompt_in_args {
             if let Some(prompt) = initial_prompt {
-                if let Err(error) = write_agent_submission(writer.as_mut(), prompt) {
-                    reap(&mut child);
-                    return Err(format!("Failed to send initial prompt: {error}"));
-                }
+                // Deliver the initial prompt on a background thread, NEVER inline:
+                // the tty input buffer is ~1 KB, so a multi-KB prompt blocks until
+                // the agent drains stdin — and a freshly spawned CLI can take
+                // seconds to start reading (Claude in a never-seen worktree sits at
+                // its folder-trust prompt and may not drain at all). Run inline on
+                // the launch path this froze the entire app. Off-thread, a slow or
+                // dead agent costs only a logged warning; the session stays usable
+                // and the user can paste the prompt themselves.
+                let prompt = prompt.to_string();
+                let writer = writer.clone();
+                let prompt_session_id = session_id.clone();
+                std::thread::spawn(move || {
+                    let mut writer = writer.lock();
+                    if let Err(error) = write_agent_submission(writer.as_mut(), &prompt) {
+                        tracing::warn!(
+                            ?error,
+                            session_id = %prompt_session_id,
+                            "failed to deliver initial prompt to agent PTY"
+                        );
+                    }
+                });
             }
         }
 
@@ -866,23 +887,30 @@ impl SessionManager {
         Ok(running.session)
     }
 
+    /// Clone a session's shared PTY writer handle, releasing the sessions map
+    /// lock before any write happens. PTY writes can block until the agent drains
+    /// stdin, so they must never run while holding the map lock — that would
+    /// stall every reader thread and session command behind one slow agent.
+    fn writer_for(&self, session_id: &str) -> Result<Arc<Mutex<Box<dyn Write + Send>>>, String> {
+        let sessions = self.sessions.lock();
+        sessions
+            .get(session_id)
+            .map(|running| running.writer.clone())
+            .ok_or_else(|| "Session is not running".to_string())
+    }
+
     pub fn write_input(&self, session_id: &str, data: &str) -> Result<(), String> {
-        let mut sessions = self.sessions.lock();
-        let running = sessions
-            .get_mut(session_id)
-            .ok_or_else(|| "Session is not running".to_string())?;
-        running
-            .writer
+        let writer = self.writer_for(session_id)?;
+        let mut writer = writer.lock();
+        writer
             .write_all(data.as_bytes())
             .map_err(|error| format!("Failed to write to PTY: {error}"))
     }
 
     pub fn submit_input(&self, session_id: &str, data: &str) -> Result<(), String> {
-        let mut sessions = self.sessions.lock();
-        let running = sessions
-            .get_mut(session_id)
-            .ok_or_else(|| "Session is not running".to_string())?;
-        write_agent_submission(running.writer.as_mut(), data)
+        let writer = self.writer_for(session_id)?;
+        let mut writer = writer.lock();
+        write_agent_submission(writer.as_mut(), data)
             .map_err(|error| format!("Failed to submit PTY input: {error}"))
     }
 
