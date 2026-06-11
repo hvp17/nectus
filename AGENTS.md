@@ -291,7 +291,13 @@ env/PATH still wins. Current call sites:
   `native/src/sessions/reviewer.rs` (`run_reviewer_command`)
 - `git` invocations in repo/worktree operations resolve `git` via
   `resolve_executable` and set `PATH` to `augmented_path`
-  (`native/src/git_ops/mod.rs`).
+  (`native/src/git_ops/mod.rs`). Network git (worktree-creation `ls-remote`/`fetch`)
+  also needs auth parity with a terminal: `git_command` seeds the
+  `login_shell_environment()` (so `SSH_AUTH_SOCK` and the user's git/ssh config are
+  present) and forces non-interactive auth (`GIT_TERMINAL_PROMPT=0`,
+  `GCM_INTERACTIVE=never`, and a batch-mode `GIT_SSH_COMMAND` unless the user set
+  one) so a GUI launch never hangs on a credential/passphrase prompt at a
+  non-existent tty — which, under the global DB lock, would freeze the whole app.
 - `gh` invocations resolve `gh` via `resolve_executable`; `gh` is a single static
   binary that spawns no node, so it needs resolution but not `augmented_path`
   (`native/src/github.rs`).

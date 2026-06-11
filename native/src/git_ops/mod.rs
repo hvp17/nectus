@@ -11,10 +11,35 @@ fn git_output(repo_path: &Path, args: &[&str], failure_message: &str) -> Result<
 
 fn git_command(repo_path: &Path) -> Command {
     let mut command = Command::new(crate::process_util::resolve_executable("git"));
-    command
-        .env("PATH", crate::process_util::augmented_path())
-        .arg("-C")
-        .arg(repo_path);
+    // A macOS app launched from Finder/Dock inherits a minimal environment: no
+    // SSH_AUTH_SOCK (the ssh-agent socket), none of the user's exported git/ssh
+    // config, and no controlling terminal. Network git — `git ls-remote`/`git
+    // fetch` during worktree creation — would then fail to authenticate against a
+    // private remote and *hang forever* waiting on a passphrase/credential prompt
+    // at a tty that doesn't exist. Because worktree creation runs under the global
+    // DB lock, that hang freezes the whole app (the create-task crash). Seed the
+    // captured login-shell env so auth works exactly as it does in a terminal
+    // (SSH_AUTH_SOCK + the user's config), then force non-interactive auth so any
+    // remaining gap fails fast with a clear error instead of hanging.
+    let mut has_git_ssh_command = false;
+    for (key, value) in crate::process_util::login_shell_environment() {
+        if key == "GIT_SSH_COMMAND" {
+            has_git_ssh_command = true;
+        }
+        command.env(key, value);
+    }
+    command.env("PATH", crate::process_util::augmented_path());
+    // git's own prompts (HTTPS username/password) and Git Credential Manager's GUI
+    // popups: disabled so they error instead of blocking.
+    command.env("GIT_TERMINAL_PROMPT", "0");
+    command.env("GCM_INTERACTIVE", "never");
+    // ssh: fail fast rather than prompt for a passphrase/host-key confirmation.
+    // Respect a user-provided GIT_SSH_COMMAND (their terminal already works with
+    // it); otherwise install a batch-mode default with a bounded connect timeout.
+    if !has_git_ssh_command {
+        command.env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes -o ConnectTimeout=10");
+    }
+    command.arg("-C").arg(repo_path);
     command
 }
 
@@ -392,7 +417,7 @@ mod tests {
     use super::*;
     use crate::models::{DiffChangeKind, DiffFileEntry};
     use std::collections::HashMap;
-    use std::ffi::OsStr;
+    use std::ffi::{OsStr, OsString};
     use std::fs;
     use tempfile::tempdir;
 
@@ -429,6 +454,30 @@ mod tests {
             .find_map(|(key, value)| (key == OsStr::new("PATH")).then_some(value))
             .flatten();
         assert_eq!(path_env, Some(expected_path.as_os_str()));
+    }
+
+    #[test]
+    fn git_command_forces_non_interactive_auth() {
+        // A GUI-launched app has no tty; without these guards network git
+        // (worktree-creation fetch/ls-remote) hangs forever on a credential prompt,
+        // freezing the app under the global DB lock. They must always be set.
+        let dir = tempdir().unwrap();
+        let command = git_command(dir.path());
+        let env = |name: &str| {
+            command
+                .get_envs()
+                .find_map(|(key, value)| (key == OsStr::new(name)).then_some(value))
+                .flatten()
+                .map(OsStr::to_os_string)
+        };
+
+        assert_eq!(env("GIT_TERMINAL_PROMPT"), Some(OsString::from("0")));
+        assert_eq!(env("GCM_INTERACTIVE"), Some(OsString::from("never")));
+        let ssh = env("GIT_SSH_COMMAND").expect("GIT_SSH_COMMAND is set");
+        assert!(
+            ssh.to_string_lossy().contains("BatchMode=yes"),
+            "ssh must run in batch mode, got {ssh:?}"
+        );
     }
 
     #[test]
