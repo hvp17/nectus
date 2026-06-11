@@ -43,6 +43,14 @@ impl Database {
         // constraints always hold for this connection.
         conn.pragma_update(None, "foreign_keys", true)
             .map_err(|error| format!("Failed to enable foreign keys: {error}"))?;
+        // Write-Ahead Logging: faster commits (append to the WAL instead of
+        // rewriting a rollback journal each time) and readers don't block the
+        // writer. `synchronous=NORMAL` is the safe, recommended pairing with WAL
+        // for an app database (durable across app crashes; only a power loss can
+        // lose the last commit). `busy_timeout` lets a momentarily-locked write
+        // wait briefly instead of erroring. WAL is persisted on the database file,
+        // but setting it per-connection is cheap and harmless.
+        configure_pragmas(&conn)?;
         let db = Self { conn };
         db.create_schema()?;
         db.seed_agent_profiles()?;
@@ -55,6 +63,7 @@ impl Database {
         let conn = Connection::open_in_memory().map_err(|error| error.to_string())?;
         conn.pragma_update(None, "foreign_keys", true)
             .map_err(|error| format!("Failed to enable foreign keys: {error}"))?;
+        // In-memory has no WAL/file to worry about; foreign keys is enough.
         let db = Self { conn };
         db.create_schema()?;
         db.seed_agent_profiles()?;
@@ -143,6 +152,20 @@ impl Database {
             .map_err(|error| format!("Failed to update project: {error}"))?;
         Ok(())
     }
+}
+
+/// Apply the connection pragmas for the on-disk database: WAL journaling plus its
+/// safe `synchronous=NORMAL` pairing, and a short `busy_timeout`. WAL makes
+/// commits cheaper and lets reads proceed without blocking the writer; the busy
+/// timeout absorbs a brief write contention instead of erroring.
+fn configure_pragmas(conn: &Connection) -> Result<(), String> {
+    conn.pragma_update(None, "journal_mode", "WAL")
+        .map_err(|error| format!("Failed to enable WAL journal mode: {error}"))?;
+    conn.pragma_update(None, "synchronous", "NORMAL")
+        .map_err(|error| format!("Failed to set synchronous mode: {error}"))?;
+    conn.pragma_update(None, "busy_timeout", 5000)
+        .map_err(|error| format!("Failed to set busy timeout: {error}"))?;
+    Ok(())
 }
 
 fn now() -> String {

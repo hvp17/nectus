@@ -81,9 +81,12 @@ fn task_session_context(
     Ok(TaskSessionContext { task, repo, agent })
 }
 
+// Adding a repo validates it with `git rev-parse` (a subprocess), so run it on
+// the blocking pool rather than the main UI thread.
 #[tauri::command]
-fn add_repo(path: String, state: State<'_, AppState>) -> AppResult<Repo> {
-    app_result(state.db.lock().add_repo(path))
+async fn add_repo(path: String, state: State<'_, AppState>) -> AppResult<Repo> {
+    let db = state.db.clone();
+    blocking("Failed to add repository", move || db.lock().add_repo(path)).await
 }
 
 #[tauri::command]
@@ -129,28 +132,41 @@ async fn create_task(
     state: State<'_, AppState>,
 ) -> AppResult<TaskSummary> {
     let db = state.db.clone();
-    // Worktree creation (`git worktree add`, even a `git fetch`) runs here, so
-    // do it on a blocking thread rather than under the async runtime, mirroring
-    // delete_task and keeping the symmetric create/delete paths consistent.
-    tauri::async_runtime::spawn_blocking(move || -> Result<TaskSummary, String> {
-        tracing::info!(
-            repo_id,
-            has_worktree = has_worktree.unwrap_or(false),
-            "create_task: acquiring DB lock"
-        );
-        let db = db.lock();
-        tracing::info!(repo_id, "create_task: DB lock held; creating task record");
-        let task = db.create_task_record(
-            repo_id,
-            title,
-            prompt,
-            agent_profile_id,
-            has_worktree.unwrap_or(false),
-            branch_name,
-        )?;
+    blocking("Failed to create task", move || {
+        let has_worktree = has_worktree.unwrap_or(false);
+        // The slow part — `git worktree add` + a network `git fetch` — must run
+        // OFF the global DB lock so it doesn't stall every other command. We hold
+        // the lock only for the fast bits: plan the worktree, then insert the row.
+        let task = if has_worktree {
+            let (repo, branch, worktree_path) = db.lock().worktree_plan(repo_id, branch_name)?;
+            tracing::info!(repo_id, branch = %branch, "create_task: creating worktree off-lock");
+            git_ops::create_worktree(Path::new(&repo.path), &worktree_path, &branch)?;
+            let worktree_value = worktree_path.to_string_lossy().to_string();
+            tracing::info!(
+                repo_id,
+                "create_task: worktree ready; inserting row (brief lock)"
+            );
+            db.lock()
+                .insert_task(
+                    repo_id,
+                    title,
+                    prompt,
+                    agent_profile_id,
+                    Some(&branch),
+                    Some(&worktree_value),
+                )
+                .inspect_err(|_| {
+                    // Compensate a failed insert (e.g. a re-used branch) by removing
+                    // the just-created, app-owned worktree.
+                    let _ = git_ops::remove_worktree(Path::new(&repo.path), &worktree_path, true);
+                })?
+        } else {
+            db.lock()
+                .insert_task(repo_id, title, prompt, agent_profile_id, None, None)?
+        };
         // Attaching to a story only links locally — it never writes back to JIRA.
         if jira_issue_key.is_some() {
-            return db.set_task_jira_link(
+            return db.lock().set_task_jira_link(
                 task.id,
                 jira_issue_key,
                 jira_issue_summary,
@@ -160,8 +176,6 @@ async fn create_task(
         Ok(task)
     })
     .await
-    .map_err(|error| AppError::from(format!("Failed to create task: {error}")))?
-    .map_err(Into::into)
 }
 
 /// Create a task that spans several repos (Increment B): one worktree per repo as
@@ -179,20 +193,18 @@ async fn create_cross_repo_task(
 ) -> AppResult<TaskSummary> {
     let db = state.db.clone();
     blocking("Failed to create cross-repo task", move || {
+        // Plan under the lock (fast), create all worktrees off-lock and in
+        // parallel (the slow network git), then insert under the lock (fast).
+        let plan = db.lock().cross_repo_plan(repo_ids, branch_name, prompt)?;
         tracing::info!(
-            repo_count = repo_ids.len(),
-            "create_cross_repo_task: acquiring DB lock"
+            repo_count = plan.repos.len(),
+            "create_cross_repo_task: creating worktrees off-lock"
         );
-        let db = db.lock();
-        tracing::info!("create_cross_repo_task: DB lock held; creating worktrees");
-        db.create_cross_repo_task(
-            workspace_id,
-            repo_ids,
-            title,
-            prompt,
-            agent_profile_id,
-            branch_name,
-        )
+        plan.create_worktrees()?;
+        tracing::info!("create_cross_repo_task: worktrees ready; inserting rows (brief lock)");
+        db.lock()
+            .insert_cross_repo_task(&plan, workspace_id, title, agent_profile_id)
+            .inspect_err(|_| plan.teardown_worktrees())
     })
     .await
 }
@@ -226,20 +238,22 @@ async fn list_tasks(
     .map_err(Into::into)
 }
 
+// Returns the updated task via `task_by_id`, which runs `git status` for
+// dirtiness — a subprocess — so keep it off the main UI thread.
 #[tauri::command]
-fn update_task_metadata(
+async fn update_task_metadata(
     task_id: i64,
     title: Option<String>,
     status: Option<TaskStatus>,
     pr_url: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<TaskSummary> {
-    app_result(
-        state
-            .db
-            .lock()
-            .update_task_metadata(task_id, title, status, pr_url),
-    )
+    let db = state.db.clone();
+    blocking("Failed to update task", move || {
+        db.lock()
+            .update_task_metadata(task_id, title, status, pr_url)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -738,20 +752,20 @@ async fn jira_sprint_board(
 }
 
 /// Set or clear the local JIRA story link on a task. Never writes to JIRA.
+/// Async because it returns the task via `task_by_id` (which runs `git status`).
 #[tauri::command]
-fn set_task_jira_link(
+async fn set_task_jira_link(
     task_id: i64,
     key: Option<String>,
     summary: Option<String>,
     url: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<TaskSummary> {
-    app_result(
-        state
-            .db
-            .lock()
-            .set_task_jira_link(task_id, key, summary, url),
-    )
+    let db = state.db.clone();
+    blocking("Failed to update JIRA link", move || {
+        db.lock().set_task_jira_link(task_id, key, summary, url)
+    })
+    .await
 }
 
 /// Largest consensus round count a caller can request. Each round runs every
@@ -1218,7 +1232,7 @@ fn init_tracing() {
     let buffer_layer = tracing_subscriber::fmt::layer()
         .with_target(false)
         .with_ansi(false)
-        .with_writer(diagnostics::DiagnosticsWriter::default());
+        .with_writer(diagnostics::DiagnosticsWriter);
     let _ = tracing_subscriber::registry()
         .with(filter)
         .with(stdout_layer)
