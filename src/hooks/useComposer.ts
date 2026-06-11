@@ -54,24 +54,28 @@ export function useComposer() {
     const resolveBranchName = (branchName: string) =>
       resolveBranch(branchName, branchPrefix, store.newTaskBranchIdentifier);
 
-    // Shared post-create choreography: select the new task, start its session
-    // (tolerating a start failure), refresh, and report. Both create paths differ
-    // only in which create API they call, the repo they select, and the message.
+    // Shared post-create choreography: start the new task's session (tolerating a
+    // start failure), select it, refresh, and report. The composer stays open
+    // showing live status until the agent is launched, then closes — so the user
+    // sees what's happening (worktree fetch can take a few seconds per repo)
+    // instead of a blank spinner. Both create paths differ only in which create
+    // API they call, the repo they select, and the message.
     const finishCreate = async (
       task: TaskSummary,
       selectRepoId: number,
       agentProfileId: number,
       successMessage: string,
     ) => {
-      store.closeComposer();
-      store.setSelectedRepoId(selectRepoId);
-      store.setSelectedTaskId(task.id);
+      store.setTaskCreationStatus("Starting agent…");
       let startError: string | null = null;
       try {
         await api.startSession(task.id, agentProfileId);
       } catch (error) {
         startError = String(error);
       }
+      store.closeComposer();
+      store.setSelectedRepoId(selectRepoId);
+      store.setSelectedTaskId(task.id);
       await refresh();
       setMessage(
         startError
@@ -93,16 +97,25 @@ export function useComposer() {
       const crossRepo = repoIds.length >= 2;
       await run(
         async () => {
-          const branchName = resolveBranchName(store.newTaskBranchName);
-          const task = crossRepo
-            ? await api.createCrossRepoTask({ workspaceId, repoIds, title, prompt, agentProfileId, branchName })
-            : await api.createTask({ repoId: repoIds[0], title, prompt, agentProfileId, hasWorktree: true, branchName });
-          await finishCreate(
-            task,
-            repoIds[0],
-            agentProfileId,
-            crossRepo ? `Created ${task.branchName} across ${repoIds.length} repos` : `Created ${task.branchName}`,
-          );
+          try {
+            const branchName = resolveBranchName(store.newTaskBranchName);
+            store.setTaskCreationStatus(
+              crossRepo
+                ? `Setting up ${repoIds.length} worktrees (fetching latest)…`
+                : "Setting up worktree (fetching latest)…",
+            );
+            const task = crossRepo
+              ? await api.createCrossRepoTask({ workspaceId, repoIds, title, prompt, agentProfileId, branchName })
+              : await api.createTask({ repoId: repoIds[0], title, prompt, agentProfileId, hasWorktree: true, branchName });
+            await finishCreate(
+              task,
+              repoIds[0],
+              agentProfileId,
+              crossRepo ? `Created ${task.branchName} across ${repoIds.length} repos` : `Created ${task.branchName}`,
+            );
+          } finally {
+            store.setTaskCreationStatus(null);
+          }
         },
         { busy: true },
       );
@@ -123,19 +136,26 @@ export function useComposer() {
     const hasWorktree = store.newTaskHasWorktree;
     await run(
       async () => {
-        const branchName = hasWorktree ? resolveBranchName(store.newTaskBranchName) : null;
-        const task = await api.createTask({
-          repoId,
-          title,
-          prompt,
-          agentProfileId,
-          hasWorktree,
-          branchName,
-          jiraIssueKey: jiraLink?.key ?? null,
-          jiraIssueSummary: jiraLink?.summary ?? null,
-          jiraIssueUrl: jiraLink?.url ?? null,
-        });
-        await finishCreate(task, repoId, agentProfileId, hasWorktree ? `Created ${task.branchName}` : `Created ${task.title}`);
+        try {
+          const branchName = hasWorktree ? resolveBranchName(store.newTaskBranchName) : null;
+          store.setTaskCreationStatus(
+            hasWorktree ? "Setting up worktree (fetching latest)…" : "Creating task…",
+          );
+          const task = await api.createTask({
+            repoId,
+            title,
+            prompt,
+            agentProfileId,
+            hasWorktree,
+            branchName,
+            jiraIssueKey: jiraLink?.key ?? null,
+            jiraIssueSummary: jiraLink?.summary ?? null,
+            jiraIssueUrl: jiraLink?.url ?? null,
+          });
+          await finishCreate(task, repoId, agentProfileId, hasWorktree ? `Created ${task.branchName}` : `Created ${task.title}`);
+        } finally {
+          store.setTaskCreationStatus(null);
+        }
       },
       { busy: true },
     );

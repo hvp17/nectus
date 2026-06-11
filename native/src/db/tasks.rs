@@ -157,26 +157,59 @@ impl Database {
 
         let folders = unique_worktree_folders(&repos);
 
-        // Create every worktree first; on any failure tear down the ones made so far.
+        // Create the per-repo worktrees concurrently — they are independent, each
+        // does its own network fetch, and serially they cost the *sum* of those
+        // fetches (tens of seconds across several large repos). Scoped threads let
+        // us borrow `repos`/`folders`/`branch_name` without cloning. On any
+        // failure, tear down whichever worktrees did get created.
+        let outcomes: Vec<(usize, Result<(), String>)> = std::thread::scope(|scope| {
+            let handles: Vec<_> = repos
+                .iter()
+                .enumerate()
+                .map(|(index, repo)| {
+                    let worktree_path = parent.join(&folders[index]);
+                    let branch_name = branch_name.as_str();
+                    scope.spawn(move || {
+                        (
+                            index,
+                            git_ops::create_worktree(
+                                Path::new(&repo.path),
+                                &worktree_path,
+                                branch_name,
+                            ),
+                        )
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .map(|handle| handle.join().expect("worktree creation thread panicked"))
+                .collect()
+        });
+
         let mut created: Vec<usize> = Vec::new();
-        for (index, repo) in repos.iter().enumerate() {
-            let worktree_path = parent.join(&folders[index]);
-            if let Err(error) =
-                git_ops::create_worktree(Path::new(&repo.path), &worktree_path, &branch_name)
-            {
-                for created_index in &created {
-                    let _ = git_ops::remove_worktree(
-                        Path::new(&repos[*created_index].path),
-                        &parent.join(&folders[*created_index]),
-                        true,
-                    );
+        let mut failure: Option<String> = None;
+        for (index, result) in outcomes {
+            match result {
+                Ok(()) => created.push(index),
+                Err(error) if failure.is_none() => {
+                    failure = Some(format!(
+                        "Failed to create worktree for {}: {error}",
+                        repos[index].name
+                    ));
                 }
-                return Err(format!(
-                    "Failed to create worktree for {}: {error}",
-                    repo.name
-                ));
+                Err(_) => {}
             }
-            created.push(index);
+        }
+        if let Some(error) = failure {
+            for created_index in &created {
+                let _ = git_ops::remove_worktree(
+                    Path::new(&repos[*created_index].path),
+                    &parent.join(&folders[*created_index]),
+                    true,
+                );
+            }
+            return Err(error);
         }
 
         let prompt = Some(cross_repo_prompt(&folders, prompt));

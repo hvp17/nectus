@@ -226,6 +226,40 @@ fn default_remote(repo_path: &Path) -> Result<String, String> {
     first_remote.ok_or_else(|| "Repository has no git remotes".to_string())
 }
 
+/// Resolve the remote's default branch, preferring a **local, no-network** read
+/// of `refs/remotes/<remote>/HEAD` (the symref `git clone` records). Only falls
+/// back to a network `ls-remote --symref` when that local symref is missing
+/// (e.g. a CI clone that didn't set it). The network `ls-remote` was the single
+/// slowest step in worktree creation — seconds, sometimes tens of seconds — so
+/// skipping it in the common case is the biggest latency win.
+fn resolve_default_branch(repo_path: &Path, remote: &str) -> Result<String, String> {
+    if let Some(branch) = local_default_branch(repo_path, remote) {
+        return Ok(branch);
+    }
+    remote_default_branch(repo_path, remote)
+}
+
+/// Read `refs/remotes/<remote>/HEAD` locally and return the bare branch name
+/// (e.g. `master`). `None` when the symref is unset — `rev-parse --abbrev-ref`
+/// then echoes the input (`origin/HEAD`) back, which we treat as missing.
+fn local_default_branch(repo_path: &Path, remote: &str) -> Option<String> {
+    let symbolic = format!("{remote}/HEAD");
+    let output = git_output(
+        repo_path,
+        &["rev-parse", "--abbrev-ref", &symbolic],
+        "Failed to read local default branch",
+    )
+    .ok()?;
+    let label = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if label.is_empty() || label == symbolic {
+        return None;
+    }
+    label
+        .strip_prefix(&format!("{remote}/"))
+        .filter(|branch| !branch.is_empty())
+        .map(str::to_string)
+}
+
 fn remote_default_branch(repo_path: &Path, remote: &str) -> Result<String, String> {
     let output = git_output(
         repo_path,
@@ -247,10 +281,15 @@ fn remote_default_branch(repo_path: &Path, remote: &str) -> Result<String, Strin
     ))
 }
 
-fn fetch_remote(repo_path: &Path, remote: &str) -> Result<(), String> {
+/// Fetch **only the default branch, without tags** — far cheaper than the old
+/// `fetch --prune` that pulled every branch and every tag on these large repos
+/// (the dominant cost after `ls-remote`). The remote's configured refspec still
+/// updates `refs/remotes/<remote>/<branch>`, which the worktree is based on, and
+/// subsequent fetches of the same branch are incremental (only new objects).
+fn fetch_default_branch(repo_path: &Path, remote: &str, branch: &str) -> Result<(), String> {
     git_output(
         repo_path,
-        &["fetch", "--prune", remote],
+        &["fetch", "--no-tags", remote, branch],
         "Failed to fetch latest remote refs",
     )?;
     Ok(())
@@ -264,16 +303,15 @@ pub fn create_worktree(
     validate_branch_name(branch_name)?;
     prepare_worktree_path(worktree_path)?;
 
-    // Step-by-step timed tracing so the Diagnostics panel pinpoints a hang: a
-    // "starting" line with no matching "done" line is the command that stuck
-    // (the network steps below are the ones that can block on auth).
+    // Step-by-step timed tracing so the Diagnostics panel pinpoints a slow/stuck
+    // step: a "starting" line with no matching "done" line is the one that stuck.
     let remote = default_remote(repo_path)?;
-    tracing::info!(repo = %repo_path.display(), %remote, branch = %branch_name, "create_worktree: resolving remote default branch (git ls-remote)");
+    tracing::info!(repo = %repo_path.display(), %remote, branch = %branch_name, "create_worktree: resolving default branch");
     let started = std::time::Instant::now();
-    let default_branch = remote_default_branch(repo_path, &remote)?;
-    tracing::info!(%default_branch, elapsed_ms = started.elapsed().as_millis() as u64, "create_worktree: ls-remote done; fetching remote (git fetch)");
+    let default_branch = resolve_default_branch(repo_path, &remote)?;
+    tracing::info!(%default_branch, elapsed_ms = started.elapsed().as_millis() as u64, "create_worktree: resolved default branch; fetching it (git fetch --no-tags <branch>)");
     let started = std::time::Instant::now();
-    fetch_remote(repo_path, &remote)?;
+    fetch_default_branch(repo_path, &remote, &default_branch)?;
     tracing::info!(
         elapsed_ms = started.elapsed().as_millis() as u64,
         "create_worktree: fetch done; adding worktree (git worktree add)"

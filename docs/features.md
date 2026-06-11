@@ -114,7 +114,9 @@ so a cross-repo task can be started from any entry point — not only a workspac
 
 - Each repo gets its own worktree on a **shared branch**, laid out as siblings under
   one parent: `<…/.nectus/worktrees>/workspaces/<branch>/<repoName>` (sibling
-  folders are disambiguated by id when two repos share a directory name).
+  folders are disambiguated by id when two repos share a directory name). The
+  per-repo worktrees are created **concurrently**, so a cross-repo task costs about
+  one repo's setup time, not the sum.
 - A **single agent session** runs in the primary repo's worktree; the other repos
   are reachable as siblings at `../<repoName>`. The task prompt is prefixed with this
   layout so the agent has cross-repo context. Each repo keeps its own branch.
@@ -123,6 +125,15 @@ so a cross-repo task can be started from any entry point — not only a workspac
   them the delete is refused until confirmed (then force-removes all).
 - Per-repo state lives in the `task_repos` table; a single-repo task is the N=1 case
   (one row mirroring the task). `tasks.repo_id` is the primary repo.
+
+**Worktree-creation latency & progress.** Creating a worktree-backed task fetches
+the latest default branch from the remote, which dominates creation time on large
+repos. It is tuned to stay fast: the default branch is read from the local
+`origin/HEAD` symref (no network round trip) and the fetch pulls only that branch
+without tags, instead of every ref; cross-repo tasks fetch all repos concurrently.
+While this runs, the composer shows a live status — "Setting up worktree (fetching
+latest)…" then "Starting agent…" — instead of a blank spinner, and the full
+backend step timing is visible in Settings → Diagnostics.
 
 Current scope: the Diff tab and GitHub PR panel operate on the **primary** repo's
 worktree for a cross-repo task. Per-repo diffs and per-repo PRs are a planned

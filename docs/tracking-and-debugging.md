@@ -427,8 +427,11 @@ Check:
   backslash, `//`, trailing `/`, or `.lock`.
 - The worktree path does not already exist.
 - The repo has at least one remote.
-- `git ls-remote --symref <remote> HEAD` can resolve the remote default branch.
-- `git fetch --prune <remote>` succeeds.
+- The default branch resolves: normally from the local `refs/remotes/<remote>/HEAD`
+  symref (no network); if that symref is unset, from `git ls-remote --symref
+  <remote> HEAD`.
+- `git fetch --no-tags <remote> <default-branch>` succeeds (only the default
+  branch is fetched — not every ref — to keep creation fast on large repos).
 
 If the **whole app freezes** (and only when creating a *worktree-backed* task —
 a no-worktree task is fine), the cause is almost always git blocking on
