@@ -161,7 +161,7 @@ Current commands:
 | `create_cross_repo_task` | Create a task spanning ≥2 repos (Increment B): one worktree per repo as siblings under a shared parent, a single agent rooted in the primary repo's worktree, and a `task_repos` row per repo. Rolls back created worktrees on failure. |
 | `list_tasks` | Load task summaries (each with its `taskRepos`) and per-repo dirty-state checks. |
 | `update_task_metadata` | Update title, status, or PR URL. |
-| `delete_task` | Delete a task and remove its worktree when applicable. Takes a `force` flag: without it a worktree with uncommitted changes is preserved and an error is returned; with it (after the delete dialog's warning) the worktree is force-removed. |
+| `delete_task` | Delete a task and remove its worktree(s) when applicable. Takes a `force` flag: without it a worktree with uncommitted changes is preserved and an error is returned; with it (after the delete dialog's warning) the worktree is force-removed. The `git worktree remove` runs **off the DB lock** (plan under a brief lock → remove worktrees off-lock → delete the row under a brief lock). Each removal also runs `git worktree prune` (clears stale `.git/worktrees/<name>` admin entries, incl. when the dir was deleted out-of-band) and cleans up the orphaned `task-*` branch — force-deleted with `force`, otherwise deleted only when fully pushed so unpushed commits are never lost. |
 | `list_workspaces` | Load workspaces, each with its ordered member `repoIds`. |
 | `create_workspace` | Create a named workspace from `name` + `repoIds` (membership written transactionally; duplicate ids dropped). |
 | `update_workspace` | Rename a workspace and replace its membership/order. |
@@ -454,9 +454,9 @@ gets stuck, open **Settings → Diagnostics**: `create_worktree` logs a timed li
 before each network step (`… ls-remote`, `… fetching`, `… worktree add`), so a
 "starting" line with no following "done" line pinpoints the stuck command.
 
-If the log instead shows `create_task_record: task row + worktree committed` and
-then goes silent (no `started agent session`), the create finished and the hang
-was in the **session launch** — see
+If the log instead shows `create_task: worktree ready; inserting row (brief lock)`
+and then goes silent (no `started agent session`), the create finished and the
+hang was in the **session launch** — see
 [App Freezes / Goes Unresponsive When Starting, Stopping, Or Feeding A Session](#app-freezes--goes-unresponsive-when-starting-stopping-or-feeding-a-session).
 
 Relevant code:
@@ -464,6 +464,34 @@ Relevant code:
 - `native/src/git_ops/mod.rs` (remote resolution, worktree create/remove/branch
   lifecycle, the non-interactive git env)
 - `native/src/db/mod.rs`
+
+### Worktrees Or `task-*` Branches Left Behind After Deleting A Task
+
+Deleting a task removes its worktree(s) and tidies up after them; if something
+lingers, this is the expected behavior and how it self-heals:
+
+- **Removal runs off the DB lock**, in three phases — `plan_task_deletion`
+  (collect worktrees), `TaskDeletionPlan::remove_worktrees` (the `git` work), and
+  `delete_task_row`. A non-dirty failure mid-removal (e.g. a locked worktree)
+  leaves the task row intact; a retry sees the gone worktrees as clean and
+  short-circuits, completing the delete.
+- **Stale admin entries** under `.git/worktrees/<name>` (left when a worktree dir
+  was deleted out-of-band) are cleared by `git worktree prune`, run after each
+  removal. If `git worktree list` still shows a ghost, run `git worktree prune` in
+  the repo manually.
+- **`task-*` branches** are cleaned up only when safe: force-deleted on a forced
+  task delete (the user accepted discarding work), otherwise deleted only when
+  every commit is already on a remote (`branch_fully_pushed`). A branch with
+  **unpushed local commits** is deliberately **kept** on a non-forced delete so
+  work is never silently lost — those branches are expected to remain until you
+  force-delete the task or remove the branch yourself.
+- A non-forced delete of a worktree with **uncommitted** changes is refused with
+  `WORKTREE_HAS_CHANGES` (all-or-nothing across a cross-repo task's repos); the
+  delete dialog then offers to force-remove.
+
+Relevant code: `native/src/db/tasks.rs` (`plan_task_deletion`,
+`TaskDeletionPlan`, `delete_task_row`), `native/src/git_ops/mod.rs`
+(`remove_worktree`, `prune_worktrees`, `cleanup_task_branch`).
 
 ### Agent Command Fails To Start
 
