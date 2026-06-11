@@ -152,6 +152,65 @@ impl Database {
             .map_err(|error| format!("Failed to update project: {error}"))?;
         Ok(())
     }
+
+    /// Rename a project's display name. The on-disk path and worktree root are
+    /// untouched — the name is a UI label (it also seeds new cross-repo sibling
+    /// folder names, which disambiguate by id on collision anyway).
+    pub fn rename_repo(&self, id: i64, name: String) -> Result<Repo, String> {
+        let name = name.trim().to_string();
+        if name.is_empty() {
+            return Err("Project name cannot be empty".to_string());
+        }
+        let duplicate: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT id FROM repos WHERE name = ?1 COLLATE NOCASE AND id != ?2",
+                params![name, id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
+        if duplicate.is_some() {
+            return Err(format!("A project named \"{name}\" already exists"));
+        }
+        let updated = self
+            .conn
+            .execute("UPDATE repos SET name = ?1 WHERE id = ?2", params![name, id])
+            .map_err(|error| format!("Failed to rename project: {error}"))?;
+        if updated == 0 {
+            return Err("Repository not found".to_string());
+        }
+        self.repo_by_id(id)?
+            .ok_or_else(|| "Repository not found after rename".into())
+    }
+
+    /// Remove a project from Nectus. **Refuses while any task references it**:
+    /// `tasks.repo_id` cascades, so deleting the row would silently drop tasks
+    /// and orphan their worktrees on disk. With no tasks left, the row delete
+    /// cascades only workspace membership and PR-review history; the repository
+    /// on disk is never touched.
+    pub fn remove_repo(&self, id: i64) -> Result<(), String> {
+        self.repo_by_id(id)?
+            .ok_or_else(|| "Repository not found".to_string())?;
+        let task_count: i64 = self
+            .conn
+            .query_row(
+                "SELECT COUNT(DISTINCT task_id) FROM task_repos WHERE repo_id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        if task_count > 0 {
+            return Err(format!(
+                "This project still has {task_count} task{} — delete them first (removing a project never deletes tasks or worktrees for you)",
+                if task_count == 1 { "" } else { "s" }
+            ));
+        }
+        self.conn
+            .execute("DELETE FROM repos WHERE id = ?1", params![id])
+            .map_err(|error| format!("Failed to remove project: {error}"))?;
+        Ok(())
+    }
 }
 
 /// Apply the connection pragmas for the on-disk database: WAL journaling plus its

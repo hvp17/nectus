@@ -110,7 +110,7 @@ export function AppLayout() {
   useEventBridge();
   useShellBootstrap();
   const workspaceActions = useWorkspaceActions();
-  const { addProject } = useProjectActions();
+  const { addProject, renameProject, removeProject } = useProjectActions();
   const { setRepoCollapsed, setWorkspaceCollapsed } = useSidebarCollapse();
 
   // Server reads (queries) + shell UI state (store) — the shell composes its own
@@ -417,6 +417,8 @@ export function AppLayout() {
             onCreateTaskForRepo={(id) => openComposer({ repoId: id })}
             onCreateTaskForWorkspace={(id) => openComposer({ workspaceId: id })}
             onAddProject={addProject}
+            onRenameProject={renameProject}
+            onRemoveProject={removeProject}
             onManageWorkspaces={openManageWorkspaces}
             onToggleRepoCollapse={setRepoCollapsed}
             onToggleWorkspaceCollapse={setWorkspaceCollapsed}

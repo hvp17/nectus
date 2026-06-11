@@ -100,6 +100,19 @@ fn set_repo_collapsed(id: i64, collapsed: bool, state: State<'_, AppState>) -> A
     app_result(state.db.lock().set_repo_collapsed(id, collapsed))
 }
 
+/// Rename a project's display name (the path and worktree root are untouched).
+#[tauri::command]
+fn rename_repo(id: i64, name: String, state: State<'_, AppState>) -> AppResult<Repo> {
+    app_result(state.db.lock().rename_repo(id, name))
+}
+
+/// Remove a project from Nectus. Refuses while tasks reference it; never touches
+/// the repository on disk.
+#[tauri::command]
+fn remove_repo(id: i64, state: State<'_, AppState>) -> AppResult<()> {
+    app_result(state.db.lock().remove_repo(id))
+}
+
 #[tauri::command]
 fn get_app_settings(state: State<'_, AppState>) -> AppResult<AppSettings> {
     app_result(state.db.lock().get_app_settings())
@@ -1253,6 +1266,8 @@ pub fn run() {
             add_repo,
             list_repos,
             set_repo_collapsed,
+            rename_repo,
+            remove_repo,
             get_app_settings,
             update_app_settings,
             create_task,

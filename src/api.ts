@@ -89,6 +89,13 @@ export const api = {
     if (!isTauriRuntime()) return;
     return invoke("set_repo_collapsed", { id, collapsed });
   },
+  async renameRepo(id: number, name: string): Promise<Repo> {
+    return invoke("rename_repo", { id, name });
+  },
+  /** Remove a project from Nectus (refused while tasks reference it). */
+  async removeRepo(id: number): Promise<void> {
+    return invoke("remove_repo", { id });
+  },
   async pickRepositoryFolder(): Promise<string | null> {
     if (!isTauriRuntime()) return null;
     const selected = await open({

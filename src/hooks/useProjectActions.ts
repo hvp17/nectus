@@ -4,7 +4,7 @@ import { useRefreshData } from "../queries/core";
 import { useGuardedAction } from "./useGuardedAction";
 import { useAppStore } from "../store/appStore";
 
-/** Add an existing local git repo as a project, select it, and refresh. */
+/** Project lifecycle: add an existing local git repo, rename, or remove it. */
 export function useProjectActions() {
   const setMessage = useAppStore((s) => s.setMessage);
   const setBusy = useAppStore((s) => s.setBusy);
@@ -30,5 +30,35 @@ export function useProjectActions() {
     [refresh, run, setMessage, setSelectedRepoId],
   );
 
-  return { addProject };
+  const renameProject = useCallback(
+    (repoId: number, name: string) =>
+      run(
+        async () => {
+          const repo = await api.renameRepo(repoId, name);
+          await refresh();
+          setMessage(`Renamed project to ${repo.name}`);
+        },
+        { busy: true },
+      ),
+    [refresh, run, setMessage],
+  );
+
+  // Removal is local-only bookkeeping: the backend refuses while tasks exist and
+  // never touches the repository on disk.
+  const removeProject = useCallback(
+    (repoId: number) =>
+      run(
+        async () => {
+          await api.removeRepo(repoId);
+          const store = useAppStore.getState();
+          if (store.selectedRepoId === repoId) store.setSelectedRepoId(undefined);
+          await refresh();
+          setMessage("Project removed (repository on disk is untouched)");
+        },
+        { busy: true },
+      ),
+    [refresh, run, setMessage],
+  );
+
+  return { addProject, renameProject, removeProject };
 }

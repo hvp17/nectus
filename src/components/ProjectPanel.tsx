@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronRight, FolderGit2, Info, Plus, Settings2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { ProjectRowMenu } from "./ProjectRowMenu";
 import { SidebarAgentRow } from "./SidebarAgentRow";
 import { useMinuteNow } from "../hooks/useMinuteNow";
 import { AGENT_STATE_META } from "../lib/agentState";
@@ -24,6 +25,10 @@ interface ProjectPanelProps {
   /** Open the composer preselected to this workspace (cross-repo when it can fan out). */
   onCreateTaskForWorkspace: (workspaceId: number) => void;
   onAddProject: () => void;
+  /** Rename a project's display name (its path on disk is untouched). */
+  onRenameProject: (repoId: number, name: string) => void;
+  /** Remove a project from Nectus (backend refuses while tasks reference it). */
+  onRemoveProject: (repoId: number) => void;
   onManageWorkspaces: () => void;
   /** Persist the fold state of a project's nested in-flight agent list. */
   onToggleRepoCollapse: (id: number, collapsed: boolean) => void;
@@ -50,6 +55,8 @@ export function ProjectPanel({
   onCreateTaskForRepo,
   onCreateTaskForWorkspace,
   onAddProject,
+  onRenameProject,
+  onRemoveProject,
   onManageWorkspaces,
   onToggleRepoCollapse,
   onToggleWorkspaceCollapse,
@@ -103,6 +110,14 @@ export function ProjectPanel({
                 onOpenTask={onOpenTask}
                 onCreateTask={() => onCreateTaskForRepo(repo.id)}
                 createLabel={`Add task to ${repo.name}`}
+                menu={
+                  <ProjectRowMenu
+                    repo={repo}
+                    busy={busy}
+                    onRename={onRenameProject}
+                    onRemove={onRemoveProject}
+                  />
+                }
               />
             ))
           )}
@@ -154,6 +169,7 @@ function NavRow({
   onCreateTask,
   createLabel,
   info,
+  menu,
 }: {
   label: string;
   icon?: React.ReactNode;
@@ -168,6 +184,8 @@ function NavRow({
   onCreateTask?: () => void;
   createLabel?: string;
   info?: React.ReactNode;
+  /** Hover-revealed row actions menu (e.g. project rename/remove). */
+  menu?: React.ReactNode;
 }) {
   const tone = dominantState(rows);
   // Nothing to fold when there are no nested agents — show a spacer instead of a
@@ -224,6 +242,7 @@ function NavRow({
             <Plus size={13} aria-hidden="true" />
           </button>
         )}
+        {menu}
       </div>
       {expanded && (
         <div className="nx-nav-agents">

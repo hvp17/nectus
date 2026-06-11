@@ -1679,3 +1679,37 @@ fn sets_a_member_repo_pr_url_without_touching_the_primary() {
         .unwrap_err();
     assert!(error.contains("no entry"), "{error}");
 }
+
+#[test]
+fn renames_a_project_and_rejects_duplicates() {
+    let db = Database::open_in_memory().unwrap();
+    let (_dir_a, repo_a) = add_repo_with_remote(&db);
+    let (_dir_b, repo_b) = add_repo_with_remote(&db);
+
+    let renamed = db.rename_repo(repo_a.id, "  Renamed App  ".to_string()).unwrap();
+    assert_eq!(renamed.name, "Renamed App");
+    assert_eq!(renamed.path, repo_a.path, "path is untouched");
+
+    let error = db
+        .rename_repo(repo_b.id, "renamed app".to_string())
+        .unwrap_err();
+    assert!(error.contains("already exists"), "{error}");
+    assert!(db.rename_repo(repo_a.id, "  ".to_string()).is_err());
+}
+
+#[test]
+fn removes_a_project_only_once_its_tasks_are_gone() {
+    let db = Database::open_in_memory().unwrap();
+    let (_dir, repo) = add_repo_with_remote(&db);
+    let task = db
+        .create_task_record(repo.id, "Task".to_string(), None, None, false, None)
+        .unwrap();
+
+    let error = db.remove_repo(repo.id).unwrap_err();
+    assert!(error.contains("1 task"), "{error}");
+
+    db.delete_task(task.id, false).unwrap();
+    db.remove_repo(repo.id).unwrap();
+    assert!(db.repo_by_id(repo.id).unwrap().is_none());
+    assert!(db.remove_repo(repo.id).is_err(), "already gone");
+}
