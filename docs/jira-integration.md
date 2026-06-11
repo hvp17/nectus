@@ -151,7 +151,10 @@ All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
 - From a card (or its dialog) choose **Create task from this story**. The task modal
   opens pre-seeded: title from the story summary, prompt from its description, with a
   project selector for the destination repo (the board is global, so the repo is
-  chosen at attach time).
+  chosen at attach time). The composer opens in Project mode, but the link is
+  preserved if you switch to Workspace (cross-repo) scope: the cross-repo create
+  takes no JIRA fields, so the story is attached in a follow-up `set_task_jira_link`
+  call — a workspace task keeps its story link just like a single-repo one.
 - The link is **local only** — attaching writes nothing back to JIRA. The story key,
   summary, and URL are stored on the task (`jira_issue_key/summary/url`).
 - The linked story shows as a badge on task cards and rows, and as a detachable panel

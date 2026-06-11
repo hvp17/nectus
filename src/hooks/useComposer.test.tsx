@@ -7,13 +7,14 @@ import { createQueryClient } from "../queries/queryClient";
 import { queryKeys } from "../queries/keys";
 import { useAppStore } from "../store/appStore";
 import { appSettingsFixture, resetAppStore, seedBootstrapQueries, testTimestamp } from "../test/testUtils";
-import type { JiraStatus, JiraWorkItem, Repo } from "../types";
+import type { JiraStatus, JiraWorkItem, Repo, TaskSummary } from "../types";
 import { useComposer } from "./useComposer";
 
 vi.mock("../api", () => ({
   api: {
     createTask: vi.fn(),
     createCrossRepoTask: vi.fn(),
+    setTaskJiraLink: vi.fn(),
     startSession: vi.fn(),
     jiraGetWorkItem: vi.fn(),
     jiraStatus: vi.fn(),
@@ -91,5 +92,37 @@ describe("useComposer", () => {
     });
     expect(state.createTaskOpen).toBe(true);
     expect(mockedApi.jiraGetWorkItem).not.toHaveBeenCalled();
+  });
+
+  it("attaches the linked JIRA story to a cross-repo task created from a story", async () => {
+    const created = { id: 500, title: story.summary, branchName: "feat/cross" } as TaskSummary;
+    mockedApi.createCrossRepoTask.mockResolvedValue(created);
+    mockedApi.setTaskJiraLink.mockResolvedValue(created);
+    mockedApi.startSession.mockResolvedValue({} as never);
+    const { result } = setup();
+
+    // Seed the composer from the story (Project mode, pendingJiraLink set)...
+    await act(async () => {
+      await result.current.createTaskFromStory(story, 2);
+    });
+    // ...then switch into cross-repo Workspace mode (as the composer toggle does).
+    act(() => {
+      const store = useAppStore.getState();
+      store.setNewTaskWorkspaceId(1);
+      store.setNewTaskRepoIds([7, 8]);
+    });
+
+    await act(async () => {
+      await result.current.createTask();
+    });
+
+    expect(mockedApi.createCrossRepoTask).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: 1, repoIds: [7, 8] }),
+    );
+    // The JIRA link is attached to the workspace task (the cross-repo create API
+    // takes no JIRA fields, so it must be linked in a follow-up call).
+    expect(mockedApi.setTaskJiraLink).toHaveBeenCalledWith(
+      expect.objectContaining({ taskId: 500, key: story.key, summary: story.summary }),
+    );
   });
 });
