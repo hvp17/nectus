@@ -265,7 +265,12 @@ async fn delete_task(
     let db = state.db.clone();
     let force = force.unwrap_or(false);
     blocking("Failed to finish task deletion", move || {
-        db.lock().delete_task(task_id, force)
+        // Plan under the lock (fast), remove worktrees off-lock (the `git`
+        // subprocesses — and any all-or-nothing dirty check), then delete the row
+        // under a brief lock. Keeps `git worktree remove` off the global DB lock.
+        let plan = db.lock().plan_task_deletion(task_id)?;
+        plan.remove_worktrees(force)?;
+        db.lock().delete_task_row(task_id)
     })
     .await
 }

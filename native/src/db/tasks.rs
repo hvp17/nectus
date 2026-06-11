@@ -441,54 +441,97 @@ impl Database {
             .ok_or_else(|| "Task not found after update".into())
     }
 
-    /// Delete a task and, for worktree-backed tasks, remove its worktree. With
-    /// `force`, a worktree carrying uncommitted work is discarded; without it,
-    /// such a worktree is preserved and an error is returned so the caller can
-    /// confirm before destroying user work (see [`git_ops::remove_worktree`]).
-    pub fn delete_task(&self, task_id: i64, force: bool) -> Result<(), String> {
+    /// Resolve what deleting a task entails — its per-repo worktrees — as a fast
+    /// DB read, after guarding against a missing task or a running session. Pairs
+    /// with [`TaskDeletionPlan::remove_worktrees`] (off-lock git) and
+    /// [`delete_task_row`]; splitting it this way keeps the `git worktree remove`
+    /// subprocesses off the global DB lock (mirroring task creation). Uses the
+    /// DB-only load so it never shells out to `git status` under the lock.
+    pub fn plan_task_deletion(&self, task_id: i64) -> Result<TaskDeletionPlan, String> {
         let existing = self
-            .task_by_id(task_id)?
+            .task_by_id_db_only(task_id)?
             .ok_or_else(|| "Task not found".to_string())?;
         if existing.active_session_id.is_some() {
             return Err("Stop the running session before deleting this task".into());
         }
 
-        // Resolve every repo's worktree once (a cross-repo task has several).
-        let mut worktrees: Vec<(String, String)> = Vec::new();
+        let mut worktrees = Vec::new();
         for task_repo in &existing.task_repos {
             if let Some(worktree_path) = &task_repo.worktree_path {
                 let repo = self
                     .repo_by_id(task_repo.repo_id)?
                     .ok_or_else(|| "Repository not found".to_string())?;
-                worktrees.push((repo.path, worktree_path.clone()));
+                worktrees.push(TaskWorktree {
+                    repo_path: repo.path,
+                    branch_name: task_repo.branch_name.clone(),
+                    worktree_path: worktree_path.clone(),
+                });
             }
         }
+        Ok(TaskDeletionPlan { worktrees })
+    }
 
-        // Without `force`, refuse the whole delete if ANY worktree carries
-        // uncommitted work — so a multi-repo delete never discards one repo's
-        // changes before failing on another. The caller confirms, then retries
-        // with force (mirroring the single-repo dialog).
+    /// Delete the task row. `task_repos` rows cascade-delete with it. Run after the
+    /// worktrees are removed (off-lock) so a failed removal leaves the row intact.
+    pub fn delete_task_row(&self, task_id: i64) -> Result<(), String> {
+        self.conn
+            .execute("DELETE FROM tasks WHERE id = ?1", params![task_id])
+            .map_err(|error| format!("Failed to delete task: {error}"))?;
+        Ok(())
+    }
+
+    /// Delete a task and, for worktree-backed tasks, remove its worktree(s) — the
+    /// all-in-one convenience for the DB tests. Production code (the command
+    /// layer) drives [`plan_task_deletion`] + [`TaskDeletionPlan::remove_worktrees`]
+    /// + [`delete_task_row`] so the git runs off the lock.
+    #[cfg(test)]
+    pub fn delete_task(&self, task_id: i64, force: bool) -> Result<(), String> {
+        let plan = self.plan_task_deletion(task_id)?;
+        plan.remove_worktrees(force)?;
+        self.delete_task_row(task_id)
+    }
+}
+
+/// One repo's worktree to remove when deleting a task (a cross-repo task has
+/// several). Resolved by [`Database::plan_task_deletion`].
+struct TaskWorktree {
+    repo_path: String,
+    branch_name: Option<String>,
+    worktree_path: String,
+}
+
+/// The worktrees a task delete must remove, resolved up front so the `git`
+/// removal can run off the global DB lock (the slow part), with only the row
+/// delete locked afterwards.
+pub struct TaskDeletionPlan {
+    worktrees: Vec<TaskWorktree>,
+}
+
+impl TaskDeletionPlan {
+    /// Remove every worktree, off any lock. Without `force`, an **all-or-nothing**
+    /// dirtiness check runs first, so a multi-repo delete never removes one repo's
+    /// worktree before failing on another's uncommitted work (the caller then
+    /// confirms and retries with `force`). Each removal also prunes stale worktree
+    /// admin entries and cleans up the task branch when it's safe to (see
+    /// [`git_ops::cleanup_task_branch`]). A mid-loop failure for a non-dirty reason
+    /// leaves the row intact and self-heals on retry (gone worktrees are clean and
+    /// short-circuit).
+    pub fn remove_worktrees(&self, force: bool) -> Result<(), String> {
         if !force {
-            for (_, worktree_path) in &worktrees {
-                if git_ops::is_dirty(Path::new(worktree_path)) {
+            for worktree in &self.worktrees {
+                if git_ops::is_dirty(Path::new(&worktree.worktree_path)) {
                     return Err(git_ops::WORKTREE_HAS_CHANGES.to_string());
                 }
             }
         }
-        // If a removal fails mid-loop for a non-dirty reason (e.g. a locked
-        // worktree), earlier repos are already removed and the task row stays —
-        // the same multi-step filesystem/DB non-atomicity the single-repo path has.
-        // It self-heals: a retry sees the missing worktrees as clean (is_dirty
-        // false on a gone path) and remove_worktree short-circuits, completing the
-        // delete cleanly.
-        for (repo_path, worktree_path) in &worktrees {
-            git_ops::remove_worktree(Path::new(repo_path), Path::new(worktree_path), force)?;
+        for worktree in &self.worktrees {
+            let repo_path = Path::new(&worktree.repo_path);
+            git_ops::remove_worktree(repo_path, Path::new(&worktree.worktree_path), force)?;
+            git_ops::prune_worktrees(repo_path);
+            if let Some(branch) = &worktree.branch_name {
+                git_ops::cleanup_task_branch(repo_path, branch, force);
+            }
         }
-
-        // task_repos rows cascade-delete with the task row.
-        self.conn
-            .execute("DELETE FROM tasks WHERE id = ?1", params![task_id])
-            .map_err(|error| format!("Failed to delete task: {error}"))?;
         Ok(())
     }
 }

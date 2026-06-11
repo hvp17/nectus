@@ -459,6 +459,47 @@ pub fn delete_branch(repo_path: &Path, branch_name: &str) -> Result<(), String> 
     Err(command_error(&output, "git branch -D failed"))
 }
 
+/// Prune stale worktree admin entries (`git worktree prune`). After a worktree
+/// directory is gone — whether `git worktree remove` cleaned it or it was deleted
+/// out-of-band — git can leave a dangling entry under `.git/worktrees/<name>`
+/// that clutters `git worktree list` and can block re-creating a same-named path.
+/// Best-effort: a prune failure never blocks task deletion.
+pub fn prune_worktrees(repo_path: &Path) {
+    let _ = git_command(repo_path).args(["worktree", "prune"]).output();
+}
+
+/// Whether every commit on `branch` is already present on some remote — i.e.
+/// deleting the local branch would lose nothing (it was pushed, e.g. for a PR, or
+/// has no unique commits). Used to clean up a finished task's branch *safely*.
+fn branch_fully_pushed(repo_path: &Path, branch: &str) -> bool {
+    git_output(
+        repo_path,
+        &["rev-list", "--count", branch, "--not", "--remotes"],
+        "Failed to count unpushed commits",
+    )
+    .ok()
+    .and_then(|output| {
+        String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .parse::<u64>()
+            .ok()
+    })
+    .map(|unpushed| unpushed == 0)
+    .unwrap_or(false)
+}
+
+/// Best-effort cleanup of a task's branch when its worktree is removed, so
+/// `task-*` branches don't pile up. Never fails the caller and never discards
+/// work silently: with `force` (the user already confirmed discarding the task's
+/// work) the branch is force-deleted; otherwise it's deleted only when
+/// [`branch_fully_pushed`] confirms no unique local commits would be lost. A
+/// branch with unpushed commits and no force is left in place.
+pub fn cleanup_task_branch(repo_path: &Path, branch: &str, force: bool) {
+    if force || branch_fully_pushed(repo_path, branch) {
+        let _ = delete_branch(repo_path, branch);
+    }
+}
+
 /// Max time to wait for `git status` before treating a worktree as clean. A
 /// healthy status returns well under this even on a large repo; the bound exists
 /// only so a pathological status — e.g. a `core.fsmonitor`/Watchman hook that
@@ -696,6 +737,61 @@ mod tests {
             fs::read_to_string(worktree_path.join("value.txt")).unwrap(),
             "remote-latest\n"
         );
+    }
+
+    fn branch_exists(repo: &Path, branch: &str) -> bool {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(["branch", "--list", branch])
+            .output()
+            .unwrap();
+        !String::from_utf8_lossy(&output.stdout).trim().is_empty()
+    }
+
+    #[test]
+    fn cleanup_task_branch_keeps_unpushed_work_but_removes_safe_or_forced() {
+        let dir = tempdir().unwrap();
+        let remote_dir = dir.path().join("remote.git");
+        let local_dir = dir.path().join("local");
+        Command::new("git")
+            .args(["init", "--bare", "--initial-branch=main"])
+            .arg(&remote_dir)
+            .output()
+            .unwrap();
+        init_repo(&local_dir);
+        run_git(
+            &local_dir,
+            &["remote", "add", "origin", &remote_dir.to_string_lossy()],
+        );
+        fs::write(local_dir.join("a.txt"), "base\n").unwrap();
+        run_git(&local_dir, &["add", "a.txt"]);
+        run_git(&local_dir, &["commit", "-m", "base"]);
+        run_git(&local_dir, &["push", "-u", "origin", "main"]);
+
+        // A branch pointing at the pushed tip has no unique commits → safe to drop
+        // even without force.
+        run_git(&local_dir, &["branch", "task-pushed", "origin/main"]);
+        assert!(branch_fully_pushed(&local_dir, "task-pushed"));
+        cleanup_task_branch(&local_dir, "task-pushed", false);
+        assert!(!branch_exists(&local_dir, "task-pushed"));
+
+        // A commit made locally but never pushed, captured on a task branch.
+        fs::write(local_dir.join("b.txt"), "wip\n").unwrap();
+        run_git(&local_dir, &["add", "b.txt"]);
+        run_git(&local_dir, &["commit", "-m", "unpushed work"]);
+        run_git(&local_dir, &["branch", "task-unpushed"]);
+
+        // Non-force must preserve the unpushed commit's branch...
+        assert!(!branch_fully_pushed(&local_dir, "task-unpushed"));
+        cleanup_task_branch(&local_dir, "task-unpushed", false);
+        assert!(
+            branch_exists(&local_dir, "task-unpushed"),
+            "a branch with unpushed commits must survive a non-forced cleanup"
+        );
+        // ...but a forced delete (user discarding the task) removes it.
+        cleanup_task_branch(&local_dir, "task-unpushed", true);
+        assert!(!branch_exists(&local_dir, "task-unpushed"));
     }
 
     fn commit_repo_with_worktree(dir: &Path, worktree_name: &str) -> PathBuf {
