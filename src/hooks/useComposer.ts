@@ -94,6 +94,7 @@ export function useComposer() {
       const agentProfileId = store.newTaskAgentProfileId;
       const repoIds = store.newTaskRepoIds;
       const workspaceId = store.newTaskWorkspaceId;
+      const jiraLink = store.pendingJiraLink;
       const crossRepo = repoIds.length >= 2;
       await run(
         async () => {
@@ -104,9 +105,20 @@ export function useComposer() {
                 ? `Setting up ${repoIds.length} worktrees (fetching latest)…`
                 : "Setting up worktree (fetching latest)…",
             );
-            const task = crossRepo
+            let task = crossRepo
               ? await api.createCrossRepoTask({ workspaceId, repoIds, title, prompt, agentProfileId, branchName })
               : await api.createTask({ repoId: repoIds[0], title, prompt, agentProfileId, hasWorktree: true, branchName });
+            // The cross-repo create API takes no JIRA fields, so attach the linked
+            // story here (works for the single-repo workspace case too) — otherwise
+            // a task created from a JIRA story in Workspace mode loses its link.
+            if (jiraLink) {
+              task = await api.setTaskJiraLink({
+                taskId: task.id,
+                key: jiraLink.key,
+                summary: jiraLink.summary,
+                url: jiraLink.url,
+              });
+            }
             await finishCreate(
               task,
               repoIds[0],
