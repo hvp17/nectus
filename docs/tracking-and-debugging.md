@@ -161,7 +161,7 @@ Current commands:
 | `create_cross_repo_task` | Create a task spanning ≥2 repos (Increment B): one worktree per repo as siblings under a shared parent, a single agent rooted in the primary repo's worktree, and a `task_repos` row per repo. Rolls back created worktrees on failure. |
 | `list_tasks` | Load task summaries (each with its `taskRepos`) and per-repo dirty-state checks. |
 | `update_task_metadata` | Update title, status, or PR URL. |
-| `delete_task` | Delete a task and remove its worktree(s) when applicable. Takes a `force` flag: without it a worktree with uncommitted changes is preserved and an error is returned; with it (after the delete dialog's warning) the worktree is force-removed. The `git worktree remove` runs **off the DB lock** (plan under a brief lock → remove worktrees off-lock → delete the row under a brief lock). Each removal also runs `git worktree prune` (clears stale `.git/worktrees/<name>` admin entries, incl. when the dir was deleted out-of-band) and cleans up the orphaned `task-*` branch — force-deleted with `force`, otherwise deleted only when fully pushed so unpushed commits are never lost. |
+| `delete_task` | Delete a task and remove its worktree(s) when applicable. Takes a `force` flag: without it a worktree with uncommitted changes is preserved and an error is returned; with it (after the delete dialog's warning) the worktree is force-removed. The `git worktree remove` runs **off the DB lock** (plan under a brief lock → remove worktrees off-lock → delete the row under a brief lock). Each removal also runs `git worktree prune` (clears stale `.git/worktrees/<name>` admin entries, incl. when the dir was deleted out-of-band) and deletes the orphaned **local** `task-*` branch (`git branch -D`; the remote branch/PR is never touched). |
 | `list_workspaces` | Load workspaces, each with its ordered member `repoIds`. |
 | `create_workspace` | Create a named workspace from `name` + `repoIds` (membership written transactionally; duplicate ids dropped). |
 | `update_workspace` | Rename a workspace and replace its membership/order. |
@@ -479,12 +479,11 @@ lingers, this is the expected behavior and how it self-heals:
   was deleted out-of-band) are cleared by `git worktree prune`, run after each
   removal. If `git worktree list` still shows a ghost, run `git worktree prune` in
   the repo manually.
-- **`task-*` branches** are cleaned up only when safe: force-deleted on a forced
-  task delete (the user accepted discarding work), otherwise deleted only when
-  every commit is already on a remote (`branch_fully_pushed`). A branch with
-  **unpushed local commits** is deliberately **kept** on a non-forced delete so
-  work is never silently lost — those branches are expected to remain until you
-  force-delete the task or remove the branch yourself.
+- **`task-*` branches** are always deleted — but only the **local** branch
+  (`git branch -D`, best-effort). The remote branch and any open PR are never
+  touched, so pushed work is safe; only commits that were never pushed go with
+  the task. Best-effort: a missing or still-checked-out branch is tolerated and
+  never fails the delete.
 - A non-forced delete of a worktree with **uncommitted** changes is refused with
   `WORKTREE_HAS_CHANGES` (all-or-nothing across a cross-repo task's repos); the
   delete dialog then offers to force-remove.
