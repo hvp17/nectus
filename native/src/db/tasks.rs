@@ -101,7 +101,10 @@ impl Database {
             }
         };
 
-        self.task_by_id(task_id)?
+        tracing::info!(task_id, "create_task_record: task row + worktree committed");
+        // Load DB-only: a freshly created worktree is clean, and computing
+        // is_dirty here would run `git status` under the global DB lock.
+        self.task_by_id_db_only(task_id)?
             .ok_or_else(|| "Task was saved but could not be loaded".into())
     }
 
@@ -239,7 +242,9 @@ impl Database {
             }
         };
 
-        self.task_by_id(task_id)?
+        // Load DB-only: the new worktrees are clean, and computing is_dirty here
+        // would run `git status` per repo under the global DB lock.
+        self.task_by_id_db_only(task_id)?
             .ok_or_else(|| "Task was saved but could not be loaded".into())
     }
 
@@ -316,7 +321,13 @@ impl Database {
         Ok(tasks)
     }
 
-    pub fn task_by_id(&self, id: i64) -> Result<Option<TaskSummary>, String> {
+    /// Load a task and its per-repo state from SQLite only — **no `git status`**,
+    /// so it runs no subprocess and is safe to call while holding the DB lock.
+    /// `is_dirty` stays `false`; compute it off-lock when actually needed (the
+    /// bulk list does, in `list_tasks`). Used by the create and session-start
+    /// paths, which hold the lock and don't need dirtiness — a brand-new worktree
+    /// is clean anyway, and a session launch never reads `is_dirty`.
+    pub fn task_by_id_db_only(&self, id: i64) -> Result<Option<TaskSummary>, String> {
         let row = self
             .conn
             .query_row(
@@ -341,13 +352,21 @@ impl Database {
         let Some(mut task) = row else {
             return Ok(None);
         };
+        task.task_repos = self.task_repos_for(id)?;
+        Ok(Some(task))
+    }
+
+    pub fn task_by_id(&self, id: i64) -> Result<Option<TaskSummary>, String> {
+        let Some(mut task) = self.task_by_id_db_only(id)? else {
+            return Ok(None);
+        };
         // A single task read tolerates the per-worktree `git status` cost inline
-        // (the bulk list defers it off-lock); compute it for the task and each repo.
+        // (the bulk list defers it off-lock); compute it for the task and each
+        // repo. `is_dirty` is time-bounded, so a stuck status can't hang here.
         task.is_dirty = task
             .worktree_path
             .as_ref()
             .is_some_and(|path| git_ops::is_dirty(Path::new(path)));
-        task.task_repos = self.task_repos_for(id)?;
         for task_repo in task.task_repos.iter_mut() {
             task_repo.is_dirty = task_repo
                 .worktree_path

@@ -1,6 +1,8 @@
 use crate::process_util::command_error;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::mpsc;
+use std::time::Duration;
 
 mod diff;
 pub use diff::*;
@@ -419,14 +421,41 @@ pub fn delete_branch(repo_path: &Path, branch_name: &str) -> Result<(), String> 
     Err(command_error(&output, "git branch -D failed"))
 }
 
+/// Max time to wait for `git status` before treating a worktree as clean. A
+/// healthy status returns well under this even on a large repo; the bound exists
+/// only so a pathological status — e.g. a `core.fsmonitor`/Watchman hook that
+/// hangs in a GUI-launched app's minimal environment — can never wedge the
+/// caller, and crucially never the global DB lock.
+const IS_DIRTY_TIMEOUT: Duration = Duration::from_secs(10);
+
 pub fn is_dirty(path: &Path) -> bool {
-    git_output(
-        path,
-        &["status", "--porcelain"],
-        "Failed to check worktree status",
-    )
-    .map(|output| !output.stdout.is_empty())
-    .unwrap_or(false)
+    // Run `git status` on a worker thread and wait at most IS_DIRTY_TIMEOUT. On
+    // timeout we report "clean" and let the worker finish (or die with the
+    // process) rather than block — a stuck git must never hold up the app. This
+    // is the safe default: the only place that acts on dirtiness, deleting a
+    // worktree, still has git's own `git worktree remove` refusal as a backstop.
+    let (tx, rx) = mpsc::channel();
+    let probe_path = path.to_path_buf();
+    std::thread::spawn(move || {
+        let dirty = git_output(
+            &probe_path,
+            &["status", "--porcelain"],
+            "Failed to check worktree status",
+        )
+        .map(|output| !output.stdout.is_empty())
+        .unwrap_or(false);
+        let _ = tx.send(dirty);
+    });
+    match rx.recv_timeout(IS_DIRTY_TIMEOUT) {
+        Ok(dirty) => dirty,
+        Err(_) => {
+            tracing::warn!(
+                path = %path.display(),
+                "git status timed out; treating worktree as clean (check core.fsmonitor)"
+            );
+            false
+        }
+    }
 }
 
 #[cfg(test)]

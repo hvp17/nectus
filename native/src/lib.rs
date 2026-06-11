@@ -62,8 +62,11 @@ fn task_session_context(
     task_id: i64,
     agent_profile_id: Option<i64>,
 ) -> AppResult<TaskSessionContext> {
+    // DB-only load: a session launch never reads is_dirty, and this runs under
+    // the global DB lock (and, for start/resume, on the main thread) — so it must
+    // not shell out to `git status`.
     let task = db
-        .task_by_id(task_id)?
+        .task_by_id_db_only(task_id)?
         .ok_or_else(|| AppError::from("Task not found"))?;
     let agent_profile_id = agent_profile_id
         .or(task.agent_profile_id)
