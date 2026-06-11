@@ -7,6 +7,90 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 impl Database {
+    /// Resolve the branch name and worktree path for a single-repo worktree task
+    /// **without creating the worktree or hitting the network** — a fast DB read
+    /// plus pure path logic. The command layer calls this under a brief lock,
+    /// releases the lock, runs the slow `git` worktree creation off-lock, then
+    /// re-locks only for [`insert_task`]. Returns the repo too (its path is needed
+    /// to create and, on failure, to clean up the worktree).
+    pub fn worktree_plan(
+        &self,
+        repo_id: i64,
+        branch_name: Option<String>,
+    ) -> Result<(Repo, String, PathBuf), String> {
+        let repo = self
+            .repo_by_id(repo_id)?
+            .ok_or_else(|| "Repository not found".to_string())?;
+        let branch_name = branch_name
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(generated_branch_name);
+        git_ops::validate_branch_name(&branch_name)?;
+        let worktree_path = PathBuf::from(&repo.default_worktree_root).join(&branch_name);
+        Ok((repo, branch_name, worktree_path))
+    }
+
+    /// Insert a task row and its primary `task_repos` row atomically, returning the
+    /// DB-only task (no `git status`). **Pure SQLite** — any worktree must already
+    /// exist — so it holds the DB lock only briefly, off the network-git path.
+    pub fn insert_task(
+        &self,
+        repo_id: i64,
+        title: String,
+        prompt: Option<String>,
+        agent_profile_id: Option<i64>,
+        branch_name: Option<&str>,
+        worktree_path: Option<&str>,
+    ) -> Result<TaskSummary, String> {
+        let has_worktree = branch_name.is_some();
+        let now = now();
+        let tx = self
+            .conn
+            .unchecked_transaction()
+            .map_err(|error| format!("Failed to begin task transaction: {error}"))?;
+        tx.execute(
+            "
+            INSERT INTO tasks
+              (repo_id, title, prompt, status, pr_url, agent_profile_id, active_session_id, last_session_id, last_session_agent, last_session_cwd, last_session_label, has_worktree, branch_name, worktree_path, created_at, updated_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15)
+            ",
+            params![
+                repo_id,
+                title,
+                prompt,
+                TaskStatus::Planned.as_str(),
+                None::<String>,
+                agent_profile_id,
+                None::<String>,
+                None::<String>,
+                None::<String>,
+                None::<String>,
+                None::<String>,
+                has_worktree,
+                branch_name,
+                worktree_path,
+                now
+            ],
+        )
+        .map_err(|error| format!("Failed to save task: {error}"))?;
+        let task_id = tx.last_insert_rowid();
+        tx.execute(
+            "INSERT INTO task_repos (task_id, repo_id, branch_name, worktree_path, pr_url, position) VALUES (?1, ?2, ?3, ?4, NULL, 0)",
+            params![task_id, repo_id, branch_name, worktree_path],
+        )
+        .map_err(|error| format!("Failed to save task repo: {error}"))?;
+        tx.commit()
+            .map_err(|error| format!("Failed to commit task: {error}"))?;
+
+        self.task_by_id_db_only(task_id)?
+            .ok_or_else(|| "Task was saved but could not be loaded".into())
+    }
+
+    /// Create a single task, optionally worktree-backed, in one call — the
+    /// all-in-one convenience used by the DB tests. Production code (the command
+    /// layer) instead drives [`worktree_plan`] + [`insert_task`] directly so the
+    /// network `git` runs off the lock, so this is test-only.
+    #[cfg(test)]
     pub fn create_task_record(
         &self,
         repo_id: i64,
@@ -16,112 +100,40 @@ impl Database {
         has_worktree: bool,
         branch_name: Option<String>,
     ) -> Result<TaskSummary, String> {
-        let repo = self
-            .repo_by_id(repo_id)?
-            .ok_or_else(|| "Repository not found".to_string())?;
-
-        let (branch_name, worktree_path) = if has_worktree {
-            let branch_name = branch_name
-                .map(|value| value.trim().to_string())
-                .filter(|value| !value.is_empty())
-                .unwrap_or_else(generated_branch_name);
-            git_ops::validate_branch_name(&branch_name)?;
-            let worktree_path = PathBuf::from(&repo.default_worktree_root).join(&branch_name);
-            git_ops::create_worktree(
-                PathBuf::from(&repo.path).as_path(),
-                &worktree_path,
-                &branch_name,
-            )?;
-            (Some(branch_name), Some(worktree_path))
-        } else {
-            (None, None)
-        };
-
-        let now = now();
-        let worktree_path_value = worktree_path
-            .as_ref()
-            .map(|path| path.to_string_lossy().to_string());
-        // Insert the task and its single (primary) task_repos row atomically, so a
-        // task never exists without its per-repo working state.
-        let inserted = (|| -> Result<i64, String> {
-            let tx = self
-                .conn
-                .unchecked_transaction()
-                .map_err(|error| format!("Failed to begin task transaction: {error}"))?;
-            tx.execute(
-                "
-                INSERT INTO tasks
-                  (repo_id, title, prompt, status, pr_url, agent_profile_id, active_session_id, last_session_id, last_session_agent, last_session_cwd, last_session_label, has_worktree, branch_name, worktree_path, created_at, updated_at)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15)
-                ",
-                params![
-                    repo_id,
-                    title,
-                    prompt,
-                    TaskStatus::Planned.as_str(),
-                    None::<String>,
-                    agent_profile_id,
-                    None::<String>,
-                    None::<String>,
-                    None::<String>,
-                    None::<String>,
-                    None::<String>,
-                    has_worktree,
-                    branch_name,
-                    worktree_path_value,
-                    now
-                ],
-            )
-            .map_err(|error| format!("Failed to save task: {error}"))?;
-            let task_id = tx.last_insert_rowid();
-            tx.execute(
-                "INSERT INTO task_repos (task_id, repo_id, branch_name, worktree_path, pr_url, position) VALUES (?1, ?2, ?3, ?4, NULL, 0)",
-                params![task_id, repo_id, branch_name, worktree_path_value],
-            )
-            .map_err(|error| format!("Failed to save task repo: {error}"))?;
-            tx.commit()
-                .map_err(|error| format!("Failed to commit task: {error}"))?;
-            Ok(task_id)
-        })();
-
-        let task_id = match inserted {
-            Ok(task_id) => task_id,
-            Err(error) => {
-                // The worktree is created on disk before this INSERT, so a failure
-                // here (e.g. a re-used branch tripping the unique index) would leave
-                // an untracked worktree that delete_task can't see and that blocks
-                // every retry with "Worktree path already exists". Compensate by
-                // removing it — it is a freshly created, app-owned worktree, so the
-                // force removal discards no user work.
-                if let Some(path) = &worktree_path {
-                    let _ =
-                        git_ops::remove_worktree(PathBuf::from(&repo.path).as_path(), path, true);
-                }
-                return Err(error);
-            }
-        };
-
-        tracing::info!(task_id, "create_task_record: task row + worktree committed");
-        // Load DB-only: a freshly created worktree is clean, and computing
-        // is_dirty here would run `git status` under the global DB lock.
-        self.task_by_id_db_only(task_id)?
-            .ok_or_else(|| "Task was saved but could not be loaded".into())
+        if !has_worktree {
+            return self.insert_task(repo_id, title, prompt, agent_profile_id, None, None);
+        }
+        let (repo, branch_name, worktree_path) = self.worktree_plan(repo_id, branch_name)?;
+        git_ops::create_worktree(Path::new(&repo.path), &worktree_path, &branch_name)?;
+        let worktree_path_value = worktree_path.to_string_lossy().to_string();
+        // A re-used branch (unique-index trip) would leave an untracked worktree
+        // that delete_task can't see; compensate by force-removing the freshly
+        // created, app-owned worktree (discards no user work).
+        self.insert_task(
+            repo_id,
+            title,
+            prompt,
+            agent_profile_id,
+            Some(&branch_name),
+            Some(&worktree_path_value),
+        )
+        .inspect_err(|_| {
+            let _ = git_ops::remove_worktree(Path::new(&repo.path), &worktree_path, true);
+        })
     }
 
-    /// Create a task that spans several repos (Increment B). Each repo gets its own
-    /// worktree on a shared branch, laid out as siblings under one parent folder, so
-    /// a single agent session (rooted in the primary repo's worktree) can reach the
-    /// others at `../<repoName>`. The first repo is the primary. All worktrees are
-    /// created up front; any failure rolls back the ones already made.
-    pub fn create_cross_repo_task(
+    /// Resolve everything a cross-repo task needs — repos, sibling folder names,
+    /// the shared parent path, branch, and the layout-prefixed prompt — as a fast
+    /// DB read plus pure logic, **without creating any worktree**. The command
+    /// holds the lock only for this, then creates the worktrees off-lock via
+    /// [`CrossRepoPlan::create_worktrees`] before re-locking for
+    /// [`insert_cross_repo_task`].
+    pub fn cross_repo_plan(
         &self,
-        workspace_id: Option<i64>,
         repo_ids: Vec<i64>,
-        title: String,
-        prompt: Option<String>,
-        agent_profile_id: Option<i64>,
         branch_name: Option<String>,
-    ) -> Result<TaskSummary, String> {
+        prompt: Option<String>,
+    ) -> Result<CrossRepoPlan, String> {
         // Dedupe preserving order; a cross-repo task needs at least two distinct repos.
         let mut seen = HashSet::new();
         let repo_ids: Vec<i64> = repo_ids.into_iter().filter(|id| seen.insert(*id)).collect();
@@ -136,7 +148,6 @@ impl Database {
                     .ok_or_else(|| format!("Repository {repo_id} not found"))?,
             );
         }
-        let primary = &repos[0];
 
         let branch_name = branch_name
             .map(|value| value.trim().to_string())
@@ -148,137 +159,103 @@ impl Database {
         // `<…/.nectus/worktrees>/workspaces/<branch>/<folder>`. Each repo's worktree
         // is a sibling under it; the primary's is the session cwd. Sibling folders use
         // the repo name, disambiguated by id when two repos share a directory name.
-        let base = PathBuf::from(&primary.default_worktree_root);
+        let base = PathBuf::from(&repos[0].default_worktree_root);
         let parent = base
             .parent()
             .map(|root| root.join("workspaces"))
             .unwrap_or_else(|| base.join("workspaces"))
             .join(&branch_name);
-
         let folders = unique_worktree_folders(&repos);
-
-        // Create the per-repo worktrees concurrently — they are independent, each
-        // does its own network fetch, and serially they cost the *sum* of those
-        // fetches (tens of seconds across several large repos). Scoped threads let
-        // us borrow `repos`/`folders`/`branch_name` without cloning. On any
-        // failure, tear down whichever worktrees did get created.
-        let outcomes: Vec<(usize, Result<(), String>)> = std::thread::scope(|scope| {
-            let handles: Vec<_> = repos
-                .iter()
-                .enumerate()
-                .map(|(index, repo)| {
-                    let worktree_path = parent.join(&folders[index]);
-                    let branch_name = branch_name.as_str();
-                    scope.spawn(move || {
-                        (
-                            index,
-                            git_ops::create_worktree(
-                                Path::new(&repo.path),
-                                &worktree_path,
-                                branch_name,
-                            ),
-                        )
-                    })
-                })
-                .collect();
-            handles
-                .into_iter()
-                .map(|handle| handle.join().expect("worktree creation thread panicked"))
-                .collect()
-        });
-
-        let mut created: Vec<usize> = Vec::new();
-        let mut failure: Option<String> = None;
-        for (index, result) in outcomes {
-            match result {
-                Ok(()) => created.push(index),
-                Err(error) if failure.is_none() => {
-                    failure = Some(format!(
-                        "Failed to create worktree for {}: {error}",
-                        repos[index].name
-                    ));
-                }
-                Err(_) => {}
-            }
-        }
-        if let Some(error) = failure {
-            for created_index in &created {
-                let _ = git_ops::remove_worktree(
-                    Path::new(&repos[*created_index].path),
-                    &parent.join(&folders[*created_index]),
-                    true,
-                );
-            }
-            return Err(error);
-        }
-
         let prompt = Some(cross_repo_prompt(&folders, prompt));
-        let primary_worktree = parent.join(&folders[0]).to_string_lossy().to_string();
+
+        Ok(CrossRepoPlan {
+            repos,
+            folders,
+            parent,
+            branch_name,
+            prompt,
+        })
+    }
+
+    /// Insert the cross-repo task row plus one `task_repos` row per repo, all in
+    /// one transaction, and return the DB-only task. **Pure SQLite** — the
+    /// worktrees in `plan` must already exist (created off-lock).
+    pub fn insert_cross_repo_task(
+        &self,
+        plan: &CrossRepoPlan,
+        workspace_id: Option<i64>,
+        title: String,
+        agent_profile_id: Option<i64>,
+    ) -> Result<TaskSummary, String> {
+        let primary_worktree = plan.worktree_path(0).to_string_lossy().to_string();
         let now = now();
-
-        let inserted = (|| -> Result<i64, String> {
-            let tx = self
-                .conn
-                .unchecked_transaction()
-                .map_err(|error| format!("Failed to begin task transaction: {error}"))?;
+        let tx = self
+            .conn
+            .unchecked_transaction()
+            .map_err(|error| format!("Failed to begin task transaction: {error}"))?;
+        tx.execute(
+            "
+            INSERT INTO tasks
+              (repo_id, workspace_id, title, prompt, status, pr_url, agent_profile_id, active_session_id, last_session_id, last_session_agent, last_session_cwd, last_session_label, has_worktree, branch_name, worktree_path, created_at, updated_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?16)
+            ",
+            params![
+                plan.repos[0].id,
+                workspace_id,
+                title,
+                plan.prompt.as_deref(),
+                TaskStatus::Planned.as_str(),
+                None::<String>,
+                agent_profile_id,
+                None::<String>,
+                None::<String>,
+                None::<String>,
+                None::<String>,
+                None::<String>,
+                true,
+                plan.branch_name.as_str(),
+                primary_worktree,
+                now
+            ],
+        )
+        .map_err(|error| format!("Failed to save task: {error}"))?;
+        let task_id = tx.last_insert_rowid();
+        for (index, repo) in plan.repos.iter().enumerate() {
+            let worktree_path = plan.worktree_path(index).to_string_lossy().to_string();
             tx.execute(
-                "
-                INSERT INTO tasks
-                  (repo_id, workspace_id, title, prompt, status, pr_url, agent_profile_id, active_session_id, last_session_id, last_session_agent, last_session_cwd, last_session_label, has_worktree, branch_name, worktree_path, created_at, updated_at)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?16)
-                ",
-                params![
-                    primary.id,
-                    workspace_id,
-                    title,
-                    prompt,
-                    TaskStatus::Planned.as_str(),
-                    None::<String>,
-                    agent_profile_id,
-                    None::<String>,
-                    None::<String>,
-                    None::<String>,
-                    None::<String>,
-                    None::<String>,
-                    true,
-                    branch_name,
-                    primary_worktree,
-                    now
-                ],
+                "INSERT INTO task_repos (task_id, repo_id, branch_name, worktree_path, pr_url, position) VALUES (?1, ?2, ?3, ?4, NULL, ?5)",
+                params![task_id, repo.id, plan.branch_name.as_str(), worktree_path, index as i64],
             )
-            .map_err(|error| format!("Failed to save task: {error}"))?;
-            let task_id = tx.last_insert_rowid();
-            for (index, repo) in repos.iter().enumerate() {
-                let worktree_path = parent.join(&folders[index]).to_string_lossy().to_string();
-                tx.execute(
-                    "INSERT INTO task_repos (task_id, repo_id, branch_name, worktree_path, pr_url, position) VALUES (?1, ?2, ?3, ?4, NULL, ?5)",
-                    params![task_id, repo.id, branch_name, worktree_path, index as i64],
-                )
-                .map_err(|error| format!("Failed to save task repo: {error}"))?;
-            }
-            tx.commit()
-                .map_err(|error| format!("Failed to commit task: {error}"))?;
-            Ok(task_id)
-        })();
+            .map_err(|error| format!("Failed to save task repo: {error}"))?;
+        }
+        tx.commit()
+            .map_err(|error| format!("Failed to commit task: {error}"))?;
 
-        let task_id = match inserted {
-            Ok(task_id) => task_id,
-            Err(error) => {
-                for (index, repo) in repos.iter().enumerate() {
-                    let _ = git_ops::remove_worktree(
-                        Path::new(&repo.path),
-                        &parent.join(&folders[index]),
-                        true,
-                    );
-                }
-                return Err(error);
-            }
-        };
-
-        // Load DB-only: the new worktrees are clean, and computing is_dirty here
-        // would run `git status` per repo under the global DB lock.
         self.task_by_id_db_only(task_id)?
             .ok_or_else(|| "Task was saved but could not be loaded".into())
+    }
+
+    /// Create a task that spans several repos (Increment B): a worktree per repo
+    /// on a shared branch, laid out as siblings under one parent so a single agent
+    /// session (rooted in the primary repo's worktree) can reach the others at
+    /// `../<repoName>`. Built from [`cross_repo_plan`] +
+    /// [`CrossRepoPlan::create_worktrees`] + [`insert_cross_repo_task`]; the
+    /// command layer drives those directly so the network `git` runs off the lock,
+    /// so this all-in-one wrapper is test-only.
+    #[cfg(test)]
+    pub fn create_cross_repo_task(
+        &self,
+        workspace_id: Option<i64>,
+        repo_ids: Vec<i64>,
+        title: String,
+        prompt: Option<String>,
+        agent_profile_id: Option<i64>,
+        branch_name: Option<String>,
+    ) -> Result<TaskSummary, String> {
+        let plan = self.cross_repo_plan(repo_ids, branch_name, prompt)?;
+        plan.create_worktrees()?;
+        self.insert_cross_repo_task(&plan, workspace_id, title, agent_profile_id)
+            .inspect_err(|_| plan.teardown_worktrees())
     }
 
     /// Load a task's per-repo working state (Increment B), in display order, each
@@ -513,6 +490,98 @@ impl Database {
             .execute("DELETE FROM tasks WHERE id = ?1", params![task_id])
             .map_err(|error| format!("Failed to delete task: {error}"))?;
         Ok(())
+    }
+}
+
+/// The fully-resolved layout for a cross-repo task — repos, sibling folder names,
+/// the shared parent path, the branch, and the layout-prefixed prompt — computed
+/// before any git runs. Created by [`Database::cross_repo_plan`]; the worktree
+/// creation/teardown it owns touches only the filesystem and `git`, never the DB,
+/// so it runs off the global lock.
+pub struct CrossRepoPlan {
+    pub repos: Vec<Repo>,
+    folders: Vec<String>,
+    parent: PathBuf,
+    pub branch_name: String,
+    prompt: Option<String>,
+}
+
+impl CrossRepoPlan {
+    /// The worktree path for the repo at `index` (sibling folder under `parent`).
+    pub fn worktree_path(&self, index: usize) -> PathBuf {
+        self.parent.join(&self.folders[index])
+    }
+
+    /// Create every repo's worktree **concurrently** (off any lock) — they are
+    /// independent and each does its own network fetch, so serial creation costs
+    /// the sum of those fetches (tens of seconds across several large repos). On
+    /// any failure, tears down the worktrees that did get created and returns the
+    /// first error.
+    pub fn create_worktrees(&self) -> Result<(), String> {
+        let outcomes: Vec<(usize, Result<(), String>)> = std::thread::scope(|scope| {
+            let handles: Vec<_> = self
+                .repos
+                .iter()
+                .enumerate()
+                .map(|(index, repo)| {
+                    let worktree_path = self.worktree_path(index);
+                    let branch_name = self.branch_name.as_str();
+                    scope.spawn(move || {
+                        (
+                            index,
+                            git_ops::create_worktree(
+                                Path::new(&repo.path),
+                                &worktree_path,
+                                branch_name,
+                            ),
+                        )
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .map(|handle| handle.join().expect("worktree creation thread panicked"))
+                .collect()
+        });
+
+        let mut created: Vec<usize> = Vec::new();
+        let mut failure: Option<String> = None;
+        for (index, result) in outcomes {
+            match result {
+                Ok(()) => created.push(index),
+                Err(error) if failure.is_none() => {
+                    failure = Some(format!(
+                        "Failed to create worktree for {}: {error}",
+                        self.repos[index].name
+                    ));
+                }
+                Err(_) => {}
+            }
+        }
+        if let Some(error) = failure {
+            for &index in &created {
+                let _ = git_ops::remove_worktree(
+                    Path::new(&self.repos[index].path),
+                    &self.worktree_path(index),
+                    true,
+                );
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    /// Force-remove every repo's worktree. Used to compensate when the DB insert
+    /// fails after the worktrees were created — they are fresh, app-owned, and
+    /// empty, so this discards no user work.
+    pub fn teardown_worktrees(&self) {
+        for index in 0..self.repos.len() {
+            let _ = git_ops::remove_worktree(
+                Path::new(&self.repos[index].path),
+                &self.worktree_path(index),
+                true,
+            );
+        }
     }
 }
 

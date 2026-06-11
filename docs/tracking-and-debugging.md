@@ -15,7 +15,13 @@ For the connected layer model and the "where does X live?" table, see
 
 The desktop app opens a local SQLite database named `nectus.sqlite3` inside the
 Tauri app data directory. The app logs the resolved app data directory during
-startup.
+startup. The on-disk connection runs in **WAL** journal mode with
+`synchronous=NORMAL` and a 5s `busy_timeout` (`configure_pragmas` in
+`native/src/db/mod.rs`) — cheaper commits and reads that don't block the writer,
+durable across app crashes. All access goes through one connection behind a
+`parking_lot::Mutex`; the discipline is to **never hold that lock across a
+subprocess (git/gh) or network call** — slow work (e.g. worktree-creation
+`git fetch`) is done off the lock, and only the fast SQLite write is locked.
 
 Core tables:
 
@@ -380,8 +386,9 @@ Useful backend log messages include:
 - Opening the app data directory.
 - Starting an agent session with task id, session id, agent, cwd, and resume
   flag.
-- Task creation acquiring/holding the DB lock, and each timed `create_worktree`
-  network step (so a hang during worktree creation is visible in the log).
+- Task creation creating the worktree off-lock and then inserting the row under a
+  brief lock, plus each timed `create_worktree` network step (so a slow/stuck
+  worktree creation is visible in the log without freezing the rest of the app).
 - Watching a Codex session log.
 - Failure to emit session or review events.
 - Review start, recorded verdict, reviewer output, and review-loop errors.
