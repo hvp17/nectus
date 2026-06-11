@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { ArrowLeft, GitBranch, Layers, Play, TerminalSquare } from "lucide-react";
+import { ArrowLeft, GitBranch, Layers, Loader2, Play, TerminalSquare } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Field, FieldDescription, FieldLabel } from "./ui/field";
@@ -17,6 +17,8 @@ interface CreateTaskComposerProps {
   agentProfiles: AgentProfile[];
   repos: Repo[];
   busy: boolean;
+  /** Live progress while creating/launching (null when idle); shown by the submit row. */
+  creationStatus?: string | null;
 
   newTaskTitle: string;
   setNewTaskTitle: (val: string) => void;
@@ -54,6 +56,7 @@ export function CreateTaskComposer({
   agentProfiles,
   repos,
   busy,
+  creationStatus,
   newTaskTitle,
   setNewTaskTitle,
   newTaskPrompt,
@@ -395,19 +398,35 @@ export function CreateTaskComposer({
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
-            <TerminalSquare className="size-3.5" aria-hidden="true" />
-            {crossRepoMode || newTaskHasWorktree
-              ? "Creates the worktree and starts the agent immediately."
-              : "Starts the agent in the project immediately."}
+          <span
+            className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground"
+            aria-live="polite"
+          >
+            {creationStatus ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin text-primary" aria-hidden="true" />
+                <span className="font-medium text-foreground">{creationStatus}</span>
+              </>
+            ) : (
+              <>
+                <TerminalSquare className="size-3.5" aria-hidden="true" />
+                {crossRepoMode || newTaskHasWorktree
+                  ? "Creates the worktree and starts the agent immediately."
+                  : "Starts the agent in the project immediately."}
+              </>
+            )}
           </span>
           <span className="flex-1" />
-          <Button type="button" variant="ghost" onClick={onClose}>
+          <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
           <Button type="submit" disabled={submitDisabled} className="gap-2">
-            <Play data-icon="inline-start" fill="currentColor" />
-            Create &amp; Start
+            {busy ? (
+              <Loader2 data-icon="inline-start" className="animate-spin" aria-hidden="true" />
+            ) : (
+              <Play data-icon="inline-start" fill="currentColor" />
+            )}
+            {busy ? "Working…" : "Create & Start"}
           </Button>
         </div>
       </form>

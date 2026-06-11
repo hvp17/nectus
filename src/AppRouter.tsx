@@ -693,6 +693,7 @@ function ComposerOverlay({ onClose }: { onClose: () => void }) {
   const workspaces = useWorkspacesQuery().data ?? EMPTY_WORKSPACES;
   const settings = useSettingsQuery().data;
   const busy = useAppStore((s) => s.busy);
+  const taskCreationStatus = useAppStore((s) => s.taskCreationStatus);
   const newTaskTitle = useAppStore((s) => s.newTaskTitle);
   const setNewTaskTitle = useAppStore((s) => s.setNewTaskTitle);
   const newTaskPrompt = useAppStore((s) => s.newTaskPrompt);
@@ -720,6 +721,7 @@ function ComposerOverlay({ onClose }: { onClose: () => void }) {
       agentProfiles={agentProfiles}
       repos={repos}
       busy={busy}
+      creationStatus={taskCreationStatus}
       newTaskTitle={newTaskTitle}
       setNewTaskTitle={setNewTaskTitle}
       newTaskPrompt={newTaskPrompt}

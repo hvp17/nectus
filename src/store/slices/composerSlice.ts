@@ -25,6 +25,10 @@ export interface ComposerSlice {
   /** Workspace the composer targets; undefined = single-repo (Project) mode. */
   newTaskWorkspaceId?: number;
   pendingJiraLink: PendingJiraLink | null;
+  /** Live status while a task is being created/launched (null when idle). Drives
+   *  the composer's progress indicator so the user sees what's happening during
+   *  the worktree fetch + agent launch instead of a blank spinner. */
+  taskCreationStatus: string | null;
   setCreateTaskOpen: (open: boolean) => void;
   setNewTaskTitle: Dispatch<SetStateAction<string>>;
   setNewTaskPrompt: Dispatch<SetStateAction<string>>;
@@ -35,6 +39,7 @@ export interface ComposerSlice {
   setNewTaskRepoIds: Dispatch<SetStateAction<number[]>>;
   setNewTaskWorkspaceId: Dispatch<SetStateAction<number | undefined>>;
   setPendingJiraLink: (link: PendingJiraLink | null) => void;
+  setTaskCreationStatus: (status: string | null) => void;
   /** Reset the draft to defaults (keeping the composer open). Selects `agentProfileId`. */
   resetComposer: (agentProfileId?: number) => void;
   /** Close the composer and reset the draft in one step. */
@@ -56,8 +61,10 @@ const freshDraft = (agentProfileId?: number) => ({
 
 export const createComposerSlice: StateCreator<AppState, [], [], ComposerSlice> = (set) => ({
   createTaskOpen: false,
+  taskCreationStatus: null,
   ...freshDraft(undefined),
   setCreateTaskOpen: (open) => set({ createTaskOpen: open }),
+  setTaskCreationStatus: (status) => set({ taskCreationStatus: status }),
   setNewTaskTitle: (value) => set((s) => ({ newTaskTitle: applyUpdate(value, s.newTaskTitle) })),
   setNewTaskPrompt: (value) => set((s) => ({ newTaskPrompt: applyUpdate(value, s.newTaskPrompt) })),
   setNewTaskBranchName: (value) => set((s) => ({ newTaskBranchName: applyUpdate(value, s.newTaskBranchName) })),
@@ -69,6 +76,7 @@ export const createComposerSlice: StateCreator<AppState, [], [], ComposerSlice> 
   setNewTaskWorkspaceId: (value) =>
     set((s) => ({ newTaskWorkspaceId: applyUpdate(value, s.newTaskWorkspaceId) })),
   setPendingJiraLink: (link) => set({ pendingJiraLink: link }),
-  resetComposer: (agentProfileId) => set(freshDraft(agentProfileId)),
-  closeComposer: (agentProfileId) => set({ createTaskOpen: false, ...freshDraft(agentProfileId) }),
+  resetComposer: (agentProfileId) => set({ taskCreationStatus: null, ...freshDraft(agentProfileId) }),
+  closeComposer: (agentProfileId) =>
+    set({ createTaskOpen: false, taskCreationStatus: null, ...freshDraft(agentProfileId) }),
 });
