@@ -3,7 +3,7 @@ import type { StateCreator } from "zustand";
 import type { AppState } from "../appStore";
 import { applyUpdate } from "../setState";
 import type { TaskAttention } from "../../sessionAttention";
-import { isBrowserPreview, seedAttention, seedLiveLines } from "../../lib/browserSeed";
+import { isBrowserPreview, seedAttention, seedLiveLines } from "../../lib/browserPreview";
 
 /**
  * Live, push-driven runtime state fed by the Tauri session events: the latest

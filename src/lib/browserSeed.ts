@@ -24,12 +24,7 @@ import type {
   TaskSummary,
   Workspace,
 } from "../types";
-import type { TaskAttention } from "../sessionAttention";
 
-export const isBrowserPreview =
-  typeof window !== "undefined" &&
-  !("__TAURI_INTERNALS__" in window) &&
-  import.meta.env.MODE !== "test";
 
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 
@@ -147,27 +142,11 @@ export const seedTasks: TaskSummary[] = [
   }),
 ];
 
-export const seedAttention: TaskAttention[] = [
-  {
-    taskId: 1, kind: "needs_input", title: "Fix OAuth redirect loop on sign-in", agentName: "Claude Sonnet",
-    reason: "awaiting_decision", prompt: "Fix verified — 6 tests pass. Open a pull request?", updatedAt: ago(4),
-  },
-  {
-    taskId: 2, kind: "needs_input", title: "Add JIRA board status filters", agentName: "Codex",
-    reason: "awaiting_decision", prompt: "Should resolved issues be hidden by default in the board view?", updatedAt: ago(1),
-  },
-];
 
 /**
  * Live activity lines for running seed tasks (those with a `Live` badge), so the
  * board and Mission Control show the "what it's doing" stream in browser preview.
  */
-export const seedLiveLines: Record<number, string> = {
-  3: "Writing the file-sink adapter in src/sinks/file.ts",
-  4: "Running pnpm test — 12 passed, 1 pending",
-  5: "Auditing --muted-foreground contrast on dark surfaces",
-  7: "Reviewing the diff against feat/json-status",
-};
 
 export const seedSettings: AppSettings = {
   defaultAgentProfileId: 1,
