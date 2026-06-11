@@ -2,7 +2,7 @@ use super::rows::{rows, workspace_from_row};
 use super::{now, Database};
 use crate::models::Workspace;
 use rusqlite::{params, Connection, OptionalExtension};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 impl Database {
     pub fn list_workspaces(&self) -> Result<Vec<Workspace>, String> {
@@ -16,8 +16,13 @@ impl Database {
             stmt.query_map([], workspace_from_row)
                 .map_err(|error| error.to_string())?,
         )?;
+        // One bulk query for every workspace's membership instead of one query
+        // per workspace (mirrors `task_repos_by_task`).
+        let mut repo_ids_by_workspace = self.workspace_repo_ids_by_workspace()?;
         for workspace in workspaces.iter_mut() {
-            workspace.repo_ids = self.workspace_repo_ids(workspace.id)?;
+            workspace.repo_ids = repo_ids_by_workspace
+                .remove(&workspace.id)
+                .unwrap_or_default();
         }
         Ok(workspaces)
     }
@@ -159,6 +164,27 @@ impl Database {
                 .map_err(|error| error.to_string())?,
         );
         result
+    }
+
+    /// Load every workspace's member repo ids in one query, grouped by workspace
+    /// id — the bulk companion to [`workspace_repo_ids`] used by
+    /// [`list_workspaces`].
+    fn workspace_repo_ids_by_workspace(&self) -> Result<HashMap<i64, Vec<i64>>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT workspace_id, repo_id FROM workspace_repos ORDER BY workspace_id, position",
+            )
+            .map_err(|error| error.to_string())?;
+        let mapped = stmt
+            .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)))
+            .map_err(|error| error.to_string())?;
+        let mut grouped: HashMap<i64, Vec<i64>> = HashMap::new();
+        for entry in mapped {
+            let (workspace_id, repo_id) = entry.map_err(|error| error.to_string())?;
+            grouped.entry(workspace_id).or_default().push(repo_id);
+        }
+        Ok(grouped)
     }
 }
 

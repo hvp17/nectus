@@ -183,8 +183,24 @@ fn collect_codex_session_ids(
     started_at: chrono::DateTime<chrono::FixedOffset>,
     best: &mut Option<(chrono::DateTime<chrono::FixedOffset>, CodexSessionMetadata)>,
 ) {
+    // Cheap prune before any open/read: the rollout we're looking for is created
+    // after this session launched, and historical rollouts are no longer being
+    // written, so a file last modified before the session started can't be it.
+    // Without this gate every 500ms discovery poll re-opens and re-parses the
+    // first line of every historical rollout under `~/.codex/sessions`. The 60s
+    // slack absorbs mtime granularity and minor clock discrepancies; a file with
+    // unreadable metadata falls through to the full content check.
+    let mtime_cutoff = (started_at - chrono::Duration::seconds(60)).with_timezone(&chrono::Utc);
     for entry in WalkDir::new(dir).into_iter().filter_map(Result::ok) {
         if !entry.file_type().is_file() {
+            continue;
+        }
+        if entry
+            .metadata()
+            .ok()
+            .and_then(|metadata| metadata.modified().ok())
+            .is_some_and(|modified| chrono::DateTime::<chrono::Utc>::from(modified) < mtime_cutoff)
+        {
             continue;
         }
         let path = entry.into_path();
