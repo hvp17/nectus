@@ -1,8 +1,24 @@
 import { useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "../queries/keys";
 import type { Repo, Workspace } from "../types";
+
+/** Optimistically flip `collapsed` on the cached row, persist, revert on failure. */
+function setCollapsed<T extends { id: number; collapsed: boolean }>(
+  queryClient: QueryClient,
+  key: QueryKey,
+  persist: (id: number, collapsed: boolean) => Promise<void>,
+  id: number,
+  collapsed: boolean,
+) {
+  const write = (value: boolean) =>
+    queryClient.setQueryData<T[]>(key, (prev) =>
+      prev?.map((row) => (row.id === id ? { ...row, collapsed: value } : row)),
+    );
+  write(collapsed);
+  void persist(id, collapsed).catch(() => write(!collapsed));
+}
 
 /**
  * Toggle the sidebar fold of a project's / workspace's nested in-flight agent
@@ -14,28 +30,20 @@ export function useSidebarCollapse() {
   const queryClient = useQueryClient();
 
   const setRepoCollapsed = useCallback(
-    (id: number, collapsed: boolean) => {
-      const write = (value: boolean) =>
-        queryClient.setQueryData<Repo[]>(queryKeys.repos(), (prev) =>
-          prev?.map((repo) => (repo.id === id ? { ...repo, collapsed: value } : repo)),
-        );
-      write(collapsed);
-      void api.setRepoCollapsed(id, collapsed).catch(() => write(!collapsed));
-    },
+    (id: number, collapsed: boolean) =>
+      setCollapsed<Repo>(queryClient, queryKeys.repos(), api.setRepoCollapsed, id, collapsed),
     [queryClient],
   );
 
   const setWorkspaceCollapsed = useCallback(
-    (id: number, collapsed: boolean) => {
-      const write = (value: boolean) =>
-        queryClient.setQueryData<Workspace[]>(queryKeys.workspaces(), (prev) =>
-          prev?.map((workspace) =>
-            workspace.id === id ? { ...workspace, collapsed: value } : workspace,
-          ),
-        );
-      write(collapsed);
-      void api.setWorkspaceCollapsed(id, collapsed).catch(() => write(!collapsed));
-    },
+    (id: number, collapsed: boolean) =>
+      setCollapsed<Workspace>(
+        queryClient,
+        queryKeys.workspaces(),
+        api.setWorkspaceCollapsed,
+        id,
+        collapsed,
+      ),
     [queryClient],
   );
 
