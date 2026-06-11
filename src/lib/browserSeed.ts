@@ -65,6 +65,7 @@ function task(partial: Partial<TaskSummary> & Pick<TaskSummary, "id" | "repoId" 
     hasWorktree: true,
     branchName: null,
     worktreePath: null,
+    archived: false,
     isDirty: false,
     activeSessionId: null,
     lastSessionId: null,

@@ -78,6 +78,7 @@ pub(super) fn task_from_row(row: &Row<'_>) -> rusqlite::Result<TaskSummary> {
         last_session_label: row.get(16)?,
         review_loop_status: row.get(19)?,
         attention: row.get(24)?,
+        archived: row.get(25)?,
         jira_issue_key: row.get(20)?,
         jira_issue_summary: row.get(21)?,
         jira_issue_url: row.get(22)?,

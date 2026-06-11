@@ -239,14 +239,16 @@ async fn create_cross_repo_task(
     .await
 }
 
+/// `archived = true` lists the archive view instead of the live boards.
 #[tauri::command]
 async fn list_tasks(
     repo_id: Option<i64>,
+    archived: Option<bool>,
     state: State<'_, AppState>,
 ) -> AppResult<Vec<TaskSummary>> {
     let db = state.db.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<Vec<TaskSummary>, String> {
-        let mut tasks = db.lock().list_tasks(repo_id)?;
+        let mut tasks = db.lock().list_tasks(repo_id, archived.unwrap_or(false))?;
         // Compute worktree dirtiness off the DB lock: one `git status` per
         // worktree-backed repo, which under the global mutex would otherwise
         // serialize every concurrent command behind the whole board load. For a
@@ -289,6 +291,22 @@ async fn update_task_metadata(
         let mut task = db
             .lock()
             .update_task_metadata(task_id, title, status, pr_url)?;
+        fill_task_dirtiness(&mut task);
+        Ok(task)
+    })
+    .await
+}
+
+/// Archive (or restore) a task: hidden from boards, kept on disk until deleted.
+#[tauri::command]
+async fn set_task_archived(
+    task_id: i64,
+    archived: bool,
+    state: State<'_, AppState>,
+) -> AppResult<TaskSummary> {
+    let db = state.db.clone();
+    blocking("Failed to update task", move || {
+        let mut task = db.lock().set_task_archived(task_id, archived)?;
         fill_task_dirtiness(&mut task);
         Ok(task)
     })
@@ -1274,6 +1292,7 @@ pub fn run() {
             create_cross_repo_task,
             list_tasks,
             update_task_metadata,
+            set_task_archived,
             delete_task,
             list_workspaces,
             create_workspace,

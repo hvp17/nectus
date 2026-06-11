@@ -41,6 +41,7 @@ function task(overrides: Partial<TaskSummary>): TaskSummary {
     hasWorktree: false,
     branchName: null,
     worktreePath: null,
+    archived: false,
     isDirty: false,
     activeSessionId: null,
     lastSessionId: null,

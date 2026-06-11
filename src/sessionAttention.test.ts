@@ -23,6 +23,7 @@ const task: TaskSummary = {
   branchName: "feat/attention",
   worktreePath: "/tmp/attention",
   isDirty: true,
+  archived: false,
   activeSessionId: "session-21",
   lastSessionId: null,
   lastSessionAgent: null,

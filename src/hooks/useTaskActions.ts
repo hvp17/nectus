@@ -64,5 +64,26 @@ export function useTaskActions() {
     [run, setTasks],
   );
 
-  return { updateStatus, renameTask, setTaskJiraLink };
+  // Archive/restore moves the task between the live cache and the archive cache
+  // (separate query keys), so the boards and the archive view both update
+  // without a refetch.
+  const setArchived = useCallback(
+    (task: TaskSummary, archived: boolean) =>
+      run(async () => {
+        const updated = await api.setTaskArchived(task.id, archived);
+        setTasks((current) =>
+          archived ? current.filter((item) => item.id !== task.id) : [updated, ...current],
+        );
+        queryClient.setQueryData<TaskSummary[]>(queryKeys.tasksArchived(), (current = []) =>
+          archived ? [updated, ...current] : current.filter((item) => item.id !== task.id),
+        );
+        if (archived) {
+          setTaskAttention((current) => clearTaskAttention(current, task.id));
+        }
+        setMessage(archived ? `Archived ${task.title}` : `Restored ${task.title}`);
+      }),
+    [run, setTasks, queryClient, setTaskAttention, setMessage],
+  );
+
+  return { updateStatus, renameTask, setTaskJiraLink, setArchived };
 }

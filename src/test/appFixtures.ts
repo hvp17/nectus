@@ -26,6 +26,7 @@ export function appTask(overrides: Partial<TaskSummary> = {}): TaskSummary {
     branchName: null,
     worktreePath: null,
     isDirty: false,
+    archived: false,
     activeSessionId: null,
     lastSessionId: null,
     lastSessionAgent: null,

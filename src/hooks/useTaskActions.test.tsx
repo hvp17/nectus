@@ -36,6 +36,7 @@ const task: TaskSummary = {
   branchName: "feat/task-actions",
   worktreePath: "/tmp/nectus/task-actions",
   isDirty: false,
+  archived: false,
   activeSessionId: null,
   lastSessionId: null,
   lastSessionAgent: null,

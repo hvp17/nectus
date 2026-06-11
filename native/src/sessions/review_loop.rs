@@ -316,6 +316,7 @@ mod tests {
             last_session_label: None,
             review_loop_status: None,
             attention: None,
+            archived: false,
             jira_issue_key: None,
             jira_issue_summary: None,
             jira_issue_url: None,

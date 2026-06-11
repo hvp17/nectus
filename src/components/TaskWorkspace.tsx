@@ -62,6 +62,8 @@ export interface TaskWorkspaceProps {
   onClosePullRequest: (task: TaskSummary) => void;
   onUpdateStatus: (task: TaskSummary, status: TaskStatus) => void;
   onRenameTask: (task: TaskSummary, title: string) => void;
+  /** Archive the task (leaves the boards; worktree kept until deletion). */
+  onArchiveTask: (task: TaskSummary) => void;
   onDeleteTask: (task: TaskSummary) => void;
   onSetJiraLink: (
     taskId: number,
@@ -134,6 +136,7 @@ export function TaskWorkspace({
   onClosePullRequest,
   onUpdateStatus,
   onRenameTask,
+  onArchiveTask,
   onDeleteTask,
   onSetJiraLink,
   jiraSite,
@@ -414,6 +417,7 @@ export function TaskWorkspace({
         onSetPullRequestReady={onSetPullRequestReady}
         onClosePullRequest={onClosePullRequest}
         onSetJiraLink={onSetJiraLink}
+        onArchiveTask={onArchiveTask}
         onDeleteTask={onDeleteTask}
         onWatchReview={() => setStageTab("review")}
       />

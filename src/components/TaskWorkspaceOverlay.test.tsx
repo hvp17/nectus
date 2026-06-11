@@ -46,6 +46,7 @@ const reviewTask: TaskSummary = {
   branchName: "feat/x",
   worktreePath: "/tmp/wt/feat-x",
   isDirty: false,
+  archived: false,
   activeSessionId: null,
   lastSessionId: null,
   lastSessionAgent: null,

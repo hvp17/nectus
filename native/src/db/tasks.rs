@@ -280,7 +280,11 @@ impl Database {
         result
     }
 
-    pub fn list_tasks(&self, repo_id: Option<i64>) -> Result<Vec<TaskSummary>, String> {
+    /// List tasks, scoped to one visibility: `archived = false` is every live
+    /// board/list read; `archived = true` is the explicit archive view. Keeping
+    /// archived rows out of the default read also keeps them out of the
+    /// command layer's per-worktree `git status` pass.
+    pub fn list_tasks(&self, repo_id: Option<i64>, archived: bool) -> Result<Vec<TaskSummary>, String> {
         let sql = "
             SELECT t.id, t.repo_id, t.title, t.prompt, t.status, t.pr_url, t.agent_profile_id, a.name, a.agent_kind,
                    t.has_worktree, t.branch_name, t.worktree_path, t.active_session_id,
@@ -288,7 +292,7 @@ impl Database {
                    t.created_at, t.updated_at,
                    rl.status,
                    t.jira_issue_key, t.jira_issue_summary, t.jira_issue_url, t.workspace_id,
-                   t.attention
+                   t.attention, t.archived
             FROM tasks t
             LEFT JOIN agent_profiles a ON a.id = t.agent_profile_id
             LEFT JOIN review_loops rl ON rl.task_id = t.id
@@ -306,21 +310,23 @@ impl Database {
             let mut stmt = self
                 .conn
                 .prepare(&format!(
-                    "{sql} WHERE EXISTS (SELECT 1 FROM task_repos tr WHERE tr.task_id = t.id AND tr.repo_id = ?1) ORDER BY t.updated_at DESC"
+                    "{sql} WHERE t.archived = ?2 AND EXISTS (SELECT 1 FROM task_repos tr WHERE tr.task_id = t.id AND tr.repo_id = ?1) ORDER BY t.updated_at DESC"
                 ))
                 .map_err(|error| error.to_string())?;
             let mapped = rows(
-                stmt.query_map(params![repo_id], task_from_row)
+                stmt.query_map(params![repo_id, archived], task_from_row)
                     .map_err(|error| error.to_string())?,
             );
             mapped?
         } else {
             let mut stmt = self
                 .conn
-                .prepare(&format!("{sql} ORDER BY t.updated_at DESC"))
+                .prepare(&format!(
+                    "{sql} WHERE t.archived = ?1 ORDER BY t.updated_at DESC"
+                ))
                 .map_err(|error| error.to_string())?;
             let mapped = rows(
-                stmt.query_map([], task_from_row)
+                stmt.query_map(params![archived], task_from_row)
                     .map_err(|error| error.to_string())?,
             );
             mapped?
@@ -377,7 +383,7 @@ impl Database {
                        t.created_at, t.updated_at,
                        rl.status,
                        t.jira_issue_key, t.jira_issue_summary, t.jira_issue_url, t.workspace_id,
-                       t.attention
+                       t.attention, t.archived
                 FROM tasks t
                 LEFT JOIN agent_profiles a ON a.id = t.agent_profile_id
                 LEFT JOIN review_loops rl ON rl.task_id = t.id
@@ -421,6 +427,26 @@ impl Database {
             )
             .map_err(|error| format!("Failed to update task: {error}"))?;
 
+        self.task_by_id(task_id)?
+            .ok_or_else(|| "Task not found after update".into())
+    }
+
+    /// Archive (or restore) a task. Archived tasks vanish from the default
+    /// board/list reads but keep their row, worktree, and branch until deleted.
+    /// Archiving with a running session is refused — it would hide a live agent.
+    pub fn set_task_archived(&self, task_id: i64, archived: bool) -> Result<TaskSummary, String> {
+        let existing = self
+            .task_by_id(task_id)?
+            .ok_or_else(|| "Task not found".to_string())?;
+        if archived && existing.active_session_id.is_some() {
+            return Err("Stop the running session before archiving this task".into());
+        }
+        self.conn
+            .execute(
+                "UPDATE tasks SET archived = ?1, updated_at = ?2 WHERE id = ?3",
+                params![archived, now(), task_id],
+            )
+            .map_err(|error| format!("Failed to update task: {error}"))?;
         self.task_by_id(task_id)?
             .ok_or_else(|| "Task not found after update".into())
     }

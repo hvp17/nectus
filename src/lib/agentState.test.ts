@@ -17,6 +17,7 @@ function task(overrides: Partial<TaskSummary>): TaskSummary {
     hasWorktree: true,
     branchName: "feat/x",
     worktreePath: "/tmp/wt/x",
+    archived: false,
     isDirty: false,
     activeSessionId: null,
     lastSessionId: null,

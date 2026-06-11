@@ -70,6 +70,9 @@ pub struct TaskSummary {
     /// Backend-owned attention signal: `Some("needs_input")` when the agent is
     /// blocked on the user, else `None`. Persisted so it survives reload.
     pub attention: Option<String>,
+    /// Archived tasks are hidden from boards/lists by default; data and
+    /// worktrees are kept until deletion.
+    pub archived: bool,
     pub jira_issue_key: Option<String>,
     pub jira_issue_summary: Option<String>,
     pub jira_issue_url: Option<String>,

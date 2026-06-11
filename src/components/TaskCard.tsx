@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { AlertTriangle, Bot, CheckCircle2, GitBranch } from "lucide-react";
+import { AlertTriangle, ArchiveRestore, Bot, CheckCircle2, GitBranch } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { AgentLogo } from "./AgentBrand";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
@@ -22,6 +22,9 @@ interface TaskCardProps {
   isDeleting?: boolean;
   isDragging?: boolean;
   onSelect: (id: number) => void;
+  /** Archive view only: restore the task to the board. Cards with this set are
+   * read-only (no open/drag) — restore or delete are the two actions. */
+  onUnarchive?: (task: TaskSummary) => void;
   onDelete: (task: TaskSummary) => void;
   onDragStart: (taskId: number) => void;
   onPointerDragMove: (clientX: number, clientY: number) => void;
@@ -44,6 +47,7 @@ export const TaskCard = memo(function TaskCard({
   isDeleting = false,
   isDragging = false,
   onSelect,
+  onUnarchive,
   onDelete,
   onDragStart,
   onPointerDragMove,
@@ -84,11 +88,13 @@ export const TaskCard = memo(function TaskCard({
           event.stopPropagation();
           return;
         }
+        if (onUnarchive) return; // archived cards don't open the workspace
         onSelect(task.id);
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
+          if (onUnarchive) return;
           onSelect(task.id);
         }
       }}
@@ -114,7 +120,21 @@ export const TaskCard = memo(function TaskCard({
               Live
             </Badge>
           )}
-          <div className="opacity-0 transition-opacity group-hover:opacity-100">
+          <div className="flex items-center opacity-0 transition-opacity group-hover:opacity-100">
+            {onUnarchive && (
+              <button
+                type="button"
+                className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                aria-label={`Restore ${task.title}`}
+                disabled={busy}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onUnarchive(task);
+                }}
+              >
+                <ArchiveRestore size={13} aria-hidden="true" />
+              </button>
+            )}
             <TaskDeleteDialog
               task={task}
               busy={busy}

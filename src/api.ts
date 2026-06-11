@@ -105,10 +105,15 @@ export const api = {
     });
     return typeof selected === "string" ? selected : null;
   },
-  async listTasks(repoId?: number): Promise<TaskSummary[]> {
+  // `archived` switches to the archive view (default: live tasks only).
+  async listTasks(repoId?: number, archived = false): Promise<TaskSummary[]> {
     if (isBrowserPreview) return repoId ? seedTasks.filter((t) => t.repoId === repoId) : seedTasks;
     if (!isTauriRuntime()) return [];
-    return invoke("list_tasks", { repoId: repoId ?? null });
+    return invoke("list_tasks", { repoId: repoId ?? null, archived });
+  },
+  /** Archive (or restore) a task: hidden from boards, kept on disk until deleted. */
+  async setTaskArchived(taskId: number, archived: boolean): Promise<TaskSummary> {
+    return invoke("set_task_archived", { taskId, archived });
   },
   async createTask(input: {
     repoId: number;

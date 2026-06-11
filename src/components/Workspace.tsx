@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GitBranch, Plus, RefreshCw } from "lucide-react";
+import { Archive, GitBranch, Plus, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
 import { Skeleton } from "./ui/skeleton";
@@ -67,6 +67,10 @@ interface WorkspaceProps {
   deletingTaskIds: ReadonlySet<number>;
   busy: boolean;
   loading: boolean;
+  /** Archive mode: the board shows archived tasks (restore/delete only). */
+  showArchived: boolean;
+  onToggleArchived: () => void;
+  onUnarchiveTask: (task: TaskSummary) => void;
 }
 
 /** The board heading: a workspace name, else the selected repo, else a loading/empty hint. */
@@ -93,6 +97,9 @@ export function Workspace({
   deletingTaskIds,
   busy,
   loading,
+  showArchived,
+  onToggleArchived,
+  onUnarchiveTask,
 }: WorkspaceProps) {
   const [draggingTaskId, setDraggingTaskId] = useState<number | undefined>();
   const [dropTargetStatus, setDropTargetStatus] = useState<TaskStatus | undefined>();
@@ -153,9 +160,11 @@ export function Workspace({
       if (!task) return;
       if (task.status === status) return;
       if (busyRef.current) return;
+      // Archived tasks are read-only on the board: restore or delete only.
+      if (showArchived) return;
       onUpdateStatus(task, status);
     },
-    [clearTaskDrag, getTaskById, onUpdateStatus],
+    [clearTaskDrag, getTaskById, onUpdateStatus, showArchived],
   );
 
   const movePointerDroppedTask = useCallback(
@@ -179,14 +188,30 @@ export function Workspace({
           <h1 className="nx-h1">
             {boardHeaderTitle(workspaceName, selectedRepo, loading)}
           </h1>
-          <p className="nx-sub">Workflow board — Planned through Done, with live state on every card.</p>
+          <p className="nx-sub">
+            {showArchived
+              ? "Archived tasks — restore them to the board or delete them for good."
+              : "Workflow board — Planned through Done, with live state on every card."}
+          </p>
         </div>
         <div className="nx-head-actions">
+          {(selectedRepo || workspaceName) && (
+            <Button
+              variant={showArchived ? "secondary" : "outline"}
+              size="sm"
+              onClick={onToggleArchived}
+              aria-pressed={showArchived}
+              aria-label={showArchived ? "Back to the board" : "Show archived tasks"}
+            >
+              <Archive data-icon="inline-start" />
+              Archived
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={onRefresh} title="Refresh">
             <RefreshCw data-icon="inline-start" className={loading ? "animate-spin" : undefined} />
             Refresh
           </Button>
-          {(selectedRepo || workspaceName) && (
+          {(selectedRepo || workspaceName) && !showArchived && (
             <Button type="button" size="sm" onClick={onCreateTask} disabled={busy}>
               <Plus data-icon="inline-start" />
               New Task
@@ -237,6 +262,7 @@ export function Workspace({
                         isDeleting={deletingTaskIds.has(task.id)}
                         isDragging={draggingTaskId === task.id}
                         onSelect={onSelectTask}
+                        onUnarchive={showArchived ? onUnarchiveTask : undefined}
                         onDelete={onDeleteTask}
                         onDragStart={startTaskDrag}
                         onPointerDragMove={markPointerDragPosition}

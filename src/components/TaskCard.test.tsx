@@ -20,6 +20,7 @@ const task: TaskSummary = {
   branchName: "feat/card-ellipsis",
   worktreePath: "/tmp/nectus-worktrees/feat-card-ellipsis",
   isDirty: false,
+  archived: false,
   activeSessionId: null,
   lastSessionId: null,
   lastSessionAgent: null,

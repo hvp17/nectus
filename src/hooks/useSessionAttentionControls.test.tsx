@@ -15,6 +15,7 @@ function task(overrides: Partial<TaskSummary> & { id: number }): TaskSummary {
     status: overrides.status ?? "in_progress",
     hasWorktree: overrides.hasWorktree ?? false,
     isDirty: overrides.isDirty ?? false,
+    archived: overrides.archived ?? false,
     activeSessionId: overrides.activeSessionId ?? null,
     taskRepos: overrides.taskRepos ?? [
       { repoId: overrides.repoId ?? 1, repoName: "nectus", isDirty: false, position: 0 },

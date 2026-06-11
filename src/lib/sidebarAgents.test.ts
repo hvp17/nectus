@@ -6,7 +6,7 @@ function task(overrides: Partial<TaskSummary>): TaskSummary {
   return {
     id: 1, repoId: 1, workspaceId: null, title: "T", prompt: null, status: "planned",
     taskRepos: [], prUrl: null, agentProfileId: 1, agentName: "Codex", agentKind: "codex",
-    hasWorktree: false, branchName: null, worktreePath: null, isDirty: false,
+    hasWorktree: false, branchName: null, worktreePath: null, isDirty: false, archived: false,
     activeSessionId: null, lastSessionId: null, lastSessionAgent: null, lastSessionCwd: null,
     lastSessionLabel: null, createdAt: "2026-06-07T00:00:00.000Z", updatedAt: "2026-06-07T00:00:00.000Z",
     ...overrides,

@@ -71,7 +71,7 @@ export function TaskWorkspaceOverlay({ task, backLabel, repoName, onClose }: Tas
   const github = useGithub({ selectedTask: task, applyTask, repoId: activeRepoId });
   const ship = useGithubShipActions({ setMessage, setTaskAttention, repoScope });
   const review = useTaskReviewLoop({ selectedTaskId: task.id, onMessage: setMessage });
-  const { updateStatus, renameTask, setTaskJiraLink } = useTaskActions();
+  const { updateStatus, renameTask, setTaskJiraLink, setArchived } = useTaskActions();
   const requestDeleteTask = useTaskDeletion();
   const session = useSessionControls();
 
@@ -125,6 +125,11 @@ export function TaskWorkspaceOverlay({ task, backLabel, repoName, onClose }: Tas
       onClosePullRequest={ship.closePullRequest}
       onUpdateStatus={updateStatus}
       onRenameTask={renameTask}
+      onArchiveTask={(t) => {
+        // Archiving removes the task from the live cache, which closes this
+        // overlay (the shell resolves the open task from that cache).
+        void setArchived(t, true);
+      }}
       onDeleteTask={requestDeleteTask}
       onSetJiraLink={setTaskJiraLink}
       jiraSite={jiraSite}

@@ -36,6 +36,7 @@ const taskWithoutPr: TaskSummary = {
   branchName: "feat/github-detect",
   worktreePath: "/tmp/nectus/feat-github-detect",
   isDirty: false,
+  archived: false,
   activeSessionId: null,
   lastSessionId: null,
   lastSessionAgent: null,

@@ -66,6 +66,16 @@ export function useTasksQuery() {
   });
 }
 
+/** The archive view, fetched only while a board's "Archived" toggle is on. */
+export function useArchivedTasksQuery(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.tasksArchived(),
+    queryFn: () => api.listTasks(undefined, true),
+    enabled,
+    meta: SURFACE_ERRORS,
+  });
+}
+
 /** Invalidate all bootstrap reads (the old `useApp.refresh()` with no preferred repo). */
 export function useRefreshData() {
   const queryClient = useQueryClient();

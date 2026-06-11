@@ -77,6 +77,8 @@ export interface TaskSummary {
    * still rides the push-driven `taskAttention` store slice.
    */
   attention?: "needs_input" | null;
+  /** Archived tasks are hidden from boards/lists by default. */
+  archived: boolean;
   jiraIssueKey?: string | null;
   jiraIssueSummary?: string | null;
   jiraIssueUrl?: string | null;

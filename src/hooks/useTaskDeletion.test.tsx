@@ -34,6 +34,7 @@ const baseTask: TaskSummary = {
   branchName: null,
   worktreePath: null,
   isDirty: false,
+  archived: false,
   activeSessionId: null,
   lastSessionId: null,
   lastSessionAgent: null,

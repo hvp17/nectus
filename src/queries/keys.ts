@@ -12,6 +12,8 @@ export const queryKeys = {
   repos: () => ["repos"] as const,
   workspaces: () => ["workspaces"] as const,
   tasks: () => ["tasks"] as const,
+  /** The archive view (separate cache from the live `tasks` read). */
+  tasksArchived: () => ["tasks-archived"] as const,
   agentProfiles: () => ["agent-profiles"] as const,
   settings: () => ["settings"] as const,
 

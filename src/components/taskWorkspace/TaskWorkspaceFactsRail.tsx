@@ -1,4 +1,4 @@
-import { CheckCircle2, GitBranch, ScanEye, Square, XCircle } from "lucide-react";
+import { Archive, CheckCircle2, GitBranch, ScanEye, Square, XCircle } from "lucide-react";
 import { AgentLogo } from "../AgentBrand";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -57,6 +57,8 @@ export interface TaskWorkspaceFactsRailProps {
     taskId: number,
     link: { key: string; summary: string; url: string | null } | null,
   ) => void;
+  /** Archive the task: it leaves the boards but keeps its worktree until deleted. */
+  onArchiveTask: (task: TaskSummary) => void;
   onDeleteTask: (task: TaskSummary) => void;
   /** Opens the read-only reviewer terminal on the stage. */
   onWatchReview: () => void;
@@ -91,6 +93,7 @@ export function TaskWorkspaceFactsRail({
   onSetPullRequestReady,
   onClosePullRequest,
   onSetJiraLink,
+  onArchiveTask,
   onDeleteTask,
   onWatchReview,
 }: TaskWorkspaceFactsRailProps) {
@@ -292,7 +295,19 @@ export function TaskWorkspaceFactsRail({
           </section>
         )}
 
-        <div className="mt-auto flex items-center justify-end px-4 py-3.5">
+        <div className="mt-auto flex items-center justify-end gap-2 px-4 py-3.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label={`Archive ${task.title}`}
+            disabled={busy || Boolean(task.activeSessionId)}
+            title={task.activeSessionId ? "Stop the session before archiving" : undefined}
+            onClick={() => onArchiveTask(task)}
+          >
+            <Archive data-icon="inline-start" />
+            Archive
+          </Button>
           <TaskDeleteDialog
             task={task}
             busy={busy}

@@ -28,6 +28,7 @@ const baseTask: TaskSummary = {
   branchName: "feat/github",
   worktreePath: "/tmp/wt/feat-github",
   isDirty: false,
+  archived: false,
   activeSessionId: null,
   lastSessionId: null,
   lastSessionAgent: null,

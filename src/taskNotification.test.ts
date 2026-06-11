@@ -11,6 +11,7 @@ const baseTask = {
   agentKind: "claude",
   hasWorktree: false,
   isDirty: false,
+  archived: false,
   taskRepos: [{ repoId: 3, repoName: "nectus", isDirty: false, position: 0 }],
   createdAt: "2026-06-09T00:00:00.000Z",
   updatedAt: "2026-06-09T00:00:00.000Z",

@@ -29,6 +29,7 @@ const task: TaskSummary = {
   branchName: "feat/card-ellipsis",
   worktreePath: "/tmp/nectus-worktrees/feat-card-ellipsis",
   isDirty: false,
+  archived: false,
   activeSessionId: null,
   lastSessionId: null,
   lastSessionAgent: null,
@@ -125,6 +126,7 @@ function renderTaskWorkspace(input?: {
       onClosePullRequest={vi.fn()}
       onUpdateStatus={input?.onUpdateStatus ?? vi.fn()}
       onRenameTask={input?.onRenameTask ?? vi.fn()}
+      onArchiveTask={vi.fn()}
       onDeleteTask={input?.onDeleteTask ?? vi.fn()}
       onSetJiraLink={vi.fn()}
       onSessionExit={vi.fn()}

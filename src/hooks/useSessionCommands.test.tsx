@@ -40,6 +40,7 @@ function task(overrides: Partial<TaskSummary> & { id: number }): TaskSummary {
     agentProfileId: overrides.agentProfileId ?? null,
     hasWorktree: overrides.hasWorktree ?? false,
     isDirty: overrides.isDirty ?? false,
+    archived: overrides.archived ?? false,
     activeSessionId: overrides.activeSessionId ?? null,
     lastSessionId: overrides.lastSessionId ?? null,
     lastSessionLabel: overrides.lastSessionLabel ?? null,

@@ -613,7 +613,7 @@ fn list_tasks_includes_review_loop_summary() {
     })
     .unwrap();
 
-    let tasks = db.list_tasks(Some(repo.id)).unwrap();
+    let tasks = db.list_tasks(Some(repo.id), false).unwrap();
     let task = tasks
         .iter()
         .find(|candidate| candidate.id == task.id)
@@ -845,7 +845,7 @@ fn list_tasks_rejects_unknown_status() {
         )
         .unwrap();
 
-    let error = db.list_tasks(None).unwrap_err();
+    let error = db.list_tasks(None, false).unwrap_err();
 
     assert!(error.contains("Unknown task status"), "{error}");
 }
@@ -1712,4 +1712,40 @@ fn removes_a_project_only_once_its_tasks_are_gone() {
     db.remove_repo(repo.id).unwrap();
     assert!(db.repo_by_id(repo.id).unwrap().is_none());
     assert!(db.remove_repo(repo.id).is_err(), "already gone");
+}
+
+#[test]
+fn archives_and_restores_a_task() {
+    let db = Database::open_in_memory().unwrap();
+    let (_dir, repo) = add_repo_with_remote(&db);
+    let task = db
+        .create_task_record(repo.id, "Done work".to_string(), None, None, false, None)
+        .unwrap();
+
+    // Archiving hides the task from the live list and shows it in the archive view.
+    let archived = db.set_task_archived(task.id, true).unwrap();
+    assert!(archived.archived);
+    assert!(db.list_tasks(None, false).unwrap().is_empty());
+    let archive_view = db.list_tasks(None, true).unwrap();
+    assert_eq!(archive_view.len(), 1);
+    assert_eq!(archive_view[0].id, task.id);
+
+    // Restoring brings it back.
+    let restored = db.set_task_archived(task.id, false).unwrap();
+    assert!(!restored.archived);
+    assert_eq!(db.list_tasks(None, false).unwrap().len(), 1);
+    assert!(db.list_tasks(None, true).unwrap().is_empty());
+}
+
+#[test]
+fn refuses_to_archive_a_task_with_a_running_session() {
+    let db = Database::open_in_memory().unwrap();
+    let (_dir, repo) = add_repo_with_remote(&db);
+    let task = db
+        .create_task_record(repo.id, "Live".to_string(), None, None, false, None)
+        .unwrap();
+    db.set_active_session(task.id, Some("sess-1")).unwrap();
+
+    let error = db.set_task_archived(task.id, true).unwrap_err();
+    assert!(error.contains("running session"), "{error}");
 }

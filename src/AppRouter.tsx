@@ -26,6 +26,7 @@ import { useJiraStatusQuery, useJiraRestStatusQuery } from "./queries/jira";
 import type { AppSettings } from "./types";
 import {
   useAgentProfilesQuery,
+  useArchivedTasksQuery,
   useReposQuery,
   useSettingsQuery,
   useTasksQuery,
@@ -497,12 +498,14 @@ function BoardView() {
   const busy = useAppStore((s) => s.busy);
   const loading = useBootstrapLoading();
   const refresh = useRefreshData();
-  const { updateStatus } = useTaskActions();
+  const { updateStatus, setArchived } = useTaskActions();
   const requestDeleteTask = useTaskDeletion();
+  const archive = useBoardArchiveToggle();
   const selectedRepo = useMemo(() => repos.find((repo) => repo.id === selectedRepoId), [repos, selectedRepoId]);
+  const sourceTasks = archive.showArchived ? archive.archivedTasks : tasks;
   const visibleTasks = useMemo(
-    () => (selectedRepoId ? tasks.filter((task) => task.repoId === selectedRepoId) : tasks),
-    [tasks, selectedRepoId],
+    () => (selectedRepoId ? sourceTasks.filter((task) => task.repoId === selectedRepoId) : sourceTasks),
+    [sourceTasks, selectedRepoId],
   );
   return (
     <div className="nx-viewport-fill" data-testid="dashboard-layout" data-task-workspace="false">
@@ -519,10 +522,25 @@ function BoardView() {
         onUpdateStatus={updateStatus}
         deletingTaskIds={deletingTaskIds}
         busy={busy}
-        loading={loading}
+        loading={loading || archive.loading}
+        showArchived={archive.showArchived}
+        onToggleArchived={archive.toggle}
+        onUnarchiveTask={(task) => setArchived(task, false)}
       />
     </div>
   );
+}
+
+/** Shared archive-view state for the project and workspace boards. */
+function useBoardArchiveToggle() {
+  const [showArchived, setShowArchived] = useState(false);
+  const archivedQuery = useArchivedTasksQuery(showArchived);
+  return {
+    showArchived,
+    toggle: () => setShowArchived((current) => !current),
+    archivedTasks: archivedQuery.data ?? EMPTY_TASKS,
+    loading: showArchived && archivedQuery.isLoading,
+  };
 }
 
 function WorkspaceView() {
@@ -538,15 +556,20 @@ function WorkspaceView() {
   const busy = useAppStore((s) => s.busy);
   const loading = useBootstrapLoading();
   const refresh = useRefreshData();
-  const { updateStatus } = useTaskActions();
+  const { updateStatus, setArchived } = useTaskActions();
   const requestDeleteTask = useTaskDeletion();
+  const archive = useBoardArchiveToggle();
   const activeWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === activeWorkspaceId),
     [workspaces, activeWorkspaceId],
   );
+  const sourceTasks = archive.showArchived ? archive.archivedTasks : tasks;
   const workspaceBoardTasks = useMemo(
-    () => (activeWorkspace ? tasks.filter((task) => activeWorkspace.repoIds.includes(task.repoId)) : EMPTY_TASKS),
-    [activeWorkspace, tasks],
+    () =>
+      activeWorkspace
+        ? sourceTasks.filter((task) => activeWorkspace.repoIds.includes(task.repoId))
+        : EMPTY_TASKS,
+    [activeWorkspace, sourceTasks],
   );
   return (
     <div className="nx-viewport-fill" data-testid="workspace-board">
@@ -565,7 +588,10 @@ function WorkspaceView() {
         onUpdateStatus={updateStatus}
         deletingTaskIds={deletingTaskIds}
         busy={busy}
-        loading={loading}
+        loading={loading || archive.loading}
+        showArchived={archive.showArchived}
+        onToggleArchived={archive.toggle}
+        onUnarchiveTask={(task) => setArchived(task, false)}
       />
     </div>
   );
