@@ -16,6 +16,8 @@ For current behavior and structure, start with [`../architecture.md`](../archite
 and the [documentation index](../architecture.md#documentation-index). Do not treat
 anything here as a description of how the app works today.
 
-> One spec is still live: `specs/2026-06-06-multi-repo-workspaces-design.md`
+> Two specs are still live: `specs/2026-06-06-multi-repo-workspaces-design.md`
 > (Increment B — per-repo diffs and per-repo PRs) remains the spec-of-record for
-> unbuilt work and is referenced from [`../features.md`](../features.md).
+> unbuilt work and is referenced from [`../features.md`](../features.md), and
+> `specs/2026-06-11-unify-projects-into-workspaces-design.md` (with its plan in
+> `plans/`) describes the proposed, not-yet-built projects→workspaces unification.
