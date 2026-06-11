@@ -1,6 +1,8 @@
 use super::pr_verdict::{parse_pr_review_output, VERDICT_MARKER};
 use super::pr_worktree::with_pr_worktree;
-use super::reviewer::{reviewer_supports_resume, run_reviewer_command};
+use super::reviewer::{
+    reviewer_supports_resume, run_reviewer_command, ReviewOutputSink, ReviewOutputTarget,
+};
 use crate::db::Database;
 use crate::github::{self, PrMeta};
 use crate::models::{PrReviewStatus, PrReviewUpdatedEvent};
@@ -69,6 +71,13 @@ fn run_pr_review(app: &AppHandle, db: &Arc<Mutex<Database>>, review_id: i64) -> 
     };
     let resuming = resume_id.is_some();
 
+    // Stream the reviewer's stdout to the Reviews view so the user can watch the
+    // review progress live (read-only); the full review is still captured below.
+    let sink = ReviewOutputSink {
+        app: app.clone(),
+        target: ReviewOutputTarget::PrReview(review_id),
+    };
+
     // The shared scaffold owns the ephemeral worktree lifecycle (unique naming,
     // pre-clean, fetch+create, persist path, guaranteed teardown incl. branch).
     let run_output = with_pr_worktree(
@@ -83,14 +92,12 @@ fn run_pr_review(app: &AppHandle, db: &Arc<Mutex<Database>>, review_id: i64) -> 
             } else {
                 build_pr_review_prompt(pr_number, &meta)
             };
-            // PR reviews surface their output through the Reviews view, not the
-            // live task workspace, so they keep the captured-output path.
             run_reviewer_command(
                 &reviewer,
                 worktree_path,
                 &prompt,
                 resume_id.as_deref(),
-                None,
+                Some(&sink),
             )
         },
     )?;

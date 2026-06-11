@@ -493,6 +493,16 @@ Current behavior:
 - The detail view shows the PR metadata and verdict badge, the review text in a
   scrollable pane, a Copy button, a Re-run action (re-fetches the PR head to pick up
   new commits and clears the prior verdict), and Delete.
+- For a **single** review the detail also has a **Review / Terminal** toggle: the
+  Terminal view is a read-only `xterm.js` pane (the same `ReviewTerminalPane` as the
+  task Review tab) that streams the reviewer's stdout live over the
+  `pr_review_output` event, so you can watch it inspect the worktree. A running
+  review opens on Terminal and a finished one on Review; the live buffer is
+  ephemeral (kept while the review stays selected, not persisted). Same caveat as
+  the task loop: Codex/OpenCode run in JSON-event mode, so their live output lands
+  as one chunk at completion rather than token-by-token, whereas Claude/Gemini
+  stream incrementally. Consensus reviews keep their round matrix and have no
+  Terminal toggle.
 - Reviewer profiles are the same agent profiles used elsewhere; the default reviewer
   is the configured default agent profile when it is still available, otherwise the
   first available profile. Claude and Gemini reviewers run with `-p`; Codex reviewers

@@ -1,4 +1,4 @@
-import { type CSSProperties, useEffect, useState } from "react";
+import { type CSSProperties, lazy, Suspense, useEffect, useState } from "react";
 import {
   AlertTriangle,
   Check,
@@ -8,13 +8,16 @@ import {
   LoaderCircle,
   Minus,
   RefreshCw,
+  ScanEye,
   Send,
+  TerminalSquare,
   Trash2,
   X,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import { AgentLogo } from "./AgentBrand";
 import { PrReviewBadge } from "./PrReviewBadge";
 import { openExternal } from "../lib/openExternal";
@@ -22,9 +25,20 @@ import { PR_REVIEW_VERDICT_LABELS, prReviewVerdictKey } from "../statusLabels";
 import { toast } from "sonner";
 import type { AgentKind, AgentProfile, PrReview, PrReviewRun, PrReviewStatus, PrReviewVerdict } from "../types";
 
+// Lazy so xterm only loads when a single review's Terminal view is opened, not in
+// the Reviews-page chunk itself (mirrors the task workspace stage).
+const ReviewTerminalPane = lazy(() =>
+  import("./ReviewTerminalPane").then((module) => ({ default: module.ReviewTerminalPane })),
+);
+
+type DetailView = "review" | "terminal";
+
 interface PrReviewDetailProps {
   review: PrReview;
   runs: PrReviewRun[];
+  /** Live stdout of a single review's reviewer, shown in the read-only Terminal
+   *  view. Empty for consensus reviews and between sessions. */
+  liveReviewOutput?: string;
   agentProfiles: AgentProfile[];
   onRerun: (reviewId: number) => void;
   onDelete: (reviewId: number) => void;
@@ -51,11 +65,36 @@ function groupRunsByRound(runs: PrReviewRun[]): RoundColumn[] {
   return [...byRound.entries()].sort(([a], [b]) => a - b).map(([round, verdicts]) => ({ round, verdicts }));
 }
 
-export function PrReviewDetail({ review, runs, agentProfiles, onRerun, onDelete, onPost }: PrReviewDetailProps) {
+export function PrReviewDetail({
+  review,
+  runs,
+  liveReviewOutput = "",
+  agentProfiles,
+  onRerun,
+  onDelete,
+  onPost,
+}: PrReviewDetailProps) {
   const [copied, setCopied] = useState(false);
   const [posting, setPosting] = useState(false);
   const isConsensus = review.mode === "consensus";
   const canShare = review.status === "ready" && !!review.reviewOutput;
+  // Single reviews can flip between the rendered review and a read-only terminal
+  // streaming the reviewer's stdout. Consensus keeps its round matrix (no toggle).
+  const showTerminalToggle = !isConsensus && review.status !== "error";
+  const [view, setView] = useState<DetailView>(() => (inFlight(review.status) ? "terminal" : "review"));
+
+  // Reset the toggle when switching reviews: watch a running one live, read a
+  // finished one's review.
+  useEffect(() => {
+    setView(inFlight(review.status) ? "terminal" : "review");
+    // Only on selection change — a manual toggle must survive unrelated updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [review.id]);
+
+  // When the selected review (re)enters reviewing, jump to the live terminal.
+  useEffect(() => {
+    if (inFlight(review.status)) setView("terminal");
+  }, [review.status]);
   const agentKindFor = (profileId: number): AgentKind =>
     agentProfiles.find((profile) => profile.id === profileId)?.agentKind ?? "custom";
 
@@ -127,6 +166,25 @@ export function PrReviewDetail({ review, runs, agentProfiles, onRerun, onDelete,
           </a>
         </div>
         <div className="nx-rev-dactions">
+          {showTerminalToggle && (
+            <ToggleGroup
+              type="single"
+              value={view}
+              onValueChange={(value) => value && setView(value as DetailView)}
+              variant="outline"
+              className="mr-1"
+            >
+              <ToggleGroupItem value="review" aria-label="Show review" className="h-8 gap-1.5 px-2.5 text-xs">
+                <ScanEye className="size-3.5" aria-hidden="true" />
+                Review
+              </ToggleGroupItem>
+              <ToggleGroupItem value="terminal" aria-label="Show reviewer terminal" className="h-8 gap-1.5 px-2.5 text-xs">
+                <TerminalSquare className="size-3.5" aria-hidden="true" />
+                Terminal
+                {inFlight(review.status) && <span className="dot live-dot bg-primary" aria-hidden="true" />}
+              </ToggleGroupItem>
+            </ToggleGroup>
+          )}
           <Button
             type="button"
             size="sm"
@@ -189,6 +247,18 @@ export function PrReviewDetail({ review, runs, agentProfiles, onRerun, onDelete,
 
     if (isConsensus) {
       return <ConsensusBody review={review} rounds={groupRunsByRound(runs)} agentKindFor={agentKindFor} />;
+    }
+
+    // Single review, Terminal view: watch the reviewer's stdout stream live (and
+    // the last run's output between sessions).
+    if (view === "terminal") {
+      return (
+        <Suspense fallback={<div className="nx-rev-term-wrap" />}>
+          <div className="nx-rev-term-wrap">
+            <ReviewTerminalPane output={liveReviewOutput} active={inFlight(review.status)} />
+          </div>
+        </Suspense>
+      );
     }
 
     if (inFlight(review.status)) {

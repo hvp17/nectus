@@ -157,6 +157,41 @@ it("posts a finished review back to the pull request", () => {
   expect(onPost).toHaveBeenCalledWith(consensusReview.id);
 });
 
+it("offers a Terminal/Review toggle for a single review and watches a running one live", async () => {
+  const single: PrReview = {
+    ...consensusReview,
+    id: 20,
+    mode: "single",
+    reviewers: [],
+    maxRounds: null,
+    converged: null,
+    status: "reviewing",
+    verdict: null,
+    reviewOutput: null,
+  };
+
+  render(
+    <PrReviewDetail
+      review={single}
+      runs={[]}
+      liveReviewOutput=""
+      agentProfiles={agentProfiles}
+      onRerun={vi.fn()}
+      onDelete={vi.fn()}
+      onPost={vi.fn()}
+    />,
+  );
+
+  // Single reviews get the toggle (consensus does not).
+  expect(screen.getByRole("radio", { name: "Show review" })).toBeInTheDocument();
+  expect(screen.getByRole("radio", { name: "Show reviewer terminal" })).toBeInTheDocument();
+
+  // An in-progress single review defaults to the live terminal. xterm is disabled
+  // under the test runner, so the read-only pane shows its waiting copy.
+  expect(await screen.findByTestId("review-terminal")).toBeInTheDocument();
+  expect(screen.getByText(/Waiting for the reviewer/i)).toBeInTheDocument();
+});
+
 it("disables sharing while a review is still in progress", () => {
   const queued: PrReview = { ...consensusReview, status: "reviewing", reviewOutput: null };
 

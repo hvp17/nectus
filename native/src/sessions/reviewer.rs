@@ -8,17 +8,56 @@
 
 use super::command::resolve_agent_command;
 use super::reviewer_output::{ReviewerOutputCollector, ReviewerWire};
-use crate::models::{AgentKind, AgentProfile, ReviewOutputEvent};
+use crate::models::{AgentKind, AgentProfile, PrReviewOutputEvent, ReviewOutputEvent};
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use tauri::{AppHandle, Emitter};
 
+/// Which live-output channel a reviewer run streams to. The task review loop and
+/// single PR reviews both forward the reviewer's stdout live, but key it
+/// differently (task id vs review id) and emit a different event.
+pub(super) enum ReviewOutputTarget {
+    Task(i64),
+    PrReview(i64),
+}
+
 /// Where to forward a reviewer's live stdout. Holds an `AppHandle` so the read
-/// loop can emit `review_output` chunks keyed by `task_id` as they arrive.
+/// loop can emit output chunks (keyed by its [`ReviewOutputTarget`]) as they
+/// arrive.
 pub(super) struct ReviewOutputSink {
     pub app: AppHandle,
-    pub task_id: i64,
+    pub target: ReviewOutputTarget,
+}
+
+impl ReviewOutputSink {
+    /// Emit one decoded text delta to the sink's channel: `review_output` keyed by
+    /// task id for the task loop, `pr_review_output` keyed by review id for a
+    /// single PR review.
+    fn emit(&self, data: String, start_offset: u64) {
+        match self.target {
+            ReviewOutputTarget::Task(task_id) => {
+                let _ = self.app.emit(
+                    "review_output",
+                    ReviewOutputEvent {
+                        task_id,
+                        data,
+                        start_offset,
+                    },
+                );
+            }
+            ReviewOutputTarget::PrReview(review_id) => {
+                let _ = self.app.emit(
+                    "pr_review_output",
+                    PrReviewOutputEvent {
+                        review_id,
+                        data,
+                        start_offset,
+                    },
+                );
+            }
+        }
+    }
 }
 
 /// The result of one reviewer run: the human-facing review text and the resolved
@@ -134,14 +173,7 @@ pub(super) fn run_reviewer_command(
                     let delta = collector.push(&buffer[..count]);
                     if !delta.is_empty() {
                         if let Some(sink) = stream {
-                            let _ = sink.app.emit(
-                                "review_output",
-                                ReviewOutputEvent {
-                                    task_id: sink.task_id,
-                                    data: delta.clone(),
-                                    start_offset: streamed_len,
-                                },
-                            );
+                            sink.emit(delta.clone(), streamed_len);
                         }
                         streamed_len += delta.len() as u64;
                     }

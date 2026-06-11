@@ -17,6 +17,8 @@ interface ReviewsPageProps {
   selectedPrReview?: PrReview;
   selectedPrReviewId?: number;
   selectedPrReviewRuns: PrReviewRun[];
+  /** Live stdout of the selected single review's reviewer, for the Terminal view. */
+  liveReviewOutput?: string;
   agentProfiles: AgentProfile[];
   defaultReviewerProfileId?: number;
   creatingReview: boolean;
@@ -53,6 +55,7 @@ export function ReviewsPage({
   selectedPrReview,
   selectedPrReviewId,
   selectedPrReviewRuns,
+  liveReviewOutput = "",
   agentProfiles,
   defaultReviewerProfileId,
   creatingReview,
@@ -236,6 +239,7 @@ export function ReviewsPage({
           <PrReviewDetail
             review={selectedPrReview}
             runs={selectedPrReviewRuns}
+            liveReviewOutput={liveReviewOutput}
             agentProfiles={agentProfiles}
             onRerun={onRerunReview}
             onDelete={onDeleteReview}

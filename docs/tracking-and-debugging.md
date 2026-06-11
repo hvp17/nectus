@@ -216,7 +216,8 @@ Backend-to-frontend events:
 | `session_idle` | Task id, session id, turn id, optional message. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL), `claude.rs` (hooks), and `opencode.rs` (local server `/event` `session.idle`) |
 | `session_needs_input` | Task id, session id, reason, optional prompt. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL), `claude.rs` (hooks), and `opencode.rs` (local server `/event` permission/question asks) |
 | `review_loop_updated` | Review-loop state and optional review run. | `native/src/sessions/review_loop.rs` |
-| `review_output` | Task id, a chunk of the task reviewer's live stdout, and the chunk's byte offset (a `0` offset starts a new run). Streamed only by the task review loop, not by PR reviews. | `native/src/sessions/review_loop.rs` |
+| `review_output` | Task id, a chunk of the task reviewer's live stdout, and the chunk's byte offset (a `0` offset starts a new run). Streamed by the task review loop. | `native/src/sessions/review_loop.rs` |
+| `pr_review_output` | Review id, a chunk of a single PR reviewer's live stdout, and the chunk's byte offset (a `0` offset starts a new run). Streamed by single PR reviews so the Reviews-view Terminal toggle can watch the reviewer live; consensus reviews keep their round matrix and do not stream. | `native/src/sessions/pr_review.rs` |
 | `pr_review_updated` | Updated external PR review (status, verdict, metadata, Markdown output), plus an optional `latest_run` carrying the consensus round output that triggered the update. | `native/src/sessions/pr_review.rs`, `native/src/sessions/pr_consensus.rs` |
 
 Frontend event listeners:

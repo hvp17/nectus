@@ -83,6 +83,18 @@ pub struct ReviewOutputEvent {
     pub start_offset: u64,
 }
 
+/// A chunk of a single PR reviewer's live stdout, streamed so the Reviews view can
+/// show the reviewer working in real time (read-only). Mirrors `ReviewOutputEvent`
+/// but keyed by `review_id` rather than `task_id`. A chunk at offset `0` marks the
+/// start of a new run, so the UI resets its buffer.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrReviewOutputEvent {
+    pub review_id: i64,
+    pub data: String,
+    pub start_offset: u64,
+}
+
 /// Lifecycle of a single external pull-request review.
 #[derive(
     Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Display, EnumString, IntoStaticStr,

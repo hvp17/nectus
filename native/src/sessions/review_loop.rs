@@ -3,7 +3,9 @@
 //! the live worker PTY. The generic reviewer launcher lives in `reviewer.rs`
 //! and the PTY submission helper in `terminal_io.rs`.
 
-use super::reviewer::{reviewer_supports_resume, run_reviewer_command, ReviewOutputSink};
+use super::reviewer::{
+    reviewer_supports_resume, run_reviewer_command, ReviewOutputSink, ReviewOutputTarget,
+};
 use super::terminal_io::write_agent_submission;
 use super::verdict::{parse_and_strip, VerdictToken, VERDICT_MARKER};
 use super::RunningSession;
@@ -92,7 +94,7 @@ fn run_review_round(
     // review progress live (read-only); the full output is still captured below.
     let sink = ReviewOutputSink {
         app: app.clone(),
-        task_id,
+        target: ReviewOutputTarget::Task(task_id),
     };
     let run_output =
         match run_reviewer_command(&reviewer, cwd, &prompt, resume_id.as_deref(), Some(&sink)) {

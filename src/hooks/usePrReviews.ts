@@ -1,10 +1,11 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "../queries/keys";
 import { useOptionalQuery } from "../queries/optional";
+import { useTauriEvent } from "./useTauriEvent";
 import { upsertNewestById } from "../lib/listState";
-import type { PrReview, PrReviewRun } from "../types";
+import type { PrReview, PrReviewOutputEvent, PrReviewRun } from "../types";
 
 interface UsePrReviewsArgs {
   onMessage: (message: string) => void;
@@ -36,6 +37,29 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
 
   const [selectedPrReviewId, setSelectedPrReviewId] = useState<number | undefined>();
   const [creatingReview, setCreatingReview] = useState(false);
+
+  // Accumulated live stdout of the selected review's reviewer, for the read-only
+  // Terminal view in the detail pane. Reset when the selection changes; a chunk at
+  // offset 0 (a fresh run) replaces it. Ephemeral — never cached, single reviews
+  // only (consensus keeps its round matrix).
+  const [liveReviewOutput, setLiveReviewOutput] = useState("");
+  const selectedPrReviewIdRef = useRef<number | undefined>(selectedPrReviewId);
+
+  useEffect(() => {
+    selectedPrReviewIdRef.current = selectedPrReviewId;
+    setLiveReviewOutput("");
+  }, [selectedPrReviewId]);
+
+  useTauriEvent<PrReviewOutputEvent>(
+    "pr_review_output",
+    (payload) => {
+      if (selectedPrReviewIdRef.current !== payload.reviewId) return;
+      setLiveReviewOutput((current) =>
+        payload.startOffset === 0 ? payload.data : current + payload.data,
+      );
+    },
+    { onError: (error) => onMessage(String(error)) },
+  );
 
   // The selected (consensus) review's per-reviewer round outputs. Events keep them
   // live afterward via `setQueryData`; single reviews simply return no runs.
@@ -86,6 +110,8 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
         // The backend cleared the prior rounds; drop the stale ones so the re-run's
         // rounds stream in fresh.
         queryClient.setQueryData<PrReviewRun[]>(queryKeys.prReviews.runs(reviewId), []);
+        // Clear the live terminal so the re-run streams from a clean slate.
+        if (selectedPrReviewIdRef.current === reviewId) setLiveReviewOutput("");
       } catch (error) {
         onMessage(String(error));
       }
@@ -140,6 +166,7 @@ export function usePrReviews({ onMessage }: UsePrReviewsArgs) {
     setSelectedPrReviewId,
     selectedPrReview,
     selectedPrReviewRuns,
+    liveReviewOutput,
     creatingReview,
     createPrReview,
     rerunPrReview,

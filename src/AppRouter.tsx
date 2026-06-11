@@ -758,6 +758,7 @@ function ReviewsView() {
       selectedPrReview={pr.selectedPrReview}
       selectedPrReviewId={pr.selectedPrReviewId}
       selectedPrReviewRuns={pr.selectedPrReviewRuns}
+      liveReviewOutput={pr.liveReviewOutput}
       agentProfiles={agentProfiles}
       defaultReviewerProfileId={resolveAgentProfileId(agentProfiles, settings?.defaultAgentProfileId)}
       creatingReview={pr.creatingReview}
