@@ -512,7 +512,7 @@ impl TaskDeletionPlan {
     /// dirtiness check runs first, so a multi-repo delete never removes one repo's
     /// worktree before failing on another's uncommitted work (the caller then
     /// confirms and retries with `force`). Each removal also prunes stale worktree
-    /// admin entries and cleans up the task branch when it's safe to (see
+    /// admin entries and deletes the now-orphaned `task-*` branch (see
     /// [`git_ops::cleanup_task_branch`]). A mid-loop failure for a non-dirty reason
     /// leaves the row intact and self-heals on retry (gone worktrees are clean and
     /// short-circuit).
@@ -529,7 +529,7 @@ impl TaskDeletionPlan {
             git_ops::remove_worktree(repo_path, Path::new(&worktree.worktree_path), force)?;
             git_ops::prune_worktrees(repo_path);
             if let Some(branch) = &worktree.branch_name {
-                git_ops::cleanup_task_branch(repo_path, branch, force);
+                git_ops::cleanup_task_branch(repo_path, branch);
             }
         }
         Ok(())
