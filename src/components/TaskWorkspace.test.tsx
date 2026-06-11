@@ -64,9 +64,9 @@ const agentProfiles: AgentProfile[] = [
   },
   {
     id: 3,
-    name: "Gemini",
-    agentKind: "gemini",
-    command: "gemini",
+    name: "Antigravity",
+    agentKind: "antigravity",
+    command: "agy",
     model: null,
     args: [],
     env: {},
@@ -256,8 +256,8 @@ describe("TaskWorkspace", () => {
     renderTaskWorkspace({ task: reviewTask, onStartReview });
 
     fireEvent.keyDown(screen.getByRole("button", { name: /change reviewer/i }), { key: "Enter" });
-    fireEvent.click(await screen.findByRole("menuitem", { name: /gemini/i }));
-    screen.getByRole("button", { name: /review with gemini/i }).click();
+    fireEvent.click(await screen.findByRole("menuitem", { name: /antigravity/i }));
+    screen.getByRole("button", { name: /review with antigravity/i }).click();
 
     expect(onStartReview).toHaveBeenCalledWith(reviewTask, 3);
   });

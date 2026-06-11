@@ -225,7 +225,7 @@ Seeded profiles:
 
 - Codex: `codex`
 - Claude: `claude`
-- Gemini: `gemini`
+- Antigravity: `agy` (Google's successor to the retired Gemini CLI)
 - OpenCode: `opencode`
 
 Profiles can also be customized with:
@@ -277,7 +277,7 @@ Current behavior:
   the provider's structured event stream (Codex reasoning/messages, Claude
   `PreToolUse` tool-use hook, OpenCode message parts), so it reads as real
   progress ("Editing App.tsx", "Running npm test") instead of statusline chrome
-  or echoed keystrokes; Gemini and custom agents fall back to an ANSI-stripped
+  or echoed keystrokes; Antigravity and custom agents fall back to an ANSI-stripped
   tail of the PTY output. It falls back to "Working…" before the first line and
   clears when the session exits.
 - Closing the app stops owned sessions and clears active session ids.
@@ -352,7 +352,7 @@ OpenCode:
 - Nectus discovers the OpenCode session from the local server's `/session` API and
   saves the id and label when available.
 
-Resume is disabled for Gemini and custom profiles unless their behavior is added
+Resume is disabled for Antigravity and custom profiles unless their behavior is added
 explicitly.
 
 ## Attention Tracking
@@ -397,7 +397,7 @@ Attention tracking is UI state derived from backend events.
   desktop — the notification plugin's desktop `show()` is fire-and-forget and its
   `onAction` listener is mobile-only — so the toast is the navigable surface.
   Events that cannot be matched to a loaded task fall back to a plain toast.
-- The toast's icon is the provider logo (Claude/Codex/Gemini/OpenCode, falling
+- The toast's icon is the provider logo (Claude/Codex/Antigravity/OpenCode, falling
   back to a generic mark for custom agents) so you can tell at a glance which
   agent the update is from. The body text is built by `formatNotificationBody`, which strips
   the Markdown agents emit in their final messages (`**bold**`, `` `code` ``,
@@ -447,7 +447,7 @@ Current behavior:
   or written through task metadata when linked manually or by the agent.
 - Manual review runs require a running worker session so blockers or
   feedback can be written back into that session.
-- Claude and Gemini reviewers are run in headless prompt mode with `-p` and the
+- Claude and Antigravity reviewers are run in headless prompt mode with `-p` and the
   generated review prompt. Codex reviewers run non-interactively with `codex exec`,
   and OpenCode reviewers run with `opencode run`; both receive the prompt as a
   trailing positional argument. Bare `codex` is the interactive TUI and aborts
@@ -462,7 +462,7 @@ Current behavior:
     `codex exec resume <id> --json`.
   - OpenCode: runs with `--format json`; the id is captured from the stream and
     resumed with `opencode run --session <id> --format json`.
-  - Gemini and Custom reviewers have no resume; they review fresh each time.
+  - Antigravity and Custom reviewers have no resume; they review fresh each time.
   - Task-loop ids are stored in `review_loops.reviewer_session_id` (reset when
     the loop is restarted). PR-review ids are stored in
     `pr_reviews.reviewer_session_id` (preserved across reruns). Consensus
@@ -541,18 +541,18 @@ Current behavior:
   review opens on Terminal and a finished one on Review; the live buffer is
   ephemeral (kept while the review stays selected, not persisted). Same caveat as
   the task loop: Codex/OpenCode run in JSON-event mode, so their live output lands
-  as one chunk at completion rather than token-by-token, whereas Claude/Gemini
+  as one chunk at completion rather than token-by-token, whereas Claude/Antigravity
   stream incrementally. Consensus reviews keep their round matrix and have no
   Terminal toggle.
 - Reviewer profiles are the same agent profiles used elsewhere; the default reviewer
   is the configured default agent profile when it is still available, otherwise the
-  first available profile. Claude and Gemini reviewers run with `-p`; Codex reviewers
+  first available profile. Claude and Antigravity reviewers run with `-p`; Codex reviewers
   run with `codex exec`, OpenCode reviewers run with `opencode run`, and custom
   reviewers receive the prompt on stdin.
 - **Session resume for PR reviewers.** Claude, Codex, and OpenCode reviewers resume
   their prior session across reruns of the same PR review (the stored id is in
   `pr_reviews.reviewer_session_id`), so repeat reviews build on earlier findings
-  rather than re-reading the PR from scratch. Gemini and Custom reviewers always
+  rather than re-reading the PR from scratch. Antigravity and Custom reviewers always
   review fresh. The live output for Codex/OpenCode PR reviewers arrives in one
   chunk at completion (same JSON-event-mode caveat as the task review loop).
   See the [AI Review](#ai-review) section for per-provider resume mechanics.

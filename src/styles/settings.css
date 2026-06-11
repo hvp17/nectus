@@ -61,7 +61,7 @@
   --agent-accent: var(--chart-4);
 }
 
-.profile-editor[data-agent-kind="gemini"] {
+.profile-editor[data-agent-kind="antigravity"] {
   --agent-accent: var(--chart-3);
 }
 

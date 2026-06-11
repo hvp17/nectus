@@ -22,7 +22,7 @@ export const fallbackSettings: AppSettings = {
 export const agentKindLabels: Record<AgentKind, string> = {
   codex: "Codex",
   claude: "Claude",
-  gemini: "Gemini",
+  antigravity: "Antigravity",
   opencode: "OpenCode",
   custom: "Custom",
 };
@@ -30,7 +30,7 @@ export const agentKindLabels: Record<AgentKind, string> = {
 export const modelPresets: Record<AgentKind, string[]> = {
   codex: ["gpt-5.3-codex", "gpt-5.2"],
   claude: ["sonnet", "opus", "haiku"],
-  gemini: ["gemini-pro", "gemini-flash"],
+  antigravity: ["gemini-3.1-pro", "gemini-3.5-flash"],
   opencode: ["opencode/gpt-5.1-codex", "anthropic/claude-sonnet-4-5-20250929"],
   custom: [],
 };

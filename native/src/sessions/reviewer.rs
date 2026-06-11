@@ -70,7 +70,7 @@ pub(super) struct ReviewerRunOutput {
 
 /// Whether a reviewer kind can resume a prior conversation. Claude mints its own
 /// id (`--session-id`/`--resume`); Codex and OpenCode mint internally and we
-/// capture + resume by id. Gemini/Custom have no supported resume path.
+/// capture + resume by id. Antigravity/Custom have no supported resume path.
 pub(super) fn reviewer_supports_resume(kind: AgentKind) -> bool {
     matches!(
         kind,
@@ -247,7 +247,7 @@ struct ReviewerCommandPlan {
 
 /// Build the headless invocation for a reviewer. Each agent kind has a distinct
 /// non-interactive entry point and resume form:
-/// - Claude/Gemini: `-p <prompt>` print mode. Claude adds `--session-id <uuid>`
+/// - Claude/Antigravity: `-p <prompt>` print mode. Claude adds `--session-id <uuid>`
 ///   to start a named session or `--resume <uuid>` to continue one.
 /// - Codex: `exec --json <prompt>`; resume is `exec resume <id> --json <prompt>`.
 ///   `--json` is required so the session id (and review text) can be captured.
@@ -278,7 +278,7 @@ fn build_reviewer_args(
             args.push("--format".to_string());
             args.push("json".to_string());
         }
-        AgentKind::Claude | AgentKind::Gemini | AgentKind::Custom => {}
+        AgentKind::Claude | AgentKind::Antigravity | AgentKind::Custom => {}
     }
     if let Some(model) = reviewer
         .model
@@ -292,7 +292,7 @@ fn build_reviewer_args(
     args.extend(reviewer.args.iter().cloned());
 
     // Claude session continuity (mint-our-own-id). Codex/OpenCode resume was
-    // handled in the subcommand block above; Gemini/Custom have no resume.
+    // handled in the subcommand block above; Antigravity/Custom have no resume.
     if reviewer.agent_kind == AgentKind::Claude {
         if let Some(id) = resume {
             args.push("--resume".to_string());
@@ -304,7 +304,7 @@ fn build_reviewer_args(
     }
 
     let pipe_prompt_to_stdin = match reviewer.agent_kind {
-        AgentKind::Claude | AgentKind::Gemini => {
+        AgentKind::Claude | AgentKind::Antigravity => {
             args.push("-p".to_string());
             args.push(prompt.to_string());
             false
@@ -401,7 +401,7 @@ mod tests {
     }
 
     #[test]
-    fn sends_claude_and_gemini_review_prompts_through_headless_print_mode() {
+    fn sends_claude_and_antigravity_review_prompts_through_headless_print_mode() {
         let claude = build_reviewer_args(
             &agent("Claude", AgentKind::Claude, "claude"),
             "Review this",
@@ -413,14 +413,14 @@ mod tests {
             vec!["-p".to_string(), "Review this".to_string()]
         );
 
-        let gemini = build_reviewer_args(
-            &agent("Gemini", AgentKind::Gemini, "gemini"),
+        let antigravity = build_reviewer_args(
+            &agent("Antigravity", AgentKind::Antigravity, "agy"),
             "Review this",
             None,
             None,
         );
         assert_eq!(
-            gemini.args,
+            antigravity.args,
             vec!["-p".to_string(), "Review this".to_string()]
         );
     }
@@ -507,7 +507,7 @@ mod tests {
         assert!(reviewer_supports_resume(AgentKind::Claude));
         assert!(reviewer_supports_resume(AgentKind::Codex));
         assert!(reviewer_supports_resume(AgentKind::OpenCode));
-        assert!(!reviewer_supports_resume(AgentKind::Gemini));
+        assert!(!reviewer_supports_resume(AgentKind::Antigravity));
         assert!(!reviewer_supports_resume(AgentKind::Custom));
     }
 

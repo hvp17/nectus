@@ -26,7 +26,7 @@ pub(super) struct ProviderSession {
     pub watcher: WatcherKind,
 }
 
-/// The structured event watcher a provider spawns. `None` for Gemini/Custom, which
+/// The structured event watcher a provider spawns. `None` for Antigravity/Custom, which
 /// have no structured stream and rely on the raw-PTY activity scraper.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum WatcherKind {
@@ -60,7 +60,7 @@ pub(super) fn provider_session(kind: AgentKind) -> ProviderSession {
             cleanup_event_sink: false,
             watcher: WatcherKind::OpenCode,
         },
-        AgentKind::Gemini | AgentKind::Custom => ProviderSession {
+        AgentKind::Antigravity | AgentKind::Custom => ProviderSession {
             needs_local_server: false,
             emits_structured_activity: false,
             sends_prompt_in_args: false,
@@ -81,7 +81,7 @@ mod tests {
             assert!(ps.emits_structured_activity);
             assert_ne!(ps.watcher, WatcherKind::None);
         }
-        for kind in [AgentKind::Gemini, AgentKind::Custom] {
+        for kind in [AgentKind::Antigravity, AgentKind::Custom] {
             let ps = provider_session(kind);
             assert!(!ps.emits_structured_activity);
             assert_eq!(ps.watcher, WatcherKind::None);
@@ -95,7 +95,7 @@ mod tests {
         for kind in [
             AgentKind::Codex,
             AgentKind::Claude,
-            AgentKind::Gemini,
+            AgentKind::Antigravity,
             AgentKind::Custom,
         ] {
             let ps = provider_session(kind);
@@ -109,7 +109,7 @@ mod tests {
         for kind in [
             AgentKind::Codex,
             AgentKind::OpenCode,
-            AgentKind::Gemini,
+            AgentKind::Antigravity,
             AgentKind::Custom,
         ] {
             assert!(!provider_session(kind).cleanup_event_sink);
