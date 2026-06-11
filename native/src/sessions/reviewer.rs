@@ -69,10 +69,14 @@ pub(super) fn run_reviewer_command(
     let plan = build_reviewer_args(reviewer, prompt, resume, claude_start_id.as_deref());
     let mut command = Command::new(executable);
     command.args(&plan.args);
-    // A GUI-launched app has a minimal PATH, so a node-based reviewer CLI (e.g.
-    // Codex, OpenCode) fails to exec `node`. Hand the child a PATH that includes
-    // the common install dirs; a profile's own PATH still wins since its env is
-    // applied next.
+    // A GUI-launched app inherits a minimal environment, so seed the child with
+    // the user's login-shell env (provider API keys like OPENAI_API_KEY live there)
+    // for terminal parity, then set a PATH that includes the common install dirs so
+    // a node-based reviewer CLI (e.g. Codex, OpenCode) can exec `node`. A profile's
+    // own env/PATH still wins since it is applied last.
+    for (key, value) in crate::process_util::login_shell_environment() {
+        command.env(key, value);
+    }
     command.env("PATH", crate::process_util::augmented_path());
     for (key, value) in &reviewer.env {
         command.env(key, value);

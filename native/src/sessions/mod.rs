@@ -509,9 +509,14 @@ impl SessionManager {
         // env still wins since it is applied afterwards.
         command.env("TERM", "xterm-256color");
         command.env("COLORTERM", "truecolor");
-        // The minimal Finder PATH also lacks Homebrew/user bin dirs, so node-based
-        // agent CLIs (e.g. Codex) fail to exec `node`. Hand the session a PATH that
-        // includes the common install dirs; a profile's own PATH still wins below.
+        // The minimal Finder environment also lacks the user's exported shell vars
+        // (provider API keys like OPENAI_API_KEY) and a full PATH, so node-based
+        // agent CLIs (e.g. Codex) fail to find their key or exec `node`. Seed the
+        // session with the login-shell env for terminal parity, then a PATH that
+        // includes the common install dirs; a profile's own env/PATH still wins.
+        for (key, value) in crate::process_util::login_shell_environment() {
+            command.env(key, value);
+        }
         command.env("PATH", crate::process_util::augmented_path());
         for (key, value) in &agent.env {
             command.env(key, value);

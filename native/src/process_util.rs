@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::env;
 use std::ffi::{OsStr, OsString};
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::OnceLock;
@@ -64,20 +63,48 @@ pub(crate) fn third_party_bin_dirs(home: Option<&Path>) -> Vec<PathBuf> {
     dirs
 }
 
-/// Capture the user's interactive login-shell `PATH` once per process.
+/// Capture the user's interactive login-shell environment once per process.
 ///
-/// A macOS app launched from Finder/Dock inherits only a minimal `PATH`
-/// (`/usr/bin:/bin:/usr/sbin:/sbin`). The user's *real* `PATH` — Homebrew at any
-/// prefix (including a no-sudo `~/homebrew`), `mise`/`asdf`/`volta` shims, `~/bin`,
-/// etc. — is assembled by their shell's profile/rc files, which the app never
-/// sources. So `third_party_bin_dirs` alone can't cover every install location.
-/// We run the user's login shell once and read back its `$PATH`, then fold those
-/// directories into both resolution ([`resolve_executable`]) and the child `PATH`
-/// ([`augmented_path`]). Cached because spawning the shell sources rc files and is
-/// not free; bounded by a timeout so a slow/hanging rc can't block startup.
+/// A macOS app launched from Finder/Dock inherits only a minimal environment: a
+/// stripped `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`) and none of the variables the
+/// user exports in their shell profile/rc — notably provider API keys
+/// (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …) that node-based agent CLIs read
+/// straight from the environment. A terminal launch would have all of these; a
+/// GUI launch would not, so spawned agents/reviewers fail with "API key is
+/// missing" even though the key is in the user's shell. We run the user's login
+/// shell once, dump its `env`, and fold the result into every spawned child so a
+/// GUI launch behaves like a terminal launch. Cached because spawning the shell
+/// sources rc files and is not free; bounded by a timeout so a slow/hanging rc
+/// can't block startup. This is the single source for both the login-shell `PATH`
+/// ([`login_shell_path`]) and the seed environment ([`login_shell_environment`]).
+fn login_shell_env() -> &'static [(String, String)] {
+    static CACHE: OnceLock<Vec<(String, String)>> = OnceLock::new();
+    CACHE.get_or_init(|| capture_login_shell_env().unwrap_or_default())
+}
+
+/// The user's login-shell environment to seed spawned agents/reviewers with, so a
+/// GUI-launched app hands them the same provider keys and config a terminal launch
+/// would. `PATH` is omitted because callers set it explicitly via
+/// [`augmented_path`]; apply this first, then `PATH`, then any profile env.
+pub(crate) fn login_shell_environment() -> Vec<(String, String)> {
+    login_shell_env()
+        .iter()
+        .filter(|(key, _)| key != "PATH")
+        .cloned()
+        .collect()
+}
+
+/// The user's real login-shell `PATH`, pulled out of the captured login-shell
+/// environment (see [`login_shell_env`]). Used to fold the user's actual install
+/// dirs — Homebrew at any prefix, `mise`/`asdf`/`volta` shims, `~/bin`, … — into
+/// both resolution ([`resolve_executable`]) and the child `PATH`
+/// ([`augmented_path`]), which `third_party_bin_dirs` alone can't enumerate.
 fn login_shell_path() -> Option<OsString> {
-    static CACHE: OnceLock<Option<OsString>> = OnceLock::new();
-    CACHE.get_or_init(capture_login_shell_path).clone()
+    login_shell_env()
+        .iter()
+        .find(|(key, _)| key == "PATH")
+        .filter(|(_, value)| !value.is_empty())
+        .map(|(_, value)| OsString::from(value))
 }
 
 fn login_shell_dirs() -> Vec<PathBuf> {
@@ -86,15 +113,16 @@ fn login_shell_dirs() -> Vec<PathBuf> {
         .unwrap_or_default()
 }
 
-fn capture_login_shell_path() -> Option<OsString> {
+fn capture_login_shell_env() -> Option<Vec<(String, String)>> {
     let shell = env::var_os("SHELL").unwrap_or_else(|| OsString::from("/bin/zsh"));
     // -l (login) sources profile files (e.g. .zprofile, where Homebrew's shellenv
     // usually lands); -i (interactive) sources rc files (e.g. .zshrc, where shim
-    // managers like mise/asdf hook in). The marker lets us pick PATH out of any
-    // unrelated rc chatter. stdin is closed and stderr discarded so an interactive
-    // rc can neither block on input nor pollute the parsed output.
+    // managers like mise/asdf hook in and where users often export API keys). The
+    // marker lets us pick the env dump out of any unrelated rc chatter. stdin is
+    // closed and stderr discarded so an interactive rc can neither block on input
+    // nor pollute the parsed output.
     let mut child = Command::new(&shell)
-        .args(["-l", "-i", "-c", "printf '__NECTUS_PATH__%s\\n' \"$PATH\""])
+        .args(["-l", "-i", "-c", "printf '__NECTUS_ENV__\\n'; env"])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -118,17 +146,48 @@ fn capture_login_shell_path() -> Option<OsString> {
     }
 
     let output = child.wait_with_output().ok()?;
-    parse_marked_path(&output.stdout)
+    Some(parse_marked_env(&output.stdout))
 }
 
-/// Pull the `PATH` value out of the marker line emitted by the login shell.
-fn parse_marked_path(stdout: &[u8]) -> Option<OsString> {
-    const MARKER: &[u8] = b"__NECTUS_PATH__";
-    stdout
-        .split(|&byte| byte == b'\n')
-        .find_map(|line| line.strip_prefix(MARKER))
-        .filter(|rest| !rest.is_empty())
-        .map(|rest| OsStr::from_bytes(rest).to_os_string())
+/// Parse the `env` dump that follows the marker line emitted by the login shell
+/// into `(key, value)` pairs. Lines before the marker (rc chatter) are skipped.
+/// A line that isn't a `KEY=` assignment is treated as a continuation of the
+/// previous value, so multi-line values survive intact.
+fn parse_marked_env(stdout: &[u8]) -> Vec<(String, String)> {
+    const MARKER: &str = "__NECTUS_ENV__";
+    let text = String::from_utf8_lossy(stdout);
+    let Some(start) = text.find(MARKER) else {
+        return Vec::new();
+    };
+    let mut vars: Vec<(String, String)> = Vec::new();
+    for line in text[start + MARKER.len()..].lines() {
+        match split_env_line(line) {
+            Some((key, value)) => vars.push((key.to_string(), value.to_string())),
+            None => {
+                if let Some(last) = vars.last_mut() {
+                    last.1.push('\n');
+                    last.1.push_str(line);
+                }
+            }
+        }
+    }
+    vars
+}
+
+/// Split a `KEY=VALUE` env line, accepting only a valid shell identifier as the
+/// key (`[A-Za-z_][A-Za-z0-9_]*`) so value continuations and stray output don't
+/// masquerade as assignments.
+fn split_env_line(line: &str) -> Option<(&str, &str)> {
+    let (key, value) = line.split_once('=')?;
+    let mut bytes = key.bytes();
+    let first = bytes.next()?;
+    if !(first.is_ascii_alphabetic() || first == b'_') {
+        return None;
+    }
+    if !bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_') {
+        return None;
+    }
+    Some((key, value))
 }
 
 /// Ordered, de-duplicated search directories: the current process `PATH` first
@@ -236,21 +295,68 @@ mod tests {
             "acli",
             OsString::from("/usr/bin:/bin:/usr/sbin:/sbin"),
             Some(home.path()),
-            &[bin_dir.clone()],
+            std::slice::from_ref(&bin_dir),
         );
 
         assert_eq!(resolved, executable.into_os_string());
     }
 
     #[test]
-    fn parses_path_from_marker_line_ignoring_rc_chatter() {
-        let stdout = b"some rc banner\n__NECTUS_PATH__/a/bin:/b/bin\ntrailing\n";
+    fn parses_env_dump_after_marker_ignoring_rc_chatter() {
+        let stdout = b"some rc banner\n__NECTUS_ENV__\nPATH=/a/bin:/b/bin\nOPENAI_API_KEY=sk-123\n";
+        let vars = parse_marked_env(stdout);
         assert_eq!(
-            parse_marked_path(stdout),
-            Some(OsString::from("/a/bin:/b/bin"))
+            vars,
+            vec![
+                ("PATH".to_string(), "/a/bin:/b/bin".to_string()),
+                ("OPENAI_API_KEY".to_string(), "sk-123".to_string()),
+            ]
         );
-        assert_eq!(parse_marked_path(b"no marker here\n"), None);
-        assert_eq!(parse_marked_path(b"__NECTUS_PATH__\n"), None);
+        // No marker → nothing captured (the shell run failed or printed nothing).
+        assert!(parse_marked_env(b"no marker here\n").is_empty());
+    }
+
+    #[test]
+    fn reassembles_multi_line_env_values() {
+        // A value with an embedded newline (e.g. a PEM key) spills onto extra
+        // lines that aren't KEY= assignments; they rejoin the preceding value.
+        let stdout = b"__NECTUS_ENV__\nKEY=line1\nline2\nNEXT=ok\n";
+        let vars = parse_marked_env(stdout);
+        assert_eq!(
+            vars,
+            vec![
+                ("KEY".to_string(), "line1\nline2".to_string()),
+                ("NEXT".to_string(), "ok".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn split_env_line_accepts_only_valid_identifiers() {
+        assert_eq!(split_env_line("FOO=bar"), Some(("FOO", "bar")));
+        assert_eq!(split_env_line("_x9=v=w"), Some(("_x9", "v=w")));
+        assert_eq!(split_env_line("EMPTY="), Some(("EMPTY", "")));
+        // Continuations / non-assignments are rejected so they fold into the
+        // previous value instead of becoming bogus vars.
+        assert_eq!(split_env_line("no key"), None);
+        assert_eq!(split_env_line("1BAD=x"), None);
+        assert_eq!(split_env_line("HAS-DASH=x"), None);
+    }
+
+    #[test]
+    fn login_shell_path_is_extracted_from_the_env_dump() {
+        let stdout = b"__NECTUS_ENV__\nHOME=/Users/me\nPATH=/p1:/p2\n";
+        let vars = parse_marked_env(stdout);
+        let path = vars
+            .iter()
+            .find(|(key, _)| key == "PATH")
+            .map(|(_, value)| value.clone());
+        assert_eq!(path, Some("/p1:/p2".to_string()));
+        // login_shell_environment() omits PATH (callers set it via augmented_path).
+        assert!(!vars
+            .iter()
+            .filter(|(k, _)| k != "PATH")
+            .any(|(k, _)| k == "PATH"));
     }
 
     #[test]

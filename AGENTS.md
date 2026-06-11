@@ -229,7 +229,7 @@ Important backend files:
 - `native/src/jira.rs`: `acli` (Atlassian CLI) integration — connection status, project list, work-item search/view/create/transition/assign/comment with tolerant JSON parsing, the structured-config JQL builder (`build_board_jql`, incl. the `status in (...)` and `parent = "<epic>"` filter clauses, so the UI never types JQL), the epic-picker helpers (`build_epics_jql`, `list_epics`), and the create argument builder + new-key parser (`build_create_args`, `parse_created_key`); no OAuth, no stored tokens
 - `native/src/jira_rest.rs`: **optional** JIRA Cloud REST layer (`ureq`, Basic auth) for what `acli` cannot do — fixture-tested core-API parsers `parse_transitions` / `parse_project_statuses` (plus `verify` (`/myself`), `list_transitions`, `project_statuses`, `perform_transition`) **and** the Agile-API sprint layer under `/rest/agile/1.0` (`find_scrum_board`, `parse_sprints`, and the `sprint_board` orchestrator that returns active/future sprints + backlog as `JiraSprintLane`s, issues carrying their epic). Additive to `acli`, gated on a user API token; powers the legal-transition dropdown, the board status filter, all status columns (incl. empty), and Sprint view
 - `native/src/jira_secret.rs`: macOS Keychain store for the optional JIRA API token (`keyring`; service = the app identifier, account = `jira-api-token:{site}`). The token never touches SQLite — only the non-secret site/email persist in `app_settings`
-- `native/src/process_util.rs`: shared command helpers — binary resolution (`resolve_executable`), child `PATH` augmentation (`augmented_path`), the captured **login-shell PATH** (`login_shell_path`, run once and cached so any install prefix — `~/homebrew`, mise/asdf/volta shims, `~/bin` — is found, not just the fixed `third_party_bin_dirs`), the install-dir source of truth (`third_party_bin_dirs`), and `command_error` stderr formatting. See [Spawning External CLIs](#spawning-external-clis-macos-gui-path).
+- `native/src/process_util.rs`: shared command helpers — binary resolution (`resolve_executable`), child `PATH` augmentation (`augmented_path`), the captured **login-shell environment** (`login_shell_env`, run once and cached: a single `$SHELL -lic 'env'` dump that feeds both the seed env for spawned children — `login_shell_environment`, so provider keys like `OPENAI_API_KEY` reach GUI-launched agents — and the login-shell PATH — `login_shell_path`, so any install prefix like `~/homebrew`, mise/asdf/volta shims, `~/bin` is found, not just the fixed `third_party_bin_dirs`), the install-dir source of truth (`third_party_bin_dirs`), and `command_error` stderr formatting. See [Spawning External CLIs](#spawning-external-clis-macos-gui-path).
 - `native/src/sessions/`: PTY lifecycle, terminal event emission, Codex JSONL watching, Claude Code hook event bridge (`claude.rs`), OpenCode local-server `/event` watching (`opencode.rs`), agent command setup, and the task review-loop / external PR-review runtimes (`review_loop.rs`, `pr_review.rs`, `pr_consensus.rs`). The append-only event-log tail loop shared by the Codex and Claude watchers (`watch_event_log` in `mod.rs`) keeps line-tailing in one place: it tails **incrementally** by byte offset (reading only appended bytes, not re-reading the whole growing file each tick) while still deferring a partial trailing line until its newline arrives. Per-provider session-lifecycle facts live in one descriptor, `provider.rs` (`provider_session(kind)`: `needs_local_server`, `emits_structured_activity`, `sends_prompt_in_args`, `cleanup_event_sink`, and which `WatcherKind` to spawn) — the lifecycle sites in `mod.rs` consume it instead of re-deriving an `if Codex … else if Claude …` ladder; `resolve_resumable_metadata` is the shared post-exit probe. Each provider watcher also feeds the live `session_activity` line via `SessionSignal::Activity` from its structured stream (Codex `agent_reasoning`/`agent_message`, Claude `PreToolUse` hook, OpenCode `message.part.updated`), normalized/throttled/de-duplicated by `emit_activity_line`; the raw-PTY `latest_activity_line` scraper is reserved for Gemini/custom agents (gated by `provider_session(kind).emits_structured_activity`), since on a full-screen TUI it only surfaced statusline chrome and echoed keystrokes. The headless reviewer-CLI launcher shared by all three reviewing surfaces lives in `reviewer.rs`; it owns the session-resume contract: `run_reviewer_command(reviewer, cwd, prompt, resume: Option<&str>, stream) -> Result<ReviewerRunOutput, String>`, `reviewer_supports_resume(AgentKind)` (true for Claude/Codex/OpenCode), and `new_reviewer_session_id()`. Per-provider reviewer stdout decoding — plain text for Claude/Gemini/custom, newline-delimited JSON events for Codex (`exec --json`) and OpenCode (`run --format json`) with session-id extraction — lives in `reviewer_output.rs`. The PTY submission helper is in `terminal_io.rs`. The single + consensus PR runtimes share one ephemeral-worktree scaffold (`pr_worktree.rs`: unique per-review branch/path + guaranteed teardown). The agent-verdict contract is shared app-wide in `verdict.rs` (the `NECTUS_VERDICT:` marker + `VerdictToken` enum + parse/strip helper); `pr_verdict.rs` (PR reviews) and `review_loop.rs` (task loop) are thin adapters mapping the token to their own domain enums — no natural-language fallback
 - `native/src/sessions/agents/`: provider-specific Codex, Claude, Gemini, and OpenCode command arguments and fallback locations
 - `native/src/models/`: shared serializable data types, split by domain (`error`, `task`, `review`, `agent`, `github`, `jira`, `settings`, `session`, `workspace`) and re-exported flat from `mod.rs`, so every `crate::models::Foo` path still resolves
@@ -246,21 +246,25 @@ purpose and source) lives in
 [`docs/tracking-and-debugging.md`](docs/tracking-and-debugging.md) — keep that the
 single source of truth rather than re-listing commands here.
 
-## Spawning External CLIs (macOS GUI PATH)
+## Spawning External CLIs (macOS GUI environment)
 
 A macOS app launched from Finder/Dock (or the packaged `.app`) inherits only a
-minimal PATH — `/usr/bin:/bin:/usr/sbin:/sbin` — with no Homebrew or user bin
-directories. This breaks externally-spawned CLIs in two distinct ways. Both are
-handled in `native/src/process_util.rs`. Resolution searches three layers in
-order: the process PATH, the user's **captured login-shell PATH**
-(`login_shell_path` — run their `$SHELL -lic 'printf … "$PATH"'` once at first
-use, cached, 3s-bounded, stderr discarded; sources `.zprofile`/`.zshrc` so any
-install prefix is picked up: a no-sudo `~/homebrew`, `mise`/`asdf`/`volta` shims,
-`~/bin`, …), then the fixed `third_party_bin_dirs` backstop
-(`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, `~/.cargo/bin`, …). The
-login-shell layer is what handles install locations the fixed list can't
-enumerate; `third_party_bin_dirs` remains the source of truth for the common
-defaults:
+minimal environment — PATH `/usr/bin:/bin:/usr/sbin:/sbin`, and **none of the
+variables the user exports in their shell profile/rc** (provider API keys like
+`OPENAI_API_KEY`/`ANTHROPIC_API_KEY`, etc.). This breaks externally-spawned CLIs
+in three distinct ways. All are handled in `native/src/process_util.rs`, which
+captures the user's login-shell environment once (`login_shell_env` — a single
+`$SHELL -lic 'env'` dump, cached, 3s-bounded, stderr discarded; sources
+`.zprofile`/`.zshrc`). That one capture feeds both the seed env and the PATH
+layers below.
+
+Binary resolution searches three layers in order: the process PATH, the **captured
+login-shell PATH** (`login_shell_path`, derived from the env dump; picks up any
+install prefix — a no-sudo `~/homebrew`, `mise`/`asdf`/`volta` shims, `~/bin`, …),
+then the fixed `third_party_bin_dirs` backstop (`/opt/homebrew/bin`,
+`/usr/local/bin`, `~/.local/bin`, `~/.cargo/bin`, …). The login-shell layer
+handles install locations the fixed list can't enumerate; `third_party_bin_dirs`
+remains the source of truth for the common defaults:
 
 1. **Finding the CLI itself.** Resolve the binary with `resolve_executable` (for
    `gh` and general tools) or `resolve_agent_command` (for agent profiles); both
@@ -270,11 +274,17 @@ defaults:
    child process's PATH. Set `command.env("PATH", process_util::augmented_path())`
    on the spawned command so nested executables resolve too. Missing this surfaces
    as `env: node: No such file or directory` with **exit status 127**.
+3. **Provider keys the CLI reads from the env.** Node-based agents read
+   `OPENAI_API_KEY` and friends straight from the environment, which a GUI launch
+   lacks. Seed the child with `process_util::login_shell_environment()` (the
+   login-shell env minus PATH) so a GUI launch behaves like a terminal launch.
+   Missing this surfaces as the reviewer/agent reporting **"API key is missing"**.
 
 **Rule:** whenever you spawn an external process — `std::process::Command` or
-portable-pty `CommandBuilder` — resolve the binary with the helpers above *and*
-set its `PATH` to `augmented_path()`. Apply any profile-provided env afterwards so
-a profile's own PATH still wins. Current call sites:
+portable-pty `CommandBuilder` — resolve the binary with the helpers above, seed
+the child env with `login_shell_environment()`, *and* set its `PATH` to
+`augmented_path()`. Apply any profile-provided env last so a profile's own
+env/PATH still wins. Current call sites:
 
 - agent PTY sessions — `native/src/sessions/mod.rs`
 - the reviewer launch shared by the task AI review loop and external PR reviews —
