@@ -35,7 +35,10 @@ The app shell is an always-collapsed icon rail plus a persistent navigator panel
   - **Workspaces** — one row per workspace; clicking opens an **aggregated
     kanban** across all of that workspace's repos (the `workspace` view, reusing
     `Workspace.tsx`). Task cards on the workspace board carry a repo-name badge so
-    cards from different repos are distinguishable. Each workspace row has an **ⓘ
+    cards from different repos are distinguishable; a cross-repo task's badge
+    appends `+N` for its additional repos (the tooltip lists them all). The
+    section header has a **"+"** (like the Projects section) that opens the
+    workspace manager. Each workspace row has an **ⓘ
     info card** (a popover, `src/components/ui/popover.tsx`) that lists the
     workspace's member projects; each listed project is clickable to open its
     individual board. A hover-revealed **"+"** at the row's right edge opens the

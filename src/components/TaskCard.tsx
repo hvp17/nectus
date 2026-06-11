@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { AlertTriangle, Bot, CheckCircle2, GitBranch } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { AgentLogo } from "./AgentBrand";
@@ -28,7 +29,12 @@ interface TaskCardProps {
   onDragEnd: () => void;
 }
 
-export function TaskCard({
+/**
+ * Memoized: the board re-renders on every live activity line, but only the card
+ * whose `liveLine`/`attention` actually changed should reconcile (the handlers
+ * the board passes are useCallback-stable).
+ */
+export const TaskCard = memo(function TaskCard({
   task,
   attention,
   liveLine,
@@ -152,7 +158,19 @@ export function TaskCard({
           <span className="truncate">{task.hasWorktree ? task.branchName : "No worktree"}</span>
         </span>
         <span className="nx-card-agent">
-          {repoName && <span className="nx-card-repo">{repoName}</span>}
+          {repoName && (
+            <span
+              className="nx-card-repo"
+              title={
+                task.taskRepos.length > 1
+                  ? task.taskRepos.map((taskRepo) => taskRepo.repoName).join(", ")
+                  : undefined
+              }
+            >
+              {repoName}
+              {task.taskRepos.length > 1 && ` +${task.taskRepos.length - 1}`}
+            </span>
+          )}
           {task.jiraIssueKey && (
             <span className="nx-card-jira" title={task.jiraIssueSummary ?? undefined}>
               {task.jiraIssueKey}
@@ -166,4 +184,4 @@ export function TaskCard({
       </div>
     </div>
   );
-}
+});

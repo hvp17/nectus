@@ -135,8 +135,10 @@ export function AppLayout() {
   const taskToast = useAppStore((s) => s.taskToast);
   const setTaskToast = useAppStore((s) => s.setTaskToast);
   const busy = useAppStore((s) => s.busy);
-  const taskAttention = useAppStore((s) => s.taskAttention);
-  const liveLines = useAppStore((s) => s.liveLines);
+  // Select just the badge count, not the attention array: the shell must NOT
+  // re-render on every hot runtime update (`liveLines` changes on every agent
+  // output line). Components that display live data subscribe themselves.
+  const needsInputCount = useAppStore((s) => getAttentionCounts(s.taskAttention).needsInput);
 
   const selectedRepo = useMemo(() => repos.find((repo) => repo.id === selectedRepoId), [repos, selectedRepoId]);
   const activeWorkspace = useMemo(
@@ -148,13 +150,6 @@ export function AppLayout() {
     [activeWorkspace, repos],
   );
   const selectedTask = useMemo(() => tasks.find((task) => task.id === selectedTaskId), [tasks, selectedTaskId]);
-  const counts = useMemo(() => {
-    const attentionCounts = getAttentionCounts(taskAttention);
-    return {
-      needsInput: attentionCounts.needsInput,
-      finished: attentionCounts.finished,
-    };
-  }, [taskAttention]);
 
   // The New Task composer draft now lives in the store; AppLayout owns only the
   // open/close trigger (the overlay itself is self-sufficient via `ComposerOverlay`).
@@ -397,7 +392,7 @@ export function AppLayout() {
       >
         <IconRail
           active={railActive}
-          needsCount={counts.needsInput}
+          needsCount={needsInputCount}
           onNavigate={handleNavigate}
           onCreateTask={openCreateTaskModal}
           canCreateTask={repos.length > 0}
@@ -409,8 +404,6 @@ export function AppLayout() {
             repos={repos}
             workspaces={workspaces}
             tasks={tasks}
-            taskAttention={taskAttention}
-            liveLines={liveLines}
             selectedRepoId={currentView === "board" ? selectedRepoId : undefined}
             selectedWorkspaceId={currentView === "workspace" ? activeWorkspaceId : undefined}
             onSelectRepo={(id) => {

@@ -106,6 +106,14 @@ export function Workspace({
     [repoNames],
   );
 
+  // Bucket once per task-list change instead of filtering per column per render,
+  // so the memoized TaskCards keep stable props while live lines stream in.
+  const tasksByStatus = useMemo(() => {
+    const byStatus = new Map<TaskStatus, TaskSummary[]>(statusOrder.map((status) => [status, []]));
+    for (const task of visibleTasks) byStatus.get(task.status)?.push(task);
+    return byStatus;
+  }, [visibleTasks]);
+
   const draggingTask = visibleTasks.find((task) => task.id === draggingTaskId);
 
   useEffect(() => {
@@ -203,7 +211,7 @@ export function Workspace({
         <div className="nx-board">
           <div className="nx-cols">
             {statusOrder.map((status) => {
-              const tasksInColumn = visibleTasks.filter((t) => t.status === status);
+              const tasksInColumn = tasksByStatus.get(status) ?? [];
               const acceptsDraggedTask = Boolean(draggingTask && draggingTask.status !== status);
               return (
                 <StatusColumn

@@ -197,7 +197,10 @@ Current behavior:
   so a subagent's approval checks do not become task-level `Finished` attention markers.
 - Keeps discovering the matching rollout while the Nectus task session is active.
   Discovery polls every 500 ms for the first 120 attempts, then every 5 seconds
-  until Codex writes metadata or the task session stops.
+  until Codex writes metadata or the task session stops. Each scan walks
+  `~/.codex/sessions` but only opens files whose mtime is at/after the session
+  start (minus 60s slack) — historical rollouts are pruned by a metadata check,
+  not re-read on every poll.
 - Reads newly appended, **newline-terminated** lines from that file. A trailing
   fragment without a `\n` (a line caught mid-write) is not parsed or counted until
   its terminator arrives, so the completing event is never skipped. This tailing

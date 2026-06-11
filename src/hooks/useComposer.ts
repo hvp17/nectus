@@ -105,20 +105,32 @@ export function useComposer() {
                 ? `Setting up ${repoIds.length} worktrees (fetching latest)…`
                 : "Setting up worktree (fetching latest)…",
             );
-            let task = crossRepo
-              ? await api.createCrossRepoTask({ workspaceId, repoIds, title, prompt, agentProfileId, branchName })
-              : await api.createTask({ repoId: repoIds[0], title, prompt, agentProfileId, hasWorktree: true, branchName });
-            // The cross-repo create API takes no JIRA fields, so attach the linked
-            // story here (works for the single-repo workspace case too) — otherwise
-            // a task created from a JIRA story in Workspace mode loses its link.
-            if (jiraLink) {
-              task = await api.setTaskJiraLink({
-                taskId: task.id,
-                key: jiraLink.key,
-                summary: jiraLink.summary,
-                url: jiraLink.url,
-              });
-            }
+            // Both create APIs attach the linked JIRA story atomically, so a task
+            // created from a story keeps its link regardless of scope.
+            const jiraFields = {
+              jiraIssueKey: jiraLink?.key ?? null,
+              jiraIssueSummary: jiraLink?.summary ?? null,
+              jiraIssueUrl: jiraLink?.url ?? null,
+            };
+            const task = crossRepo
+              ? await api.createCrossRepoTask({
+                  workspaceId,
+                  repoIds,
+                  title,
+                  prompt,
+                  agentProfileId,
+                  branchName,
+                  ...jiraFields,
+                })
+              : await api.createTask({
+                  repoId: repoIds[0],
+                  title,
+                  prompt,
+                  agentProfileId,
+                  hasWorktree: true,
+                  branchName,
+                  ...jiraFields,
+                });
             await finishCreate(
               task,
               repoIds[0],

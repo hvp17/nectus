@@ -66,7 +66,7 @@ fn task_session_context(
     // the global DB lock (and, for start/resume, on the main thread) — so it must
     // not shell out to `git status`.
     let task = db
-        .task_by_id_db_only(task_id)?
+        .task_by_id(task_id)?
         .ok_or_else(|| AppError::from("Task not found"))?;
     let agent_profile_id = agent_profile_id
         .or(task.agent_profile_id)
@@ -180,7 +180,10 @@ async fn create_task(
 
 /// Create a task that spans several repos (Increment B): one worktree per repo as
 /// siblings under a shared parent, driven by a single agent session. `repo_ids[0]`
-/// is the primary repo (the session's working directory).
+/// is the primary repo (the session's working directory). Accepts the same
+/// optional JIRA story link as `create_task`, so a story-seeded task keeps its
+/// link regardless of scope.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn create_cross_repo_task(
     workspace_id: Option<i64>,
@@ -189,6 +192,9 @@ async fn create_cross_repo_task(
     prompt: Option<String>,
     agent_profile_id: Option<i64>,
     branch_name: Option<String>,
+    jira_issue_key: Option<String>,
+    jira_issue_summary: Option<String>,
+    jira_issue_url: Option<String>,
     state: State<'_, AppState>,
 ) -> AppResult<TaskSummary> {
     let db = state.db.clone();
@@ -202,9 +208,20 @@ async fn create_cross_repo_task(
         );
         plan.create_worktrees()?;
         tracing::info!("create_cross_repo_task: worktrees ready; inserting rows (brief lock)");
-        db.lock()
+        let task = db
+            .lock()
             .insert_cross_repo_task(&plan, workspace_id, title, agent_profile_id)
-            .inspect_err(|_| plan.teardown_worktrees())
+            .inspect_err(|_| plan.teardown_worktrees())?;
+        // Attaching to a story only links locally — it never writes back to JIRA.
+        if jira_issue_key.is_some() {
+            return db.lock().set_task_jira_link(
+                task.id,
+                jira_issue_key,
+                jira_issue_summary,
+                jira_issue_url,
+            );
+        }
+        Ok(task)
     })
     .await
 }
@@ -222,14 +239,7 @@ async fn list_tasks(
         // serialize every concurrent command behind the whole board load. For a
         // cross-repo task this checks each repo's worktree.
         for task in tasks.iter_mut() {
-            if let Some(path) = task.worktree_path.as_deref() {
-                task.is_dirty = git_ops::is_dirty(Path::new(path));
-            }
-            for task_repo in task.task_repos.iter_mut() {
-                if let Some(path) = task_repo.worktree_path.as_deref() {
-                    task_repo.is_dirty = git_ops::is_dirty(Path::new(path));
-                }
-            }
+            fill_task_dirtiness(task);
         }
         Ok(tasks)
     })
@@ -238,8 +248,21 @@ async fn list_tasks(
     .map_err(Into::into)
 }
 
-// Returns the updated task via `task_by_id`, which runs `git status` for
-// dirtiness — a subprocess — so keep it off the main UI thread.
+/// Fill in worktree dirtiness — one `git status` subprocess per worktree-backed
+/// repo. DB reads never compute this (a subprocess under the global DB lock would
+/// stall every other command), so commands returning a task to the UI call this
+/// **after releasing the lock**.
+fn fill_task_dirtiness(task: &mut TaskSummary) {
+    if let Some(path) = task.worktree_path.as_deref() {
+        task.is_dirty = git_ops::is_dirty(Path::new(path));
+    }
+    for task_repo in task.task_repos.iter_mut() {
+        if let Some(path) = task_repo.worktree_path.as_deref() {
+            task_repo.is_dirty = git_ops::is_dirty(Path::new(path));
+        }
+    }
+}
+
 #[tauri::command]
 async fn update_task_metadata(
     task_id: i64,
@@ -250,8 +273,11 @@ async fn update_task_metadata(
 ) -> AppResult<TaskSummary> {
     let db = state.db.clone();
     blocking("Failed to update task", move || {
-        db.lock()
-            .update_task_metadata(task_id, title, status, pr_url)
+        let mut task = db
+            .lock()
+            .update_task_metadata(task_id, title, status, pr_url)?;
+        fill_task_dirtiness(&mut task);
+        Ok(task)
     })
     .await
 }
@@ -363,10 +389,13 @@ async fn detect_github_pull_request(
             }
         };
         match github::find_pull_request(Path::new(&worktree))? {
-            Some(info) => db
-                .lock()
-                .update_task_metadata(task_id, None, None, Some(info.url))
-                .map(Some),
+            Some(info) => {
+                let mut task =
+                    db.lock()
+                        .update_task_metadata(task_id, None, None, Some(info.url))?;
+                fill_task_dirtiness(&mut task);
+                Ok(Some(task))
+            }
             None => Ok(None),
         }
     })
@@ -757,7 +786,6 @@ async fn jira_sprint_board(
 }
 
 /// Set or clear the local JIRA story link on a task. Never writes to JIRA.
-/// Async because it returns the task via `task_by_id` (which runs `git status`).
 #[tauri::command]
 async fn set_task_jira_link(
     task_id: i64,
@@ -768,7 +796,9 @@ async fn set_task_jira_link(
 ) -> AppResult<TaskSummary> {
     let db = state.db.clone();
     blocking("Failed to update JIRA link", move || {
-        db.lock().set_task_jira_link(task_id, key, summary, url)
+        let mut task = db.lock().set_task_jira_link(task_id, key, summary, url)?;
+        fill_task_dirtiness(&mut task);
+        Ok(task)
     })
     .await
 }
@@ -781,26 +811,31 @@ const MAX_CONSENSUS_ROUNDS: i64 = 5;
 /// known project, queue the review, and kick off the background reviewer. One
 /// reviewer runs the original single-reviewer flow; two or more runs a
 /// multi-model consensus that iterates up to `max_rounds` (default 3) rounds.
+// Async because resolving the PR's `owner/repo` to a known project runs one
+// `git remote get-url` subprocess per candidate repo — off the main UI thread,
+// and off the DB lock (only the repo list and the insert hold it briefly).
 #[tauri::command]
-fn create_pr_review(
+async fn create_pr_review(
     pr_url: String,
     reviewer_profile_ids: Option<Vec<i64>>,
     max_rounds: Option<i64>,
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> AppResult<PrReview> {
-    let review = {
-        let db = state.db.lock();
+    let db = state.db.clone();
+    let review = blocking("Failed to create PR review", move || {
         let parsed = github::parse_pull_request_url(&pr_url)?;
-        let repo = db
-            .resolve_repo_for_owner_repo(&parsed.owner, &parsed.repo)?
+        // Brief lock for the candidate list, then match remotes off-lock.
+        let repos = db.lock().list_repos()?;
+        let repo = github::resolve_repo_for_owner_repo(repos, &parsed.owner, &parsed.repo)
             .ok_or_else(|| {
-                AppError::from(format!(
+                format!(
                     "Add {}/{} as a project to review its pull requests",
                     parsed.owner, parsed.repo
-                ))
+                )
             })?;
 
+        let db = db.lock();
         // Fall back to the default reviewer profile when none were chosen, and
         // drop duplicates so consensus runs across distinct reviewers.
         let mut reviewer_ids = reviewer_profile_ids.unwrap_or_default();
@@ -811,7 +846,7 @@ fn create_pr_review(
             reviewer_ids.push(
                 db.get_app_settings()?
                     .default_agent_profile_id
-                    .ok_or_else(|| AppError::from("Choose a reviewer profile for the review"))?,
+                    .ok_or_else(|| "Choose a reviewer profile for the review".to_string())?,
             );
         }
 
@@ -819,7 +854,7 @@ fn create_pr_review(
         // first selected reviewer doubles as the synthesizer. The stored `mode`
         // then drives the runtime dispatch (here and on re-run).
         if reviewer_ids.len() <= 1 {
-            db.create_pr_review(repo.id, reviewer_ids[0], pr_url.trim(), parsed.number)?
+            db.create_pr_review(repo.id, reviewer_ids[0], pr_url.trim(), parsed.number)
         } else {
             let rounds = max_rounds.unwrap_or(3).clamp(1, MAX_CONSENSUS_ROUNDS);
             db.create_consensus_pr_review(
@@ -829,9 +864,10 @@ fn create_pr_review(
                 rounds,
                 pr_url.trim(),
                 parsed.number,
-            )?
+            )
         }
-    };
+    })
+    .await?;
 
     start_pr_review(&state, app, review.mode, review.id);
     Ok(review)

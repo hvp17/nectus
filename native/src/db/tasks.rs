@@ -3,7 +3,7 @@ use super::{generated_branch_name, now, Database};
 use crate::git_ops;
 use crate::models::{Repo, TaskRepo, TaskStatus, TaskSummary};
 use rusqlite::{params, OptionalExtension};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 impl Database {
@@ -82,7 +82,7 @@ impl Database {
         tx.commit()
             .map_err(|error| format!("Failed to commit task: {error}"))?;
 
-        self.task_by_id_db_only(task_id)?
+        self.task_by_id(task_id)?
             .ok_or_else(|| "Task was saved but could not be loaded".into())
     }
 
@@ -231,7 +231,7 @@ impl Database {
         tx.commit()
             .map_err(|error| format!("Failed to commit task: {error}"))?;
 
-        self.task_by_id_db_only(task_id)?
+        self.task_by_id(task_id)?
             .ok_or_else(|| "Task was saved but could not be loaded".into())
     }
 
@@ -325,19 +325,48 @@ impl Database {
             );
             mapped?
         };
+        // One bulk query for every task's per-repo rows instead of one query per
+        // task — the board load is O(2 queries), not O(tasks).
+        let mut repos_by_task = self.task_repos_by_task()?;
         for task in tasks.iter_mut() {
-            task.task_repos = self.task_repos_for(task.id)?;
+            task.task_repos = repos_by_task.remove(&task.id).unwrap_or_default();
         }
         Ok(tasks)
+    }
+
+    /// Load every task's per-repo rows in one query, grouped by task id — the
+    /// bulk companion to [`task_repos_for`] used by [`list_tasks`].
+    fn task_repos_by_task(&self) -> Result<HashMap<i64, Vec<TaskRepo>>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "
+                SELECT tr.repo_id, r.name, tr.branch_name, tr.worktree_path, tr.pr_url, tr.position, tr.task_id
+                FROM task_repos tr
+                JOIN repos r ON r.id = tr.repo_id
+                ORDER BY tr.task_id, tr.position
+                ",
+            )
+            .map_err(|error| error.to_string())?;
+        let mapped = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, i64>(6)?, task_repo_from_row(row)?))
+            })
+            .map_err(|error| error.to_string())?;
+        let mut grouped: HashMap<i64, Vec<TaskRepo>> = HashMap::new();
+        for entry in mapped {
+            let (task_id, task_repo) = entry.map_err(|error| error.to_string())?;
+            grouped.entry(task_id).or_default().push(task_repo);
+        }
+        Ok(grouped)
     }
 
     /// Load a task and its per-repo state from SQLite only — **no `git status`**,
     /// so it runs no subprocess and is safe to call while holding the DB lock.
     /// `is_dirty` stays `false`; compute it off-lock when actually needed (the
-    /// bulk list does, in `list_tasks`). Used by the create and session-start
-    /// paths, which hold the lock and don't need dirtiness — a brand-new worktree
-    /// is clean anyway, and a session launch never reads `is_dirty`.
-    pub fn task_by_id_db_only(&self, id: i64) -> Result<Option<TaskSummary>, String> {
+    /// command layer does, via `fill_task_dirtiness` in `lib.rs`). Every DB-layer
+    /// caller holds the lock, so dirtiness is never computed here.
+    pub fn task_by_id(&self, id: i64) -> Result<Option<TaskSummary>, String> {
         let row = self
             .conn
             .query_row(
@@ -363,26 +392,6 @@ impl Database {
             return Ok(None);
         };
         task.task_repos = self.task_repos_for(id)?;
-        Ok(Some(task))
-    }
-
-    pub fn task_by_id(&self, id: i64) -> Result<Option<TaskSummary>, String> {
-        let Some(mut task) = self.task_by_id_db_only(id)? else {
-            return Ok(None);
-        };
-        // A single task read tolerates the per-worktree `git status` cost inline
-        // (the bulk list defers it off-lock); compute it for the task and each
-        // repo. `is_dirty` is time-bounded, so a stuck status can't hang here.
-        task.is_dirty = task
-            .worktree_path
-            .as_ref()
-            .is_some_and(|path| git_ops::is_dirty(Path::new(path)));
-        for task_repo in task.task_repos.iter_mut() {
-            task_repo.is_dirty = task_repo
-                .worktree_path
-                .as_ref()
-                .is_some_and(|path| git_ops::is_dirty(Path::new(path)));
-        }
         Ok(Some(task))
     }
 
@@ -449,7 +458,7 @@ impl Database {
     /// DB-only load so it never shells out to `git status` under the lock.
     pub fn plan_task_deletion(&self, task_id: i64) -> Result<TaskDeletionPlan, String> {
         let existing = self
-            .task_by_id_db_only(task_id)?
+            .task_by_id(task_id)?
             .ok_or_else(|| "Task not found".to_string())?;
         if existing.active_session_id.is_some() {
             return Err("Stop the running session before deleting this task".into());
