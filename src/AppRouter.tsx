@@ -399,7 +399,8 @@ export function AppLayout() {
           "app-shell relative isolate grid h-full min-h-dvh w-full min-w-0 items-stretch overflow-hidden bg-background font-sans text-foreground",
           // Frame columns: icon rail + viewport, with the navigator panel slotted in
           // on the work views ("railp") — collapsed away again under 961px wide.
-          "grid-cols-[52px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] min-[961px]:data-[frame=railp]:grid-cols-[52px_14rem_minmax(0,1fr)]",
+          // The panel column matches shadcn's SIDEBAR_WIDTH (16rem).
+          "grid-cols-[52px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] min-[961px]:data-[frame=railp]:grid-cols-[52px_16rem_minmax(0,1fr)]",
           `density-${settings?.density ?? "comfortable"}`,
         )}
         data-frame={frame}
