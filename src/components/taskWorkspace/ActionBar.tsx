@@ -27,7 +27,7 @@ export function ActionBar({
   // Reply focuses the live terminal so the user can type their answer inline.
   const focusTerminal = () => {
     if (typeof document === "undefined") return;
-    document.querySelector<HTMLTextAreaElement>(".task-workspace .xterm-helper-textarea")?.focus();
+    document.querySelector<HTMLTextAreaElement>("[data-task-workspace] .xterm-helper-textarea")?.focus();
   };
   const showOpenPr = Boolean(prUrl || canCreatePullRequest);
   const openPr = () => {

@@ -236,7 +236,8 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
     }
 
     const container = document.createElement("div");
-    container.className = "terminal-session-host";
+    // Hiding relies on the `hidden` attribute (UA default `display: none`).
+    container.className = "h-full w-full";
     host.appendChild(container);
 
     const terminal = new Terminal({
@@ -367,7 +368,7 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
 
   return (
     <div
-      className="terminal-host"
+      className="relative h-full min-h-0 flex-1 bg-card p-2.5 data-[empty]:before:font-mono data-[empty]:before:text-[13px] data-[empty]:before:text-muted-foreground data-[empty]:before:content-['Select_a_task_and_start_an_agent.']"
       ref={hostRef}
       onDragOver={(event) => {
         event.preventDefault();

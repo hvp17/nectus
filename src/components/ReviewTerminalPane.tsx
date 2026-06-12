@@ -97,10 +97,10 @@ export function ReviewTerminalPane({ output, active }: ReviewTerminalPaneProps) 
   }, [output]);
 
   return (
-    <div className="review-terminal" data-testid="review-terminal">
-      <div ref={hostRef} className="review-terminal-host" />
+    <div className="relative h-full min-h-0 bg-card p-2.5" data-testid="review-terminal">
+      <div ref={hostRef} className="h-full w-full" />
       {output.length === 0 && (
-        <Empty className="review-terminal-empty">
+        <Empty className="absolute inset-0 border-none">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <ScanEye />

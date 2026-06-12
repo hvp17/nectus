@@ -46,9 +46,9 @@ describe("TaskDiffView", () => {
       },
     };
     renderView({ files });
-    expect(screen.getByText("+new line")).toHaveClass("diff-line--add");
-    expect(screen.getByText("-old line")).toHaveClass("diff-line--del");
-    expect(screen.getByText("@@ -1,2 +1,2 @@")).toHaveClass("diff-line--hunk");
+    expect(screen.getByText("+new line")).toHaveAttribute("data-line-type", "add");
+    expect(screen.getByText("-old line")).toHaveAttribute("data-line-type", "del");
+    expect(screen.getByText("@@ -1,2 +1,2 @@")).toHaveAttribute("data-line-type", "hunk");
   });
 
   it("requests another file's patch when it is selected", () => {

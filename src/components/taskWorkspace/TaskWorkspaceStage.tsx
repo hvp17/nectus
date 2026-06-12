@@ -111,8 +111,8 @@ export function TaskWorkspaceStage({
 }: TaskWorkspaceStageProps) {
   return (
     <main className="flex min-h-0 min-w-0 flex-col gap-3 bg-gradient-to-b from-muted/25 to-transparent to-30% p-4">
-      <header className="task-workspace-header">
-        <div className="task-workspace-heading">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="flex min-w-0 flex-[1_1_12rem] items-center gap-3">
           <Button
             type="button"
             variant="ghost"
@@ -127,7 +127,7 @@ export function TaskWorkspaceStage({
           <Separator orientation="vertical" className="h-5 shrink-0" />
           <EditableTaskTitle title={task.title} onRename={(title) => onRenameTask(task, title)} />
         </div>
-        <div className="task-workspace-badges">
+        <div className="ml-auto flex flex-wrap items-center gap-1.5 max-[1040px]:ml-0 max-[1040px]:w-full">
           <TaskStatusBadges task={task} />
         </div>
       </header>
@@ -209,7 +209,12 @@ export function TaskWorkspaceStage({
               <ToggleGroupItem value="review" aria-label="Show reviewer terminal" className="h-7 gap-1.5 px-2.5 text-xs">
                 <ScanEye className="size-3.5" aria-hidden="true" />
                 Review
-                {reviewInProgress && <span className="dot live-dot bg-primary" aria-hidden="true" />}
+                {reviewInProgress && (
+                  <span
+                    className="size-[7px] shrink-0 rounded-full bg-primary motion-safe:animate-pulse"
+                    aria-hidden="true"
+                  />
+                )}
               </ToggleGroupItem>
             </ToggleGroup>
 

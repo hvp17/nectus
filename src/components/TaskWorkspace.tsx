@@ -285,7 +285,7 @@ export function TaskWorkspace({
                 onSelect={() => setReviewerProfileId(profile.id)}
                 className="justify-between"
               >
-                <span className="select-option-with-logo">
+                <span className="inline-flex min-w-0 items-center gap-2">
                   <span aria-hidden="true">
                     <AgentLogo agentKind={profile.agentKind} size="sm" />
                   </span>
@@ -361,7 +361,11 @@ export function TaskWorkspace({
   ];
 
   return (
-    <section className="task-workspace" aria-label="Task workspace">
+    <section
+      data-task-workspace=""
+      className="grid h-full min-h-0 w-full min-w-0 grid-cols-[minmax(0,1fr)_320px] overflow-hidden bg-background max-[1040px]:grid-cols-[minmax(0,1fr)] max-[1040px]:grid-rows-[minmax(0,auto)_minmax(0,1fr)] max-[1040px]:[&>aside]:-order-1 max-[1040px]:[&>aside]:max-h-[min(42vh,360px)] max-[1040px]:[&>aside]:border-t-0 max-[1040px]:[&>aside]:border-b max-[1040px]:[&>aside]:border-l-0 max-[1040px]:[&>main]:order-1 max-[1040px]:[&>main]:min-h-0"
+      aria-label="Task workspace"
+    >
       <TaskWorkspaceStage
         task={task}
         backLabel={backLabel}
