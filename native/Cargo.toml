@@ -19,7 +19,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
-keyring = "3"
+# `apple-native` is required: keyring 3 makes platform keystores opt-in and
+# silently falls back to an in-memory mock store without it — tokens would
+# "save" but vanish on app relaunch.
+keyring = { version = "3", features = ["apple-native"] }
 parking_lot = "0.12"
 portable-pty = "0.9"
 rusqlite = { version = "0.32", features = ["bundled"] }

@@ -172,6 +172,11 @@ All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
 - API tokens are **JIRA Cloud only** (Basic auth `email:token`), and Atlassian
   tokens have a mandatory expiry — a 401 after months of use usually means the token
   expired; create a new one and **Update token** in Settings.
+- **Keychain storage requires keyring's `apple-native` feature** (set in
+  `native/Cargo.toml`). Without it, keyring 3 silently falls back to an
+  in-memory mock store — the token appears to save but is gone after an app
+  relaunch. If a macOS dialog ever asks whether Nectus may access the item
+  (e.g. after an app update changes the ad-hoc code signature), choose Allow.
 - **TLS trust comes from the macOS system trust store** (`ureq` is built with the
   `native-certs` feature), so corporate TLS-inspection proxies (Zscaler, Netskope,
   …) whose root CA is installed in the Keychain work. A
