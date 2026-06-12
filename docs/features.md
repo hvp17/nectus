@@ -11,8 +11,8 @@ authoritative Tauri command/event reference and SQLite tables, see
 
 The app shell is an always-collapsed icon rail plus a persistent navigator panel.
 
-- The icon rail (always visible, a narrow ~60px icon-only strip under the brand
-  "N" mark; width is the `--nx-rail-w` token) holds Mission Control, Board, JIRA,
+- The icon rail (always visible, a narrow 52px icon-only strip under the brand
+  "N" mark; the width lives in `AppRouter`'s frame grid) holds Mission Control, Board, JIRA,
   PR Reviews, and Settings. Each button is icon-only with a hover tooltip naming
   it and keeps its `aria-label`; the Mission Control icon carries a corner badge
   with the cross-project needs-input count.

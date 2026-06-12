@@ -552,7 +552,7 @@ overwritten and you see **duplicate spinner/footer lines**. `src/TerminalPane.ts
 defends this on several fronts:
 
 - **Terminal height.** The pane height is driven by the layout (the `height:100%`
-  chain `html`→`#root`→`.nx-app`→`.task-workspace`→`.terminal-host`). A very short
+  chain `html`→`#root`→app shell→task-workspace grid→the terminal host). A very short
   pane (≈10 rows) leaves the agent no room and its redraws overlap — confirmed via
   the `[term-diag]` logs as the real cause of "double rendering". If the terminal
   looks cramped, the window/pane is too short, not a renderer bug.
