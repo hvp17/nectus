@@ -1,4 +1,4 @@
-import { type CSSProperties, lazy, Suspense, useEffect, useState } from "react";
+import { lazy, type ReactNode, Suspense, useEffect, useState } from "react";
 import {
   AlertTriangle,
   Check,
@@ -18,6 +18,7 @@ import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
+import { cn } from "@/lib/utils";
 import { AgentLogo } from "./AgentBrand";
 import { PrReviewBadge } from "./PrReviewBadge";
 import { openExternal } from "../lib/openExternal";
@@ -128,23 +129,35 @@ export function PrReviewDetail({
   };
 
   return (
-    <section className="nx-rev-detail" aria-label="PR review">
-      <header className="nx-rev-dhead">
-        <div className="nx-rev-dtitle">
+    <section
+      className="flex min-h-0 flex-col overflow-hidden rounded-lg bg-card shadow-xs ring-1 ring-border"
+      aria-label="PR review"
+    >
+      <header className="flex flex-none flex-col gap-[9px] border-b border-border px-[18px] py-4">
+        <div className="flex items-center gap-[9px]">
           <PrReviewBadge review={review} />
-          {isConsensus && <span className="nx-modeltag">{review.reviewers.length}-model consensus</span>}
-          <span className="nx-num">#{review.prNumber}</span>
-          <span className="nx-t">{review.prTitle ?? review.prUrl}</span>
+          {isConsensus && (
+            <span className="text-[9.5px] font-extrabold uppercase tracking-[0.05em] text-muted-foreground">
+              {review.reviewers.length}-model consensus
+            </span>
+          )}
+          <span className="font-mono text-[13px] font-bold text-muted-foreground">#{review.prNumber}</span>
+          <span className="min-w-0 truncate text-[14.5px] font-bold tracking-[-0.01em]">
+            {review.prTitle ?? review.prUrl}
+          </span>
         </div>
-        <div className="nx-rev-dmeta">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-muted-foreground">
           <span>{review.repoName}</span>
           {review.prAuthor && <span>by {review.prAuthor}</span>}
           {review.baseBranch && <span>base {review.baseBranch}</span>}
           {isConsensus && review.reviewers.length > 0 && (
-            <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span className="flex items-center gap-[5px]">
               Reviewers:
               {review.reviewers.map((reviewer) => (
-                <span key={reviewer.reviewerProfileId} className="nx-rev-reviewer-pill">
+                <span
+                  key={reviewer.reviewerProfileId}
+                  className="inline-flex items-center gap-1 rounded-[5px] bg-muted px-1.5 py-px"
+                >
                   <AgentLogo agentKind={agentKindFor(reviewer.reviewerProfileId)} size="sm" />
                   {(reviewer.reviewerName ?? "Reviewer").split(" ")[0]}
                 </span>
@@ -155,6 +168,7 @@ export function PrReviewDetail({
             href={review.prUrl}
             target="_blank"
             rel="noreferrer"
+            className="inline-flex cursor-pointer items-center gap-1 text-foreground no-underline hover:underline"
             onClick={(event) => {
               // A plain target="_blank" does nothing in the Tauri webview; route
               // through the opener plugin (and surface a toast on failure).
@@ -162,10 +176,10 @@ export function PrReviewDetail({
               openExternal(review.prUrl);
             }}
           >
-            Open PR <ExternalLink aria-hidden="true" />
+            Open PR <ExternalLink className="size-[11px]" aria-hidden="true" />
           </a>
         </div>
-        <div className="nx-rev-dactions">
+        <div className="flex items-center gap-2 pt-[3px]">
           {showTerminalToggle && (
             <ToggleGroup
               type="single"
@@ -181,7 +195,9 @@ export function PrReviewDetail({
               <ToggleGroupItem value="terminal" aria-label="Show reviewer terminal" className="h-8 gap-1.5 px-2.5 text-xs">
                 <TerminalSquare className="size-3.5" aria-hidden="true" />
                 Terminal
-                {inFlight(review.status) && <span className="dot live-dot bg-primary" aria-hidden="true" />}
+                {inFlight(review.status) && (
+                  <span className="size-[7px] shrink-0 animate-pulse rounded-full bg-primary" aria-hidden="true" />
+                )}
               </ToggleGroupItem>
             </ToggleGroup>
           )}
@@ -231,7 +247,7 @@ export function PrReviewDetail({
         </div>
       </header>
 
-      <div className="nx-rev-body">{renderBody()}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-[18px] py-4">{renderBody()}</div>
     </section>
   );
 
@@ -252,9 +268,10 @@ export function PrReviewDetail({
     // Single review, Terminal view: watch the reviewer's stdout stream live (and
     // the last run's output between sessions).
     if (view === "terminal") {
+      const termWrap = "h-full min-h-[320px] overflow-hidden rounded-[10px] border border-border bg-card";
       return (
-        <Suspense fallback={<div className="nx-rev-term-wrap" />}>
-          <div className="nx-rev-term-wrap">
+        <Suspense fallback={<div className={termWrap} />}>
+          <div className={termWrap}>
             <ReviewTerminalPane output={liveReviewOutput} active={inFlight(review.status)} />
           </div>
         </Suspense>
@@ -275,7 +292,11 @@ export function PrReviewDetail({
       );
     }
 
-    return <div className="nx-rev-output">{review.reviewOutput ?? "The reviewer returned no output."}</div>;
+    return (
+      <div className="whitespace-pre-wrap font-mono text-[12.5px] leading-[1.65] text-foreground [word-break:break-word]">
+        {review.reviewOutput ?? "The reviewer returned no output."}
+      </div>
+    );
   }
 }
 
@@ -289,45 +310,59 @@ function ConsensusBody({
   agentKindFor: (profileId: number) => AgentKind;
 }) {
   const ready = review.status === "ready";
+  const matrixRow = "grid items-stretch border-b border-border last:border-b-0";
+  const matrixRowColumns = { gridTemplateColumns: `150px repeat(${rounds.length}, 1fr)` };
+  const matrixCell =
+    "flex min-w-0 items-center gap-[7px] border-l border-border px-3 py-[9px] text-[11.5px] first:border-l-0";
+  const verdictLabelColor: Record<PrReviewVerdict, string> = {
+    passed: "text-[color-mix(in_oklch,var(--status-success)_55%,var(--foreground))]",
+    blockers: "text-[color-mix(in_oklch,var(--destructive)_62%,var(--foreground))]",
+    inconclusive: "text-muted-foreground",
+  };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="flex flex-col gap-4">
       <ConsensusBanner review={review} roundsShown={rounds.length} />
 
       {rounds.length > 0 && (
-        <div className="nx-matrix" style={{ "--rounds": rounds.length } as CSSProperties}>
-          <div className="nx-matrix-row head">
-            <div className="nx-matrix-cell">Reviewer</div>
-            {rounds.map((round) => (
-              <div key={round.round} className="nx-matrix-cell">
-                Round {round.round}
+        <div className="overflow-hidden rounded-lg border border-border bg-card">
+          <div className={cn(matrixRow, "bg-muted/50")} style={matrixRowColumns}>
+            {["Reviewer", ...rounds.map((round) => `Round ${round.round}`)].map((label) => (
+              <div
+                key={label}
+                className={cn(matrixCell, "text-[10px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground")}
+              >
+                {label}
               </div>
             ))}
           </div>
           {review.reviewers.map((reviewer) => (
-            <div key={reviewer.reviewerProfileId} className="nx-matrix-row">
-              <div className="nx-matrix-cell">
+            <div key={reviewer.reviewerProfileId} className={matrixRow} style={matrixRowColumns}>
+              <div className={matrixCell}>
                 <AgentLogo agentKind={agentKindFor(reviewer.reviewerProfileId)} size="sm" />
-                <span className="nx-matrix-rev">
+                <span className="text-[12.5px] font-semibold text-foreground">
                   {reviewer.reviewerName ?? `Reviewer #${reviewer.reviewerProfileId}`}
                   {reviewer.reviewerProfileId === review.reviewerProfileId && (
-                    <span className="sub"> · synthesizer</span>
+                    <span className="text-[10.5px] font-medium text-muted-foreground"> · synthesizer</span>
                   )}
                 </span>
               </div>
               {rounds.map((round) => {
                 const verdict = round.verdicts[reviewer.reviewerProfileId];
                 return (
-                  <div key={round.round} className="nx-matrix-cell">
+                  <div key={round.round} className={matrixCell}>
                     {verdict ? (
                       <>
                         <VDot verdict={verdict} />
-                        <span className="nx-vlabel" data-v={verdict}>
+                        <span
+                          className={cn("text-[11.5px] font-semibold", verdictLabelColor[verdict])}
+                          data-v={verdict}
+                        >
                           {PR_REVIEW_VERDICT_LABELS[verdict].short}
                         </span>
                       </>
                     ) : (
-                      <span className="empty">—</span>
+                      <span className="text-muted-foreground opacity-40">—</span>
                     )}
                   </div>
                 );
@@ -338,9 +373,13 @@ function ConsensusBody({
       )}
 
       {ready && review.reviewOutput ? (
-        <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <h3 className="nx-cons-h3">Consensus review</h3>
-          <div className="nx-cons-out">{review.reviewOutput}</div>
+        <section className="flex flex-col gap-2">
+          <h3 className="m-0 text-[11px] font-extrabold uppercase tracking-[0.07em] text-muted-foreground">
+            Consensus review
+          </h3>
+          <div className="whitespace-pre-wrap rounded-md border border-border bg-background px-[13px] py-[11px] font-mono text-[11.5px] leading-[1.6] text-foreground [word-break:break-word]">
+            {review.reviewOutput}
+          </div>
         </section>
       ) : (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -352,26 +391,56 @@ function ConsensusBody({
   );
 }
 
+type BannerTone = "ok" | "warn" | "bad";
+
+const bannerToneClasses: Record<BannerTone, { banner: string; icon: string }> = {
+  ok: { banner: "border-status-success/38 bg-status-success/9", icon: "bg-status-success/16 text-status-success" },
+  warn: { banner: "border-status-warning/40 bg-status-warning/9", icon: "bg-status-warning/16 text-status-warning" },
+  bad: { banner: "border-destructive/40 bg-destructive/9", icon: "bg-destructive/16 text-destructive" },
+};
+
+function Banner({
+  tone,
+  icon,
+  title,
+  description,
+}: {
+  tone: BannerTone;
+  icon: ReactNode;
+  title: ReactNode;
+  description: ReactNode;
+}) {
+  const classes = bannerToneClasses[tone];
+  return (
+    <div className={cn("flex items-center gap-[13px] rounded-lg border px-4 py-3.5", classes.banner)}>
+      <span
+        className={cn("grid size-[34px] flex-none place-items-center rounded-full [&_svg]:size-[18px]", classes.icon)}
+      >
+        {icon}
+      </span>
+      <div>
+        <div className="text-[13.5px] font-bold">{title}</div>
+        <div className="mt-px text-xs text-muted-foreground">{description}</div>
+      </div>
+    </div>
+  );
+}
+
 function ConsensusBanner({ review, roundsShown }: { review: PrReview; roundsShown: number }) {
   const ready = review.status === "ready";
 
   if (!ready) {
     return (
-      <div className="nx-cons-banner warn">
-        <span className="nx-cb-ic">
-          <LoaderCircle className="animate-spin" />
-        </span>
-        <div>
-          <div className="nx-cb-t">
-            {roundsShown === 0
-              ? "Reviewers are reading the pull request"
-              : `Reviewing — round ${roundsShown} of ${review.maxRounds ?? roundsShown}`}
-          </div>
-          <div className="nx-cb-d">
-            {review.reviewers.length} reviewers compare notes each round and converge on a single verdict.
-          </div>
-        </div>
-      </div>
+      <Banner
+        tone="warn"
+        icon={<LoaderCircle className="animate-spin" />}
+        title={
+          roundsShown === 0
+            ? "Reviewers are reading the pull request"
+            : `Reviewing — round ${roundsShown} of ${review.maxRounds ?? roundsShown}`
+        }
+        description={`${review.reviewers.length} reviewers compare notes each round and converge on a single verdict.`}
+      />
     );
   }
 
@@ -380,39 +449,40 @@ function ConsensusBanner({ review, roundsShown }: { review: PrReview; roundsShow
 
   if (review.converged) {
     return (
-      <div className="nx-cons-banner">
-        <span className="nx-cb-ic">
-          <CheckCircle2 />
-        </span>
-        <div>
-          <div className="nx-cb-t">
-            Converged in {roundsDone} round{roundsDone === 1 ? "" : "s"} — {verdictWord}
-          </div>
-          <div className="nx-cb-d">All reviewers agreed on the verdict. The synthesized review is below.</div>
-        </div>
-      </div>
+      <Banner
+        tone="ok"
+        icon={<CheckCircle2 />}
+        title={`Converged in ${roundsDone} round${roundsDone === 1 ? "" : "s"} — ${verdictWord}`}
+        description="All reviewers agreed on the verdict. The synthesized review is below."
+      />
     );
   }
 
   return (
-    <div className="nx-cons-banner warn">
-      <span className="nx-cb-ic">
-        <AlertTriangle />
-      </span>
-      <div>
-        <div className="nx-cb-t">Did not fully converge — {verdictWord}</div>
-        <div className="nx-cb-d">
-          Reviewers disagreed after {roundsDone} round{roundsDone === 1 ? "" : "s"}; the synthesizer used the majority
-          position.
-        </div>
-      </div>
-    </div>
+    <Banner
+      tone="warn"
+      icon={<AlertTriangle />}
+      title={`Did not fully converge — ${verdictWord}`}
+      description={`Reviewers disagreed after ${roundsDone} round${roundsDone === 1 ? "" : "s"}; the synthesizer used the majority position.`}
+    />
   );
 }
 
+const verdictDotColor: Record<PrReviewVerdict, string> = {
+  passed: "bg-status-success",
+  blockers: "bg-destructive",
+  inconclusive: "bg-muted-foreground",
+};
+
 function VDot({ verdict }: { verdict: PrReviewVerdict }) {
   return (
-    <span className="nx-vdot" data-v={verdict}>
+    <span
+      className={cn(
+        "grid size-[18px] flex-none place-items-center rounded-full [&_svg]:size-[11px] [&_svg]:text-primary-foreground",
+        verdictDotColor[verdict],
+      )}
+      data-v={verdict}
+    >
       {verdict === "passed" ? <Check /> : verdict === "blockers" ? <X /> : <Minus />}
     </span>
   );

@@ -64,7 +64,7 @@ function renderBadge(spec: BadgeSpec, dataAttrs: Record<string, string>, classNa
 }
 
 export function PrReviewBadge({ review, className }: { review: PrReview; className?: string }) {
-  // Reviewing leads with a pulsing primary live-dot (not a spinner) to read as "live".
+  // Reviewing leads with a pulsing primary dot (not a spinner) to read as "live".
   if (review.status === "reviewing") {
     return (
       <Badge
@@ -73,7 +73,7 @@ export function PrReviewBadge({ review, className }: { review: PrReview; classNa
         data-pr-review-status="reviewing"
         data-pr-review-tone="reviewing"
       >
-        <span className="nx-badge-dot live-dot" />
+        <span className="size-[7px] shrink-0 animate-pulse rounded-full bg-current" />
         Reviewing
       </Badge>
     );

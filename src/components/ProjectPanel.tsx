@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronRight, FolderGit2, Info, Plus, Settings2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { cn } from "../lib/utils";
 import { ProjectRowMenu } from "./ProjectRowMenu";
 import { SidebarAgentRow } from "./SidebarAgentRow";
 import { useMinuteNow } from "../hooks/useMinuteNow";
@@ -9,6 +10,21 @@ import { buildSidebarAgents, dominantState } from "../lib/sidebarAgents";
 import { useAppStore } from "../store/appStore";
 import type { AgentRow } from "../lib/agentState";
 import type { Repo, TaskSummary, Workspace } from "../types";
+
+/** Section kicker (PROJECTS / WORKSPACES) with its trailing icon action slot. */
+const PANEL_KICK =
+  "flex items-center justify-between px-2 pt-2 pb-1 text-[10px] font-extrabold tracking-[0.09em] uppercase text-muted-foreground";
+const KICK_BTN =
+  "grid size-5 cursor-pointer place-items-center rounded-sm text-muted-foreground hover:bg-foreground/5 hover:text-foreground";
+
+/**
+ * Hover-revealed per-row icon action (the "+"), pinned to the row's right edge.
+ * It reserves its slot (opacity, not display) so the row doesn't reflow on hover.
+ * Requires the row to carry `group/proj`; `ProjectRowMenu` mirrors this recipe
+ * for its "⋯" trigger.
+ */
+const NAV_ROW_ACTION =
+  "grid size-[18px] flex-none cursor-pointer place-items-center rounded-sm text-muted-foreground opacity-0 transition-opacity duration-[120ms] group-hover/proj:opacity-100 focus-visible:opacity-100 hover:bg-foreground/10 hover:text-foreground";
 
 interface ProjectPanelProps {
   repos: Repo[];
@@ -77,25 +93,35 @@ export function ProjectPanel({
   );
 
   return (
-    <aside className="nx-panel" aria-label="Projects and workspaces">
-      <div className="nx-panel-head">
+    <aside
+      className="flex h-full min-h-0 min-w-0 flex-col self-stretch overflow-hidden border-r border-sidebar-border bg-sidebar/60 max-[960px]:hidden"
+      aria-label="Projects and workspaces"
+    >
+      <div className="flex items-center justify-between gap-2 px-3.5 pt-3.5 pb-2 text-[18px] font-bold tracking-[-0.02em]">
         Nectus
-        <button type="button" className="nx-panel-manage" onClick={onManageWorkspaces} aria-label="Manage workspaces">
+        <button
+          type="button"
+          className="inline-flex cursor-pointer items-center gap-1.5 rounded-sm px-1.5 py-1 text-xs font-semibold text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+          onClick={onManageWorkspaces}
+          aria-label="Manage workspaces"
+        >
           <Settings2 size={14} aria-hidden="true" />
           Manage
         </button>
       </div>
 
-      <div className="nx-panel-scroll">
-        <div className="nx-panel-sect">
-          <div className="nx-panel-kick">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="px-2 py-1.5">
+          <div className={PANEL_KICK}>
             <span>Projects</span>
-            <button type="button" aria-label="Add project" onClick={onAddProject} disabled={busy}>
+            <button type="button" className={KICK_BTN} aria-label="Add project" onClick={onAddProject} disabled={busy}>
               <Plus size={13} aria-hidden="true" />
             </button>
           </div>
           {repos.length === 0 ? (
-            <p className="nx-panel-empty">{loading ? "Loading projects…" : "Add a local git project to begin."}</p>
+            <p className="px-3 py-2.5 text-xs text-muted-foreground">
+              {loading ? "Loading projects…" : "Add a local git project to begin."}
+            </p>
           ) : (
             repos.map((repo) => (
               <NavRow
@@ -124,10 +150,16 @@ export function ProjectPanel({
         </div>
 
         {workspaces.length > 0 && (
-          <div className="nx-panel-sect">
-            <div className="nx-panel-kick">
+          <div className="px-2 py-1.5">
+            <div className={PANEL_KICK}>
               <span>Workspaces</span>
-              <button type="button" aria-label="New workspace" onClick={onManageWorkspaces} disabled={busy}>
+              <button
+                type="button"
+                className={KICK_BTN}
+                aria-label="New workspace"
+                onClick={onManageWorkspaces}
+                disabled={busy}
+              >
                 <Plus size={13} aria-hidden="true" />
               </button>
             </div>
@@ -193,9 +225,14 @@ function NavRow({
   const canCollapse = rows.length > 0;
   const expanded = canCollapse && !collapsed;
   return (
-    <div className="nx-nav-group">
+    <div className="flex flex-col">
       <div
-        className="nx-proj"
+        className={cn(
+          "group/proj flex w-full cursor-pointer items-center gap-[9px] rounded-md px-[9px] py-[7px] text-left text-[13px] font-semibold text-sidebar-foreground",
+          "hover:bg-foreground/5 data-[active=true]:bg-primary/10 data-[active=true]:text-primary",
+          // The optional leading scope icon (a direct-child svg, never the nested buttons').
+          "[&>svg]:size-[15px] [&>svg]:flex-none [&>svg]:opacity-80",
+        )}
         data-active={active}
         role="button"
         tabIndex={0}
@@ -210,7 +247,7 @@ function NavRow({
         {canCollapse ? (
           <button
             type="button"
-            className="nx-nav-chevron"
+            className="-ml-[3px] grid size-4 flex-none cursor-pointer place-items-center rounded-sm p-0 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
             data-expanded={expanded}
             aria-expanded={expanded}
             aria-label={`${expanded ? "Collapse" : "Expand"} agents in ${label}`}
@@ -219,20 +256,36 @@ function NavRow({
               onToggleCollapse();
             }}
           >
-            <ChevronRight size={14} aria-hidden="true" />
+            <ChevronRight
+              size={14}
+              aria-hidden="true"
+              className={cn("transition-transform duration-[120ms]", expanded && "rotate-90")}
+            />
           </button>
         ) : (
-          <span className="nx-nav-chevron-spacer" aria-hidden="true" />
+          // A spacer of equal width stands in when a row has no agents, so
+          // project/workspace names stay aligned.
+          <span className="-ml-[3px] size-4 flex-none" aria-hidden="true" />
         )}
         {icon}
-        <span className="nx-proj-name">{label}</span>
+        <span className="truncate">{label}</span>
         {info}
-        {tone && <span className="nx-nav-dot" style={{ background: AGENT_STATE_META[tone].dot }} aria-hidden="true" />}
-        <span className="nx-proj-count">{rows.length}</span>
+        {tone && (
+          <span
+            className="ml-1 size-[7px] flex-none rounded-full"
+            style={{ background: AGENT_STATE_META[tone].dot }}
+            aria-hidden="true"
+          />
+        )}
+        <span className="ml-1.5 font-mono text-[11px] font-semibold text-muted-foreground group-data-[active=true]/proj:text-primary">
+          {rows.length}
+        </span>
         {onCreateTask && (
           <button
             type="button"
-            className="nx-nav-add"
+            // On workspace rows the info button already anchors the trailing
+            // cluster right; without it the "+" claims the auto margin itself.
+            className={cn(NAV_ROW_ACTION, info ? "ml-1.5" : "ml-auto")}
             aria-label={createLabel}
             onClick={(event) => {
               event.stopPropagation();
@@ -245,7 +298,7 @@ function NavRow({
         {menu}
       </div>
       {expanded && (
-        <div className="nx-nav-agents">
+        <div className="flex flex-col gap-1.5 pt-1 pr-1 pb-2 pl-2.5">
           {rows.map((row) => (
             <SidebarAgentRow key={row.task.id} row={row} onOpen={() => onOpenTask(row.task.id)} />
           ))}
@@ -270,29 +323,32 @@ function WorkspaceInfo({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="nx-nav-info"
+          className="ml-auto grid size-[18px] flex-none cursor-pointer place-items-center rounded-sm text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
           aria-label={`Projects in ${workspace.name}`}
           onClick={(event) => event.stopPropagation()}
         >
           <Info size={13} aria-hidden="true" />
         </button>
       </PopoverTrigger>
-      <PopoverContent side="right" align="start" sideOffset={8} className="nx-info-card w-56 p-2">
-        <div className="nx-info-title">{workspace.name}</div>
+      <PopoverContent side="right" align="start" sideOffset={8} className="flex w-56 flex-col gap-0.5 p-2">
+        <div className="px-1.5 pt-0.5 pb-1 text-[11px] font-extrabold tracking-[0.06em] text-muted-foreground uppercase">
+          {workspace.name}
+        </div>
         {workspace.repoIds.length === 0 ? (
-          <p className="nx-info-empty">No projects yet.</p>
+          <p className="px-1.5 py-1 text-xs text-muted-foreground">No projects yet.</p>
         ) : (
           workspace.repoIds.map((repoId) => (
             <button
               key={repoId}
               type="button"
-              className="nx-info-row"
+              className="flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[12.5px] font-semibold text-foreground hover:bg-foreground/5"
+              data-testid="workspace-info-repo"
               onClick={() => {
                 setOpen(false);
                 onSelectRepo(repoId);
               }}
             >
-              <FolderGit2 size={13} aria-hidden="true" />
+              <FolderGit2 size={13} aria-hidden="true" className="flex-none opacity-70" />
               {repoNames.get(repoId) ?? `repo ${repoId}`}
             </button>
           ))

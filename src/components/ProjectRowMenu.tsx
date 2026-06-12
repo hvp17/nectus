@@ -57,7 +57,9 @@ export function ProjectRowMenu({ repo, busy, onRename, onRemove }: ProjectRowMen
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="nx-nav-add"
+            // Mirrors ProjectPanel's hover-revealed row-action recipe: reserves its
+            // slot (opacity, not display) and reveals on row (`group/proj`) hover.
+            className="group-hover/proj:opacity-100 ml-auto grid size-[18px] flex-none cursor-pointer place-items-center rounded-sm text-muted-foreground opacity-0 transition-opacity duration-[120ms] hover:bg-foreground/10 hover:text-foreground focus-visible:opacity-100"
             aria-label={`Project actions for ${repo.name}`}
             onClick={(event) => event.stopPropagation()}
           >

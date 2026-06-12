@@ -71,7 +71,7 @@ export function defineAppSidebarTests() {
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Projects in Core" }));
-    const card = await screen.findByText(secondRepo.name, { selector: ".nx-info-row" });
+    const card = await screen.findByText(secondRepo.name, { selector: '[data-testid="workspace-info-repo"]' });
     expect(card).toBeInTheDocument();
   });
 

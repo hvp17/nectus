@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { Check, GitPullRequest, LoaderCircle } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { cn } from "@/lib/utils";
 import { AgentLogo } from "./AgentBrand";
 import { PrReviewDetail } from "./PrReviewDetail";
 import { PrReviewBadge } from "./PrReviewBadge";
@@ -112,24 +113,28 @@ export function ReviewsPage({
   };
 
   return (
-    <div className="nx-rev">
+    <div className="flex h-full min-h-0 flex-col gap-4 px-6 py-[22px]">
       <div>
-        <h1 className="nx-h1" style={{ fontSize: 23 }}>
+        <h1 className="m-0 text-[23px] font-semibold tracking-[-0.01em]">
           PR Reviews
           {consensus && (
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--muted-foreground)", letterSpacing: 0 }}>
+            <span className="text-[13px] font-semibold tracking-normal text-muted-foreground">
               {" · Consensus"}
             </span>
           )}
         </h1>
-        <p className="nx-sub">
+        <p className="mt-[3px] mb-0 text-[13px] text-muted-foreground">
           Paste a GitHub pull request link to review it against a known project. Pick two or more
           reviewers to run a multi-model consensus.
         </p>
       </div>
 
-      <form className="nx-rev-form" onSubmit={submit} aria-label="Start a PR review">
-        <div className="nx-rev-form-row">
+      <form
+        className="flex flex-none flex-col gap-2.5 rounded-lg bg-card px-4 py-[15px] shadow-xs ring-1 ring-border"
+        onSubmit={submit}
+        aria-label="Start a PR review"
+      >
+        <div className="flex items-center gap-2.5">
           <Input
             type="url"
             inputMode="url"
@@ -153,27 +158,32 @@ export function ReviewsPage({
           </Button>
         </div>
         {agentProfiles.length > 0 && (
-          <div className="nx-rev-reviewers">
-            <span className="nx-rl">Reviewers</span>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="text-[11px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">
+              Reviewers
+            </span>
             {agentProfiles.map((profile) => {
               const on = selectedReviewerIds.includes(profile.id);
               return (
                 <button
                   key={profile.id}
                   type="button"
-                  className="nx-chip"
+                  className={cn(
+                    "inline-flex h-[30px] cursor-pointer items-center gap-[7px] rounded-md border border-border bg-card px-3 text-[12.5px] font-semibold text-foreground transition-colors",
+                    "data-[on=true]:border-primary data-[on=true]:bg-primary/12 data-[on=true]:text-primary",
+                  )}
                   data-on={on}
                   aria-pressed={on}
                   onClick={() => toggleReviewer(profile.id)}
                 >
-                  <Check className="nx-check" aria-hidden="true" />
+                  <Check className={cn("size-[13px]", on ? "opacity-100" : "opacity-0")} aria-hidden="true" />
                   <AgentLogo agentKind={profile.agentKind} size="sm" />
                   {profile.name}
                 </button>
               );
             })}
             {consensus && (
-              <label style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 4, fontSize: 12, color: "var(--muted-foreground)" }}>
+              <label className="ml-1 flex items-center gap-2 text-xs text-muted-foreground">
                 Rounds
                 <Input
                   type="number"
@@ -192,16 +202,18 @@ export function ReviewsPage({
         )}
       </form>
 
-      <div className="nx-rev-main">
-        <div className="nx-rev-list" aria-label="PR review list">
+      <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)] gap-4">
+        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pr-[2px]" aria-label="PR review list">
           {prReviews.length === 0 ? (
-            <p className="nx-rev-empty">No reviews yet. Paste a pull request link above to start one.</p>
+            <p className="rounded-md border border-dashed border-border px-3 py-3.5 text-xs text-muted-foreground">
+              No reviews yet. Paste a pull request link above to start one.
+            </p>
           ) : (
             groupReviews(prReviews).map((section) => (
-              <section key={section.key} className="nx-rev-sect" aria-label={section.label}>
-                <h2>
+              <section key={section.key} aria-label={section.label}>
+                <h2 className="mb-2 mt-0 flex items-center gap-[7px] px-[2px] text-[11px] font-extrabold uppercase tracking-[0.07em] text-muted-foreground">
                   {section.label}
-                  <span className="nx-c">{section.reviews.length}</span>
+                  <span className="font-mono font-semibold">{section.reviews.length}</span>
                 </h2>
                 {section.reviews.length === 0 ? (
                   <p className="px-1 text-xs text-muted-foreground">Nothing here yet.</p>
@@ -210,20 +222,30 @@ export function ReviewsPage({
                     <button
                       key={review.id}
                       type="button"
-                      className="nx-rev-card"
+                      className={cn(
+                        "mb-2 flex w-full cursor-pointer flex-col gap-1.5 rounded-lg bg-card px-3 py-[11px] text-left ring-1 ring-border transition-shadow",
+                        "not-data-[active=true]:hover:ring-primary/40",
+                        "data-[active=true]:bg-primary/6 data-[active=true]:ring-[1.5px] data-[active=true]:ring-primary",
+                      )}
                       data-active={review.id === selectedPrReviewId}
                       aria-pressed={review.id === selectedPrReviewId}
                       onClick={() => onSelectReview(review.id)}
                     >
-                      <div className="nx-rev-card-top">
+                      <div className="flex items-center gap-2">
                         <PrReviewBadge review={review} />
                         {review.mode === "consensus" && (
-                          <span className="nx-modeltag">{review.reviewers.length}-model</span>
+                          <span className="text-[9.5px] font-extrabold uppercase tracking-[0.05em] text-muted-foreground">
+                            {review.reviewers.length}-model
+                          </span>
                         )}
-                        <span className="nx-num">#{review.prNumber}</span>
+                        <span className="ml-auto font-mono text-[11.5px] font-bold text-muted-foreground">
+                          #{review.prNumber}
+                        </span>
                       </div>
-                      <div className="nx-rev-card-title">{review.prTitle ?? review.prUrl}</div>
-                      <div className="nx-rev-card-meta">
+                      <div className="w-full truncate text-[13px] font-semibold leading-[1.3]">
+                        {review.prTitle ?? review.prUrl}
+                      </div>
+                      <div className="w-full truncate text-[11px] text-muted-foreground">
                         {review.repoName}
                         {review.prAuthor ? ` · ${review.prAuthor}` : ""}
                       </div>
@@ -246,8 +268,11 @@ export function ReviewsPage({
             onPost={onPostReview}
           />
         ) : (
-          <section className="nx-rev-detail" aria-label="PR review">
-            <div className="nx-rev-placeholder">
+          <section
+            className="flex min-h-0 flex-col overflow-hidden rounded-lg bg-card shadow-xs ring-1 ring-border"
+            aria-label="PR review"
+          >
+            <div className="flex h-full flex-col items-center justify-center gap-2 p-[30px] text-center text-muted-foreground">
               <GitPullRequest size={22} aria-hidden="true" />
               <strong className="text-sm font-semibold text-foreground">No review selected</strong>
               <span>Select a review from the list to see its feedback.</span>

@@ -45,7 +45,14 @@ import { formatNotificationBody } from "./notificationText";
 import { planTaskFocus } from "./taskNavigation";
 import { openExternal } from "./lib/openExternal";
 import { resolveAgentProfileId } from "./lib/agentProfiles";
+import { cn } from "./lib/utils";
 import { api } from "./api";
+
+/**
+ * Fills the viewport: the wrapper flexes into the remaining space and every
+ * direct child stretches to the full area.
+ */
+const VIEWPORT_FILL = "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden *:min-h-0 *:min-w-0 *:flex-1";
 
 const SettingsPage = lazy(() =>
   import("./components/SettingsPage").then((module) => ({ default: module.SettingsPage })),
@@ -354,7 +361,7 @@ export function AppLayout() {
     );
   } else if (taskOpen && selectedTask) {
     viewport = (
-      <div className="nx-viewport-fill" data-testid="dashboard-layout" data-task-workspace="true">
+      <div className={VIEWPORT_FILL} data-testid="dashboard-layout" data-task-workspace="true">
         <TaskWorkspaceOverlay
           task={selectedTask}
           backLabel={
@@ -388,7 +395,13 @@ export function AppLayout() {
   return (
     <AppContext.Provider value={contextValue}>
       <div
-        className={`app-shell nx-app density-${settings?.density ?? "comfortable"} bg-background text-foreground`}
+        className={cn(
+          "app-shell relative isolate grid h-full min-h-dvh w-full min-w-0 items-stretch overflow-hidden bg-background font-sans text-foreground",
+          // Frame columns: icon rail + viewport, with the navigator panel slotted in
+          // on the work views ("railp") — collapsed away again under 961px wide.
+          "grid-cols-[52px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] min-[961px]:data-[frame=railp]:grid-cols-[52px_14rem_minmax(0,1fr)]",
+          `density-${settings?.density ?? "comfortable"}`,
+        )}
         data-frame={frame}
       >
         <IconRail
@@ -428,8 +441,8 @@ export function AppLayout() {
           />
         )}
 
-        <div className="nx-viewport">
-          <Suspense fallback={<div className="nx-viewport-fill" />}>{viewport}</Suspense>
+        <div className="relative flex h-full min-h-0 min-w-0 flex-col self-stretch overflow-hidden *:min-h-0 *:min-w-0 *:flex-1">
+          <Suspense fallback={<div className={VIEWPORT_FILL} />}>{viewport}</Suspense>
         </div>
 
         <Toaster closeButton theme={settings?.theme ?? "system"} />
@@ -471,7 +484,7 @@ function MissionView() {
   const loading = useBootstrapLoading();
   const refresh = useRefreshData();
   return (
-    <div className="nx-viewport-fill" data-testid="mission-control">
+    <div className={VIEWPORT_FILL} data-testid="mission-control">
       <MissionControl
         repos={repos}
         tasks={tasks}
@@ -508,7 +521,7 @@ function BoardView() {
     [sourceTasks, selectedRepoId],
   );
   return (
-    <div className="nx-viewport-fill" data-testid="dashboard-layout" data-task-workspace="false">
+    <div className={VIEWPORT_FILL} data-testid="dashboard-layout" data-task-workspace="false">
       <Workspace
         selectedRepo={selectedRepo}
         visibleTasks={visibleTasks}
@@ -572,7 +585,7 @@ function WorkspaceView() {
     [activeWorkspace, sourceTasks],
   );
   return (
-    <div className="nx-viewport-fill" data-testid="workspace-board">
+    <div className={VIEWPORT_FILL} data-testid="workspace-board">
       <Workspace
         selectedRepo={undefined}
         workspaceName={activeWorkspace?.name}

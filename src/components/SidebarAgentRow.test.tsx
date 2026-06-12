@@ -26,13 +26,13 @@ describe("SidebarAgentRow", () => {
   it("renders the live pulse dot for a running row", () => {
     const row = makeRow({ state: "running", line: "Compiling…" });
     const { container } = render(<SidebarAgentRow row={row} onOpen={vi.fn()} />);
-    expect(container.querySelector(".nx-livedot")).toBeInTheDocument();
+    expect(container.querySelector('[data-testid="live-dot"]')).toBeInTheDocument();
   });
 
   it("does not render the live pulse dot for a non-running row", () => {
     const row = makeRow({ state: "needs_you", line: "Answer me" });
     const { container } = render(<SidebarAgentRow row={row} onOpen={vi.fn()} />);
-    expect(container.querySelector(".nx-livedot")).not.toBeInTheDocument();
+    expect(container.querySelector('[data-testid="live-dot"]')).not.toBeInTheDocument();
   });
 
   it("does not quote the line for a non-needs_you row", () => {
@@ -46,14 +46,14 @@ describe("SidebarAgentRow", () => {
     const task = appTask({ hasWorktree: false, branchName: "feat/some-branch" });
     const row = makeRow({ task });
     const { container } = render(<SidebarAgentRow row={row} onOpen={vi.fn()} />);
-    expect(container.querySelector(".nx-fly-branch")).not.toBeInTheDocument();
+    expect(container.querySelector('[data-testid="agent-branch"]')).not.toBeInTheDocument();
   });
 
   it("renders the branch name when hasWorktree is true and branchName is set", () => {
     const task = appTask({ hasWorktree: true, branchName: "feat/my-feature" });
     const row = makeRow({ task });
     const { container } = render(<SidebarAgentRow row={row} onOpen={vi.fn()} />);
-    expect(container.querySelector(".nx-fly-branch")).toBeInTheDocument();
+    expect(container.querySelector('[data-testid="agent-branch"]')).toBeInTheDocument();
     expect(screen.getByText("feat/my-feature")).toBeInTheDocument();
   });
 });
