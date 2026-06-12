@@ -54,7 +54,8 @@ function renderTaskCard(
 
 describe("TaskCard", () => {
   afterEach(() => {
-    document.body.classList.remove("task-drag-selection-lock");
+    document.body.style.userSelect = "";
+    document.body.style.webkitUserSelect = "";
   });
 
   it("truncates long finished-card content", () => {
@@ -123,7 +124,7 @@ describe("TaskCard", () => {
     const card = screen.getByRole("button", { name: /finished task with long output/i });
 
     dispatchPointerEvent(card, "pointerdown", { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
-    expect(document.body).toHaveClass("task-drag-selection-lock");
+    expect(document.body.style.userSelect).toBe("none");
 
     const moveEvent = dispatchPointerEvent(window, "pointermove", {
       pointerId: 1,
@@ -134,6 +135,6 @@ describe("TaskCard", () => {
     expect(moveEvent.defaultPrevented).toBe(true);
 
     dispatchPointerEvent(window, "pointerup", { pointerId: 1, clientX: 11, clientY: 10 });
-    expect(document.body).not.toHaveClass("task-drag-selection-lock");
+    expect(document.body.style.userSelect).toBe("");
   });
 });

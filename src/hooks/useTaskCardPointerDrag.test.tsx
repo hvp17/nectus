@@ -34,8 +34,9 @@ function DragHarness({
 
 describe("useTaskCardPointerDrag", () => {
   afterEach(() => {
-    document.body.classList.remove("task-drag-selection-lock");
-    document.querySelectorAll(".task-drag-ghost").forEach((element) => element.remove());
+    document.body.style.userSelect = "";
+    document.body.style.webkitUserSelect = "";
+    document.querySelectorAll("[data-task-drag-ghost]").forEach((element) => element.remove());
   });
 
   it("ignores movement below the drag threshold", () => {
@@ -50,7 +51,7 @@ describe("useTaskCardPointerDrag", () => {
 
     expect(onDragStart).not.toHaveBeenCalled();
     expect(onPointerDragEnd).not.toHaveBeenCalled();
-    expect(document.body).not.toHaveClass("task-drag-selection-lock");
+    expect(document.body.style.userSelect).toBe("");
   });
 
   it("starts and completes pointer drags beyond the threshold", () => {
@@ -73,7 +74,7 @@ describe("useTaskCardPointerDrag", () => {
     expect(onDragStart).toHaveBeenCalledWith(42);
     expect(onPointerDragMove).toHaveBeenCalledWith(18, 10);
     expect(onPointerDragEnd).toHaveBeenCalledWith(42, 18, 10);
-    expect(document.querySelector(".task-drag-ghost")).not.toBeInTheDocument();
+    expect(document.querySelector("[data-task-drag-ghost]")).not.toBeInTheDocument();
   });
 
   it("cancels pointer drags without treating them as drops", () => {
@@ -85,15 +86,15 @@ describe("useTaskCardPointerDrag", () => {
     dispatchPointerEvent(card, "pointerdown", { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
     dispatchPointerEvent(window, "pointermove", { pointerId: 1, clientX: 18, clientY: 10 });
 
-    expect(document.body).toHaveClass("task-drag-selection-lock");
-    expect(document.querySelector(".task-drag-ghost")).toBeInTheDocument();
+    expect(document.body.style.userSelect).toBe("none");
+    expect(document.querySelector("[data-task-drag-ghost]")).toBeInTheDocument();
 
     dispatchPointerEvent(window, "pointercancel", { pointerId: 1, clientX: 18, clientY: 10 });
 
     expect(onDragEnd).toHaveBeenCalledTimes(1);
     expect(onPointerDragEnd).not.toHaveBeenCalled();
-    expect(document.body).not.toHaveClass("task-drag-selection-lock");
-    expect(document.querySelector(".task-drag-ghost")).not.toBeInTheDocument();
+    expect(document.body.style.userSelect).toBe("");
+    expect(document.querySelector("[data-task-drag-ghost]")).not.toBeInTheDocument();
   });
 
   it("does not attach drag tracking while busy", () => {
@@ -105,7 +106,7 @@ describe("useTaskCardPointerDrag", () => {
     dispatchPointerEvent(window, "pointermove", { pointerId: 1, clientX: 18, clientY: 10 });
 
     expect(onDragStart).not.toHaveBeenCalled();
-    expect(document.body).not.toHaveClass("task-drag-selection-lock");
+    expect(document.body.style.userSelect).toBe("");
   });
 
   it("ends the drag if the card unmounts mid-drag", () => {

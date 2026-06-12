@@ -368,6 +368,7 @@ export function TerminalPane({ sessionId, onSessionExit, onSessionInput }: Termi
 
   return (
     <div
+      data-testid="terminal-host"
       className="relative h-full min-h-0 flex-1 bg-card p-2.5 data-[empty]:before:font-mono data-[empty]:before:text-[13px] data-[empty]:before:text-muted-foreground data-[empty]:before:content-['Select_a_task_and_start_an_agent.']"
       ref={hostRef}
       onDragOver={(event) => {

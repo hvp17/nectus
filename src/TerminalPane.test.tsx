@@ -362,7 +362,7 @@ describe("TerminalPane", () => {
       expect(terminalTestState.instances).toHaveLength(1);
     });
 
-    expect(container.querySelector<HTMLElement>(".terminal-host")).not.toBeNull();
+    expect(container.querySelector<HTMLElement>('[data-testid="terminal-host"]')).not.toBeNull();
 
     act(() => {
       terminalTestState.getDragDropHandler()?.({

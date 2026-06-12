@@ -7,6 +7,7 @@ import { deriveAttentionPreview } from "./attentionPreview";
 import { useTaskCardPointerDrag } from "../hooks/useTaskCardPointerDrag";
 import { formatAttentionReason, type TaskAttention } from "../sessionAttention";
 import { deriveAgentState } from "../lib/agentState";
+import { cn } from "../lib/utils";
 import { REVIEW_LOOP_BADGE_VARIANTS, REVIEW_LOOP_STATUS_LABELS } from "../statusLabels";
 import type { AgentKind, TaskSummary } from "../types";
 
@@ -75,7 +76,12 @@ export const TaskCard = memo(function TaskCard({
   return (
     <div
       ref={cardRef}
-      className="task-card-shell nx-card group"
+      className={cn(
+        "group relative flex w-full flex-none cursor-grab flex-col gap-[9px] overflow-hidden rounded-lg bg-card p-3 pl-3.5 text-left shadow-xs ring-1 ring-border transition-[box-shadow,transform] hover:-translate-y-px hover:shadow-sm hover:ring-primary/45",
+        "data-[dragging=true]:opacity-50 data-[selected=true]:shadow-[0_0_0_4px_color-mix(in_oklch,var(--primary)_18%,transparent),var(--shadow-md)] data-[selected=true]:ring-primary",
+        // State rail: a 4px colored stripe hugging the card's left edge.
+        "before:absolute before:inset-y-0 before:left-0 before:w-1 before:content-[''] data-[state=needs_you]:before:bg-status-warning data-[state=running]:before:bg-primary data-[state=review]:before:bg-status-info data-[state=done]:before:bg-status-success",
+      )}
       data-state={state}
       data-selected={isSelected ? "true" : undefined}
       data-dragging={isDragging ? "true" : undefined}
@@ -99,8 +105,8 @@ export const TaskCard = memo(function TaskCard({
         }
       }}
     >
-      <div className="nx-card-top">
-        <span className="nx-card-title">{task.title}</span>
+      <div className="flex items-start justify-between gap-2">
+        <span className="line-clamp-2 text-[13px] leading-[1.3] font-semibold">{task.title}</span>
         <div className="flex items-center gap-1.5 shrink-0">
           {attention?.kind === "needs_input" && (
             <Badge variant="warning" className="font-extrabold h-5 px-1.5 text-[10px]">
@@ -116,7 +122,7 @@ export const TaskCard = memo(function TaskCard({
           )}
           {task.activeSessionId && attention?.kind !== "needs_input" && (
             <Badge variant="default" className="h-5 px-1.5 text-[10px]">
-              <span className="nx-badge-dot live-dot" />
+              <span className="size-[7px] flex-none animate-pulse rounded-full bg-current" />
               Live
             </Badge>
           )}
@@ -147,7 +153,13 @@ export const TaskCard = memo(function TaskCard({
       </div>
 
       {attention && (
-        <div className="nx-card-line" title={isAttentionDetailTruncated ? attentionDetail ?? undefined : undefined}>
+        <div
+          className={cn(
+            "truncate font-mono text-[11px] text-muted-foreground",
+            state === "needs_you" && "text-[color-mix(in_oklch,var(--status-warning)_55%,var(--foreground))]",
+          )}
+          title={isAttentionDetailTruncated ? attentionDetail ?? undefined : undefined}
+        >
           {attention.kind === "needs_input"
             ? `“${attentionDetail ?? formatAttentionReason(attention.reason)}”`
             : displayedAttentionDetail ?? "Agent finished"}
@@ -155,7 +167,11 @@ export const TaskCard = memo(function TaskCard({
       )}
 
       {!attention && state === "running" && (
-        <div className="nx-card-line" data-live="true" title={liveLine || undefined}>
+        <div
+          className="truncate font-mono text-[11px] text-[color-mix(in_oklch,var(--primary)_32%,var(--muted-foreground))] before:mr-1.5 before:inline-block before:size-1.5 before:animate-pulse before:rounded-full before:bg-primary before:align-middle before:content-['']"
+          data-live="true"
+          title={liveLine || undefined}
+        >
           {liveLine ?? "Working…"}
         </div>
       )}
@@ -172,15 +188,19 @@ export const TaskCard = memo(function TaskCard({
         </div>
       )}
 
-      <div className="nx-card-foot">
-        <span className="nx-card-branch">
-          {task.hasWorktree ? <GitBranch aria-hidden="true" /> : <Bot aria-hidden="true" />}
+      <div className="flex items-center justify-between gap-2 text-[10px] font-extrabold tracking-[0.05em] text-muted-foreground uppercase">
+        <span className="flex min-w-0 items-center gap-[5px] overflow-hidden font-mono text-[10.5px] font-medium tracking-normal normal-case">
+          {task.hasWorktree ? (
+            <GitBranch aria-hidden="true" className="size-[11px] flex-none opacity-70" />
+          ) : (
+            <Bot aria-hidden="true" className="size-[11px] flex-none opacity-70" />
+          )}
           <span className="truncate">{task.hasWorktree ? task.branchName : "No worktree"}</span>
         </span>
-        <span className="nx-card-agent">
+        <span className="flex items-center gap-1.5">
           {repoName && (
             <span
-              className="nx-card-repo"
+              className="rounded-full border border-border px-[5px] py-px font-mono text-[10px] font-semibold text-muted-foreground"
               title={
                 task.taskRepos.length > 1
                   ? task.taskRepos.map((taskRepo) => taskRepo.repoName).join(", ")
@@ -192,13 +212,16 @@ export const TaskCard = memo(function TaskCard({
             </span>
           )}
           {task.jiraIssueKey && (
-            <span className="nx-card-jira" title={task.jiraIssueSummary ?? undefined}>
+            <span
+              className="font-mono text-[10px] font-semibold tracking-normal normal-case"
+              title={task.jiraIssueSummary ?? undefined}
+            >
               {task.jiraIssueKey}
             </span>
           )}
           <AgentLogo agentKind={agentKind} size="xs" />
           {task.hasWorktree && (
-            <span className={task.isDirty ? "dirty-indicator" : undefined}>{task.isDirty ? "dirty" : "clean"}</span>
+            <span className={task.isDirty ? "text-status-info" : undefined}>{task.isDirty ? "dirty" : "clean"}</span>
           )}
         </span>
       </div>

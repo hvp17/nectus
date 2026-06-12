@@ -396,7 +396,7 @@ export function defineAppTaskCreationTests() {
 
     const toastBody = await screen.findByText(formatNotificationBody(`Created ${longTaskTitle}`));
 
-    expect(toastBody.closest("[data-sonner-toast]")).toHaveClass("cn-toast");
+    expect(toastBody.closest("[data-sonner-toast]")).toBeInTheDocument();
   });
 
   it("automatically dismisses alerts after 5 seconds", async () => {

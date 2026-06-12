@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 
 const DRAG_START_THRESHOLD_PX = 3;
-const TASK_DRAG_SELECTION_LOCK_CLASS = "task-drag-selection-lock";
 
 interface UseTaskCardPointerDragArgs {
   taskId: number;
@@ -40,15 +39,19 @@ export function useTaskCardPointerDrag({
     let ghostOffsetY = 0;
     let selectionLocked = false;
 
+    // Page-wide selection lock while a drag is tracked, applied as inline body
+    // styles (user-select inherits) so it needs no stylesheet support.
     const lockPageSelection = () => {
       selectionLocked = true;
-      document.body.classList.add(TASK_DRAG_SELECTION_LOCK_CLASS);
+      document.body.style.userSelect = "none";
+      document.body.style.webkitUserSelect = "none";
     };
 
     const unlockPageSelection = () => {
       if (!selectionLocked) return;
       selectionLocked = false;
-      document.body.classList.remove(TASK_DRAG_SELECTION_LOCK_CLASS);
+      document.body.style.userSelect = "";
+      document.body.style.webkitUserSelect = "";
     };
 
     const getClientPosition = (event: PointerEvent) => ({
@@ -72,13 +75,25 @@ export function useTaskCardPointerDrag({
       ghostOffsetX = clientX - rect.left;
       ghostOffsetY = clientY - rect.top;
       ghost = element.cloneNode(true) as HTMLElement;
-      ghost.classList.add("task-drag-ghost");
-      ghost.style.width = `${rect.width}px`;
-      ghost.style.height = `${rect.height}px`;
-      ghost.style.left = "0";
-      ghost.style.top = "0";
-      ghost.style.transition = "none";
-      ghost.style.animation = "none";
+      // The ghost is a transient runtime element: it carries a data marker (for
+      // tests/tooling) and inline styles only, so it renders without stylesheet help.
+      ghost.dataset.taskDragGhost = "true";
+      const style = ghost.style;
+      style.position = "fixed";
+      style.zIndex = "1000";
+      style.pointerEvents = "none";
+      style.margin = "0";
+      style.opacity = "0.92";
+      style.userSelect = "none";
+      style.webkitUserSelect = "none";
+      style.willChange = "transform";
+      style.boxShadow = "0 18px 48px color-mix(in srgb, var(--foreground) 20%, transparent)";
+      style.width = `${rect.width}px`;
+      style.height = `${rect.height}px`;
+      style.left = "0";
+      style.top = "0";
+      style.transition = "none";
+      style.animation = "none";
       document.body.appendChild(ghost);
       moveGhost(clientX, clientY);
     };

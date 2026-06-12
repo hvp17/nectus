@@ -201,11 +201,11 @@ export function defineAppTaskBoardTests() {
     dispatchPointerEvent(taskCard, "pointerdown", { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
     dispatchPointerEvent(window, "pointermove", { pointerId: 1, clientX: 40, clientY: 10 });
 
-    expect(document.querySelector(".task-drag-ghost")).toBeInstanceOf(HTMLElement);
+    expect(document.querySelector("[data-task-drag-ghost]")).toBeInstanceOf(HTMLElement);
 
     dispatchPointerEvent(window, "pointerup", { pointerId: 1, clientX: 40, clientY: 10 });
 
-    expect(document.querySelector(".task-drag-ghost")).toBeNull();
+    expect(document.querySelector("[data-task-drag-ghost]")).toBeNull();
 
     await waitFor(() => {
       expect(mockedApi.updateTaskMetadata).toHaveBeenCalledWith({ taskId: 21, status: "review" });
@@ -225,7 +225,7 @@ export function defineAppTaskBoardTests() {
     dispatchPointerEvent(taskCard, "pointerdown", { pointerId: 1, button: 0, clientX: 10, clientY: 20 });
     dispatchPointerEvent(window, "pointermove", { pointerId: 1, clientX: 13, clientY: 20 });
 
-    const ghost = document.querySelector<HTMLElement>(".task-drag-ghost");
+    const ghost = document.querySelector<HTMLElement>("[data-task-drag-ghost]");
     expect(ghost).toBeInstanceOf(HTMLElement);
     expect(ghost?.style.transform).toContain("translate3d(");
     expect(ghost?.style.transition).toBe("none");
@@ -259,7 +259,7 @@ export function defineAppTaskBoardTests() {
     dispatchPointerEvent(window, "pointermove", { pointerId: 1, clientX: 23, clientY: 30 });
     dispatchPointerEvent(window, "pointermove", { pointerId: 1, clientX: 230, clientY: 30 });
 
-    expect(document.querySelector(".task-drag-ghost")).toBeInstanceOf(HTMLElement);
+    expect(document.querySelector("[data-task-drag-ghost]")).toBeInstanceOf(HTMLElement);
     await waitFor(() => {
       expect(taskCard).toHaveAttribute("aria-grabbed", "true");
     });

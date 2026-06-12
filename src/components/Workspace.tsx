@@ -6,9 +6,22 @@ import { Skeleton } from "./ui/skeleton";
 import { TaskCard } from "./TaskCard";
 import { getTaskAttention, type TaskAttention } from "../sessionAttention";
 import { TASK_STATUS_LABELS } from "../statusLabels";
+import { cn } from "../lib/utils";
 import { TaskStatus, TaskSummary, Repo } from "../types";
 
 const statusOrder: TaskStatus[] = ["planned", "in_progress", "review", "done"];
+
+/* Board grid: four equal columns on wide windows; below 1280px the columns become
+   a horizontally scrolling, scroll-snapping row so card text never gets crushed. */
+const boardColsClass =
+  "grid min-h-0 flex-1 grid-cols-4 grid-rows-[minmax(0,1fr)] gap-3 max-[1280px]:flex max-[1280px]:items-stretch max-[1280px]:overflow-x-auto max-[1280px]:overflow-y-hidden max-[1280px]:pb-1 max-[1280px]:snap-x max-[1280px]:snap-proximity max-[1280px]:[-webkit-overflow-scrolling:touch]";
+
+const boardColClass =
+  "flex min-h-0 flex-col gap-[9px] overflow-hidden rounded-xl bg-muted p-2.5 max-[1280px]:w-[min(272px,calc(100vw_-_108px))] max-[1280px]:flex-[0_0_min(272px,calc(100vw_-_108px))] max-[1280px]:snap-start";
+
+const colHeadClass = "flex flex-none items-center gap-2 px-[3px] pt-[3px] pb-px";
+const colLabelClass = "text-[12.5px] font-extrabold tracking-[0.02em]";
+const colBodyClass = "flex min-h-0 flex-col gap-[9px] overflow-y-auto";
 
 interface StatusHitbox {
   status: TaskStatus;
@@ -182,19 +195,22 @@ export function Workspace({
   );
 
   return (
-    <main className="nx-main" aria-label="Project board">
-      <div className="nx-head-row">
+    <main
+      className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden px-6 py-[22px]"
+      aria-label="Project board"
+    >
+      <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h1 className="nx-h1">
+          <h1 className="text-xl font-semibold tracking-[-0.01em]">
             {boardHeaderTitle(workspaceName, selectedRepo, loading)}
           </h1>
-          <p className="nx-sub">
+          <p className="mt-[3px] text-[13px] text-muted-foreground">
             {showArchived
               ? "Archived tasks — restore them to the board or delete them for good."
               : "Workflow board — Planned through Done, with live state on every card."}
           </p>
         </div>
-        <div className="nx-head-actions">
+        <div className="flex flex-none gap-2">
           {(selectedRepo || workspaceName) && (
             <Button
               variant={showArchived ? "secondary" : "outline"}
@@ -233,8 +249,8 @@ export function Workspace({
           </EmptyHeader>
         </Empty>
       ) : (
-        <div className="nx-board">
-          <div className="nx-cols">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className={boardColsClass}>
             {statusOrder.map((status) => {
               const tasksInColumn = tasksByStatus.get(status) ?? [];
               const acceptsDraggedTask = Boolean(draggingTask && draggingTask.status !== status);
@@ -245,11 +261,13 @@ export function Workspace({
                   isDropAvailable={acceptsDraggedTask}
                   isDropTarget={acceptsDraggedTask && dropTargetStatus === status}
                 >
-                  <div className="nx-col-head">
-                    <span className="nx-cl">{TASK_STATUS_LABELS[status]}</span>
-                    <span className="nx-cc">{tasksInColumn.length}</span>
+                  <div className={colHeadClass}>
+                    <span className={colLabelClass}>{TASK_STATUS_LABELS[status]}</span>
+                    <span className="ml-auto grid h-[19px] min-w-5 place-items-center rounded-full bg-card px-1.5 font-mono text-[11px] font-bold text-muted-foreground">
+                      {tasksInColumn.length}
+                    </span>
                   </div>
-                  <div className="nx-col-body">
+                  <div className={colBodyClass}>
                     {tasksInColumn.map((task) => (
                       <TaskCard
                         key={task.id}
@@ -271,7 +289,9 @@ export function Workspace({
                       />
                     ))}
                     {tasksInColumn.length === 0 && (
-                      <p className="nx-col-empty">No {TASK_STATUS_LABELS[status].toLowerCase()} tasks</p>
+                      <p className="px-2.5 py-[22px] text-center text-[11px] leading-[1.35] text-muted-foreground [overflow-wrap:anywhere]">
+                        No {TASK_STATUS_LABELS[status].toLowerCase()} tasks
+                      </p>
                     )}
                   </div>
                 </StatusColumn>
@@ -286,15 +306,15 @@ export function Workspace({
 
 function BoardSkeleton() {
   return (
-    <div className="nx-board" aria-busy="true" aria-label="Loading tasks">
-      <div className="nx-cols">
+    <div className="flex min-h-0 flex-1 flex-col" aria-busy="true" aria-label="Loading tasks">
+      <div className={boardColsClass}>
         {statusOrder.map((status) => (
-          <div key={status} className="nx-col">
-            <div className="nx-col-head">
-              <span className="nx-cl">{TASK_STATUS_LABELS[status]}</span>
+          <div key={status} className={boardColClass}>
+            <div className={colHeadClass}>
+              <span className={colLabelClass}>{TASK_STATUS_LABELS[status]}</span>
               <Skeleton className="h-5 w-5 rounded-md" />
             </div>
-            <div className="nx-col-body">
+            <div className={colBodyClass}>
               <Skeleton className="h-24 w-full rounded-lg" />
               <Skeleton className="h-24 w-full rounded-lg" />
             </div>
@@ -318,7 +338,11 @@ function StatusColumn({
 }) {
   return (
     <div
-      className="nx-col"
+      className={cn(
+        boardColClass,
+        "data-[drop-target=true]:outline-2 data-[drop-target=true]:outline-dashed data-[drop-target=true]:-outline-offset-2 data-[drop-target=true]:outline-primary/55",
+        "data-[drop-available=true]:bg-[color-mix(in_srgb,var(--primary)_6%,var(--muted))]",
+      )}
       role="region"
       aria-label={`${TASK_STATUS_LABELS[status]} tasks`}
       data-task-status={status}

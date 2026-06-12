@@ -81,12 +81,17 @@ export function defineAppSmokeTests() {
 
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
 
-    // Settings is a routed view; awaiting the first heading lets the navigation land.
+    // Settings is a routed view; awaiting the first section title lets the navigation
+    // land. Section titles render via the shadcn Card primitive (data-slot="card-title").
     expect(
-      await screen.findByRole("heading", { name: "Agent Profiles" }, { timeout: ROUTED_VIEW_TIMEOUT_MS }),
+      await screen.findByText(
+        "Agent Profiles",
+        { selector: '[data-slot="card-title"]' },
+        { timeout: ROUTED_VIEW_TIMEOUT_MS },
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /projects & worktrees/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Appearance" })).toBeInTheDocument();
+    expect(screen.getByText(/projects & worktrees/i, { selector: '[data-slot="card-title"]' })).toBeInTheDocument();
+    expect(screen.getByText("Appearance", { selector: '[data-slot="card-title"]' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("radio", { name: /dark/i }));
     fireEvent.click(screen.getByRole("radio", { name: /compact/i }));
