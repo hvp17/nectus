@@ -172,6 +172,12 @@ All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
 - API tokens are **JIRA Cloud only** (Basic auth `email:token`), and Atlassian
   tokens have a mandatory expiry — a 401 after months of use usually means the token
   expired; create a new one and **Update token** in Settings.
+- **TLS trust comes from the macOS system trust store** (`ureq` is built with the
+  `native-certs` feature), so corporate TLS-inspection proxies (Zscaler, Netskope,
+  …) whose root CA is installed in the Keychain work. A
+  `tls connection init failed: invalid peer certificate: UnknownIssuer` on
+  **Test & connect** means the intercepting proxy's root CA is not trusted by the
+  system — install/trust it in Keychain Access, then retry.
 - A transition is resolved by matching the chosen status **name** to a legal
   transition; a workflow with two transitions to the same target status name
   resolves to the first.
