@@ -52,13 +52,11 @@ git, SQLite, and PTY work lives in the Rust backend.
   single verdict. See [docs/features.md](docs/features.md#pr-review).
 - Submit a Create PR prompt to a running agent from the task workflow.
 - Manage a global JIRA board: pick a project from a dropdown and toggle filters —
-  no JQL to write — then browse stories in status columns, drag to transition,
-  assign and comment, and create a task from a story with a local-only task↔story
-  link. Connect with a JIRA Cloud **API token** (Settings → JIRA, kept in the macOS
-  Keychain; recommended, no other tools needed) — which also unlocks legal
-  transitions, every status column, the board status filter, and Sprint view — or
-  fall back to the Atlassian CLI (`acli` installed + `acli jira auth login`). See
-  [docs/jira-integration.md](docs/jira-integration.md).
+  no JQL to write — then browse stories in status columns (legal-transition drag,
+  empty columns, a status filter, and Sprint view included), assign and comment,
+  and create a task from a story with a local-only task↔story link. Connects with
+  a JIRA Cloud **API token** (Settings → JIRA, kept in the macOS Keychain — no
+  other tools needed). See [docs/jira-integration.md](docs/jira-integration.md).
 - Configure agent commands, model arguments, environment variables, theme,
   density, branch prefixes, and worktree root patterns.
 

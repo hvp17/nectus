@@ -1,9 +1,8 @@
 import { Badge } from "./ui/badge";
 import { Skeleton } from "./ui/skeleton";
 import { JiraCard } from "./JiraCard";
-import { isCliConnected } from "../lib/connection";
 import type { JiraColumn } from "../hooks/useJira";
-import type { JiraStatus, JiraStatusCategory, JiraWorkItem, TaskSummary } from "../types";
+import type { JiraStatusCategory, JiraWorkItem, TaskSummary } from "../types";
 
 const CATEGORY_DOT: Record<JiraStatusCategory, string> = {
   to_do: "var(--muted-foreground)",
@@ -13,8 +12,7 @@ const CATEGORY_DOT: Record<JiraStatusCategory, string> = {
 };
 
 interface BoardBodyProps {
-  status: JiraStatus | undefined;
-  /** API token connected — a full JIRA connection on its own (token-primary). */
+  /** API token connected — the JIRA connection; nothing loads without it. */
   restConnected: boolean;
   project: string | null;
   loading: boolean;
@@ -29,7 +27,6 @@ interface BoardBodyProps {
 }
 
 export function BoardBody({
-  status,
   restConnected,
   project,
   loading,
@@ -42,12 +39,11 @@ export function BoardBody({
   onOpenTask,
   onCreateTask,
 }: BoardBodyProps) {
-  if (!restConnected && !isCliConnected(status)) {
+  if (!restConnected) {
     return (
       <BoardEmpty>
-        Not connected to JIRA. Paste an API token in <strong>Settings → JIRA</strong>{" "}
-        (recommended — no extra tools needed), or install the Atlassian CLI and run{" "}
-        <code>acli jira auth login</code> in a terminal.
+        Not connected to JIRA. Paste an API token in <strong>Settings → JIRA</strong> to load
+        the board — create one at id.atlassian.com, no other tools needed.
       </BoardEmpty>
     );
   }

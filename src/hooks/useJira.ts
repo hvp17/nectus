@@ -3,7 +3,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "../queries/keys";
 import {
-  useJiraStatusQuery,
   useJiraRestStatusQuery,
   useJiraProjectsQuery,
   useJiraProjectStatusesQuery,
@@ -11,7 +10,6 @@ import {
   useJiraEpicsQuery,
   useJiraSprintBoardQuery,
 } from "../queries/jira";
-import { isCliConnected } from "../lib/connection";
 import type {
   JiraProject,
   JiraRestStatus,
@@ -35,12 +33,12 @@ const CATEGORY_ORDER: Record<JiraStatusCategory, number> = {
 };
 
 /**
- * Build the board columns. With a connected REST token, `projectStatuses` supplies
- * the full custom-workflow status set so the column skeleton renders every status
- * (including empty ones), narrowed to `statusFilter` when one is active. Without
- * REST, columns are auto-derived from the statuses present in the results (acli
- * exposes no canonical status list), narrowed client-side to `statusFilter`.
- * Either way, columns are ordered by JIRA status category then status name.
+ * Build the board columns. `projectStatuses` supplies the full custom-workflow
+ * status set so the column skeleton renders every status (including empty ones),
+ * narrowed to `statusFilter` when one is active. While the status set hasn't
+ * loaded, columns are auto-derived from the statuses present in the results,
+ * narrowed client-side to `statusFilter`. Either way, columns are ordered by
+ * JIRA status category then status name.
  */
 export function deriveColumns(
   items: JiraWorkItem[],
@@ -106,12 +104,11 @@ const EMPTY_LANES: JiraSprintLane[] = [];
 
 /**
  * Owns JIRA connection state, the project list, and the board work items — backed
- * by TanStack Query. Connection status (the primary REST token + the acli fallback)
- * loads on mount; the project list / project status set / board load only once their
- * `enabled` gate is met (view active, either connection ready, a project
- * configured). The board transition is an optimistic cache write with snapshot
- * rollback; the board JQL is built backend-side from the structured config, so no
- * JQL is typed here.
+ * by TanStack Query. The API-token connection status loads on mount; the project
+ * list / project status set / board load only once their `enabled` gate is met
+ * (view active, token connected, a project configured). The board transition is an
+ * optimistic cache write with snapshot rollback; the board JQL is built
+ * backend-side from the structured config, so no JQL is typed here.
  */
 export function useJira({
   active,
@@ -123,28 +120,22 @@ export function useJira({
 }: UseJiraInput) {
   const queryClient = useQueryClient();
 
-  const jiraStatus = useJiraStatusQuery().data;
   const restStatus = useJiraRestStatusQuery().data;
   const restConnected = Boolean(restStatus?.connected);
-  // Token-primary: a connected REST token alone fully drives the board (the
-  // backend dispatches REST-first); acli is the fallback connection.
-  const ready = restConnected || isCliConnected(jiraStatus);
-  // Site host for browse URLs — from whichever connection is configured.
-  const site = jiraStatus?.site ?? restStatus?.site ?? null;
+  // The API token is the JIRA connection; everything gates on it.
+  const ready = restConnected;
+  // Site host for browse URLs.
+  const site = restStatus?.site ?? null;
 
   const projects = useJiraProjectsQuery(active && ready).data ?? EMPTY_PROJECTS;
-  const projectStatusesQuery = useJiraProjectStatusesQuery(project, active && ready && restConnected);
-  const projectStatuses = restConnected ? (projectStatusesQuery.data ?? EMPTY_STATUSES) : EMPTY_STATUSES;
+  const projectStatusesQuery = useJiraProjectStatusesQuery(project, active && ready);
+  const projectStatuses = ready ? (projectStatusesQuery.data ?? EMPTY_STATUSES) : EMPTY_STATUSES;
   const boardQuery = useJiraBoardQuery(active && ready && configured);
   const items = boardQuery.data ?? EMPTY_ITEMS;
   const loading = boardQuery.isLoading;
   const epics = useJiraEpicsQuery(project, active && ready).data ?? EMPTY_ITEMS;
-  // Sprint view is REST-only (acli exposes no sprint/board data), so the sprint
-  // board loads only with a connected token and Sprint mode active.
-  const sprintBoardQuery = useJiraSprintBoardQuery(
-    project,
-    active && ready && restConnected && sprintMode,
-  );
+  // The sprint board loads only in Sprint mode (it is the heavier Agile-API read).
+  const sprintBoardQuery = useJiraSprintBoardQuery(project, active && ready && sprintMode);
   const sprintLanes = sprintBoardQuery.data ?? EMPTY_LANES;
   const sprintLoading = sprintBoardQuery.isLoading;
   const sprintError = sprintBoardQuery.error ? String(sprintBoardQuery.error) : null;
@@ -263,7 +254,6 @@ export function useJira({
   );
 
   return {
-    jiraStatus,
     restStatus,
     restConnected,
     ready,

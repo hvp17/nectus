@@ -15,19 +15,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { Skeleton } from "./ui/skeleton";
 import { BoardBody } from "./JiraBoardBody";
 import { SprintBody } from "./JiraSprintBody";
 import { JiraWorkItemPanel } from "./JiraWorkItemDialog";
 import { JiraCreateWorkItemPanel } from "./JiraCreateWorkItemPanel";
-import { isCliConnected } from "../lib/connection";
 import type { JiraColumn } from "../hooks/useJira";
 import type { JiraViewMode } from "../hooks/useJiraBoardView";
 import type {
   AgentProfile,
   JiraProject,
   JiraSprintLane,
-  JiraStatus,
   JiraTransition,
   JiraWorkItem,
   TaskSummary,
@@ -58,7 +55,6 @@ const ALL_EPICS_VALUE = "__all_epics";
 const NO_LANES: JiraSprintLane[] = [];
 
 interface JiraBoardPageProps {
-  status: JiraStatus | undefined;
   projects: JiraProject[];
   /** Local Nectus tasks, used to surface the ones attached to each story. */
   tasks: TaskSummary[];
@@ -97,7 +93,7 @@ interface JiraBoardPageProps {
   agentProfiles?: AgentProfile[];
   selectedAgentProfileId?: number;
   site?: string | null;
-  /** REST token connected — enables legal-transition dropdowns. */
+  /** API token connected — the JIRA connection; gates the whole board. */
   restConnected?: boolean;
   onListTransitions?: (key: string) => Promise<JiraTransition[]>;
   /** Statuses offered in the board's status filter (project set when connected). */
@@ -111,7 +107,6 @@ interface JiraBoardPageProps {
 }
 
 export function JiraBoardPage({
-  status,
   projects,
   tasks,
   project,
@@ -147,9 +142,7 @@ export function JiraBoardPage({
   onPickAgent,
   onOpenUrl,
 }: JiraBoardPageProps) {
-  // Token-primary: a connected REST token alone drives the board; acli is the
-  // fallback connection.
-  const ready = Boolean(restConnected) || isCliConnected(status);
+  const ready = Boolean(restConnected);
   const itemsByKey = new Map(columns.flatMap((column) => column.items).map((item) => [item.key, item]));
   const statusOptions = columns.map((column) => column.statusName);
   // Always include the currently-selected statuses so they stay uncheckable even
@@ -213,7 +206,6 @@ export function JiraBoardPage({
 
   const body = sprintView ? (
     <SprintBody
-      status={status}
       project={project}
       restConnected={Boolean(restConnected)}
       loading={sprintLoading}
@@ -227,7 +219,6 @@ export function JiraBoardPage({
     />
   ) : (
     <BoardBody
-      status={status}
       restConnected={Boolean(restConnected)}
       project={project}
       loading={loading}
@@ -246,7 +237,7 @@ export function JiraBoardPage({
     <div className="nx-jira" data-testid="jira-board">
       <header className="nx-jira-head">
         <h1>JIRA Board</h1>
-        <JiraConnection status={status} restConnected={Boolean(restConnected)} site={site} />
+        <JiraConnection restConnected={Boolean(restConnected)} site={site} />
         <Button
           type="button"
           variant="outline"
@@ -426,17 +417,13 @@ export function JiraBoardPage({
 }
 
 function JiraConnection({
-  status,
   restConnected,
   site,
 }: {
-  status: JiraStatus | undefined;
   restConnected: boolean;
   site?: string | null;
 }) {
-  // A connected API token is a full connection on its own; only fall back to the
-  // acli connection state (and its guidance) when no token is set up.
-  if (restConnected || isCliConnected(status)) {
+  if (restConnected) {
     return (
       <Badge variant="secondary" className="gap-1.5">
         <span
@@ -444,10 +431,9 @@ function JiraConnection({
           style={{ background: "var(--status-success)" }}
           aria-hidden="true"
         />
-        {site ?? status?.site ?? "Connected"}
+        {site ?? "Connected"}
       </Badge>
     );
   }
-  if (!status) return <Skeleton className="h-5 w-28" />;
   return <Badge variant="destructive">Not connected</Badge>;
 }

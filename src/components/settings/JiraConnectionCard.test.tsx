@@ -19,13 +19,13 @@ describe("JiraConnectionCard", () => {
     const onSave = vi.fn(async () => connected);
     renderWithTooltipProvider(
       <JiraConnectionCard
-        detectedSite="team.atlassian.net"
         busy={false}
         onSave={onSave}
         onDisconnect={vi.fn(async () => {})}
       />,
     );
 
+    fireEvent.change(screen.getByLabelText("Site"), { target: { value: "team.atlassian.net" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "me@example.com" } });
     fireEvent.change(screen.getByLabelText("API token"), { target: { value: "secret-token" } });
     fireEvent.click(screen.getByRole("button", { name: "Test & connect" }));

@@ -6,8 +6,8 @@ use std::process::{Command, Output, Stdio};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
-/// Run a single-binary third-party CLI (`gh`, `acli`): resolve it against PATH +
-/// the common install dirs, run it in `current_dir`, and map a missing binary to
+/// Run a single-binary third-party CLI (`gh`): resolve it against PATH + the
+/// common install dirs, run it in `current_dir`, and map a missing binary to
 /// `not_installed_message`. No `augmented_path` — these spawn no nested `node`.
 pub(crate) fn run_cli(
     command: &str,

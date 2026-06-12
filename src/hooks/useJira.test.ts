@@ -7,7 +7,7 @@ import { api } from "../api";
 import { createQueryClient } from "../queries/queryClient";
 import { queryKeys } from "../queries/keys";
 import { deriveColumns, useJira } from "./useJira";
-import type { JiraRestStatus, JiraStatus, JiraStatusDef, JiraWorkItem } from "../types";
+import type { JiraRestStatus, JiraStatusDef, JiraWorkItem } from "../types";
 
 function makeWrapper(client = createQueryClient()) {
   return ({ children }: { children: ReactNode }) =>
@@ -16,7 +16,6 @@ function makeWrapper(client = createQueryClient()) {
 
 vi.mock("../api", () => ({
   api: {
-    jiraStatus: vi.fn(),
     jiraRestStatus: vi.fn(),
     jiraListProjects: vi.fn(),
     jiraProjectStatuses: vi.fn(),
@@ -44,13 +43,17 @@ const item = (key: string, statusName: string): JiraWorkItem => ({
   description: null,
 });
 
-const connectedStatus: JiraStatus = { installed: true, authenticated: true };
+const connectedRestStatus: JiraRestStatus = {
+  connected: true,
+  site: "team.atlassian.net",
+  email: "me@example.com",
+  error: null,
+};
 const disconnectedRestStatus: JiraRestStatus = { connected: false };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockedApi.jiraStatus.mockResolvedValue(connectedStatus);
-  mockedApi.jiraRestStatus.mockResolvedValue(disconnectedRestStatus);
+  mockedApi.jiraRestStatus.mockResolvedValue(connectedRestStatus);
   mockedApi.jiraListProjects.mockResolvedValue([]);
   mockedApi.jiraProjectStatuses.mockResolvedValue([]);
   mockedApi.jiraSearchBoard.mockResolvedValue([item("A-1", "To Do")]);
@@ -113,9 +116,11 @@ describe("useJira", () => {
     expect(result.current.columns).toBe(firstColumns);
   });
 
-  it("ignores cached project statuses when REST is disconnected", async () => {
+  it("ignores cached data and loads nothing while disconnected", async () => {
+    mockedApi.jiraRestStatus.mockResolvedValue(disconnectedRestStatus);
     const setMessage = vi.fn();
     const client = createQueryClient();
+    // A stale status set from an earlier connected session must not leak through.
     client.setQueryData<JiraStatusDef[]>(queryKeys.jira.projectStatuses("A"), [
       { id: "1", name: "To Do", category: "to_do" },
       { id: "2", name: "Done", category: "done" },
@@ -132,21 +137,17 @@ describe("useJira", () => {
       { wrapper: makeWrapper(client) },
     );
 
-    await waitFor(() => expect(mockedApi.jiraSearchBoard).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.restConnected).toBe(false));
 
-    expect(result.current.restConnected).toBe(false);
+    expect(result.current.ready).toBe(false);
     expect(result.current.projectStatuses).toEqual([]);
-    expect(result.current.columns.map((column) => column.statusName)).toEqual(["To Do"]);
+    expect(result.current.columns).toEqual([]);
+    // The token is the connection: nothing is fetched without it.
+    expect(mockedApi.jiraSearchBoard).not.toHaveBeenCalled();
+    expect(mockedApi.jiraListProjects).not.toHaveBeenCalled();
   });
 
-  it("is ready with a REST token alone — token-primary, no acli", async () => {
-    mockedApi.jiraStatus.mockResolvedValue({ installed: false, authenticated: false });
-    mockedApi.jiraRestStatus.mockResolvedValue({
-      connected: true,
-      site: "team.atlassian.net",
-      email: "me@example.com",
-      error: null,
-    });
+  it("loads the board and project list once the token is connected", async () => {
     const setMessage = vi.fn();
     const { result } = renderHook(
       () =>
@@ -161,10 +162,9 @@ describe("useJira", () => {
     );
 
     await waitFor(() => expect(result.current.ready).toBe(true));
-    // The board and project list load on the token alone.
     await waitFor(() => expect(mockedApi.jiraSearchBoard).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mockedApi.jiraListProjects).toHaveBeenCalledTimes(1));
-    // Browse URLs fall back to the REST site when acli reports none.
+    // Browse URLs use the connected token's site.
     expect(result.current.site).toBe("team.atlassian.net");
   });
 

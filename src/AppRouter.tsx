@@ -22,7 +22,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { makeCacheSetter } from "./queries/cache";
 import { queryKeys } from "./queries/keys";
 import { useGithubStatusQuery } from "./queries/github";
-import { useJiraStatusQuery, useJiraRestStatusQuery } from "./queries/jira";
+import { useJiraRestStatusQuery } from "./queries/jira";
 import type { AppSettings } from "./types";
 import {
   useAgentProfilesQuery,
@@ -602,7 +602,6 @@ function SettingsView() {
   const settings = useSettingsQuery().data;
   const agentProfiles = useAgentProfilesQuery().data ?? EMPTY_PROFILES;
   const githubStatus = useGithubStatusQuery().data;
-  const jiraStatus = useJiraStatusQuery().data;
   const jiraRestStatus = useJiraRestStatusQuery().data;
   const busy = useAppStore((s) => s.busy);
   const setCurrentView = useAppStore((s) => s.setCurrentView);
@@ -614,7 +613,6 @@ function SettingsView() {
       agentProfiles={agentProfiles}
       githubStatus={githubStatus}
       jiraRestStatus={jiraRestStatus}
-      jiraDetectedSite={jiraStatus?.site}
       appUpdate={appUpdate}
       busy={busy}
       onBack={() => setCurrentView("mission")}
@@ -651,7 +649,6 @@ function JiraView() {
   );
   return (
     <JiraBoardPage
-      status={jira.jiraStatus}
       projects={jira.projects}
       tasks={tasks}
       onOpenTask={openTask}

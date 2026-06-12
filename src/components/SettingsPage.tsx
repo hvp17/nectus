@@ -33,8 +33,6 @@ interface SettingsPageProps {
   agentProfiles: AgentProfile[];
   githubStatus?: GithubStatus;
   jiraRestStatus?: JiraRestStatus;
-  /** Site detected from acli, used to prefill the JIRA token card. */
-  jiraDetectedSite?: string | null;
   appUpdate: AppUpdateState;
   busy: boolean;
   onBack: () => void;
@@ -53,7 +51,6 @@ export function SettingsPage({
   agentProfiles,
   githubStatus,
   jiraRestStatus,
-  jiraDetectedSite,
   appUpdate,
   busy,
   onSaveSettings,
@@ -330,7 +327,6 @@ export function SettingsPage({
           <div className="nx-set-sec-body">
             <JiraConnectionCard
               status={jiraRestStatus}
-              detectedSite={jiraDetectedSite}
               busy={busy}
               onSave={onSaveJiraToken}
               onDisconnect={onDisconnectJira}

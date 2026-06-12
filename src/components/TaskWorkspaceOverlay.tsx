@@ -5,7 +5,7 @@ import { queryKeys } from "../queries/keys";
 import { makeCacheSetter } from "../queries/cache";
 import { taskRepoName, taskRepoWorktreePath } from "../lib/taskRepos";
 import { useAgentProfilesQuery } from "../queries/core";
-import { useJiraStatusQuery } from "../queries/jira";
+import { useJiraRestStatusQuery } from "../queries/jira";
 import { useAppStore } from "../store/appStore";
 import { useGithub } from "../hooks/useGithub";
 import { useTaskReviewLoop } from "../hooks/useTaskReviewLoop";
@@ -37,7 +37,7 @@ interface TaskWorkspaceOverlayProps {
 export function TaskWorkspaceOverlay({ task, backLabel, repoName, onClose }: TaskWorkspaceOverlayProps) {
   const queryClient = useQueryClient();
   const agentProfiles = useAgentProfilesQuery().data ?? EMPTY_PROFILES;
-  const jiraSite = useJiraStatusQuery().data?.site ?? null;
+  const jiraSite = useJiraRestStatusQuery().data?.site ?? null;
   const taskAttention = useAppStore((s) => s.taskAttention);
   const busy = useAppStore((s) => s.busy);
   const setBusy = useAppStore((s) => s.setBusy);

@@ -604,18 +604,16 @@ back to the pull request** as a comment. Full behavior lives in
 ## JIRA
 
 The JIRA Board is a first-class view (icon rail, alongside PR Reviews), connected
-**token-primary**: the recommended setup is a JIRA Cloud API token pasted in
-Settings → JIRA (stored in the macOS Keychain, verified before saving, no other
-tools needed), with the official Atlassian CLI (`acli`) as the fallback connection —
-every command runs REST-first and degrades to `acli` when no token is connected.
-No OAuth either way. The board is global and fully UI-driven — **no JQL is
+with a JIRA Cloud **API token** pasted in Settings → JIRA (stored in the macOS
+Keychain, verified before saving, no other tools needed; a **Create a token**
+button deep-links to Atlassian's token page). The token is the only connection —
+no CLI dependency, no OAuth. The board is global and fully UI-driven — **no JQL is
 typed**: pick a JIRA project from a dropdown and toggle filters (My issues / Hide
 done / Current sprint), narrow to a status set, or pick an **Epic** to show only
 that epic's children (`parent = "<key>"`). Nectus builds the query behind the
 scenes (`jira::build_board_jql`, stored as `jira_board_project` + `jira_filter_*`
-flags + `jira_filter_epic`) and loads work items into status columns ordered by
-JIRA status category (the project's full status set with a token, or columns
-auto-derived from the results in acli fallback).
+flags + `jira_filter_epic`) and loads work items into the project's full status
+column set (empty columns included), ordered by JIRA status category.
 
 It is a full management surface: create a new work item, drag a card between
 columns to transition it (optimistic — reverted if JIRA's workflow rejects the
@@ -627,8 +625,7 @@ place. **New work item** in the toolbar opens an
 inline create form in that same dock slot (project defaulting to the board's,
 type Task/Bug/Story/Epic, summary, description, assignee, labels). If projects
 hydrate after the panel opens, an empty project field adopts the board/default
-project once it is available; on submit Nectus creates the item (REST
-`POST /issue`, or `acli jira workitem create` in fallback),
+project once it is available; on submit Nectus creates the item (`POST /issue`),
 refreshes the board, and auto-opens the new card's view panel — where the launch
 row can immediately start an agent on it. The panel's bottom launch row (agent
 select + **Create task & start**, carrying the selected launch agent into the task
@@ -641,24 +638,19 @@ cards/rows and a detachable panel in the task inspector, and — the other direc
 each board card lists the tasks attached to that story (agent logo, title, live/
 status), each click-through opening that task.
 
-**Sprint view (token-only).** A **Board / Sprint** toggle in the header
-switches the same project between the status-column board and JIRA's sprint layout:
-each active then future sprint, then the backlog, every section split into **epic
-swimlanes** (grouped by each issue's epic). Because sprints/boards/backlog are
-Agile-board concepts `acli` can't read, Sprint view requires the API token (it
-prompts to connect one otherwise) and loads from the Agile REST API
+**Sprint view.** A **Board / Sprint** toggle in the header switches the same
+project between the status-column board and JIRA's sprint layout: each active then
+future sprint, then the backlog, every section split into **epic swimlanes**
+(grouped by each issue's epic), loaded from the Agile REST API
 (`/rest/agile/1.0`). v1 is read-only: cards open the work-item panel, create a task
 from a story, and show a status pill, but there's no drag — transition from Board
 view.
 
-**Custom workflows (token-only).** Because `acli` can't enumerate a project's
-statuses or an issue's valid transitions, these come with the API token: the status
-dropdown shows the issue's **legal transitions**, the board renders **every status
-column** (including empty ones), and a **status filter** in the board header
-narrows the board. With no token, the board degrades to the acli-only flow
-(item-derived columns, optimistic transitions). Full behavior and caveats live in
-[JIRA Integration](jira-integration.md); file ownership is in
-[AGENTS.md](../AGENTS.md).
+**Custom workflows.** The status dropdown shows the issue's **legal transitions**
+(fetched on open), the board renders **every status column** (including empty
+ones), and a **status filter** in the board header narrows the board. Full
+behavior and caveats live in [JIRA Integration](jira-integration.md); file
+ownership is in [AGENTS.md](../AGENTS.md).
 
 ## Settings
 

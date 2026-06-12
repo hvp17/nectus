@@ -13,23 +13,19 @@ const API_TOKENS_URL = "https://id.atlassian.com/manage-profile/security/api-tok
 
 interface JiraConnectionCardProps {
   status?: JiraRestStatus;
-  /** Site detected from `acli jira auth status`, used to prefill when unconnected. */
-  detectedSite?: string | null;
   busy: boolean;
   onSave: (site: string, email: string, token: string) => Promise<JiraRestStatus>;
   onDisconnect: () => Promise<void>;
 }
 
 /**
- * The recommended JIRA connection: a JIRA Cloud API token. It alone fully drives
- * the integration — board, sprints, legal transitions, every status column —
- * with the Atlassian CLI (`acli`) kept as the fallback connection. The token is
- * verified against `/myself`, then stored in the macOS Keychain — never in the
- * app database.
+ * The JIRA connection: a JIRA Cloud API token. It drives the whole integration —
+ * board, sprints, legal transitions, every status column. The token is verified
+ * against `/myself`, then stored in the macOS Keychain — never in the app
+ * database.
  */
 export function JiraConnectionCard({
   status,
-  detectedSite,
   busy,
   onSave,
   onDisconnect,
@@ -41,12 +37,12 @@ export function JiraConnectionCard({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Prefill site/email from the connection status or acli-detected site whenever
-  // they change (e.g. after connecting), without clobbering an in-progress edit.
+  // Prefill site/email from the connection status whenever it changes (e.g.
+  // after connecting), without clobbering an in-progress edit.
   useEffect(() => {
-    setSite((current) => current || status?.site || detectedSite || "");
+    setSite((current) => current || status?.site || "");
     setEmail((current) => current || status?.email || "");
-  }, [status?.site, status?.email, detectedSite]);
+  }, [status?.site, status?.email]);
 
   const run = useGuardedAction(setError, setSaving);
 
@@ -80,9 +76,9 @@ export function JiraConnectionCard({
         <span className="nx-strip-copy">
           <strong>JIRA API token</strong>
           <small>
-            The recommended way to connect — drives the board, sprints, legal
-            transitions, and every status column. Stored in your Keychain. Without a
-            token, Nectus falls back to the Atlassian CLI (acli).
+            Connects Nectus to JIRA Cloud — the board, sprints, legal transitions,
+            and every status column. Stored in your Keychain, never in the app
+            database.
           </small>
         </span>
         <span className="nx-strip-right">

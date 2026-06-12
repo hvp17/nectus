@@ -1,6 +1,7 @@
-//! JIRA Cloud REST client for the optional API-token layer. The HTTP wrappers are
-//! thin; the JSON shape handling lives in pure parse functions that are unit-tested
-//! against golden fixtures (mirroring `native/src/jira.rs`).
+//! JIRA Cloud REST client — the app's JIRA integration, gated on the user's API
+//! token (Settings → JIRA). The HTTP wrappers are thin; the JSON shape handling
+//! lives in pure parse functions (here and in `native/src/jira.rs`) that are
+//! unit-tested against golden fixtures.
 
 use crate::models::{
     JiraProject, JiraSprint, JiraSprintLane, JiraStatusCategory, JiraStatusDef, JiraTransition,
@@ -13,8 +14,7 @@ use std::time::Duration;
 
 /// Shared `ureq` agent with bounded timeouts. All REST calls run inside a
 /// `spawn_blocking` worker, so without these a connect-but-never-respond JIRA
-/// host would pin that thread forever and defeat the documented degrade-to-acli
-/// fallback. Built once and reused.
+/// host would pin that thread forever. Built once and reused.
 fn agent() -> &'static ureq::Agent {
     static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
     AGENT.get_or_init(|| {
@@ -288,8 +288,7 @@ fn transition_id_for_status<'a>(
 
 /// Resolve `status_name` to a legal transition for `key` and perform it. Returns
 /// an error when no legal transition matches the target status. Keeps the
-/// REST-side list→match→perform algorithm out of the command layer (`lib.rs`),
-/// which only owns the decision to fall back to acli.
+/// list→match→perform algorithm out of the command layer (`lib.rs`).
 pub fn transition_to_status(
     site: &str,
     email: &str,
@@ -304,21 +303,21 @@ pub fn transition_to_status(
     perform_transition(site, email, token, key, transition_id)
 }
 
-// ---- Core API parity with acli: projects, search, view, assign, comment, create
+// ---- Core API: projects, search, view, assign, comment, create ------------
 
-/// The issue fields a board/search card needs. Matches what the acli board search
-/// returns (no `description` — the work-item view backfills it on open).
+/// The issue fields a board/search card needs (no `description` — the work-item
+/// view backfills it on open).
 const BOARD_ISSUE_FIELDS: [&str; 5] = ["summary", "status", "issuetype", "priority", "assignee"];
 
 /// List the JIRA projects visible to the user via `GET /project/search`. The
-/// response wraps the page under `values`, which the tolerant acli parser accepts.
+/// response wraps the page under `values`, which the shared tolerant parser accepts.
 pub fn list_projects(site: &str, email: &str, token: &str) -> Result<Vec<JiraProject>, String> {
     let body = get(site, email, token, "/project/search?maxResults=100")?;
     crate::jira::parse_projects(&body)
 }
 
 /// `nextPageToken` from a `/search/jql` page (absent on the last page). Parsed
-/// separately from the issues so `parse_work_items` stays shared with acli.
+/// separately from the issues so `parse_work_items` stays payload-agnostic.
 fn parse_next_page_token(json: &str) -> Option<String> {
     #[derive(Deserialize)]
     struct Page {
@@ -429,7 +428,7 @@ fn pick_account_id(users: &[RawUser], query: &str) -> Result<String, String> {
 }
 
 /// Resolve an assignee string (`@me`, an email, or a display name) to an
-/// `accountId` — REST assigns by account id, unlike acli's email convenience.
+/// `accountId` — the assignee endpoint takes account ids, not emails.
 fn resolve_account_id(
     site: &str,
     email: &str,
@@ -518,7 +517,7 @@ pub fn comment(site: &str, email: &str, token: &str, key: &str, body: &str) -> R
 }
 
 /// Create a work item via `POST /issue`, then re-fetch it so the caller gets a
-/// fully populated card (status, type, assignee) — same contract as the acli path.
+/// fully populated card (status, type, assignee) for the board panel.
 #[allow(clippy::too_many_arguments)]
 pub fn create(
     site: &str,
@@ -706,7 +705,7 @@ fn sprint_issues(
         ),
     )?;
     // The Agile issue payload is shaped like the core search (`{ issues: [...] }`),
-    // so the tolerant acli parser handles it — and now extracts epic/parent too.
+    // so the shared tolerant parser handles it — including epic/parent extraction.
     crate::jira::parse_work_items(&body)
 }
 
@@ -860,8 +859,8 @@ mod tests {
 
     #[test]
     fn search_page_payload_parses_with_shared_parser() {
-        // A `/search/jql` page is shaped like the acli search (`{ issues: [...] }`),
-        // so the shared tolerant parser must handle it.
+        // A `/search/jql` page wraps its items under `issues`, one of the wrapped
+        // shapes the shared tolerant parser accepts.
         let json = r#"{"issues":[{"key":"ENG-1","fields":{"summary":"Story","status":{"name":"To Do","statusCategory":{"key":"new"}}}}],"nextPageToken":"t1"}"#;
         let items = crate::jira::parse_work_items(json).unwrap();
         assert_eq!(items.len(), 1);

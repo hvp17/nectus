@@ -1,15 +1,6 @@
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString, IntoStaticStr};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct JiraStatus {
-    pub installed: bool,
-    pub authenticated: bool,
-    pub account: Option<String>,
-    pub site: Option<String>,
-}
-
 #[derive(
     Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Display, EnumString, IntoStaticStr,
 )]
@@ -42,8 +33,8 @@ pub struct JiraWorkItem {
     pub url: Option<String>,
     pub description: Option<String>,
     /// Parent epic key, when known. Populated by the Agile-API sprint path (and any
-    /// search that requests the `epic`/`parent` fields); `None` on the plain acli
-    /// board path, which does not carry it.
+    /// search that requests the `epic`/`parent` fields); `None` on the plain board
+    /// search, which does not request them.
     #[serde(default)]
     pub epic_key: Option<String>,
     /// Parent epic name/summary, when known. Same provenance as `epic_key`.
@@ -76,8 +67,8 @@ pub struct JiraSprintLane {
 
 impl JiraStatusCategory {
     /// Classify a JIRA status-category key/name, or — when no category is present —
-    /// a raw status name, into our coarse buckets. Mirrors the token logic that was
-    /// inline in `jira::map_category`, shared so the acli and REST paths agree.
+    /// a raw status name, into our coarse buckets. Shared by every payload parser
+    /// (`jira::map_category`, the REST transition/status parsers) so they agree.
     pub fn from_token(token: &str) -> Self {
         // Match whole words, not substrings, so e.g. "Abandoned" doesn't match
         // "done". Splitting on non-alphanumerics also handles "To Do" → ["to","do"].
@@ -118,7 +109,8 @@ pub struct JiraStatusDef {
     pub category: JiraStatusCategory,
 }
 
-/// REST connection state for the optional API-token layer.
+/// JIRA connection state: whether an API token is connected for the configured
+/// site + email (the token itself stays in the Keychain).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct JiraRestStatus {

@@ -147,13 +147,6 @@ export interface JiraProject {
   name: string;
 }
 
-export interface JiraStatus {
-  installed: boolean;
-  authenticated: boolean;
-  account?: string | null;
-  site?: string | null;
-}
-
 export interface JiraWorkItem {
   key: string;
   summary: string;
@@ -165,7 +158,7 @@ export interface JiraWorkItem {
   url?: string | null;
   description?: string | null;
   /** Parent epic key, when known (the Agile sprint path populates it; null on the
-   * plain acli board path). */
+   * plain board search). */
   epicKey?: string | null;
   /** Parent epic name/summary, when known. */
   epicName?: string | null;

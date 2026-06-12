@@ -11,8 +11,8 @@ import type {
   DiffFileEntry,
   GithubStatus,
   JiraProject,
+  JiraRestStatus,
   JiraSprintLane,
-  JiraStatus,
   JiraWorkItem,
   PrReview,
   PrReviewRun,
@@ -166,7 +166,12 @@ export const seedSettings: AppSettings = {
 };
 
 export const seedGithubStatus: GithubStatus = { installed: true, authenticated: true, account: "hvp17" };
-export const seedJiraStatus: JiraStatus = { installed: true, authenticated: true, account: "hvp17", site: "acme.atlassian.net" };
+export const seedJiraRestStatus: JiraRestStatus = {
+  connected: true,
+  site: "acme.atlassian.net",
+  email: "preview@example.com",
+  error: null,
+};
 export const seedJiraProjects: JiraProject[] = [
   { key: "WEB", name: "web-app" },
   { key: "CLI", name: "cli-tools" },

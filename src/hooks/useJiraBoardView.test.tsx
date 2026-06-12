@@ -12,7 +12,6 @@ const mockedUseJira = vi.mocked(useJira);
 
 function jiraState(): ReturnType<typeof useJira> {
   return {
-    jiraStatus: undefined,
     restStatus: undefined,
     restConnected: false,
     ready: true,

@@ -8,7 +8,7 @@ follow the [doc index](#documentation-index) to the deep references.
 Nectus Desktop is a Mac-first **Tauri 2** app for running parallel Codex / Claude /
 Antigravity / OpenCode agents across local git projects and worktrees. It is
 **local-first**: the React frontend never shells out. Every OS, git, SQLite, PTY,
-and external-CLI (`gh`, `acli`) operation happens in the Rust backend and is
+and external-CLI (`gh`) operation happens in the Rust backend and is
 reached through a typed Tauri command boundary.
 
 ## The five layers
@@ -28,7 +28,7 @@ reached through a typed Tauri command boundary.
                   ▼            ▼            ▼            ▼            ▼
   ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────────┐
   │   db/    │ │ git_ops/ │ │ sessions/│ │ github.rs│ │ jira.rs / jira_rest.rs│
-  │ rusqlite │ │ git CLI  │ │portable- │ │  gh CLI  │ │   acli CLI / REST     │
+  │ rusqlite │ │ git CLI  │ │portable- │ │  gh CLI  │ │   JIRA REST (ureq)    │
   │  SQLite  │ │ worktrees│ │ pty PTY  │ │   (PRs)  │ │ (board, transitions)  │
   └──────────┘ └──────────┘ └────┬─────┘ └──────────┘ └──────────────────────┘
                                  │ .emit("session_*", "review_*", "pr_review_*")
@@ -126,7 +126,7 @@ Backend:
 3. `native/src/sessions/mod.rs` — PTY lifecycle + the shared event-log tail loop;
    where live events originate.
 4. `native/src/process_util.rs` — the external-CLI spawn rules every git / `gh` /
-   `acli` / agent call depends on.
+   agent call depends on.
 
 Frontend:
 
@@ -161,5 +161,5 @@ Grouped by concern, with a single owner per topic:
 | **Persistence & debugging** | [`docs/tracking-and-debugging.md`](tracking-and-debugging.md) | SQLite tables, the **canonical Tauri command + event reference**, task/session fields, debugging flows |
 | **Codex JSONL** | [`docs/codex-session-jsonl.md`](codex-session-jsonl.md) | The Codex rollout-JSONL contract Nectus tails |
 | **GitHub** | [`docs/github-integration.md`](github-integration.md) | `gh`-CLI connection, PR create/detect/status/ship, external + consensus PR review |
-| **JIRA** | [`docs/jira-integration.md`](jira-integration.md) | `acli` + optional Keychain REST, the JQL board, work-item flows, task↔story link |
+| **JIRA** | [`docs/jira-integration.md`](jira-integration.md) | the Keychain API-token REST connection, the JQL board, work-item flows, task↔story link |
 | **Design archive** | [`docs/superpowers/`](superpowers/) | Dated, point-in-time design specs/plans — historical intent, not current truth |

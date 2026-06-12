@@ -12,10 +12,10 @@ mod sessions;
 use crate::db::Database;
 use crate::models::{
     AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings, AppSettingsInput,
-    GithubStatus, JiraProject, JiraRestStatus, JiraSprintLane, JiraStatus, JiraStatusDef,
-    JiraTransition, JiraWorkItem, PrReview, PrReviewMode, PrReviewRun, PullRequestInfo, Repo,
-    ReviewLoop, ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskDiffSummary,
-    TaskStatus, TaskSummary, Workspace,
+    GithubStatus, JiraProject, JiraRestStatus, JiraSprintLane, JiraStatusDef, JiraTransition,
+    JiraWorkItem, PrReview, PrReviewMode, PrReviewRun, PullRequestInfo, Repo, ReviewLoop,
+    ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskDiffSummary, TaskStatus,
+    TaskSummary, Workspace,
 };
 use crate::sessions::SessionManager;
 use parking_lot::Mutex;
@@ -596,23 +596,14 @@ async fn task_diff_file(
     .map_err(Into::into)
 }
 
-/// Report whether `acli` is installed, authenticated, and the active site.
-#[tauri::command]
-async fn jira_status() -> AppResult<JiraStatus> {
-    tauri::async_runtime::spawn_blocking(jira::status)
-        .await
-        .map_err(|error| AppError::from(format!("Failed to query JIRA status: {error}")))
-}
-
-/// List the JIRA projects visible to the user, for the board's project picker.
-/// REST-first (`GET /project/search`) with an acli fallback.
+/// List the JIRA projects visible to the user, for the board's project picker
+/// (`GET /project/search`).
 #[tauri::command]
 async fn jira_list_projects(state: State<'_, AppState>) -> AppResult<Vec<JiraProject>> {
-    jira_rest_or_acli(
+    jira_rest_call(
         &state,
         "Failed to list JIRA projects",
         |site, email, token| jira_rest::list_projects(&site, &email, &token),
-        jira::list_projects,
     )
     .await
 }
@@ -637,12 +628,10 @@ async fn jira_search_board(state: State<'_, AppState>) -> AppResult<Vec<JiraWork
             settings.jira_filter_epic.as_deref(),
         )
     };
-    let acli_jql = jql.clone();
-    jira_rest_or_acli(
+    jira_rest_call(
         &state,
         "Failed to load JIRA board",
         move |site, email, token| jira_rest::search(&site, &email, &token, &jql, 200),
-        move || jira::search(&acli_jql, 200),
     )
     .await
 }
@@ -654,11 +643,10 @@ async fn jira_list_epics(
     project: String,
 ) -> AppResult<Vec<JiraWorkItem>> {
     let jql = jira::build_epics_jql(&project);
-    jira_rest_or_acli(
+    jira_rest_call(
         &state,
         "Failed to list JIRA epics",
         move |site, email, token| jira_rest::search(&site, &email, &token, &jql, 200),
-        move || jira::list_epics(&project),
     )
     .await
 }
@@ -666,54 +654,45 @@ async fn jira_list_epics(
 /// Fetch a single work item (e.g. to backfill a story description on attach).
 #[tauri::command]
 async fn jira_get_work_item(state: State<'_, AppState>, key: String) -> AppResult<JiraWorkItem> {
-    let acli_key = key.clone();
-    jira_rest_or_acli(
+    jira_rest_call(
         &state,
         "Failed to load work item",
         move |site, email, token| jira_rest::view(&site, &email, &token, &key),
-        move || jira::view(&acli_key),
     )
     .await
 }
 
-/// Transition a work item. When a REST token is connected, resolve the target
-/// status name to a legal transition id and POST it. The integration is additive:
-/// if the REST attempt fails for any reason (revoked/stale token, network error, or
-/// no legal transition found), it degrades to the acli path rather than blocking the
-/// move — acli uses its own auth and is itself optimistic. JIRA workflow rejections
-/// then surface as errors and the UI reverts the card.
+/// Transition a work item: resolve the target status name to one of the issue's
+/// **legal** transitions and POST it. A workflow-forbidden move errors and the UI
+/// reverts the card.
 #[tauri::command]
 async fn jira_transition_work_item(
     state: State<'_, AppState>,
     key: String,
     status: String,
 ) -> AppResult<()> {
-    let (acli_key, acli_status) = (key.clone(), status.clone());
-    jira_rest_or_acli(
+    jira_rest_call(
         &state,
         "Failed to transition work item",
         move |site, email, token| {
             jira_rest::transition_to_status(&site, &email, &token, &key, &status)
         },
-        move || jira::transition(&acli_key, &acli_status),
     )
     .await
 }
 
-/// Assign a work item. REST resolves the assignee (`@me`, email, or display name)
-/// to an account id; acli takes the string as-is.
+/// Assign a work item, resolving the assignee (`@me`, email, or display name) to
+/// an account id first.
 #[tauri::command]
 async fn jira_assign_work_item(
     state: State<'_, AppState>,
     key: String,
     assignee: String,
 ) -> AppResult<()> {
-    let (acli_key, acli_assignee) = (key.clone(), assignee.clone());
-    jira_rest_or_acli(
+    jira_rest_call(
         &state,
         "Failed to assign work item",
         move |site, email, token| jira_rest::assign(&site, &email, &token, &key, &assignee),
-        move || jira::assign(&acli_key, &acli_assignee),
     )
     .await
 }
@@ -724,12 +703,10 @@ async fn jira_comment_work_item(
     key: String,
     body: String,
 ) -> AppResult<()> {
-    let (acli_key, acli_body) = (key.clone(), body.clone());
-    jira_rest_or_acli(
+    jira_rest_call(
         &state,
         "Failed to comment on work item",
         move |site, email, token| jira_rest::comment(&site, &email, &token, &key, &body),
-        move || jira::comment(&acli_key, &acli_body),
     )
     .await
 }
@@ -747,19 +724,10 @@ async fn jira_create_work_item(
     assignee: Option<String>,
     labels: Option<String>,
 ) -> AppResult<JiraWorkItem> {
-    let rest_input = (
-        project.clone(),
-        issue_type.clone(),
-        summary.clone(),
-        description.clone(),
-        assignee.clone(),
-        labels.clone(),
-    );
-    jira_rest_or_acli(
+    jira_rest_call(
         &state,
         "Failed to create work item",
         move |site, email, token| {
-            let (project, issue_type, summary, description, assignee, labels) = rest_input;
             jira_rest::create(
                 &site,
                 &email,
@@ -772,64 +740,23 @@ async fn jira_create_work_item(
                 labels.as_deref().unwrap_or(""),
             )
         },
-        move || {
-            jira::create(
-                &project,
-                &issue_type,
-                &summary,
-                description.as_deref(),
-                assignee.as_deref(),
-                labels.as_deref().unwrap_or(""),
-            )
-        },
     )
     .await
 }
 
-/// Run a JIRA operation REST-first. With a connected API token the REST closure
-/// runs; on any REST failure (revoked token, network error, endpoint change) the
-/// acli closure runs as the fallback, so neither layer is a hard dependency. When
-/// both fail, the REST error leads — for a token-connected user it is the
-/// actionable one — with the acli failure appended. With no token, this is the
-/// plain acli path.
-async fn jira_rest_or_acli<T>(
+/// Run a JIRA REST operation on the blocking pool with the connected token's
+/// credentials. Errors immediately when no token is connected — the API token is
+/// the JIRA connection (Settings → JIRA).
+async fn jira_rest_call<T>(
     state: &State<'_, AppState>,
     context: &'static str,
-    rest: impl FnOnce(String, String, String) -> Result<T, String> + Send + 'static,
-    acli: impl FnOnce() -> Result<T, String> + Send + 'static,
+    f: impl FnOnce(String, String, String) -> Result<T, String> + Send + 'static,
 ) -> AppResult<T>
 where
     T: Send + 'static,
 {
-    let rest_error = match rest_credentials(state) {
-        Ok((site, email, token)) => {
-            let result =
-                tauri::async_runtime::spawn_blocking(move || rest(site, email, token)).await;
-            // Fold a task panic (JoinError) into the same fall-through as an inner
-            // Err: any REST failure mode must degrade to acli, never short-circuit.
-            let outcome = match result {
-                Ok(inner) => inner,
-                Err(join_error) => Err(format!("REST task failed: {join_error}")),
-            };
-            match outcome {
-                Ok(value) => return Ok(value),
-                Err(error) => {
-                    tracing::warn!("JIRA REST call failed, falling back to acli: {error}");
-                    Some(error)
-                }
-            }
-        }
-        Err(_) => None,
-    };
-    match blocking(context, acli).await {
-        Ok(value) => Ok(value),
-        Err(acli_error) => Err(match rest_error {
-            Some(rest_error) => AppError::from(format!(
-                "{rest_error} (acli fallback also failed: {acli_error})"
-            )),
-            None => acli_error,
-        }),
-    }
+    let (site, email, token) = rest_credentials(state)?;
+    blocking(context, move || f(site, email, token)).await
 }
 
 /// Resolve `(site, email, token)` for a REST call, or an error when not connected.
@@ -926,51 +853,47 @@ fn clear_jira_api_token(state: State<'_, AppState>) -> AppResult<()> {
     Ok(())
 }
 
-/// List an issue's legal transitions via REST. Errors if no token is connected.
+/// List an issue's legal transitions (for the work-item status dropdown).
 #[tauri::command]
 async fn jira_list_transitions(
     state: State<'_, AppState>,
     key: String,
 ) -> AppResult<Vec<JiraTransition>> {
-    let (site, email, token) = rest_credentials(&state)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        jira_rest::list_transitions(&site, &email, &token, &key)
-    })
+    jira_rest_call(
+        &state,
+        "Failed to list transitions",
+        move |site, email, token| jira_rest::list_transitions(&site, &email, &token, &key),
+    )
     .await
-    .map_err(|error| AppError::from(format!("Failed to list transitions: {error}")))?
-    .map_err(Into::into)
 }
 
-/// Load a project's full status set via REST (for the board filter + empty columns).
+/// Load a project's full status set (for the board filter + empty columns).
 #[tauri::command]
 async fn jira_project_statuses(
     state: State<'_, AppState>,
     project: String,
 ) -> AppResult<Vec<JiraStatusDef>> {
-    let (site, email, token) = rest_credentials(&state)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        jira_rest::project_statuses(&site, &email, &token, &project)
-    })
+    jira_rest_call(
+        &state,
+        "Failed to load project statuses",
+        move |site, email, token| jira_rest::project_statuses(&site, &email, &token, &project),
+    )
     .await
-    .map_err(|error| AppError::from(format!("Failed to load project statuses: {error}")))?
-    .map_err(Into::into)
 }
 
 /// Load the sprint board (active/future sprints + backlog, issues carrying their
-/// epic) via the Agile REST API. Errors when no token is connected — Sprint view is
-/// REST-gated, since acli exposes no sprint/board data.
+/// epic) via the Agile REST API.
 #[tauri::command]
 async fn jira_sprint_board(
     state: State<'_, AppState>,
     project: String,
 ) -> AppResult<Vec<JiraSprintLane>> {
-    let (site, email, token) = rest_credentials(&state)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        jira_rest::sprint_board(&site, &email, &token, &project)
-    })
+    jira_rest_call(
+        &state,
+        "Failed to load sprint board",
+        move |site, email, token| jira_rest::sprint_board(&site, &email, &token, &project),
+    )
     .await
-    .map_err(|error| AppError::from(format!("Failed to load sprint board: {error}")))?
-    .map_err(Into::into)
 }
 
 /// Set or clear the local JIRA story link on a task. Never writes to JIRA.
@@ -1439,7 +1362,6 @@ pub fn run() {
             github_pull_request_status,
             detect_github_pull_request,
             post_pr_review_comment,
-            jira_status,
             jira_list_projects,
             jira_search_board,
             jira_list_epics,

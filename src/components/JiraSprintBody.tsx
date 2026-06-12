@@ -2,12 +2,10 @@ import { Layers } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Skeleton } from "./ui/skeleton";
 import { JiraCard } from "./JiraCard";
-import { isCliConnected } from "../lib/connection";
 import { groupByEpic } from "../lib/jiraSprints";
-import type { JiraSprintLane, JiraStatus, JiraWorkItem, TaskSummary } from "../types";
+import type { JiraSprintLane, JiraWorkItem, TaskSummary } from "../types";
 
 interface SprintBodyProps {
-  status: JiraStatus | undefined;
   project: string | null;
   restConnected: boolean;
   loading: boolean;
@@ -23,11 +21,10 @@ interface SprintBodyProps {
 /**
  * Sprint view body: each active/future sprint (then the backlog) as a section,
  * split into epic swimlanes. Read-only — cards open the work-item panel and the
- * create-task action, but there are no status columns and no drag. REST-gated:
- * without a token, prompts the user to connect one (acli has no sprint data).
+ * create-task action, but there are no status columns and no drag. Without a
+ * connected token, prompts the user to connect one.
  */
 export function SprintBody({
-  status,
   project,
   restConnected,
   loading,
@@ -39,25 +36,16 @@ export function SprintBody({
   onOpenTask,
   onCreateTask,
 }: SprintBodyProps) {
-  if (!restConnected && !isCliConnected(status)) {
+  if (!restConnected) {
     return (
       <SprintEmpty>
-        Not connected to JIRA. Paste an API token in <strong>Settings → JIRA</strong>{" "}
-        (recommended — no extra tools needed), or install the Atlassian CLI and run{" "}
-        <code>acli jira auth login</code> in a terminal.
+        Not connected to JIRA. Paste an API token in <strong>Settings → JIRA</strong> to load
+        sprints and the backlog — create one at id.atlassian.com, no other tools needed.
       </SprintEmpty>
     );
   }
   if (!project) {
     return <SprintEmpty>Choose a project above to load its sprints.</SprintEmpty>;
-  }
-  if (!restConnected) {
-    return (
-      <SprintEmpty>
-        Sprint view needs a JIRA API token. Connect one in <strong>Settings → JIRA</strong> to load
-        sprints and the backlog (the Atlassian CLI alone can&rsquo;t read sprint data).
-      </SprintEmpty>
-    );
   }
   if (error) {
     return <SprintEmpty>{error}</SprintEmpty>;

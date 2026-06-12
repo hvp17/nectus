@@ -11,14 +11,6 @@ import { useOptionalQuery } from "./optional";
  * board, and the project status set load only when their `enabled` gate is met.
  */
 
-export function useJiraStatusQuery() {
-  return useQuery({
-    queryKey: queryKeys.jira.status(),
-    queryFn: () => api.jiraStatus(),
-    staleTime: 5 * 60_000,
-  });
-}
-
 export function useJiraRestStatusQuery() {
   return useQuery({
     queryKey: queryKeys.jira.restStatus(),

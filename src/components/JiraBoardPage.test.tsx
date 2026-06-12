@@ -2,15 +2,8 @@ import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { renderWithTooltipProvider } from "../test/testUtils";
 import type { JiraColumn } from "../hooks/useJira";
-import type { JiraSprintLane, JiraStatus, JiraWorkItem, TaskSummary } from "../types";
+import type { JiraSprintLane, JiraWorkItem, TaskSummary } from "../types";
 import { JiraBoardPage } from "./JiraBoardPage";
-
-const status: JiraStatus = {
-  installed: true,
-  authenticated: true,
-  account: "me@example.com",
-  site: "example.atlassian.net",
-};
 
 const story: JiraWorkItem = {
   key: "SCRUM-2",
@@ -60,7 +53,8 @@ function task(overrides: Partial<TaskSummary>): TaskSummary {
 function renderBoard(tasks: TaskSummary[], onOpenTask = vi.fn()) {
   renderWithTooltipProvider(
     <JiraBoardPage
-      status={status}
+      restConnected
+      site="example.atlassian.net"
       projects={[{ key: "SCRUM", name: "Scrum" }]}
       tasks={tasks}
       project="SCRUM"
@@ -95,7 +89,8 @@ function renderCreatable(
 ) {
   renderWithTooltipProvider(
     <JiraBoardPage
-      status={status}
+      restConnected
+      site="example.atlassian.net"
       projects={[{ key: "SCRUM", name: "Scrum" }]}
       tasks={[]}
       project={overrides.project === undefined ? "SCRUM" : overrides.project}
@@ -201,7 +196,8 @@ describe("JiraBoardPage status filter", () => {
     const onChangeConfig = vi.fn();
     renderWithTooltipProvider(
       <JiraBoardPage
-        status={status}
+        restConnected
+        site="example.atlassian.net"
         projects={[{ key: "SCRUM", name: "Scrum" }]}
         tasks={[]}
         project="SCRUM"
@@ -231,7 +227,8 @@ describe("JiraBoardPage status filter", () => {
     const onChangeConfig = vi.fn();
     renderWithTooltipProvider(
       <JiraBoardPage
-        status={status}
+        restConnected
+        site="example.atlassian.net"
         projects={[{ key: "SCRUM", name: "Scrum" }]}
         tasks={[]}
         project="SCRUM"
@@ -270,7 +267,8 @@ describe("JiraBoardPage epic filter", () => {
   ) {
     renderWithTooltipProvider(
       <JiraBoardPage
-        status={status}
+        restConnected
+        site="example.atlassian.net"
         projects={[{ key: "SCRUM", name: "Scrum" }]}
         tasks={[]}
         project="SCRUM"
@@ -324,7 +322,6 @@ describe("JiraBoardPage sprint view", () => {
   function renderSprint(overrides: Partial<React.ComponentProps<typeof JiraBoardPage>> = {}) {
     renderWithTooltipProvider(
       <JiraBoardPage
-        status={status}
         projects={[{ key: "SCRUM", name: "Scrum" }]}
         tasks={[]}
         project="SCRUM"
@@ -361,7 +358,7 @@ describe("JiraBoardPage sprint view", () => {
 
   it("prompts to connect a token when REST is not connected", () => {
     renderSprint({ restConnected: false });
-    expect(screen.getByText(/needs a JIRA API token/i)).toBeInTheDocument();
+    expect(screen.getByText(/Paste an API token/i)).toBeInTheDocument();
     // The sprint data is not rendered without a token.
     expect(screen.queryByText("Sprint 7")).not.toBeInTheDocument();
   });
@@ -374,13 +371,10 @@ describe("JiraBoardPage sprint view", () => {
   });
 });
 
-describe("JiraBoardPage token-primary connection", () => {
-  const noAcli: JiraStatus = { installed: false, authenticated: false };
-
+describe("JiraBoardPage token connection", () => {
   function renderConnection(overrides: Partial<React.ComponentProps<typeof JiraBoardPage>> = {}) {
     renderWithTooltipProvider(
       <JiraBoardPage
-        status={noAcli}
         projects={[{ key: "SCRUM", name: "Scrum" }]}
         tasks={[]}
         project="SCRUM"
@@ -398,16 +392,16 @@ describe("JiraBoardPage token-primary connection", () => {
     );
   }
 
-  it("is fully usable with a REST token alone — no acli", () => {
+  it("is fully usable with a connected token", () => {
     renderConnection({ restConnected: true, site: "team.atlassian.net" });
-    // Connected badge shows the REST site; the toolbar (project picker) renders.
+    // Connected badge shows the site; the toolbar (project picker) renders.
     expect(screen.getByText("team.atlassian.net")).toBeInTheDocument();
     expect(screen.getByLabelText("JIRA project")).toBeInTheDocument();
     // The board renders cards instead of connection guidance.
     expect(screen.getByText("Hi Mann this is in review")).toBeInTheDocument();
   });
 
-  it("prompts for a token first when neither connection is set up", () => {
+  it("prompts for a token when not connected", () => {
     renderConnection();
     expect(screen.getByText("Not connected")).toBeInTheDocument();
     expect(screen.getByText(/Settings → JIRA/)).toBeInTheDocument();

@@ -1,7 +1,10 @@
-use crate::models::{JiraProject, JiraStatus, JiraStatusCategory, JiraWorkItem};
-use crate::process_util::{command_error, run_cli};
+//! Shared JIRA domain helpers: the structured-config JQL builders and the
+//! tolerant work-item/project payload parsers used by the REST layer
+//! (`jira_rest.rs`). Pure — no shell-outs, no HTTP. The golden fixtures in
+//! `jira_fixtures/` pin the raw JIRA Cloud v3 payload shapes these parsers accept.
+
+use crate::models::{JiraProject, JiraStatusCategory, JiraWorkItem};
 use serde::{Deserialize, Deserializer};
-use std::process::Output;
 
 /// Build the board JQL from the structured UI selections, so the user never types
 /// JQL. `project` is required; the flags add the usual board filters. Ordering by
@@ -64,10 +67,10 @@ fn jql_quote(value: impl AsRef<str>) -> String {
     )
 }
 
-/// Tolerant raw shape of a work item from `acli jira workitem search --json` /
-/// `view --json`. Field names follow the documented `acli` output; every field
-/// is optional and unknown extras are ignored, so a shape drift degrades
-/// gracefully (one bad item is dropped) rather than failing the whole board.
+/// Tolerant raw shape of a JIRA Cloud v3 work item (a `/search/jql` page entry,
+/// a `GET /issue/{key}` body, or an Agile-API issue). Every field is optional and
+/// unknown extras are ignored, so a shape drift degrades gracefully (one bad item
+/// is dropped) rather than failing the whole board.
 #[derive(Debug, Deserialize)]
 struct RawWorkItem {
     key: Option<String>,
@@ -311,8 +314,9 @@ fn work_item_from_raw(raw: RawWorkItem) -> Option<JiraWorkItem> {
     })
 }
 
-/// Parse `acli jira workitem search --json`. Accepts either a top-level array or
-/// an object wrapping the array under a common key.
+/// Parse a work-item search payload (`POST /search/jql` pages, Agile sprint and
+/// backlog issues). Accepts either a top-level array or an object wrapping the
+/// array under a common key (REST uses `issues`).
 pub fn parse_work_items(json: &str) -> Result<Vec<JiraWorkItem>, String> {
     #[derive(Deserialize)]
     #[serde(untagged)]
@@ -337,8 +341,9 @@ pub fn parse_work_items(json: &str) -> Result<Vec<JiraWorkItem>, String> {
     Ok(raw.into_iter().filter_map(work_item_from_raw).collect())
 }
 
-/// Parse `acli jira project list --json` into key/name pairs. Tolerant of a
-/// top-level array or an object wrapping the list, and of missing names.
+/// Parse a project-list payload (`GET /project/search`) into key/name pairs.
+/// Tolerant of a top-level array or an object wrapping the list (REST uses
+/// `values`), and of missing names.
 pub fn parse_projects(json: &str) -> Result<Vec<JiraProject>, String> {
     #[derive(Deserialize)]
     struct RawProject {
@@ -370,243 +375,11 @@ pub fn parse_projects(json: &str) -> Result<Vec<JiraProject>, String> {
         .collect())
 }
 
-/// Parse a single work item from `acli jira workitem view --json`.
+/// Parse a single work item (`GET /issue/{key}`).
 pub fn parse_work_item(json: &str) -> Result<JiraWorkItem, String> {
     let raw: RawWorkItem = serde_json::from_str(json)
         .map_err(|error| format!("Failed to parse work item: {error}"))?;
     work_item_from_raw(raw).ok_or_else(|| "Work item is missing its key".to_string())
-}
-
-/// Build the `acli jira workitem create` argument list from the structured form.
-/// Kept pure (no shell-out) so the flag assembly is unit-tested. Optional fields
-/// are omitted entirely when blank, and labels are trimmed and comma-joined the
-/// way `acli --label` expects.
-fn build_create_args<'a>(
-    project: &'a str,
-    issue_type: &'a str,
-    summary: &'a str,
-    description: Option<&'a str>,
-    assignee: Option<&'a str>,
-    labels: &'a str,
-) -> Vec<String> {
-    let mut args = vec![
-        "jira".to_string(),
-        "workitem".to_string(),
-        "create".to_string(),
-        "--project".to_string(),
-        project.to_string(),
-        "--type".to_string(),
-        issue_type.to_string(),
-        "--summary".to_string(),
-        summary.to_string(),
-        "--json".to_string(),
-    ];
-    if let Some(description) = description.map(str::trim).filter(|value| !value.is_empty()) {
-        args.push("--description".to_string());
-        args.push(description.to_string());
-    }
-    if let Some(assignee) = assignee.map(str::trim).filter(|value| !value.is_empty()) {
-        args.push("--assignee".to_string());
-        args.push(assignee.to_string());
-    }
-    let labels = labels
-        .split(',')
-        .map(str::trim)
-        .filter(|label| !label.is_empty())
-        .collect::<Vec<_>>()
-        .join(",");
-    if !labels.is_empty() {
-        args.push("--label".to_string());
-        args.push(labels);
-    }
-    args
-}
-
-/// Find the new issue key from `acli jira workitem create --json` output. Prefers
-/// the structured `key` field, then a key embedded in the returned URL, then any
-/// `ABC-123`-shaped token in the raw output, so a shape drift still recovers the key.
-fn parse_created_key(stdout: &str) -> Option<String> {
-    if let Ok(raw) = serde_json::from_str::<RawWorkItem>(stdout) {
-        if let Some(key) = raw.key {
-            return Some(key);
-        }
-        if let Some(key) = raw.url.as_deref().and_then(key_from_text) {
-            return Some(key);
-        }
-    }
-    key_from_text(stdout)
-}
-
-/// Scan free text for the first JIRA issue key (`PROJ-123`: an uppercase/digit
-/// prefix of length >= 2 starting with a letter, a dash, then digits).
-fn key_from_text(text: &str) -> Option<String> {
-    text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
-        .find_map(|token| {
-            let (prefix, number) = token.split_once('-')?;
-            let prefix_ok = prefix.len() >= 2
-                && prefix.starts_with(|c: char| c.is_ascii_uppercase())
-                && prefix
-                    .chars()
-                    .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit());
-            let number_ok = !number.is_empty() && number.chars().all(|c| c.is_ascii_digit());
-            (prefix_ok && number_ok).then(|| token.to_string())
-        })
-}
-
-/// Extract the active site host from `acli jira auth status` text output.
-pub fn parse_auth_site(text: &str) -> Option<String> {
-    text.split(|c: char| c.is_whitespace() || c == '/' || c == '"' || c == '\'')
-        .find(|token| token.ends_with(".atlassian.net") && token.len() > ".atlassian.net".len())
-        .map(str::to_string)
-}
-
-fn run_acli(args: &[&str]) -> Result<Output, String> {
-    run_cli("acli", None, "Atlassian CLI (acli) is not installed", args)
-}
-
-/// Report whether `acli` is installed, authenticated, and the active site.
-/// Never errors — a missing `acli` reports `installed: false`.
-pub fn status() -> JiraStatus {
-    let installed = run_acli(&["--version"])
-        .map(|output| output.status.success())
-        .unwrap_or(false);
-    if !installed {
-        return JiraStatus {
-            installed: false,
-            authenticated: false,
-            account: None,
-            site: None,
-        };
-    }
-    let auth = run_acli(&["jira", "auth", "status"]);
-    let authenticated = auth
-        .as_ref()
-        .map(|output| output.status.success())
-        .unwrap_or(false);
-    let site = auth
-        .ok()
-        .filter(|output| output.status.success())
-        .and_then(|output| parse_auth_site(&String::from_utf8_lossy(&output.stdout)));
-    JiraStatus {
-        installed: true,
-        authenticated,
-        account: site.clone(),
-        site,
-    }
-}
-
-/// Load the board: search work items by JQL.
-pub fn search(jql: &str, limit: u32) -> Result<Vec<JiraWorkItem>, String> {
-    let limit = limit.to_string();
-    let output = run_acli(&[
-        "jira", "workitem", "search", "--jql", jql, "--json", "--limit", &limit,
-    ])?;
-    if !output.status.success() {
-        return Err(command_error(&output, "acli jira workitem search failed"));
-    }
-    parse_work_items(&String::from_utf8_lossy(&output.stdout))
-}
-
-/// List a project's epics, to populate the board's epic-filter picker (so no JQL
-/// has to be typed). Returns the epics as work items (key + summary are what the
-/// picker shows).
-pub fn list_epics(project: &str) -> Result<Vec<JiraWorkItem>, String> {
-    search(&build_epics_jql(project), 200)
-}
-
-/// List the JIRA projects visible to the user, to populate the board's project
-/// picker (so no JQL has to be typed).
-pub fn list_projects() -> Result<Vec<JiraProject>, String> {
-    let output = run_acli(&["jira", "project", "list", "--json", "--limit", "100"])?;
-    if !output.status.success() {
-        return Err(command_error(&output, "acli jira project list failed"));
-    }
-    parse_projects(&String::from_utf8_lossy(&output.stdout))
-}
-
-/// View a single work item (used to backfill a story description).
-pub fn view(key: &str) -> Result<JiraWorkItem, String> {
-    let output = run_acli(&["jira", "workitem", "view", key, "--json"])?;
-    if !output.status.success() {
-        return Err(command_error(&output, "acli jira workitem view failed"));
-    }
-    parse_work_item(&String::from_utf8_lossy(&output.stdout))
-}
-
-/// Transition a work item to a target status. Optimistic: JIRA rejects illegal
-/// workflow moves with a non-zero exit, surfaced here as an `Err` so the UI can
-/// revert the card.
-pub fn transition(key: &str, status: &str) -> Result<(), String> {
-    let output = run_acli(&[
-        "jira",
-        "workitem",
-        "transition",
-        "--key",
-        key,
-        "--status",
-        status,
-        "--yes",
-    ])?;
-    if !output.status.success() {
-        return Err(command_error(
-            &output,
-            "acli jira workitem transition failed",
-        ));
-    }
-    Ok(())
-}
-
-pub fn assign(key: &str, assignee: &str) -> Result<(), String> {
-    let output = run_acli(&[
-        "jira",
-        "workitem",
-        "assign",
-        "--key",
-        key,
-        "--assignee",
-        assignee,
-    ])?;
-    if !output.status.success() {
-        return Err(command_error(&output, "acli jira workitem assign failed"));
-    }
-    Ok(())
-}
-
-pub fn comment(key: &str, body: &str) -> Result<(), String> {
-    let output = run_acli(&["jira", "workitem", "comment", "--key", key, "--body", body])?;
-    if !output.status.success() {
-        return Err(command_error(&output, "acli jira workitem comment failed"));
-    }
-    Ok(())
-}
-
-/// Create a work item in JIRA, then re-fetch it so the caller gets a fully
-/// populated `JiraWorkItem` (status, type, assignee) to open in the board panel.
-/// `acli`'s create `--json` output only reliably carries the new key, so the
-/// second `view` call fills in the rest. Optional fields (description, assignee,
-/// labels) are omitted when blank.
-pub fn create(
-    project: &str,
-    issue_type: &str,
-    summary: &str,
-    description: Option<&str>,
-    assignee: Option<&str>,
-    labels: &str,
-) -> Result<JiraWorkItem, String> {
-    let args = build_create_args(project, issue_type, summary, description, assignee, labels);
-    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    let output = run_acli(&arg_refs)?;
-    if !output.status.success() {
-        return Err(command_error(&output, "acli jira workitem create failed"));
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let key = parse_created_key(&stdout).ok_or_else(|| {
-        format!(
-            "Work item created but its key could not be read from acli output: {}",
-            stdout.trim()
-        )
-    })?;
-    view(&key)
 }
 
 #[cfg(test)]
@@ -725,11 +498,11 @@ mod tests {
         assert_eq!(item.description, None);
     }
 
-    // Golden-fixture tests: real `acli ... --json` output (scrubbed) from
-    // `native/src/jira_fixtures/`. These guard against the actual CLI shape
+    // Golden-fixture tests: real JIRA Cloud v3 payloads (scrubbed) from
+    // `native/src/jira_fixtures/`. These guard against the live API shape
     // drifting from our structs — the hand-written tests above can only encode
     // our assumptions, so the recurrence guard has to come from captured output.
-    // See `native/src/jira_fixtures/README.md` to refresh after an `acli` upgrade.
+    // See `native/src/jira_fixtures/README.md` to refresh them.
 
     #[test]
     fn real_acli_view_with_assignee_parses() {
@@ -890,101 +663,5 @@ mod tests {
 
         let wrapped = r#"{"projects":[{"key":"PROJ","name":"Project"}]}"#;
         assert_eq!(parse_projects(wrapped).unwrap()[0].key, "PROJ");
-    }
-
-    #[test]
-    fn builds_create_args_minimal() {
-        let args = build_create_args("ENG", "Task", "Login bug", None, None, "");
-        assert_eq!(
-            args,
-            vec![
-                "jira",
-                "workitem",
-                "create",
-                "--project",
-                "ENG",
-                "--type",
-                "Task",
-                "--summary",
-                "Login bug",
-                "--json"
-            ]
-        );
-    }
-
-    #[test]
-    fn builds_create_args_with_all_fields_and_trims_labels() {
-        let args = build_create_args(
-            "ENG",
-            "Bug",
-            "Crash",
-            Some("Steps to reproduce"),
-            Some("user@example.com"),
-            " api , , crash ",
-        );
-        assert_eq!(
-            args,
-            vec![
-                "jira",
-                "workitem",
-                "create",
-                "--project",
-                "ENG",
-                "--type",
-                "Bug",
-                "--summary",
-                "Crash",
-                "--json",
-                "--description",
-                "Steps to reproduce",
-                "--assignee",
-                "user@example.com",
-                "--label",
-                "api,crash",
-            ]
-        );
-    }
-
-    #[test]
-    fn builds_create_args_omits_blank_optionals() {
-        let args = build_create_args("ENG", "Story", "Thing", Some("   "), Some(""), "  ,  ");
-        // Blank description/assignee/labels add no flags.
-        assert!(!args.iter().any(|a| a == "--description"));
-        assert!(!args.iter().any(|a| a == "--assignee"));
-        assert!(!args.iter().any(|a| a == "--label"));
-    }
-
-    #[test]
-    fn parse_created_key_prefers_json_key() {
-        assert_eq!(
-            parse_created_key(r#"{"key":"ENG-42","summary":"x"}"#),
-            Some("ENG-42".to_string())
-        );
-    }
-
-    #[test]
-    fn parse_created_key_from_url_and_plain_text() {
-        assert_eq!(
-            parse_created_key(r#"{"url":"https://acme.atlassian.net/browse/ENG-7"}"#),
-            Some("ENG-7".to_string())
-        );
-        assert_eq!(
-            parse_created_key("Created work item ENG-100"),
-            Some("ENG-100".to_string())
-        );
-        assert_eq!(parse_created_key("no key here"), None);
-    }
-
-    #[test]
-    fn parse_site_from_auth_status() {
-        assert_eq!(
-            parse_auth_site("Logged in to mary.atlassian.net as Mary"),
-            Some("mary.atlassian.net".to_string())
-        );
-        assert_eq!(
-            parse_auth_site("Account: https://acme.atlassian.net/"),
-            Some("acme.atlassian.net".to_string())
-        );
-        assert_eq!(parse_auth_site("Not logged in"), None);
     }
 }

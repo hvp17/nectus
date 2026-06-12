@@ -7,7 +7,7 @@ import { createQueryClient } from "../queries/queryClient";
 import { queryKeys } from "../queries/keys";
 import { useAppStore } from "../store/appStore";
 import { appSettingsFixture, resetAppStore, seedBootstrapQueries, testTimestamp } from "../test/testUtils";
-import type { JiraStatus, JiraWorkItem, Repo, TaskSummary } from "../types";
+import type { JiraRestStatus, JiraWorkItem, Repo, TaskSummary } from "../types";
 import { useComposer } from "./useComposer";
 
 vi.mock("../api", () => ({
@@ -17,7 +17,6 @@ vi.mock("../api", () => ({
     setTaskJiraLink: vi.fn(),
     startSession: vi.fn(),
     jiraGetWorkItem: vi.fn(),
-    jiraStatus: vi.fn(),
     jiraRestStatus: vi.fn(),
     listRepos: vi.fn(),
     listWorkspaces: vi.fn(),
@@ -38,10 +37,11 @@ const repo: Repo = {
   collapsed: false,
 };
 
-const jiraStatus: JiraStatus = {
-  installed: true,
-  authenticated: true,
+const jiraRestStatus: JiraRestStatus = {
+  connected: true,
   site: "example.atlassian.net",
+  email: "me@example.com",
+  error: null,
 };
 
 const story: JiraWorkItem = {
@@ -62,8 +62,7 @@ function setup() {
     repos: [repo],
     settings: appSettingsFixture({ defaultAgentProfileId: 2 }),
   });
-  queryClient.setQueryData(queryKeys.jira.status(), jiraStatus);
-  queryClient.setQueryData(queryKeys.jira.restStatus(), { connected: false });
+  queryClient.setQueryData(queryKeys.jira.restStatus(), jiraRestStatus);
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );

@@ -1,96 +1,75 @@
 # JIRA Integration
 
-Nectus integrates with JIRA Cloud **token-primary**: the recommended connection is
-a user-pasted Atlassian API token (Settings → JIRA), which alone drives the whole
-integration over the JIRA Cloud REST API. The official Atlassian CLI (`acli`) is
-the **fallback** connection — every read/write command dispatches REST-first when a
-token is connected and degrades to shelling out to `acli` otherwise (or when a REST
-call fails). There is no OAuth flow, and the token never touches SQLite.
+Nectus connects to JIRA Cloud with a user-pasted Atlassian **API token**
+(Settings → JIRA) and talks to the JIRA Cloud REST API directly. The token is the
+only connection — there is no CLI dependency, no OAuth flow, and the token never
+touches SQLite.
 
 ## Connection
 
-Two ways to connect; either one fully enables the board:
-
-1. **API token (recommended, no extra tools).** Settings → **JIRA** → *JIRA API
-   token*: enter the site host + Atlassian account email, paste a token (the
-   **Create a token** button deep-links to
-   `id.atlassian.com/manage-profile/security/api-tokens`), and **Test & connect**
-   verifies it against `GET /rest/api/3/myself` before anything is saved. Connecting
-   a token also unlocks the REST-only features (legal transitions, full status
-   columns, Sprint view).
-2. **Atlassian CLI (fallback).** Install `acli` and run `acli jira auth login` in a
-   terminal. Used automatically when no token is connected (and as the fallback when
-   a REST call fails). With acli connected, the token card prefills the detected
-   site.
-
-- On opening the JIRA view the app checks both connections (`jira_rest_status` for
-  the token; `acli --version` + `acli jira auth status` for the CLI).
-- The board header shows a single connection badge (the connected site); when
-  neither connection is set up, the board body points to Settings → JIRA first and
-  mentions the acli alternative.
-- A single Atlassian site is supported per connection.
-
-## The API token (REST) layer
-
+- **Connect:** Settings → **JIRA** → *JIRA API token*: enter the site host +
+  Atlassian account email and paste a token. The **Create a token** button
+  deep-links to `id.atlassian.com/manage-profile/security/api-tokens`;
+  **Test & connect** verifies the token against `GET /rest/api/3/myself`
+  (Basic auth, `email:token`) before anything is saved.
 - **Storage:** the token is stored in the **macOS Keychain** (service =
   `com.hvp17.nectus`, account = `jira-api-token:{site}`), never in SQLite. Only the
   non-secret site/email are persisted (`app_settings.jira_site_url`,
-  `app_settings.jira_rest_email`). Disconnecting deletes the Keychain entry and clears
-  the email. This is a deliberate, contained exception to the "no app-managed tokens"
-  default — an opt-in, user-revocable token, not OAuth.
-- **REST-first dispatch:** with a token connected, project list
-  (`GET /project/search`), board + epic search (`POST /search/jql`, the endpoint that
-  replaced the removed `/rest/api/3/search`, paginated via `nextPageToken`), work-item
-  view (`GET /issue/{key}`), transition, assign (`PUT /issue/{key}/assignee`, with
-  `@me`/email/display-name resolved to an account id via `/myself` / `/user/search`),
-  comment and create (plain text wrapped in a minimal ADF document) all run over REST
-  (`jira_rest_or_acli` in `native/src/lib.rs`). Any REST failure logs a warning and
-  retries the same operation through acli; if both fail, the REST error is surfaced
-  (with the acli failure appended).
-- **Token-only features** (no acli equivalent exists):
-  - **Legal-transition dropdown** — the work-item status dropdown shows the issue's
-    valid moves from `GET /rest/api/3/issue/{key}/transitions`, and the move executes
-    via `POST /rest/api/3/issue/{key}/transitions` (resolving the chosen status name to
-    its transition id). Falls back to `acli ... transition` when no token.
-  - **All status columns, including empty ones** — board columns are built from the
-    project's full workflow status set (`GET /rest/api/3/project/{key}/statuses`,
-    unioned across issue types), so empty statuses still render.
-  - **Board status filter** — a multi-select in the board header (options from the
-    project status set) compiled into the board JQL as `status in (...)`.
-  - **Sprint view** — the Board/Sprint toggle's sprint layout (sprints + backlog,
-    grouped by epic) via the Agile API; see *Sprint view* below.
-- **Degradation:** with no token, every operation runs through acli (item-derived
-  columns, optimistic transition). The status filter still works token-free, but its
-  options fall back to the statuses currently present on the board.
+  `app_settings.jira_rest_email`). Disconnecting deletes the Keychain entry and
+  clears the email. This is a deliberate, contained exception to the "no
+  app-managed tokens" default — an opt-in, user-revocable token, not OAuth.
+- On opening the JIRA view the app reads the connection state
+  (`jira_rest_status`: a Keychain token exists for the configured site + an email
+  is set). The board header shows a single badge (the connected site, or
+  "Not connected"); without a connection the board body points to Settings → JIRA.
+- A single Atlassian site is supported (whatever the token card points at).
+
+## REST endpoints used
+
+All commands run over the JIRA Cloud v3 core API (plus the Agile API for Sprint
+view), via `jira_rest_call` in `native/src/lib.rs` → `native/src/jira_rest.rs`:
+
+- Project list: `GET /project/search`
+- Board + epic search: `POST /search/jql` (the endpoint that replaced the removed
+  `/rest/api/3/search`), paginated via `nextPageToken` up to 200 items
+- Work-item view: `GET /issue/{key}` (description included, ADF flattened)
+- Legal transitions: `GET /issue/{key}/transitions`; transition execution:
+  `POST /issue/{key}/transitions` (the chosen status name resolved to a
+  transition id)
+- Assign: `PUT /issue/{key}/assignee`, with `@me`/email/display name resolved to
+  an account id via `GET /myself` / `GET /user/search`
+- Comment: `POST /issue/{key}/comment`; create: `POST /issue` — plain text is
+  wrapped in a minimal ADF document (one paragraph per line) by `text_to_adf`,
+  the inverse of the read-side ADF flattener
+- Project status set: `GET /project/{key}/statuses` (unioned across issue types —
+  powers empty columns and the status filter)
+- Sprint view: the Agile API under `/rest/agile/1.0` (see *Sprint view*)
 
 ## The board (no JQL to write)
 
 The board is entirely UI-driven; no JQL is ever typed.
 
 - The board is global — it is not tied to a repo. In the header you **pick a JIRA
-  project** from a dropdown (REST `GET /project/search`, or
-  `acli jira project list --json` in fallback) and toggle a few filters: **My
-  issues** (`assignee = currentUser()`), **Hide done** (`statusCategory != Done`, on
-  by default), and **Current sprint** (`sprint in openSprints()`).
+  project** from a dropdown and toggle a few filters: **My issues**
+  (`assignee = currentUser()`), **Hide done** (`statusCategory != Done`, on by
+  default), and **Current sprint** (`sprint in openSprints()`).
 - **Epic filter** — an **Epic** dropdown in the header narrows the board to a single
   epic's children. Its options are the project's epics, loaded with the JQL
   `project = "<key>" AND issuetype = Epic ORDER BY summary ASC` (the
-  `jira_list_epics` command, REST-first like every search); selecting one compiles
-  into the board JQL as `parent = "<EPIC-KEY>"` (JIRA Cloud's unified `parent` field
-  covers the epic→story link in both team- and company-managed projects). "All
-  epics" clears it, and switching projects resets it (an epic key belongs to one
-  project). The selection persists in `app_settings.jira_filter_epic`.
+  `jira_list_epics` command); selecting one compiles into the board JQL as
+  `parent = "<EPIC-KEY>"` (JIRA Cloud's unified `parent` field covers the
+  epic→story link in both team- and company-managed projects). "All epics" clears
+  it, and switching projects resets it (an epic key belongs to one project). The
+  selection persists in `app_settings.jira_filter_epic`.
 - Nectus builds the JQL from that structured config in `jira::build_board_jql`
   (e.g. `project = "PROJ" AND statusCategory != Done ORDER BY updated DESC`). The
   config is stored as `app_settings.jira_board_project` plus the three
   `jira_filter_*` flags; the generated query is never shown to the user.
-- Work items load via `POST /rest/api/3/search/jql` (paginated, up to 200 items) —
-  or `acli jira workitem search --jql "<built jql>" --json --limit 200` in fallback.
-- **Columns:** with a token, the column skeleton is the project's full status set
-  (empty statuses included). In acli fallback, columns are **auto-derived** from the
-  statuses present in the results, ordered by JIRA status category (To Do → In
-  Progress → Done) then status name — `acli` exposes no command to enumerate a
-  project's status set, so a status with zero matching items produces no column.
+- **Columns** render the project's full workflow status set (empty statuses
+  included), ordered by JIRA status category (To Do → In Progress → Done) then
+  status name, narrowed by the **status filter** (a multi-select in the board
+  header, compiled into the JQL as `status in (...)`). While the status set is
+  still loading, columns are derived from the statuses present in the results.
 - The board refreshes when the view becomes active, when the project/filters change,
   when create/transition/assign/comment actions succeed, and via the `Refresh`
   button. There is no background polling or webhook.
@@ -102,13 +81,10 @@ picker). Sprint view renders JIRA's sprint/backlog layout: each **active** then
 **future** sprint as a section, followed by the **Backlog**, with every section split
 into **epic swimlanes**.
 
-- **REST-gated.** Sprints, boards, and the backlog are Agile-board concepts that
-  `acli` does not expose, so Sprint view requires the optional JIRA API token (see
-  *Optional REST layer*). Without a token it shows a "Connect a JIRA API token" prompt;
-  Board view is unaffected. Data comes from the Agile API (`/rest/agile/1.0`): the
-  project's first **Scrum** board (`/board?projectKeyOrId=<key>&type=scrum`) → its
-  active+future sprints (`/board/{id}/sprint?state=active,future`) → each sprint's
-  issues (`/board/{id}/sprint/{id}/issue`) and the `/board/{id}/backlog`. A project with
+- **Data.** The Agile API (`/rest/agile/1.0`): the project's first **Scrum** board
+  (`/board?projectKeyOrId=<key>&type=scrum`) → its active+future sprints
+  (`/board/{id}/sprint?state=active,future`) → each sprint's issues
+  (`/board/{id}/sprint/{id}/issue`) and the `/board/{id}/backlog`. A project with
   no Scrum board reports that Sprint view needs one.
 - **Epic grouping.** Each issue carries its epic (the Agile `epic` field, or `parent`
   when the parent is an Epic — covering team- and company-managed projects), and
@@ -122,55 +98,47 @@ into **epic swimlanes**.
 
 ## Creating a work item
 
-- The board toolbar has a **New work item** button (enabled once `acli` is connected
-  and a project is chosen). It opens an **inline create form** in the same right-hand
+- The board toolbar has a **New work item** button (enabled once connected and a
+  project is chosen). It opens an **inline create form** in the same right-hand
   dock slot the work-item view panel uses — the two are mutually exclusive, so opening
   one closes the other (no modal, matching the rest of the JIRA surfaces).
 - Fields: **Project** (defaults to the board's project; any visible project can be
   picked), **Type** (`Task`/`Bug`/`Story`/`Epic`), **Summary** (required), and optional
   **Description**, **Assignee** (email/account id, or `@me`), and comma-separated
   **Labels**. Submit is disabled until a project and a summary are present.
-- On submit Nectus creates the item — REST-first via `POST /rest/api/3/issue` (the
-  description wrapped in a minimal ADF document, the assignee resolved to an account
-  id), or `acli jira workitem create --project <key> --type <type> --summary
-  "<summary>" --json` plus `--description/--assignee/--label` in fallback (the new
-  key read from the JSON, falling back to a `KEY-123` token in the output) — then
-  `view`s the new key to return a fully populated card. The board refreshes and the
-  new item's **view panel** auto-opens, where the launch row can start an agent on it.
-- Type is **optimistic** on both paths: Nectus does not enumerate a project's
-  configured issue types, so an invalid type for the chosen project surfaces as a
-  JIRA error (same model as drag-to-transition). Priority is not set at create time.
+- On submit Nectus runs `POST /rest/api/3/issue` (the description wrapped in a
+  minimal ADF document, the assignee resolved to an account id), then `view`s the
+  new key to return a fully populated card. The board refreshes and the new item's
+  **view panel** auto-opens, where the launch row can start an agent on it.
+- Type is **optimistic**: Nectus does not enumerate a project's configured issue
+  types, so an invalid type for the chosen project surfaces as a JIRA error (same
+  model as drag-to-transition). Priority is not set at create time.
 
 ## Managing work items
 
 All JIRA mutations are explicit actions; nothing is written to JIRA implicitly.
-Every action below is REST-first with an acli fallback.
 
 - **Transition:** drag a card to another column, or change the status in the work
-  item dialog. With a token, the status name is resolved to a **legal** transition
-  and POSTed; in fallback, `acli jira workitem transition --key <key> --status
-  "<status>" --yes` is **optimistic** — `acli` exposes no list of valid transitions,
-  so if JIRA's workflow forbids the move the card reverts and the error is shown.
-- **Assign:** REST `PUT /issue/{key}/assignee` after resolving `@me` (via
-  `/myself`), an email, or a display name to an account id via `/user/search`
-  (exact email match wins, then exact display name, then a single unambiguous
-  result; app/bot accounts are ignored) — or `acli jira workitem assign --key <key>
-  --assignee <user>` in fallback.
-- **Comment:** REST `POST /issue/{key}/comment` with the text wrapped in a minimal
-  ADF document (one paragraph per line) — or `acli jira workitem comment --key
-  <key> --body "<text>"` in fallback.
-- **View:** REST `GET /issue/{key}` (or `acli jira workitem view <key> --json`)
-  backfills a story description when creating a task from it. JIRA Cloud's v3 API
-  returns `description` as an Atlassian Document Format (ADF) object, not a string;
-  `native/src/jira.rs` flattens that node tree to plain text (paragraphs/headings/
-  list items separated by newlines) and still accepts a plain-string or `null`
-  description. The same tolerant parser handles both the acli and raw REST payloads.
+  item dialog (the dropdown shows the issue's **legal transitions**, fetched on
+  open). The status name is resolved to a legal transition and POSTed; a
+  workflow-forbidden move errors, the card reverts, and the error is shown.
+- **Assign:** `PUT /issue/{key}/assignee` after resolving `@me` (via `/myself`),
+  an email, or a display name to an account id via `/user/search` (exact email
+  match wins, then exact display name, then a single unambiguous result; app/bot
+  accounts are ignored).
+- **Comment:** `POST /issue/{key}/comment` with the text wrapped in a minimal ADF
+  document (one paragraph per line).
+- **View:** `GET /issue/{key}` backfills a story description when creating a task
+  from it. JIRA Cloud's v3 API returns `description` as an Atlassian Document
+  Format (ADF) object, not a string; `native/src/jira.rs` flattens that node tree
+  to plain text (paragraphs/headings/list items separated by newlines) and still
+  accepts a plain-string or `null` description.
 - **Open in JIRA:** the work-item dialog and the linked-story panel open the canonical
   browse URL `https://<site>/browse/<KEY>`, built from the connected site host plus the
-  issue key (`jiraBrowseUrl` in `src/lib/jira.ts`). `acli` only returns the issue's REST
-  `self` link (`…/rest/api/3/issue/<id>`), which is an API endpoint, not a page — it is
-  intentionally ignored, and the linked-story panel rebuilds the URL so stories attached
-  before this was fixed still open correctly.
+  issue key (`jiraBrowseUrl` in `src/lib/jira.ts`). The API's `self` link
+  (`…/rest/api/3/issue/<id>`) is an endpoint, not a page — it is intentionally
+  ignored, and the linked-story panel rebuilds the URL so stories attached before
+  this was fixed still open correctly.
 
 ## Attaching a task to a story
 
@@ -194,17 +162,8 @@ Every action below is REST-first with an acli fallback.
 
 ## Requirements
 
-- **One** of the two connections:
-  - a JIRA Cloud **API token** connected in Settings → JIRA (recommended; works
-    with nothing else installed), or
-  - the Atlassian CLI (`acli`) installed and authenticated
-    (`acli jira auth login`). Resolution captures the user's login-shell `PATH`
-    (see the External-CLI PATH rule in
-    [`AGENTS.md`](../AGENTS.md#spawning-external-clis-macos-gui-path)), so `acli` is
-    found at any prefix — `~/homebrew`, mise/asdf shims, `~/bin`. If the badge still
-    shows "Not connected" while `which acli` works in a terminal, the binary's
-    parent dir is missing from your login-shell `PATH`; fix the shell config,
-    symlink it into `~/.local/bin` — or just connect an API token instead.
+- A JIRA Cloud **API token** connected in Settings → JIRA (site host + account
+  email + token). Nothing else needs to be installed.
 - A project must be chosen from the picker in the JIRA view header to load work
   items. No JQL is required.
 
@@ -213,22 +172,18 @@ Every action below is REST-first with an acli fallback.
 - API tokens are **JIRA Cloud only** (Basic auth `email:token`), and Atlassian
   tokens have a mandatory expiry — a 401 after months of use usually means the token
   expired; create a new one and **Update token** in Settings.
-- **In acli fallback** (no token), `acli` has no command to enumerate a project's
-  statuses or a work item's valid transitions. Consequences: empty-status columns do
-  not appear, and drag-to-transition is optimistic (validated only by `acli`'s exit
-  status). Connecting an API token resolves both.
-- With a REST token, the actual transition is resolved by matching the chosen status
-  **name** to a legal transition; a workflow with two transitions to the same target
-  status name resolves to the first.
-- REST assignment needs an account id; a query matching several non-bot users (and
+- A transition is resolved by matching the chosen status **name** to a legal
+  transition; a workflow with two transitions to the same target status name
+  resolves to the first.
+- Assignment needs an account id; a query matching several non-bot users (and
   none exactly by email or display name) is rejected as ambiguous — use the full
   email address.
 - The work-item JSON shape is parsed tolerantly in `native/src/jira.rs` (top-level
-  array or wrapped object — including REST's `issues`/`values` envelopes; flat or
+  array or wrapped object — the `issues`/`values` envelopes; flat or
   `fields`-nested; every field optional; `description` accepted as an ADF object,
   plain string, or `null`). A drifting shape drops a single bad item rather than
-  failing the whole board. The same parser serves acli output, `/search/jql` pages,
-  and Agile-API payloads.
+  failing the whole board. The same parser serves `/search/jql` pages, issue
+  views, and Agile-API payloads.
 
 ## Key files
 
@@ -238,32 +193,33 @@ Every action below is REST-first with an acli fallback.
 - Work item management dialog: `src/components/JiraWorkItemDialog.tsx`
 - New-work-item create panel: `src/components/JiraCreateWorkItemPanel.tsx`
 - Linked-story inspector panel: `src/components/JiraPanel.tsx`
-- Board + connection state, project list, auto-derived columns, optimistic
+- Board + connection state, project list, columns, optimistic
   transition, and work-item creation: `src/hooks/useJira.ts`
 - Create-from-story / create-task handlers: `src/hooks/useComposer.ts`
   (`createTaskFromStory`, `createTask`); board-config persistence: `src/hooks/useJira.ts`
 - Frontend API: `src/api.ts`
-- `acli` shell-out (the fallback path), the shared tolerant JSON parsing, the JQL
-  builders (`build_board_jql`, incl. the `status in (...)` and `parent = "<epic>"`
-  filter clauses; `build_epics_jql` + `list_epics` for the epic picker), and the
-  create argument builder/key parser: `native/src/jira.rs`
-- REST layer (the primary path): client + fixture-tested parsers
-  (`parse_transitions`, `parse_project_statuses`), the core-API parity operations
-  (`list_projects`, the paginated `search`, `view`, `assign` + account-id
-  resolution, the ADF-building `comment`/`create`), plus the Agile-API sprint layer
-  (`find_scrum_board`, `parse_sprints`, `sprint_board`) in `native/src/jira_rest.rs`;
-  Keychain token store in `native/src/jira_secret.rs`; the token/transitions/statuses
-  commands and the REST-first `jira_rest_or_acli` dispatch in `native/src/lib.rs`.
-  Settings token card: `src/components/settings/JiraConnectionCard.tsx`.
-- Parser regression guard: scrubbed real `acli --json` output in
+- Shared JIRA domain helpers — the tolerant payload parsers and the JQL builders
+  (`build_board_jql`, incl. the `status in (...)` and `parent = "<epic>"` filter
+  clauses; `build_epics_jql`): `native/src/jira.rs`
+- REST client: fixture-tested parsers (`parse_transitions`,
+  `parse_project_statuses`), the core-API operations (`list_projects`, the
+  paginated `search`, `view`, `assign` + account-id resolution, the ADF-building
+  `comment`/`create`), plus the Agile-API sprint layer (`find_scrum_board`,
+  `parse_sprints`, `sprint_board`) in `native/src/jira_rest.rs`; Keychain token
+  store in `native/src/jira_secret.rs`; the `jira_rest_call` command plumbing in
+  `native/src/lib.rs`. Settings token card:
+  `src/components/settings/JiraConnectionCard.tsx`.
+- Parser regression guard: scrubbed real JIRA Cloud v3 payloads in
   `native/src/jira_fixtures/` (view/search/project list), `include_str!`ed by the
-  `real_acli_*` tests in `native/src/jira.rs`. These pin the live CLI shape (e.g.
-  ADF `description`) so a struct/CLI drift fails a test instead of users. Refresh
+  fixture tests in `native/src/jira.rs`. These pin the live API shape (e.g.
+  ADF `description`) so a struct/API drift fails a test instead of users. Refresh
   via `native/src/jira_fixtures/scrub.py` per that directory's `README.md`.
-- Backend commands: `jira_status`, `jira_list_projects`, `jira_search_board`,
+- Backend commands: `jira_rest_status`, `set_jira_api_token`,
+  `clear_jira_api_token`, `jira_list_projects`, `jira_search_board`,
   `jira_list_epics`, `jira_sprint_board`, `jira_get_work_item`,
-  `jira_transition_work_item`, `jira_assign_work_item`, `jira_comment_work_item`,
-  `jira_create_work_item`, `set_task_jira_link` (registered in `native/src/lib.rs`)
+  `jira_list_transitions`, `jira_project_statuses`, `jira_transition_work_item`,
+  `jira_assign_work_item`, `jira_comment_work_item`, `jira_create_work_item`,
+  `set_task_jira_link` (registered in `native/src/lib.rs`)
 - Link persistence: the `jira_issue_key`, `jira_issue_summary`, and `jira_issue_url`
   columns on the `tasks` table; board config in `jira_board_project`, the
   `jira_filter_*` flags, and `jira_filter_epic` on `app_settings`

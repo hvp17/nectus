@@ -15,7 +15,7 @@ vi.mock("../api", () => ({
     detectGithubPullRequest: vi.fn(),
     getTaskReviewLoop: vi.fn(),
     listTaskReviewRuns: vi.fn(),
-    jiraStatus: vi.fn(),
+    jiraRestStatus: vi.fn(),
     startPairLoop: vi.fn(),
     runPairReview: vi.fn(),
     submitSessionInput: vi.fn(),
@@ -74,7 +74,7 @@ beforeEach(() => {
   mockedApi.detectGithubPullRequest.mockResolvedValue(null);
   mockedApi.getTaskReviewLoop.mockResolvedValue(null);
   mockedApi.listTaskReviewRuns.mockResolvedValue([]);
-  mockedApi.jiraStatus.mockResolvedValue({ installed: false, authenticated: false });
+  mockedApi.jiraRestStatus.mockResolvedValue({ connected: false, site: null, email: null, error: null });
   mockedApi.startPairLoop.mockResolvedValue(runningLoop);
   mockedApi.runPairReview.mockResolvedValue(runningLoop);
   mockedApi.submitSessionInput.mockResolvedValue(undefined);

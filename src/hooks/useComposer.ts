@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { api } from "../api";
 import { useReposQuery, useSettingsQuery, useRefreshData } from "../queries/core";
-import { useJiraRestStatusQuery, useJiraStatusQuery } from "../queries/jira";
+import { useJiraRestStatusQuery } from "../queries/jira";
 import { useGuardedAction } from "./useGuardedAction";
 import {
   getSuggestedWorktreeBranchName,
@@ -34,10 +34,8 @@ function generatedTitle(title: string, prompt: string): string {
 export function useComposer() {
   const settings = useSettingsQuery().data;
   const repos = useReposQuery().data ?? EMPTY_REPOS;
-  const jiraStatus = useJiraStatusQuery().data;
   const jiraRestStatus = useJiraRestStatusQuery().data;
-  // Browse-URL host from whichever JIRA connection is configured (token or acli).
-  const jiraSite = jiraStatus?.site ?? jiraRestStatus?.site ?? null;
+  const jiraSite = jiraRestStatus?.site ?? null;
   const setMessage = useAppStore((s) => s.setMessage);
   const setBusy = useAppStore((s) => s.setBusy);
   const run = useGuardedAction(setMessage, setBusy);

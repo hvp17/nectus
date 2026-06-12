@@ -15,7 +15,6 @@ import type {
   JiraProject,
   JiraRestStatus,
   JiraSprintLane,
-  JiraStatus,
   JiraStatusDef,
   JiraTransition,
   JiraWorkItem,
@@ -220,11 +219,6 @@ export const api = {
     if (!isTauriRuntime()) return null;
     return invoke("detect_github_pull_request", { taskId, repoId: repoId ?? null });
   },
-  async jiraStatus(): Promise<JiraStatus> {
-    if (isBrowserPreview) return (await seeds()).seedJiraStatus;
-    if (!isTauriRuntime()) return { installed: false, authenticated: false, account: null, site: null };
-    return invoke("jira_status");
-  },
   async jiraListProjects(): Promise<JiraProject[]> {
     if (isBrowserPreview) return (await seeds()).seedJiraProjects;
     if (!isTauriRuntime()) return [];
@@ -253,7 +247,7 @@ export const api = {
     return invoke("jira_comment_work_item", { key, body });
   },
   async jiraRestStatus(): Promise<JiraRestStatus> {
-    if (isBrowserPreview) return { connected: false, site: null, email: null, error: null };
+    if (isBrowserPreview) return (await seeds()).seedJiraRestStatus;
     return invoke("jira_rest_status");
   },
   async setJiraApiToken(site: string, email: string, token: string): Promise<JiraRestStatus> {

@@ -1,13 +1,15 @@
-# JIRA `acli` golden fixtures
+# JIRA golden fixtures
 
-Real `acli ... --json` output, captured from a live Atlassian site and scrubbed
-of PII, used by the parser tests in `native/src/jira.rs` (`include_str!`ed under
-`#[cfg(test)]`).
+Real JIRA Cloud v3 payloads, captured from a live Atlassian site (via the
+Atlassian CLI `acli`, which emits the raw API JSON) and scrubbed of PII, used by
+the parser tests in `native/src/jira.rs` (`include_str!`ed under `#[cfg(test)]`).
+The app talks to the REST API directly; these fixtures pin the payload shapes
+the shared parsers must keep accepting.
 
 These exist because the original `description` parse bug
 (`invalid type: map, expected a string`) slipped through a unit test built from a
 **hand-invented** payload (`"description":"details"`) — which encoded our wrong
-assumption instead of reality. Fixtures must therefore come from running `acli`,
+assumption instead of reality. Fixtures must therefore come from a real capture,
 never typed by hand, so the tests assert against what JIRA Cloud actually emits.
 
 ## Files
@@ -24,7 +26,7 @@ The key fact these pin down: JIRA Cloud's **v3** API returns rich-text fields
 while `search` omits `description` entirely. `native/src/jira.rs` must keep
 accepting all of those shapes.
 
-## Refreshing (after an `acli` / JIRA upgrade)
+## Refreshing (after a JIRA payload change)
 
 Re-capture, scrub, and write each fixture, then run the tests:
 
@@ -50,7 +52,6 @@ grep -REn "Tomas|Gadliauskas|@gmail|atlassian\.net|gravatar" native/src/jira_fix
 URL-encoded avatar `d=` query may remain; it carries no personal data and the
 parser ignores `avatarUrls`.)
 
-> `acli jira workitem create --json` is intentionally **not** captured here:
-> running it writes a real work item to the tracker. The create path only needs
-> the new key, which `parse_created_key` recovers from JSON, a URL, or free text
-> (covered by unit tests in `jira.rs`).
+> A create response is intentionally **not** captured here: capturing one writes
+> a real work item to the tracker. The create path only needs the new `key`
+> field from the `POST /issue` response.
