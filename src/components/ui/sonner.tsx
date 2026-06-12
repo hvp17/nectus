@@ -33,8 +33,15 @@ const Toaster = ({ theme = "system", ...props }: ToasterProps) => {
         } as React.CSSProperties
       }
       toastOptions={{
+        // Task-attention toasts use the provider logo as the icon: top-align it
+        // beside the title, mute and clamp the message body, and let long tokens
+        // (URLs, branch names) break instead of overflow.
         classNames: {
-          toast: "cn-toast",
+          toast: "items-start gap-3",
+          icon: "mt-px self-start",
+          title: "font-semibold tracking-[-0.01em]",
+          description: "line-clamp-3 leading-[1.45] text-muted-foreground [overflow-wrap:anywhere]",
+          actionButton: "self-center",
         },
       }}
       {...props}

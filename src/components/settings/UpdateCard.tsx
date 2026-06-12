@@ -1,6 +1,7 @@
 import { DownloadCloud, RefreshCw, RotateCw } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "../ui/item";
 import type { UpdateInfo } from "../../lib/update";
 import type { UpdateStatus } from "../../hooks/useAppUpdate";
 
@@ -77,15 +78,15 @@ export function UpdateCard({
   const detail = detailMessage(status, info, percent, error, lastCheckedAt);
 
   return (
-    <div className="nx-strip">
-      <span className="nx-strip-ic">
+    <Item variant="muted">
+      <ItemMedia variant="icon" className="size-8 rounded-md bg-card text-muted-foreground shadow-xs">
         <DownloadCloud />
-      </span>
-      <span className="nx-strip-copy">
-        <strong>Nectus Desktop {currentVersion ? `v${currentVersion}` : ""}</strong>
-        <small>{detail}</small>
-      </span>
-      <span className="nx-strip-right">
+      </ItemMedia>
+      <ItemContent>
+        <ItemTitle className="text-[13px]">Nectus Desktop {currentVersion ? `v${currentVersion}` : ""}</ItemTitle>
+        <ItemDescription>{detail}</ItemDescription>
+      </ItemContent>
+      <ItemActions>
         <Badge variant="outline" aria-label={`Update status: ${statusLabel(status)}`}>
           {statusLabel(status)}
         </Badge>
@@ -112,7 +113,7 @@ export function UpdateCard({
             Check for updates
           </Button>
         )}
-      </span>
-    </div>
+      </ItemActions>
+    </Item>
   );
 }

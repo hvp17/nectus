@@ -1,4 +1,5 @@
 import { Github } from "lucide-react";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "../ui/item";
 import { Skeleton } from "../ui/skeleton";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { isCliConnected } from "../../lib/connection";
@@ -7,18 +8,18 @@ import type { GithubStatus } from "../../types";
 export function GithubConnectionCard({ status }: { status?: GithubStatus }) {
   if (!status) {
     return (
-      <div className="nx-strip">
-        <span className="nx-strip-ic">
+      <Item variant="muted">
+        <ItemMedia variant="icon" className="size-8 rounded-md bg-card text-muted-foreground shadow-xs">
           <Github />
-        </span>
-        <span className="nx-strip-copy">
-          <strong>GitHub CLI</strong>
-          <Skeleton className="mt-1 h-3 w-44" />
-        </span>
-        <span className="nx-strip-right">
+        </ItemMedia>
+        <ItemContent>
+          <ItemTitle className="text-[13px]">GitHub CLI</ItemTitle>
+          <Skeleton className="h-3 w-44" />
+        </ItemContent>
+        <ItemActions>
           <Skeleton className="h-6 w-24" />
-        </span>
-      </div>
+        </ItemActions>
+      </Item>
     );
   }
 
@@ -31,17 +32,17 @@ export function GithubConnectionCard({ status }: { status?: GithubStatus }) {
   const badgeLabel = connected ? "Connected" : status.installed ? "Not signed in" : "Not installed";
 
   return (
-    <div className="nx-strip">
-      <span className="nx-strip-ic">
+    <Item variant="muted">
+      <ItemMedia variant="icon" className="size-8 rounded-md bg-card text-muted-foreground shadow-xs">
         <Github />
-      </span>
-      <span className="nx-strip-copy">
-        <strong>GitHub CLI</strong>
-        <small>{detail}</small>
-      </span>
-      <span className="nx-strip-right">
+      </ItemMedia>
+      <ItemContent>
+        <ItemTitle className="text-[13px]">GitHub CLI</ItemTitle>
+        <ItemDescription>{detail}</ItemDescription>
+      </ItemContent>
+      <ItemActions>
         <ConnectionBadge connected={connected} label={badgeLabel} ariaPrefix="GitHub" />
-      </span>
-    </div>
+      </ItemActions>
+    </Item>
   );
 }

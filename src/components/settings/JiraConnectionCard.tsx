@@ -4,6 +4,7 @@ import { ConnectionBadge } from "./ConnectionBadge";
 import { Button } from "../ui/button";
 import { Field, FieldDescription, FieldError, FieldLabel } from "../ui/field";
 import { Input } from "../ui/input";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "../ui/item";
 import { useGuardedAction } from "../../hooks/useGuardedAction";
 import { openExternal } from "../../lib/openExternal";
 import type { JiraRestStatus } from "../../types";
@@ -68,27 +69,27 @@ export function JiraConnectionCard({
   const canSave = Boolean(site.trim() && email.trim() && token) && !disabled;
 
   return (
-    <div className="nx-set-grid">
-      <div className="nx-strip">
-        <span className="nx-strip-ic">
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Item variant="muted" className="lg:col-span-2">
+        <ItemMedia variant="icon" className="size-8 rounded-md bg-card text-muted-foreground shadow-xs">
           <KanbanSquare />
-        </span>
-        <span className="nx-strip-copy">
-          <strong>JIRA API token</strong>
-          <small>
+        </ItemMedia>
+        <ItemContent>
+          <ItemTitle className="text-[13px]">JIRA API token</ItemTitle>
+          <ItemDescription>
             Connects Nectus to JIRA Cloud — the board, sprints, legal transitions,
             and every status column. Stored in your Keychain, never in the app
             database.
-          </small>
-        </span>
-        <span className="nx-strip-right">
+          </ItemDescription>
+        </ItemContent>
+        <ItemActions>
           <ConnectionBadge
             connected={connected}
             label={connected ? "Connected" : "Not connected"}
             ariaPrefix="JIRA REST"
           />
-        </span>
-      </div>
+        </ItemActions>
+      </Item>
 
       <Field>
         <FieldLabel htmlFor="jira-rest-site">Site</FieldLabel>
@@ -113,7 +114,7 @@ export function JiraConnectionCard({
         />
       </Field>
 
-      <Field>
+      <Field className="lg:col-span-2">
         <FieldLabel htmlFor="jira-rest-token">API token</FieldLabel>
         <Input
           id="jira-rest-token"
@@ -129,7 +130,7 @@ export function JiraConnectionCard({
         {error && <FieldError>{error}</FieldError>}
       </Field>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 lg:col-span-2">
         <Button type="button" onClick={save} disabled={!canSave}>
           {connected ? "Update token" : "Test & connect"}
         </Button>

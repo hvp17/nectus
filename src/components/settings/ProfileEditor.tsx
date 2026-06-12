@@ -34,18 +34,22 @@ export function ProfileEditor({ profile, isDefault, busy, onChange, onSave }: Pr
   const saveDisabled = busy || !profile.name.trim() || !profile.command.trim();
 
   return (
-    <Card size="sm" className="profile-editor shadow-none" data-agent-kind={profile.agentKind}>
-      <CardHeader className="profile-editor-header p-0">
-        <div className="profile-identity">
-          <AgentLogo agentKind={profile.agentKind} size="md" className="profile-kind-mark" />
-          <div className="profile-title-fields">
+    <Card size="sm" className="gap-0 py-0 shadow-none" data-agent-kind={profile.agentKind}>
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4 border-b px-4 py-3.5">
+        <div className="flex min-w-0 items-center gap-3">
+          <AgentLogo
+            agentKind={profile.agentKind}
+            size="md"
+            className="size-9 rounded-md bg-muted p-[7px] text-muted-foreground"
+          />
+          <div className="grid min-w-0 gap-1.5">
             <Input
               aria-label="Profile name"
               value={profile.name}
               onChange={(event) => onChange({ name: event.target.value })}
-              className="profile-name-input"
+              className="h-[30px] max-w-[360px] border-transparent bg-transparent px-0 text-[15px] font-bold tracking-[-0.01em] shadow-none focus-visible:border-ring focus-visible:bg-background focus-visible:px-2.5"
             />
-            <p className="profile-command-summary">
+            <p className="m-0 flex min-w-0 flex-wrap items-center gap-[7px] text-xs text-muted-foreground">
               <Terminal size={13} />
               <span className={profile.command.trim() ? "font-mono" : undefined}>{commandLabel}</span>
               <span aria-hidden="true">·</span>
@@ -54,22 +58,22 @@ export function ProfileEditor({ profile, isDefault, busy, onChange, onSave }: Pr
           </div>
         </div>
 
-        <div className="profile-editor-toolbar">
-          <div className="profile-editor-badges">
+        <div className="flex items-center justify-end gap-2.5">
+          <div className="flex flex-wrap justify-end gap-1.5">
             {isDefault && (
-              <Badge variant="outline" className="profile-status-badge">
+              <Badge variant="outline" className="gap-1.5">
                 <Star size={11} />
                 Default
               </Badge>
             )}
-            <Badge variant="outline" className="profile-status-badge">
+            <Badge variant="outline" className="gap-1.5">
               <AgentLogo agentKind={profile.agentKind} size="sm" />
               {agentKindLabels[profile.agentKind]}
             </Badge>
           </div>
           <Select value={profile.agentKind} onValueChange={(value) => onChange({ agentKind: value as AgentKind })}>
-            <SelectTrigger aria-label="Agent kind" className="profile-kind-select h-8 justify-between">
-              <span className="select-value-with-logo">
+            <SelectTrigger aria-label="Agent kind" className="h-8 w-[150px] justify-between">
+              <span className="flex min-w-0 flex-1 items-center gap-2">
                 <SelectValue />
               </span>
             </SelectTrigger>
@@ -77,7 +81,7 @@ export function ProfileEditor({ profile, isDefault, busy, onChange, onSave }: Pr
               <SelectGroup>
                 {Object.entries(agentKindLabels).map(([value, label]) => (
                   <SelectItem key={value} value={value} textValue={label}>
-                    <span className="select-option-with-logo">
+                    <span className="inline-flex min-w-0 items-center gap-2">
                       <AgentLogo agentKind={value as AgentKind} size="sm" />
                       {label}
                     </span>
@@ -93,8 +97,8 @@ export function ProfileEditor({ profile, isDefault, busy, onChange, onSave }: Pr
         </div>
       </CardHeader>
 
-      <CardContent className="p-0">
-        <FieldGroup className="profile-editor-grid">
+      <CardContent className="px-4 py-4">
+        <FieldGroup className="grid gap-3.5 sm:grid-cols-2">
           <Field>
             <FieldLabel htmlFor={`profile-command-${profile.id ?? "new"}`}>
               <Terminal size={13} />
@@ -123,28 +127,28 @@ export function ProfileEditor({ profile, isDefault, busy, onChange, onSave }: Pr
               }}
             >
               <SelectTrigger className="h-8 w-full justify-between">
-                <span className="select-value-with-logo">
+                <span className="flex min-w-0 flex-1 items-center gap-2">
                   <SelectValue />
                 </span>
               </SelectTrigger>
               <SelectContent position="popper">
                 <SelectGroup>
                   <SelectItem value={cliDefaultModelValue} textValue="CLI default">
-                    <span className="select-option-with-logo">
+                    <span className="inline-flex min-w-0 items-center gap-2">
                       <ModelLogo agentKind={profile.agentKind} model={null} size="sm" />
                       CLI default
                     </span>
                   </SelectItem>
                   {presets.map((preset) => (
                     <SelectItem key={preset} value={preset} textValue={preset}>
-                      <span className="select-option-with-logo">
+                      <span className="inline-flex min-w-0 items-center gap-2">
                         <ModelLogo agentKind={profile.agentKind} model={preset} size="sm" />
                         {preset}
                       </span>
                     </SelectItem>
                   ))}
                   <SelectItem value={customModelValue} textValue="Custom...">
-                    <span className="select-option-with-logo">
+                    <span className="inline-flex min-w-0 items-center gap-2">
                       <ModelLogo agentKind="custom" model={profile.customModel || "custom"} size="sm" />
                       Custom...
                     </span>

@@ -1,4 +1,5 @@
 import { LayoutGrid, ListFilter, Plus, RefreshCw, Rows3 } from "lucide-react";
+import { cn } from "../lib/utils";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import {
@@ -53,6 +54,11 @@ const ALL_EPICS_VALUE = "__all_epics";
 
 /** Stable empty default so an unset `sprintLanes` prop doesn't churn renders. */
 const NO_LANES: JiraSprintLane[] = [];
+
+/** Segmented-control track and button styles (the toolbar's Board/Sprint and filter toggles). */
+const SEG_TRACK = "inline-flex gap-0.5 rounded-md border border-border bg-card p-0.5";
+const SEG_BUTTON =
+  "inline-flex h-7 cursor-pointer items-center rounded-[6px] bg-transparent px-[13px] text-[12.5px] font-semibold text-muted-foreground transition-colors data-[on=true]:bg-card data-[on=true]:text-foreground data-[on=true]:shadow-xs";
 
 interface JiraBoardPageProps {
   projects: JiraProject[];
@@ -234,9 +240,9 @@ export function JiraBoardPage({
   );
 
   return (
-    <div className="nx-jira" data-testid="jira-board">
-      <header className="nx-jira-head">
-        <h1>JIRA Board</h1>
+    <div className="flex h-full min-h-0 flex-col" data-testid="jira-board">
+      <header className="flex flex-none items-center gap-3 border-b border-border px-[22px] py-4">
+        <h1 className="m-0 mr-auto text-[21px] font-bold tracking-[-0.02em]">JIRA Board</h1>
         <JiraConnection restConnected={Boolean(restConnected)} site={site} />
         <Button
           type="button"
@@ -252,7 +258,7 @@ export function JiraBoardPage({
       </header>
 
       {ready && (
-        <div className="nx-jira-toolbar">
+        <div className="flex flex-none flex-wrap items-center gap-3 border-b border-border bg-card/50 px-[22px] py-3">
           <Select
             value={project ?? undefined}
             onValueChange={(value) => onChangeConfig({ project: value })}
@@ -269,13 +275,13 @@ export function JiraBoardPage({
             </SelectContent>
           </Select>
 
-          <div className="nx-seg" role="group" aria-label="View mode">
+          <div className={SEG_TRACK} role="group" aria-label="View mode">
             <button
               type="button"
               data-on={!sprintView}
               aria-pressed={!sprintView}
               onClick={() => onChangeViewMode("board")}
-              className="gap-1.5"
+              className={cn(SEG_BUTTON, "gap-1.5")}
             >
               <LayoutGrid className="size-3.5" />
               Board
@@ -285,7 +291,7 @@ export function JiraBoardPage({
               data-on={sprintView}
               aria-pressed={sprintView}
               onClick={() => onChangeViewMode("sprint")}
-              className="gap-1.5"
+              className={cn(SEG_BUTTON, "gap-1.5")}
             >
               <Rows3 className="size-3.5" />
               Sprint
@@ -294,13 +300,14 @@ export function JiraBoardPage({
 
           {!sprintView && (
           <>
-          <div className="nx-seg" role="group" aria-label="Board filters">
+          <div className={SEG_TRACK} role="group" aria-label="Board filters">
             <button
               type="button"
               data-on={filters.myIssues}
               aria-pressed={filters.myIssues}
               disabled={!project}
               onClick={() => onChangeConfig({ myIssues: !filters.myIssues })}
+              className={SEG_BUTTON}
             >
               My issues
             </button>
@@ -310,6 +317,7 @@ export function JiraBoardPage({
               aria-pressed={filters.unresolved}
               disabled={!project}
               onClick={() => onChangeConfig({ unresolved: !filters.unresolved })}
+              className={SEG_BUTTON}
             >
               Hide done
             </button>
@@ -319,6 +327,7 @@ export function JiraBoardPage({
               aria-pressed={filters.currentSprint}
               disabled={!project}
               onClick={() => onChangeConfig({ currentSprint: !filters.currentSprint })}
+              className={SEG_BUTTON}
             >
               Current sprint
             </button>
@@ -426,11 +435,7 @@ function JiraConnection({
   if (restConnected) {
     return (
       <Badge variant="secondary" className="gap-1.5">
-        <span
-          className="nx-livedot"
-          style={{ background: "var(--status-success)" }}
-          aria-hidden="true"
-        />
+        <span className="size-2 shrink-0 rounded-full bg-status-success" aria-hidden="true" />
         {site ?? "Connected"}
       </Badge>
     );

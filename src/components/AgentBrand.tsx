@@ -24,6 +24,13 @@ const brandLogos: Partial<Record<BrandKey, string>> = {
   opencode: opencodeLogo,
 };
 
+const logoSizes: Record<LogoSize, string> = {
+  xs: "size-3.5",
+  sm: "size-4",
+  md: "size-[22px]",
+  lg: "size-7",
+};
+
 export function AgentLogo({
   agentKind,
   size = "md",
@@ -65,7 +72,11 @@ function BrandLogo({
     <span
       role="img"
       aria-label={`${brandLabels[brand]} ${brand === "custom" ? "icon" : "logo"}`}
-      className={cn("brand-logo", `brand-logo-${size}`, `brand-logo-${brand}`, className)}
+      className={cn(
+        "inline-grid shrink-0 place-items-center text-foreground [&>img]:block [&>img]:size-full [&>svg]:block [&>svg]:size-full",
+        logoSizes[size],
+        className,
+      )}
     >
       {logo ? (
         <img src={logo} alt="" aria-hidden="true" />

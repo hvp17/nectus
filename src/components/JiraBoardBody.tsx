@@ -11,6 +11,13 @@ const CATEGORY_DOT: Record<JiraStatusCategory, string> = {
   unknown: "var(--muted-foreground)",
 };
 
+/** Status-column scaffolding shared by the loaded board and its loading skeleton. */
+const COLS = "flex min-h-0 flex-1 gap-3.5 overflow-x-auto px-[22px] py-4";
+const COL =
+  "flex min-h-0 w-[290px] flex-none flex-col overflow-hidden rounded-lg border border-border bg-muted/35";
+const COL_HEAD = "flex flex-none items-center gap-2 border-b border-border px-[13px] py-2.5";
+const COL_BODY = "flex min-h-0 flex-col gap-[9px] overflow-y-auto p-2.5";
+
 interface BoardBodyProps {
   /** API token connected — the JIRA connection; nothing loads without it. */
   restConnected: boolean;
@@ -57,17 +64,17 @@ export function BoardBody({
   }
   if (loading && columns.length === 0) {
     return (
-      <div className="nx-jira-cols" aria-busy="true" aria-label="Loading JIRA board">
+      <div className={COLS} aria-busy="true" aria-label="Loading JIRA board">
         {["To Do", "In Progress", "In Review", "Done"].map((label) => (
-          <section key={label} className="nx-jira-col">
-            <div className="nx-jira-col-head">
+          <section key={label} className={COL}>
+            <div className={COL_HEAD}>
               <Skeleton className="size-2 rounded-full" />
               <Skeleton className="h-3.5 w-24" />
-              <span className="nx-cc">
+              <span className="ml-auto">
                 <Skeleton className="h-5 w-6 rounded-full" />
               </span>
             </div>
-            <div className="nx-jira-col-body">
+            <div className={COL_BODY}>
               <Skeleton className="h-28 w-full rounded-lg" />
               <Skeleton className="h-24 w-full rounded-lg" />
             </div>
@@ -86,11 +93,11 @@ export function BoardBody({
   }
 
   return (
-    <div className="nx-jira-cols">
+    <div className={COLS}>
       {columns.map((column) => (
         <section
           key={column.statusName}
-          className="nx-jira-col"
+          className={COL}
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault();
@@ -101,18 +108,18 @@ export function BoardBody({
             }
           }}
         >
-          <div className="nx-jira-col-head">
+          <div className={COL_HEAD}>
             <span
-              className="nx-dot"
+              className="size-2 rounded-full"
               style={{ background: CATEGORY_DOT[column.category] }}
               aria-hidden="true"
             />
-            <span className="nx-cl">{column.statusName}</span>
-            <span className="nx-cc">
+            <span className="text-[12.5px] font-bold">{column.statusName}</span>
+            <span className="ml-auto">
               <Badge variant="secondary">{column.items.length}</Badge>
             </span>
           </div>
-          <div className="nx-jira-col-body">
+          <div className={COL_BODY}>
             {column.items.map((item) => (
               <JiraCard
                 key={item.key}
@@ -133,5 +140,9 @@ export function BoardBody({
 }
 
 function BoardEmpty({ children }: { children: React.ReactNode }) {
-  return <div className="nx-jira-empty">{children}</div>;
+  return (
+    <div className="m-auto max-w-[460px] p-10 text-center text-[13px] leading-normal text-muted-foreground">
+      {children}
+    </div>
+  );
 }

@@ -36,12 +36,12 @@ export function DiagnosticsCard() {
   const lineCountLabel = `${lines.length} ${lines.length === 1 ? "line" : "lines"}`;
 
   return (
-    <div className="nx-diag">
-      <div className="nx-diag-bar">
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-center gap-2">
         <Badge variant="outline" aria-label={`${lineCountLabel} captured`}>
           {lineCountLabel}
         </Badge>
-        <span className="nx-diag-bar-actions">
+        <span className="ml-auto flex items-center gap-2">
           <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => void refresh()}>
             <RefreshCw data-icon="inline-start" />
             Refresh
@@ -72,17 +72,19 @@ export function DiagnosticsCard() {
       </div>
       <div
         ref={viewportRef}
-        className="nx-diag-log"
+        className="h-[360px] overflow-y-auto rounded-lg bg-muted px-3.5 py-3 font-mono text-xs leading-[1.55] ring-1 ring-border ring-inset"
         onScroll={handleScroll}
         role="log"
         aria-label="Backend diagnostics log"
         aria-live="off"
       >
         {lines.length === 0 ? (
-          <p className="nx-diag-empty">No log output captured yet. Trigger an action (e.g. create a task) to see backend activity.</p>
+          <p className="m-0 font-sans text-[12.5px] text-muted-foreground">
+            No log output captured yet. Trigger an action (e.g. create a task) to see backend activity.
+          </p>
         ) : (
           lines.map((line, index) => (
-            <div key={index} className="nx-diag-line">
+            <div key={index} className="whitespace-pre-wrap text-foreground [word-break:break-word]">
               {line}
             </div>
           ))

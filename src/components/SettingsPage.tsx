@@ -3,10 +3,13 @@ import { Activity, Bot, GitBranch, Github, Info, KanbanSquare, Palette, Plus, Sa
 import { AgentLogo } from "./AgentBrand";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
 import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "./ui/item";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { cn } from "../lib/utils";
 import type { AgentProfile, AppSettings, AppSettingsInput, GithubStatus, JiraRestStatus } from "../types";
 import { ProfileEditor } from "./settings/ProfileEditor";
 import { GithubConnectionCard } from "./settings/GithubConnectionCard";
@@ -45,6 +48,32 @@ interface SettingsPageProps {
 }
 
 type SettingsSectionId = "profiles" | "projects" | "github" | "jira" | "appearance" | "diagnostics" | "about";
+
+/** One settings section: a flat card with an icon-led header and an optional action cluster. */
+function SettingsSection({
+  id,
+  icon,
+  title,
+  actions,
+  children,
+}: {
+  id: SettingsSectionId;
+  icon: ReactNode;
+  title: string;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <Card id={`settings-section-${id}`} size="sm" className="shrink-0 gap-0 py-0 shadow-none">
+      <CardHeader className="flex flex-row items-center gap-2.5 border-b px-4 py-3.5 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-primary">
+        {icon}
+        <CardTitle className="text-sm font-bold tracking-[-0.01em]">{title}</CardTitle>
+        {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3.5 px-4 py-4">{children}</CardContent>
+    </Card>
+  );
+}
 
 export function SettingsPage({
   settings,
@@ -119,72 +148,85 @@ export function SettingsPage({
     await onSaveAgentProfile(profileDraftToInput(draft));
   };
 
+  const addProfileButton = (
+    <Button type="button" variant="outline" size="sm" className="gap-2" onClick={addProfileDraft}>
+      <Plus data-icon="inline-start" />
+      Add Profile
+    </Button>
+  );
+
   return (
-    <section className="nx-set">
-      <nav className="nx-set-nav">
-        <div className="nx-set-brand">
-          <h1>Settings</h1>
-          <p>Local · ~/.nectus</p>
+    <section className="grid h-full min-h-0 grid-cols-[212px_minmax(0,1fr)] max-[1080px]:grid-cols-[minmax(0,1fr)]">
+      <nav className="flex flex-col gap-0.5 overflow-y-auto border-r bg-sidebar/60 px-3 py-5 max-[1080px]:flex-row max-[1080px]:flex-wrap max-[1080px]:gap-1 max-[1080px]:border-r-0 max-[1080px]:border-b max-[1080px]:p-3">
+        <div className="px-2.5 pb-3.5 max-[1080px]:w-full max-[1080px]:px-2 max-[1080px]:pb-2">
+          <h1 className="m-0 text-[21px] font-bold tracking-[-0.02em]">Settings</h1>
+          <p className="m-0 mt-0.5 text-[11.5px] text-muted-foreground">Local · ~/.nectus</p>
         </div>
         {navItems.map((item) => (
           <button
             key={item.id}
             type="button"
-            className="nx-set-navitem"
+            className={cn(
+              "flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-semibold text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground max-[1080px]:w-auto max-[1080px]:flex-1 [&>svg]:size-[15px] [&>svg]:shrink-0",
+              activeSection === item.id && "bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary",
+            )}
             data-active={activeSection === item.id}
             onClick={() => goToSection(item.id)}
           >
             {item.icon}
             {item.label}
-            {item.count !== undefined && <span className="nx-count">{item.count}</span>}
+            {item.count !== undefined && <span className="ml-auto font-mono text-[11px]">{item.count}</span>}
           </button>
         ))}
       </nav>
 
-      <div className="nx-set-body">
-        <div className="nx-set-scroll">
-        <div className="nx-set-overview" aria-label="Settings summary">
-          <SettingsOverviewItem
-            icon={selectedDefaultProfile ? <AgentLogo agentKind={selectedDefaultProfile.agentKind} size="sm" /> : <Terminal />}
-            label="Default agent"
-            value={selectedDefaultProfile?.name ?? "No default"}
-          />
-          <SettingsOverviewItem
-            icon={<GitBranch />}
-            label="Worktree root"
-            value={settingsDraft.defaultWorktreeRootPattern || "Unset"}
-            mono
-          />
-          <SettingsOverviewItem icon={<Palette />} label="Interface" value={`${themeLabel} / ${densityLabel}`} />
-          <SettingsOverviewItem
-            icon={<Info />}
-            label="Version"
-            value={appUpdate.currentVersion ? `v${appUpdate.currentVersion}` : "—"}
-          />
-        </div>
-
-        <section id="settings-section-profiles" className="nx-set-section">
-          <div className="nx-set-sec-head">
-            <Bot />
-            <h3>Agent Profiles</h3>
-            <div className="nx-set-sec-actions">
-              <Badge variant="outline" aria-label={profileCountLabel}>{profileCountLabel}</Badge>
-              <Button type="button" variant="outline" size="sm" className="gap-2" onClick={addProfileDraft}>
-                <Plus data-icon="inline-start" />
-                Add Profile
-              </Button>
-            </div>
+      <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-7 pt-6 pb-22 [scroll-padding-bottom:88px]">
+          <div
+            className="grid shrink-0 grid-cols-2 gap-3 xl:grid-cols-4 max-[1080px]:grid-cols-1"
+            aria-label="Settings summary"
+          >
+            <SettingsOverviewItem
+              icon={selectedDefaultProfile ? <AgentLogo agentKind={selectedDefaultProfile.agentKind} size="sm" /> : <Terminal />}
+              label="Default agent"
+              value={selectedDefaultProfile?.name ?? "No default"}
+            />
+            <SettingsOverviewItem
+              icon={<GitBranch />}
+              label="Worktree root"
+              value={settingsDraft.defaultWorktreeRootPattern || "Unset"}
+              mono
+            />
+            <SettingsOverviewItem icon={<Palette />} label="Interface" value={`${themeLabel} / ${densityLabel}`} />
+            <SettingsOverviewItem
+              icon={<Info />}
+              label="Version"
+              value={appUpdate.currentVersion ? `v${appUpdate.currentVersion}` : "—"}
+            />
           </div>
-          <div className="nx-set-sec-body">
-            <div className="nx-strip">
-              <span className="nx-strip-ic">
+
+          <SettingsSection
+            id="profiles"
+            icon={<Bot />}
+            title="Agent Profiles"
+            actions={
+              <>
+                <Badge variant="outline" aria-label={profileCountLabel}>
+                  {profileCountLabel}
+                </Badge>
+                {addProfileButton}
+              </>
+            }
+          >
+            <Item variant="muted">
+              <ItemMedia variant="icon" className="size-8 rounded-md bg-card shadow-xs">
                 {selectedDefaultProfile ? <AgentLogo agentKind={selectedDefaultProfile.agentKind} size="sm" /> : <Terminal />}
-              </span>
-              <span className="nx-strip-copy">
-                <strong>Default agent</strong>
-                <small>Used when a new task does not choose a specific profile.</small>
-              </span>
-              <span className="nx-strip-right">
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle className="text-[13px]">Default agent</ItemTitle>
+                <ItemDescription>Used when a new task does not choose a specific profile.</ItemDescription>
+              </ItemContent>
+              <ItemActions>
                 <Select
                   value={settingsDraft.defaultAgentProfileId?.toString() ?? noDefaultProfileValue}
                   onValueChange={(value) =>
@@ -195,7 +237,7 @@ export function SettingsPage({
                   }
                 >
                   <SelectTrigger id="default-agent-profile" aria-label="Default agent" className="h-9 w-full justify-between md:w-[280px]">
-                    <span className="select-value-with-logo">
+                    <span className="flex min-w-0 flex-1 items-center gap-2">
                       <SelectValue />
                     </span>
                   </SelectTrigger>
@@ -204,7 +246,7 @@ export function SettingsPage({
                       <SelectItem value={noDefaultProfileValue}>No default</SelectItem>
                       {defaultProfileOptions.map((profile) => (
                         <SelectItem key={profile.id} value={profile.id!.toString()} textValue={profile.name}>
-                          <span className="select-option-with-logo">
+                          <span className="inline-flex min-w-0 items-center gap-2">
                             <AgentLogo agentKind={profile.agentKind} size="sm" />
                             {profile.name}
                           </span>
@@ -213,10 +255,10 @@ export function SettingsPage({
                     </SelectGroup>
                   </SelectContent>
                 </Select>
-              </span>
-            </div>
+              </ItemActions>
+            </Item>
 
-            <div className="nx-set-list">
+            <div className="flex flex-col gap-3">
               {profileDrafts.length === 0 ? (
                 <Empty className="border border-dashed">
                   <EmptyHeader>
@@ -226,12 +268,7 @@ export function SettingsPage({
                     <EmptyTitle>No agent profiles yet</EmptyTitle>
                     <EmptyDescription>Add a profile to choose which CLI agent runs your tasks.</EmptyDescription>
                   </EmptyHeader>
-                  <EmptyContent>
-                    <Button type="button" variant="outline" size="sm" className="gap-2" onClick={addProfileDraft}>
-                      <Plus data-icon="inline-start" />
-                      Add Profile
-                    </Button>
-                  </EmptyContent>
+                  <EmptyContent>{addProfileButton}</EmptyContent>
                 </Empty>
               ) : (
                 profileDrafts.map((profile, index) => (
@@ -246,16 +283,10 @@ export function SettingsPage({
                 ))
               )}
             </div>
-          </div>
-        </section>
+          </SettingsSection>
 
-        <section id="settings-section-projects" className="nx-set-section">
-          <div className="nx-set-sec-head">
-            <GitBranch />
-            <h3>Projects &amp; Worktrees</h3>
-          </div>
-          <div className="nx-set-sec-body">
-            <FieldGroup className="nx-set-grid">
+          <SettingsSection id="projects" icon={<GitBranch />} title="Projects & Worktrees">
+            <FieldGroup className="grid gap-4 lg:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="worktree-root-pattern">Worktree root pattern</FieldLabel>
                 <Input
@@ -289,7 +320,7 @@ export function SettingsPage({
                   className="font-mono"
                 />
               </Field>
-              <Field orientation="horizontal">
+              <Field orientation="horizontal" className="lg:col-span-2">
                 <FieldContent>
                   <FieldLabel htmlFor="persistent-sessions">Persistent sessions</FieldLabel>
                   <FieldDescription>
@@ -306,41 +337,23 @@ export function SettingsPage({
                 />
               </Field>
             </FieldGroup>
-          </div>
-        </section>
+          </SettingsSection>
 
-        <section id="settings-section-github" className="nx-set-section">
-          <div className="nx-set-sec-head">
-            <Github />
-            <h3>GitHub</h3>
-          </div>
-          <div className="nx-set-sec-body">
+          <SettingsSection id="github" icon={<Github />} title="GitHub">
             <GithubConnectionCard status={githubStatus} />
-          </div>
-        </section>
+          </SettingsSection>
 
-        <section id="settings-section-jira" className="nx-set-section">
-          <div className="nx-set-sec-head">
-            <KanbanSquare />
-            <h3>JIRA</h3>
-          </div>
-          <div className="nx-set-sec-body">
+          <SettingsSection id="jira" icon={<KanbanSquare />} title="JIRA">
             <JiraConnectionCard
               status={jiraRestStatus}
               busy={busy}
               onSave={onSaveJiraToken}
               onDisconnect={onDisconnectJira}
             />
-          </div>
-        </section>
+          </SettingsSection>
 
-        <section id="settings-section-appearance" className="nx-set-section">
-          <div className="nx-set-sec-head">
-            <Palette />
-            <h3>Appearance</h3>
-          </div>
-          <div className="nx-set-sec-body">
-            <FieldGroup className="nx-set-grid">
+          <SettingsSection id="appearance" icon={<Palette />} title="Appearance">
+            <FieldGroup className="grid gap-4 lg:grid-cols-2">
               <SegmentedRadioGroup
                 label="Theme"
                 name="theme"
@@ -363,29 +376,17 @@ export function SettingsPage({
                 onChange={(density) => setSettingsDraft((current) => ({ ...current, density }))}
               />
             </FieldGroup>
-          </div>
-        </section>
+          </SettingsSection>
 
-        <section id="settings-section-diagnostics" className="nx-set-section">
-          <div className="nx-set-sec-head">
-            <Activity />
-            <h3>Diagnostics</h3>
-          </div>
-          <div className="nx-set-sec-body">
-            <p className="nx-set-sec-note">
+          <SettingsSection id="diagnostics" icon={<Activity />} title="Diagnostics">
+            <p className="m-0 text-[12.5px] leading-normal text-muted-foreground">
               Live backend log (the same output Rust prints to the console). Streams while the app runs, so
               you can see exactly where a hang occurs. Use Copy to share it when reporting an issue.
             </p>
             <DiagnosticsCard />
-          </div>
-        </section>
+          </SettingsSection>
 
-        <section id="settings-section-about" className="nx-set-section">
-          <div className="nx-set-sec-head">
-            <Info />
-            <h3>About &amp; Updates</h3>
-          </div>
-          <div className="nx-set-sec-body">
+          <SettingsSection id="about" icon={<Info />} title="About & Updates">
             <UpdateCard
               status={appUpdate.status}
               info={appUpdate.info}
@@ -397,11 +398,10 @@ export function SettingsPage({
               onInstall={appUpdate.installUpdate}
               onRelaunch={appUpdate.relaunch}
             />
-          </div>
-        </section>
-
+          </SettingsSection>
         </div>
-        <div className="nx-set-foot">
+
+        <div className="flex shrink-0 justify-end border-t bg-card/55 px-7 py-3.5">
           <Button
             type="button"
             onClick={() => onSaveSettings(settingsDraft)}

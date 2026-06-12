@@ -5,6 +5,13 @@ import { JiraCard } from "./JiraCard";
 import { groupByEpic } from "../lib/jiraSprints";
 import type { JiraSprintLane, JiraWorkItem, TaskSummary } from "../types";
 
+/** Sprint-section scaffolding shared by the loaded view and its loading skeleton. */
+const SPRINTS = "flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-[22px] py-4";
+const SPRINT =
+  "flex-none overflow-hidden rounded-lg border border-border bg-muted/30 data-[state=active]:border-primary/40";
+const SPRINT_HEAD = "flex items-center gap-2.5 border-b border-border bg-card/55 px-3.5 py-[11px]";
+const SPRINT_BODY = "flex flex-col gap-3.5 p-3.5";
+
 interface SprintBodyProps {
   project: string | null;
   restConnected: boolean;
@@ -52,13 +59,13 @@ export function SprintBody({
   }
   if (loading && lanes.length === 0) {
     return (
-      <div className="nx-jira-sprints" aria-busy="true" aria-label="Loading sprints">
+      <div className={SPRINTS} aria-busy="true" aria-label="Loading sprints">
         {[0, 1].map((i) => (
-          <section key={i} className="nx-jira-sprint">
-            <div className="nx-jira-sprint-head">
+          <section key={i} className={SPRINT}>
+            <div className={SPRINT_HEAD}>
               <Skeleton className="h-4 w-40" />
             </div>
-            <div className="nx-jira-sprint-body">
+            <div className={SPRINT_BODY}>
               <Skeleton className="h-24 w-full rounded-lg" />
             </div>
           </section>
@@ -78,7 +85,7 @@ export function SprintBody({
   }
 
   return (
-    <div className="nx-jira-sprints">
+    <div className={SPRINTS}>
       {lanes.map((lane) => (
         <SprintLane
           key={lane.sprint?.id ?? "backlog"}
@@ -116,39 +123,45 @@ function SprintLane({
   const range = sprint ? formatSprintRange(sprint.startDate, sprint.endDate) : null;
 
   return (
-    <section className="nx-jira-sprint" data-state={sprint?.state ?? "backlog"}>
-      <div className="nx-jira-sprint-head">
-        <span className="nx-jira-sprint-name">{title}</span>
-        {sprint?.state === "active" && <Badge className="nx-jira-sprint-state">Active</Badge>}
+    <section className={SPRINT} data-state={sprint?.state ?? "backlog"}>
+      <div className={SPRINT_HEAD}>
+        <span className="text-sm font-bold tracking-[-0.01em]">{title}</span>
+        {sprint?.state === "active" && <Badge className="text-[10px]">Active</Badge>}
         {sprint?.state === "future" && (
-          <Badge variant="secondary" className="nx-jira-sprint-state">
+          <Badge variant="secondary" className="text-[10px]">
             Future
           </Badge>
         )}
-        {range && <span className="nx-jira-sprint-range">{range}</span>}
-        <span className="nx-jira-sprint-count">
+        {range && <span className="font-mono text-[11.5px] text-muted-foreground">{range}</span>}
+        <span className="ml-auto">
           <Badge variant="secondary">{lane.items.length}</Badge>
         </span>
       </div>
-      {sprint?.goal && <div className="nx-jira-sprint-goal">{sprint.goal}</div>}
+      {sprint?.goal && (
+        <div className="px-3.5 pt-2 text-xs italic text-muted-foreground">{sprint.goal}</div>
+      )}
 
-      <div className="nx-jira-sprint-body">
+      <div className={SPRINT_BODY}>
         {lane.items.length === 0 ? (
-          <div className="nx-jira-sprint-emptylane">
+          <div className="px-0.5 py-1.5 text-[12.5px] text-muted-foreground">
             {isBacklog ? "Backlog is empty." : "No issues in this sprint."}
           </div>
         ) : (
           epicGroups.map((group) => (
-            <div className="nx-jira-swimlane" key={group.epicKey ?? "__no_epic"}>
-              <div className="nx-jira-swimlane-head">
+            <div className="flex flex-col gap-[9px]" key={group.epicKey ?? "__no_epic"}>
+              <div className="flex items-center gap-[7px] text-muted-foreground">
                 <Layers className="size-3.5" aria-hidden="true" />
-                <span className="nx-jira-swimlane-name">
+                <span className="text-xs font-bold text-foreground">
                   {group.epicKey ? group.epicName ?? group.epicKey : "No epic"}
                 </span>
-                {group.epicKey && <span className="nx-jira-swimlane-key">{group.epicKey}</span>}
-                <span className="nx-jira-swimlane-count">{group.items.length}</span>
+                {group.epicKey && (
+                  <span className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.03em]">
+                    {group.epicKey}
+                  </span>
+                )}
+                <span className="ml-auto text-[11px] font-bold">{group.items.length}</span>
               </div>
-              <div className="nx-jira-swimlane-cards">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-2.5">
                 {group.items.map((item) => (
                   <JiraCard
                     key={item.key}
@@ -186,5 +199,9 @@ function formatSprintRange(start?: string | null, end?: string | null): string |
 }
 
 function SprintEmpty({ children }: { children: React.ReactNode }) {
-  return <div className="nx-jira-empty">{children}</div>;
+  return (
+    <div className="m-auto max-w-[460px] p-10 text-center text-[13px] leading-normal text-muted-foreground">
+      {children}
+    </div>
+  );
 }

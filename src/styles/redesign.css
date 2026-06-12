@@ -28,10 +28,8 @@
   overflow: hidden;
   color: var(--foreground);
   font-family: var(--font-sans);
-  background:
-    radial-gradient(120% 90% at 0% -10%, color-mix(in oklch, var(--primary) 9%, transparent), transparent 55%),
-    radial-gradient(90% 80% at 100% 0%, color-mix(in oklch, var(--chart-3) 7%, transparent), transparent 50%),
-    var(--background);
+  /* Flat editor canvas — structure comes from hairline borders, not washes. */
+  background: var(--background);
 }
 .nx-app[data-frame="railp"] {
   grid-template-columns: var(--nx-rail-w) var(--nx-panel-w) minmax(0, 1fr);
@@ -107,8 +105,7 @@
 .nx-brand-mark {
   width: 30px; height: 30px; border-radius: var(--radius-md); display: grid; place-items: center; flex: none;
   color: var(--sidebar-primary-foreground); font-size: 15px; font-weight: 800; letter-spacing: -0.02em;
-  background: linear-gradient(155deg, color-mix(in oklch, var(--sidebar-primary) 88%, white), var(--sidebar-primary) 55%, color-mix(in oklch, var(--sidebar-primary) 78%, black));
-  box-shadow: inset 0 1px 0 0 color-mix(in oklch, white 45%, transparent), 0 6px 16px -6px color-mix(in oklch, var(--sidebar-primary) 70%, transparent);
+  background: var(--sidebar-primary);
 }
 .nx-rail-nav { display: flex; flex-direction: column; gap: 2px; }
 .nx-rail-btn {
@@ -142,7 +139,7 @@
 .nx-fly-row {
   position: relative; display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left;
   background: var(--card); border: none; border-radius: var(--radius-md); padding: 9px 11px 9px 13px; cursor: pointer;
-  box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 8%, transparent); transition: box-shadow .15s; overflow: hidden;
+  box-shadow: 0 0 0 1px var(--border); transition: box-shadow .15s; overflow: hidden;
 }
 .nx-fly-row:hover { box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 45%, transparent), var(--shadow-xs); }
 .nx-fly-row:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
@@ -284,7 +281,7 @@
 .nx-row {
   position: relative; display: grid; grid-template-columns: minmax(132px, auto) minmax(0, 1fr) auto; align-items: center; gap: 14px;
   background: var(--card); border-radius: var(--radius-lg); padding: 13px 15px 13px 17px; width: 100%; text-align: left; border: none;
-  box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 9%, transparent), var(--shadow-xs); cursor: pointer; transition: box-shadow .15s; overflow: hidden;
+  box-shadow: 0 0 0 1px var(--border), var(--shadow-xs); cursor: pointer; transition: box-shadow .15s; overflow: hidden;
 }
 .nx-row:hover { box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 45%, transparent), var(--shadow-sm); }
 .nx-row::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--rail, transparent); }
@@ -337,7 +334,7 @@
 
 .nx-card {
   position: relative; flex: none; background: var(--card); border-radius: var(--radius-lg); padding: 12px 12px 12px 14px; display: flex; flex-direction: column; gap: 9px;
-  box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 9%, transparent), var(--shadow-xs); cursor: grab; overflow: hidden; transition: box-shadow .15s, transform .12s; text-align: left; width: 100%; border: none;
+  box-shadow: 0 0 0 1px var(--border), var(--shadow-xs); cursor: grab; overflow: hidden; transition: box-shadow .15s, transform .12s; text-align: left; width: 100%; border: none;
 }
 .nx-card:hover { box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 45%, transparent), var(--shadow-sm); transform: translateY(-1px); }
 .nx-card[data-selected="true"] { box-shadow: 0 0 0 1px var(--primary), 0 0 0 4px color-mix(in oklch, var(--primary) 18%, transparent), var(--shadow-md); }
@@ -412,7 +409,7 @@
 }
 .nx-set-foot { flex: none; display: flex; justify-content: flex-end; padding: 14px 30px; border-top: 1px solid var(--border); background: color-mix(in srgb, var(--card) 55%, var(--background)); }
 .nx-set-overview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.nx-ov { display: flex; align-items: center; gap: 11px; padding: 13px 15px; border-radius: var(--radius-lg); background: var(--card); box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 9%, transparent), var(--shadow-xs); }
+.nx-ov { display: flex; align-items: center; gap: 11px; padding: 13px 15px; border-radius: var(--radius-lg); background: var(--card); box-shadow: 0 0 0 1px var(--border), var(--shadow-xs); }
 .nx-ov-ic { width: 34px; height: 34px; flex: none; border-radius: var(--radius-md); display: grid; place-items: center; background: var(--muted); color: var(--muted-foreground); }
 .nx-ov-ic svg { width: 16px; height: 16px; }
 .nx-ov small { display: block; font-size: 10px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted-foreground); }
@@ -422,7 +419,7 @@
 /* `flex: none` keeps each section at its content height so the scroll container
    (.nx-set-scroll) scrolls, instead of flex-shrinking the sections and clipping
    their bodies under `overflow: hidden`. */
-.nx-set-section { flex: none; background: var(--card); border-radius: var(--radius-xl); box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 9%, transparent), var(--shadow-xs); overflow: hidden; }
+.nx-set-section { flex: none; background: var(--card); border-radius: var(--radius-xl); box-shadow: 0 0 0 1px var(--border), var(--shadow-xs); overflow: hidden; }
 .nx-set-sec-head { display: flex; align-items: center; gap: 10px; padding: 15px 18px; border-bottom: 1px solid var(--border); }
 .nx-set-sec-head > svg { width: 16px; height: 16px; color: var(--primary); flex: none; }
 .nx-set-sec-head h3 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
@@ -478,7 +475,7 @@
 
 /* ============================ PR Reviews ============================ */
 .nx-rev { display: flex; flex-direction: column; gap: 16px; height: 100%; min-height: 0; padding: 22px 24px; }
-.nx-rev-form { display: flex; flex-direction: column; gap: 10px; padding: 15px 16px; background: var(--card); border-radius: var(--radius-lg); box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 9%, transparent), var(--shadow-xs); flex: none; }
+.nx-rev-form { display: flex; flex-direction: column; gap: 10px; padding: 15px 16px; background: var(--card); border-radius: var(--radius-lg); box-shadow: 0 0 0 1px var(--border), var(--shadow-xs); flex: none; }
 .nx-rev-form-row { display: flex; align-items: center; gap: 10px; }
 .nx-rev-reviewers { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .nx-rev-reviewers .nx-rl { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-foreground); }
@@ -491,7 +488,7 @@
 .nx-rev-list { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding-right: 2px; }
 .nx-rev-sect h2 { display: flex; align-items: center; gap: 7px; margin: 0 0 8px; padding: 0 2px; font-size: 11px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted-foreground); }
 .nx-rev-sect h2 .nx-c { font-family: var(--font-mono); font-weight: 600; }
-.nx-rev-card { display: flex; flex-direction: column; gap: 6px; padding: 11px 12px; border-radius: var(--radius-lg); background: var(--card); box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 9%, transparent); text-align: left; cursor: pointer; transition: box-shadow .12s; margin-bottom: 8px; width: 100%; border: none; }
+.nx-rev-card { display: flex; flex-direction: column; gap: 6px; padding: 11px 12px; border-radius: var(--radius-lg); background: var(--card); box-shadow: 0 0 0 1px var(--border); text-align: left; cursor: pointer; transition: box-shadow .12s; margin-bottom: 8px; width: 100%; border: none; }
 .nx-rev-card:hover { box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 40%, transparent); }
 .nx-rev-card[data-active="true"] { box-shadow: 0 0 0 1.5px var(--primary); background: color-mix(in oklch, var(--primary) 6%, transparent); }
 .nx-rev-card-top { display: flex; align-items: center; gap: 8px; }
@@ -501,7 +498,7 @@
 .nx-modeltag { font-size: 9.5px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted-foreground); }
 .nx-rev-empty { padding: 14px 12px; border: 1px dashed var(--border); border-radius: var(--radius-md); font-size: 12px; color: var(--muted-foreground); }
 
-.nx-rev-detail { display: flex; flex-direction: column; border-radius: var(--radius-lg); background: var(--card); box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 9%, transparent), var(--shadow-xs); min-height: 0; overflow: hidden; }
+.nx-rev-detail { display: flex; flex-direction: column; border-radius: var(--radius-lg); background: var(--card); box-shadow: 0 0 0 1px var(--border), var(--shadow-xs); min-height: 0; overflow: hidden; }
 .nx-rev-dhead { display: flex; flex-direction: column; gap: 9px; padding: 16px 18px; border-bottom: 1px solid var(--border); flex: none; }
 .nx-rev-dtitle { display: flex; align-items: center; gap: 9px; }
 .nx-rev-dtitle .nx-num { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--muted-foreground); }
@@ -562,7 +559,7 @@
 .nx-jira-col-head .nx-cl { font-size: 12.5px; font-weight: 700; }
 .nx-jira-col-head .nx-cc { margin-left: auto; }
 .nx-jira-col-body { display: flex; flex-direction: column; gap: 9px; padding: 10px; overflow-y: auto; min-height: 0; }
-.nx-jira-card { display: flex; flex-direction: column; gap: 0; padding: 11px 12px; border-radius: var(--radius-md); background: var(--card); box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 9%, transparent); cursor: pointer; transition: box-shadow .12s; text-align: left; border: none; width: 100%; }
+.nx-jira-card { display: flex; flex-direction: column; gap: 0; padding: 11px 12px; border-radius: var(--radius-md); background: var(--card); box-shadow: 0 0 0 1px var(--border); cursor: pointer; transition: box-shadow .12s; text-align: left; border: none; width: 100%; }
 .nx-jira-card:hover { box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 42%, transparent), var(--shadow-sm); }
 .nx-jira-summary { font-size: 13px; line-height: 1.4; color: var(--foreground); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .nx-jira-foot { display: flex; align-items: center; gap: 7px; margin-top: 11px; }

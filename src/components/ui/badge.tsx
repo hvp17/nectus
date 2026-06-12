@@ -19,12 +19,13 @@ const badgeVariants = cva(
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
-        // Semantic status variants — colored via data-variant rules in redesign.css
-        // so the same concept stays the same hue everywhere it appears.
-        success: "border-transparent",
-        warning: "border-transparent",
-        info: "border-border",
-        review: "border-transparent",
+        // Semantic status variants — the same concept stays the same hue
+        // everywhere it appears (tokens defined in src/styles.css).
+        success: "border-transparent bg-status-success/15 text-status-success",
+        warning:
+          "border-transparent bg-status-warning/20 text-[color-mix(in_oklch,var(--status-warning)_55%,black)] dark:text-[color-mix(in_oklch,var(--status-warning)_82%,white)]",
+        info: "border-border bg-foreground/4 text-status-info",
+        review: "border-transparent bg-status-review/15 text-status-review",
       },
     },
     defaultVariants: {
