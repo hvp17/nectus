@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
-import { KanbanSquare } from "lucide-react";
+import { ExternalLink, KanbanSquare } from "lucide-react";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { Button } from "../ui/button";
 import { Field, FieldDescription, FieldError, FieldLabel } from "../ui/field";
 import { Input } from "../ui/input";
 import { useGuardedAction } from "../../hooks/useGuardedAction";
+import { openExternal } from "../../lib/openExternal";
 import type { JiraRestStatus } from "../../types";
+
+/** Where Atlassian Cloud users create personal API tokens. */
+const API_TOKENS_URL = "https://id.atlassian.com/manage-profile/security/api-tokens";
 
 interface JiraConnectionCardProps {
   status?: JiraRestStatus;
@@ -17,10 +21,11 @@ interface JiraConnectionCardProps {
 }
 
 /**
- * Optional JIRA REST API-token connection. acli stays the base integration; this
- * token unlocks custom-workflow features (legal-transition dropdown, board status
- * filter, all status columns). The token is verified against `/myself`, then stored
- * in the macOS Keychain — never in the app database.
+ * The recommended JIRA connection: a JIRA Cloud API token. It alone fully drives
+ * the integration — board, sprints, legal transitions, every status column —
+ * with the Atlassian CLI (`acli`) kept as the fallback connection. The token is
+ * verified against `/myself`, then stored in the macOS Keychain — never in the
+ * app database.
  */
 export function JiraConnectionCard({
   status,
@@ -75,8 +80,9 @@ export function JiraConnectionCard({
         <span className="nx-strip-copy">
           <strong>JIRA API token</strong>
           <small>
-            Optional. Unlocks custom workflow statuses — legal-transition moves, the
-            board status filter, and every status column. Stored in your Keychain.
+            The recommended way to connect — drives the board, sprints, legal
+            transitions, and every status column. Stored in your Keychain. Without a
+            token, Nectus falls back to the Atlassian CLI (acli).
           </small>
         </span>
         <span className="nx-strip-right">
@@ -122,8 +128,7 @@ export function JiraConnectionCard({
           autoComplete="off"
         />
         <FieldDescription>
-          Create one at id.atlassian.com/manage/api-tokens. Verified against /myself
-          before it is saved.
+          Verified against /myself before it is saved.
         </FieldDescription>
         {error && <FieldError>{error}</FieldError>}
       </Field>
@@ -131,6 +136,15 @@ export function JiraConnectionCard({
       <div className="flex gap-2">
         <Button type="button" onClick={save} disabled={!canSave}>
           {connected ? "Update token" : "Test & connect"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="gap-2"
+          onClick={() => openExternal(API_TOKENS_URL)}
+        >
+          <ExternalLink className="size-4" />
+          Create a token
         </Button>
         {connected && (
           <Button type="button" variant="outline" onClick={disconnect} disabled={disabled}>

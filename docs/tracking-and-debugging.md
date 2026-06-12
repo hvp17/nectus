@@ -175,17 +175,17 @@ Current commands:
 | `github_status` | Report whether `gh` is installed, authenticated, and the active account. |
 | `github_pull_request_status` | Fetch live PR state, CI check rollup, and review decision via `gh pr view --json`. Optional `repo_id` targets a cross-repo member's branch. |
 | `detect_github_pull_request` | Check whether a worktree task's branch already has a PR (`gh pr view`) and backfill its URL — the primary repo's onto `tasks.pr_url`, a non-primary member's onto its `task_repos.pr_url` (`repo_id` selects the member). |
-| `jira_status` | Report whether `acli` is installed, authenticated, and the active site. |
-| `jira_list_projects` | List visible JIRA projects for the board's project picker (`acli jira project list --json`). |
-| `jira_search_board` | Load board work items; the JQL is built from the structured board config (project + filter flags + epic), so no JQL is typed. |
-| `jira_list_epics` | List a project's epics (`issuetype = Epic`) for the board's epic-filter picker. |
+| `jira_status` | Report whether `acli` (the fallback connection) is installed, authenticated, and the active site. The primary connection state is `jira_rest_status`. |
+| `jira_list_projects` | List visible JIRA projects for the board's project picker. REST-first (`GET /project/search`); falls back to `acli jira project list --json`. |
+| `jira_search_board` | Load board work items; the JQL is built from the structured board config (project + filter flags + epic), so no JQL is typed. REST-first (`POST /search/jql`, paginated); falls back to `acli jira workitem search`. |
+| `jira_list_epics` | List a project's epics (`issuetype = Epic`) for the board's epic-filter picker. REST-first via the same search dispatch. |
 | `jira_sprint_board` | Load the sprint view (active/future sprints + backlog, issues carrying their epic) via the Agile REST API. REST-token-gated; errors without a token. |
-| `jira_get_work_item` | Fetch a single work item (e.g. to backfill a story description). |
-| `jira_create_work_item` | Create a JIRA work item from project/type/summary (+ optional description, assignee, labels) via `acli jira workitem create`; returns the new item. |
-| `jira_transition_work_item` | Transition a work item to a target status. REST-aware: with a connected token it resolves the status to a legal transition and POSTs it; otherwise falls back to optimistic `acli` transition. |
-| `jira_assign_work_item` | Assign a work item to a user. |
-| `jira_comment_work_item` | Add a comment to a work item. |
-| `jira_rest_status` | Report whether the optional JIRA REST API token is connected (Keychain token present for the configured site + email). |
+| `jira_get_work_item` | Fetch a single work item (e.g. to backfill a story description). REST-first (`GET /issue/{key}`); falls back to `acli jira workitem view`. |
+| `jira_create_work_item` | Create a JIRA work item from project/type/summary (+ optional description, assignee, labels); returns the new item. REST-first (`POST /issue`, ADF description, assignee resolved to an account id); falls back to `acli jira workitem create`. |
+| `jira_transition_work_item` | Transition a work item to a target status. REST-first: with a connected token it resolves the status to a legal transition and POSTs it; otherwise falls back to optimistic `acli` transition. |
+| `jira_assign_work_item` | Assign a work item to a user. REST-first (`PUT /issue/{key}/assignee`, resolving `@me`/email/display name to an account id via `/myself` / `/user/search`); falls back to `acli jira workitem assign`. |
+| `jira_comment_work_item` | Add a comment to a work item. REST-first (`POST /issue/{key}/comment`, plain text wrapped in a minimal ADF doc); falls back to `acli jira workitem comment`. |
+| `jira_rest_status` | Report whether the JIRA REST API token (the primary connection) is connected (Keychain token present for the configured site + email). |
 | `set_jira_api_token` | Verify a token via `GET /myself`, then store it in the macOS Keychain and persist the non-secret site/email. Stores nothing on failure. |
 | `clear_jira_api_token` | Disconnect: delete the Keychain token and clear the stored REST email. |
 | `jira_list_transitions` | List an issue's legal transitions via REST (`GET /issue/{key}/transitions`). Requires a connected token. |

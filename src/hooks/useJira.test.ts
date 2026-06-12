@@ -139,6 +139,35 @@ describe("useJira", () => {
     expect(result.current.columns.map((column) => column.statusName)).toEqual(["To Do"]);
   });
 
+  it("is ready with a REST token alone — token-primary, no acli", async () => {
+    mockedApi.jiraStatus.mockResolvedValue({ installed: false, authenticated: false });
+    mockedApi.jiraRestStatus.mockResolvedValue({
+      connected: true,
+      site: "team.atlassian.net",
+      email: "me@example.com",
+      error: null,
+    });
+    const setMessage = vi.fn();
+    const { result } = renderHook(
+      () =>
+        useJira({
+          active: true,
+          configured: true,
+          project: "A",
+          statusFilter: [],
+          setMessage,
+        }),
+      { wrapper: makeWrapper() },
+    );
+
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    // The board and project list load on the token alone.
+    await waitFor(() => expect(mockedApi.jiraSearchBoard).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockedApi.jiraListProjects).toHaveBeenCalledTimes(1));
+    // Browse URLs fall back to the REST site when acli reports none.
+    expect(result.current.site).toBe("team.atlassian.net");
+  });
+
   it("cancels in-flight board queries before an optimistic transition", async () => {
     const setMessage = vi.fn();
     const client = createQueryClient();

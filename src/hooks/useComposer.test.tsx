@@ -18,6 +18,7 @@ vi.mock("../api", () => ({
     startSession: vi.fn(),
     jiraGetWorkItem: vi.fn(),
     jiraStatus: vi.fn(),
+    jiraRestStatus: vi.fn(),
     listRepos: vi.fn(),
     listWorkspaces: vi.fn(),
     listAgentProfiles: vi.fn(),
@@ -62,6 +63,7 @@ function setup() {
     settings: appSettingsFixture({ defaultAgentProfileId: 2 }),
   });
   queryClient.setQueryData(queryKeys.jira.status(), jiraStatus);
+  queryClient.setQueryData(queryKeys.jira.restStatus(), { connected: false });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );

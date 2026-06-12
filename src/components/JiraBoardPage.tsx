@@ -147,7 +147,9 @@ export function JiraBoardPage({
   onPickAgent,
   onOpenUrl,
 }: JiraBoardPageProps) {
-  const ready = isCliConnected(status);
+  // Token-primary: a connected REST token alone drives the board; acli is the
+  // fallback connection.
+  const ready = Boolean(restConnected) || isCliConnected(status);
   const itemsByKey = new Map(columns.flatMap((column) => column.items).map((item) => [item.key, item]));
   const statusOptions = columns.map((column) => column.statusName);
   // Always include the currently-selected statuses so they stay uncheckable even
@@ -226,6 +228,7 @@ export function JiraBoardPage({
   ) : (
     <BoardBody
       status={status}
+      restConnected={Boolean(restConnected)}
       project={project}
       loading={loading}
       columns={columns}
@@ -243,7 +246,7 @@ export function JiraBoardPage({
     <div className="nx-jira" data-testid="jira-board">
       <header className="nx-jira-head">
         <h1>JIRA Board</h1>
-        <JiraConnection status={status} />
+        <JiraConnection status={status} restConnected={Boolean(restConnected)} site={site} />
         <Button
           type="button"
           variant="outline"
@@ -422,18 +425,29 @@ export function JiraBoardPage({
   );
 }
 
-function JiraConnection({ status }: { status: JiraStatus | undefined }) {
+function JiraConnection({
+  status,
+  restConnected,
+  site,
+}: {
+  status: JiraStatus | undefined;
+  restConnected: boolean;
+  site?: string | null;
+}) {
+  // A connected API token is a full connection on its own; only fall back to the
+  // acli connection state (and its guidance) when no token is set up.
+  if (restConnected || isCliConnected(status)) {
+    return (
+      <Badge variant="secondary" className="gap-1.5">
+        <span
+          className="nx-livedot"
+          style={{ background: "var(--status-success)" }}
+          aria-hidden="true"
+        />
+        {site ?? status?.site ?? "Connected"}
+      </Badge>
+    );
+  }
   if (!status) return <Skeleton className="h-5 w-28" />;
-  if (!status.installed) return <Badge variant="destructive">acli not installed</Badge>;
-  if (!status.authenticated) return <Badge variant="destructive">Not authenticated</Badge>;
-  return (
-    <Badge variant="secondary" className="gap-1.5">
-      <span
-        className="nx-livedot"
-        style={{ background: "var(--status-success)" }}
-        aria-hidden="true"
-      />
-      {status.site ?? "Connected"}
-    </Badge>
-  );
+  return <Badge variant="destructive">Not connected</Badge>;
 }

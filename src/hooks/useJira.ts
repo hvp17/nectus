@@ -106,11 +106,12 @@ const EMPTY_LANES: JiraSprintLane[] = [];
 
 /**
  * Owns JIRA connection state, the project list, and the board work items — backed
- * by TanStack Query. Connection status (acli + optional REST token) loads on mount;
- * the project list / project status set / board load only once their `enabled` gate
- * is met (view active, CLI connected, a project configured). The board transition
- * is an optimistic cache write with snapshot rollback; the board JQL is built
- * backend-side from the structured config, so no JQL is typed here.
+ * by TanStack Query. Connection status (the primary REST token + the acli fallback)
+ * loads on mount; the project list / project status set / board load only once their
+ * `enabled` gate is met (view active, either connection ready, a project
+ * configured). The board transition is an optimistic cache write with snapshot
+ * rollback; the board JQL is built backend-side from the structured config, so no
+ * JQL is typed here.
  */
 export function useJira({
   active,
@@ -124,8 +125,12 @@ export function useJira({
 
   const jiraStatus = useJiraStatusQuery().data;
   const restStatus = useJiraRestStatusQuery().data;
-  const ready = isCliConnected(jiraStatus);
   const restConnected = Boolean(restStatus?.connected);
+  // Token-primary: a connected REST token alone fully drives the board (the
+  // backend dispatches REST-first); acli is the fallback connection.
+  const ready = restConnected || isCliConnected(jiraStatus);
+  // Site host for browse URLs — from whichever connection is configured.
+  const site = jiraStatus?.site ?? restStatus?.site ?? null;
 
   const projects = useJiraProjectsQuery(active && ready).data ?? EMPTY_PROJECTS;
   const projectStatusesQuery = useJiraProjectStatusesQuery(project, active && ready && restConnected);
@@ -262,6 +267,7 @@ export function useJira({
     restStatus,
     restConnected,
     ready,
+    site,
     projects,
     projectStatuses,
     items,

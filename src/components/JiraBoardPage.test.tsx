@@ -373,3 +373,45 @@ describe("JiraBoardPage sprint view", () => {
     expect(onChangeViewMode).toHaveBeenCalledWith("sprint");
   });
 });
+
+describe("JiraBoardPage token-primary connection", () => {
+  const noAcli: JiraStatus = { installed: false, authenticated: false };
+
+  function renderConnection(overrides: Partial<React.ComponentProps<typeof JiraBoardPage>> = {}) {
+    renderWithTooltipProvider(
+      <JiraBoardPage
+        status={noAcli}
+        projects={[{ key: "SCRUM", name: "Scrum" }]}
+        tasks={[]}
+        project="SCRUM"
+        filters={{ myIssues: false, unresolved: true, currentSprint: false, statuses: [], epic: null }}
+        columns={columns}
+        loading={false}
+        onChangeConfig={vi.fn()}
+        onRefresh={vi.fn()}
+        onTransition={vi.fn()}
+        onOpenItem={vi.fn()}
+        onOpenTask={vi.fn()}
+        onCreateTask={vi.fn()}
+        {...overrides}
+      />,
+    );
+  }
+
+  it("is fully usable with a REST token alone — no acli", () => {
+    renderConnection({ restConnected: true, site: "team.atlassian.net" });
+    // Connected badge shows the REST site; the toolbar (project picker) renders.
+    expect(screen.getByText("team.atlassian.net")).toBeInTheDocument();
+    expect(screen.getByLabelText("JIRA project")).toBeInTheDocument();
+    // The board renders cards instead of connection guidance.
+    expect(screen.getByText("Hi Mann this is in review")).toBeInTheDocument();
+  });
+
+  it("prompts for a token first when neither connection is set up", () => {
+    renderConnection();
+    expect(screen.getByText("Not connected")).toBeInTheDocument();
+    expect(screen.getByText(/Settings → JIRA/)).toBeInTheDocument();
+    // No toolbar without a connection.
+    expect(screen.queryByLabelText("JIRA project")).not.toBeInTheDocument();
+  });
+});

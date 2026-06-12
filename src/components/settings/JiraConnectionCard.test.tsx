@@ -1,8 +1,11 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { renderWithTooltipProvider } from "../../test/testUtils";
+import { openExternal } from "../../lib/openExternal";
 import type { JiraRestStatus } from "../../types";
 import { JiraConnectionCard } from "./JiraConnectionCard";
+
+vi.mock("../../lib/openExternal", () => ({ openExternal: vi.fn() }));
 
 const connected: JiraRestStatus = {
   connected: true,
@@ -29,6 +32,22 @@ describe("JiraConnectionCard", () => {
 
     await waitFor(() =>
       expect(onSave).toHaveBeenCalledWith("team.atlassian.net", "me@example.com", "secret-token"),
+    );
+  });
+
+  it("deep-links to the Atlassian API-token page", () => {
+    renderWithTooltipProvider(
+      <JiraConnectionCard
+        busy={false}
+        onSave={vi.fn(async () => connected)}
+        onDisconnect={vi.fn(async () => {})}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Create a token/ }));
+
+    expect(vi.mocked(openExternal)).toHaveBeenCalledWith(
+      "https://id.atlassian.com/manage-profile/security/api-tokens",
     );
   });
 

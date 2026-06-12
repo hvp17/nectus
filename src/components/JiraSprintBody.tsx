@@ -2,6 +2,7 @@ import { Layers } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Skeleton } from "./ui/skeleton";
 import { JiraCard } from "./JiraCard";
+import { isCliConnected } from "../lib/connection";
 import { groupByEpic } from "../lib/jiraSprints";
 import type { JiraSprintLane, JiraStatus, JiraWorkItem, TaskSummary } from "../types";
 
@@ -38,19 +39,12 @@ export function SprintBody({
   onOpenTask,
   onCreateTask,
 }: SprintBodyProps) {
-  if (!status?.installed) {
+  if (!restConnected && !isCliConnected(status)) {
     return (
       <SprintEmpty>
-        Atlassian CLI not found. Install the Atlassian CLI (<code>acli</code>) and reopen this
-        view.
-      </SprintEmpty>
-    );
-  }
-  if (!status.authenticated) {
-    return (
-      <SprintEmpty>
-        Not signed in to JIRA. Run <code>acli jira auth login</code> in a terminal, then reopen
-        this view.
+        Not connected to JIRA. Paste an API token in <strong>Settings → JIRA</strong>{" "}
+        (recommended — no extra tools needed), or install the Atlassian CLI and run{" "}
+        <code>acli jira auth login</code> in a terminal.
       </SprintEmpty>
     );
   }

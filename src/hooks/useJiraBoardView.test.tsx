@@ -16,6 +16,7 @@ function jiraState(): ReturnType<typeof useJira> {
     restStatus: undefined,
     restConnected: false,
     ready: true,
+    site: null,
     projects: [],
     projectStatuses: [],
     items: [],

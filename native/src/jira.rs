@@ -194,7 +194,8 @@ fn rich_text_to_string(value: serde_json::Value) -> Option<String> {
 
 /// Walk an ADF node tree, appending text-node content and inserting newlines at
 /// block and hard-break boundaries so the flattened text stays readable.
-fn collect_adf_text(node: &serde_json::Value, out: &mut String) {
+/// `pub(crate)` so the REST layer's ADF *builder* test can round-trip through it.
+pub(crate) fn collect_adf_text(node: &serde_json::Value, out: &mut String) {
     if let Some(text) = node.get("text").and_then(serde_json::Value::as_str) {
         out.push_str(text);
     }

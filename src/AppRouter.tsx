@@ -686,7 +686,7 @@ function JiraView() {
       onCreateWorkItem={jiraBoard.createWorkItem}
       agentProfiles={agentProfiles}
       selectedAgentProfileId={jiraLaunchAgentProfileId}
-      site={jira.jiraStatus?.site}
+      site={jira.site}
       restConnected={jira.restConnected}
       onListTransitions={api.jiraListTransitions}
       filterableStatuses={

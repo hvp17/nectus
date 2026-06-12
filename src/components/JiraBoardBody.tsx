@@ -1,6 +1,7 @@
 import { Badge } from "./ui/badge";
 import { Skeleton } from "./ui/skeleton";
 import { JiraCard } from "./JiraCard";
+import { isCliConnected } from "../lib/connection";
 import type { JiraColumn } from "../hooks/useJira";
 import type { JiraStatus, JiraStatusCategory, JiraWorkItem, TaskSummary } from "../types";
 
@@ -13,6 +14,8 @@ const CATEGORY_DOT: Record<JiraStatusCategory, string> = {
 
 interface BoardBodyProps {
   status: JiraStatus | undefined;
+  /** API token connected — a full JIRA connection on its own (token-primary). */
+  restConnected: boolean;
   project: string | null;
   loading: boolean;
   columns: JiraColumn[];
@@ -27,6 +30,7 @@ interface BoardBodyProps {
 
 export function BoardBody({
   status,
+  restConnected,
   project,
   loading,
   columns,
@@ -38,19 +42,12 @@ export function BoardBody({
   onOpenTask,
   onCreateTask,
 }: BoardBodyProps) {
-  if (!status?.installed) {
+  if (!restConnected && !isCliConnected(status)) {
     return (
       <BoardEmpty>
-        Atlassian CLI not found. Install the Atlassian CLI (<code>acli</code>) and reopen this
-        view.
-      </BoardEmpty>
-    );
-  }
-  if (!status.authenticated) {
-    return (
-      <BoardEmpty>
-        Not signed in to JIRA. Run <code>acli jira auth login</code> in a terminal, then reopen
-        this view.
+        Not connected to JIRA. Paste an API token in <strong>Settings → JIRA</strong>{" "}
+        (recommended — no extra tools needed), or install the Atlassian CLI and run{" "}
+        <code>acli jira auth login</code> in a terminal.
       </BoardEmpty>
     );
   }

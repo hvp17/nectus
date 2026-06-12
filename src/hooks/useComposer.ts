@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { api } from "../api";
 import { useReposQuery, useSettingsQuery, useRefreshData } from "../queries/core";
-import { useJiraStatusQuery } from "../queries/jira";
+import { useJiraRestStatusQuery, useJiraStatusQuery } from "../queries/jira";
 import { useGuardedAction } from "./useGuardedAction";
 import {
   getSuggestedWorktreeBranchName,
@@ -35,6 +35,9 @@ export function useComposer() {
   const settings = useSettingsQuery().data;
   const repos = useReposQuery().data ?? EMPTY_REPOS;
   const jiraStatus = useJiraStatusQuery().data;
+  const jiraRestStatus = useJiraRestStatusQuery().data;
+  // Browse-URL host from whichever JIRA connection is configured (token or acli).
+  const jiraSite = jiraStatus?.site ?? jiraRestStatus?.site ?? null;
   const setMessage = useAppStore((s) => s.setMessage);
   const setBusy = useAppStore((s) => s.setBusy);
   const run = useGuardedAction(setMessage, setBusy);
@@ -202,7 +205,7 @@ export function useComposer() {
       store.setPendingJiraLink({
         key: item.key,
         summary: item.summary,
-        url: jiraBrowseUrl(jiraStatus?.site, item.key),
+        url: jiraBrowseUrl(jiraSite, item.key),
       });
       store.setNewTaskRepoId(store.selectedRepoId ?? repos[0]?.id);
       // A JIRA-seeded task is single-repo; open the composer in Project mode.
@@ -211,7 +214,7 @@ export function useComposer() {
       store.setSelectedTaskId(undefined);
       store.setCreateTaskOpen(true);
     },
-    [jiraStatus?.site, repos],
+    [jiraSite, repos],
   );
 
   return { createTask, createTaskFromStory, getSuggestedBranchName };
