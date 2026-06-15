@@ -15,6 +15,8 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
+mod acp;
+mod acp_manager;
 mod agents;
 mod claude;
 mod codex;
@@ -34,14 +36,16 @@ mod terminal_io;
 mod tmux;
 mod verdict;
 
+pub(crate) use acp::acp_provider_infos;
+pub use acp_manager::AcpManager;
+
 use agents::configure_agent_command;
-use claude::{cleanup_event_sink, spawn_claude_event_watcher};
-use codex::{latest_codex_session_metadata, spawn_codex_event_watcher};
+use codex::latest_codex_session_metadata;
 use command::resolve_agent_command;
-use opencode::{latest_opencode_session_metadata_from_server, spawn_opencode_event_watcher};
+use opencode::latest_opencode_session_metadata_from_server;
 use pr_consensus::spawn_consensus_pr_review;
 use pr_review::spawn_pr_review;
-use provider::{provider_session, WatcherKind};
+use provider::provider_session;
 use review_loop::spawn_review_on_session_idle;
 use terminal_io::write_agent_submission;
 
@@ -56,8 +60,8 @@ const DEFAULT_PTY_ROWS: u16 = 28;
 const DEFAULT_PTY_COLS: u16 = 100;
 
 /// A turn-completion or input-request signal parsed from an agent-specific event
-/// source. Provider watchers translate their native events into this shape so
-/// emission and review kick-off stay in one place.
+/// source. Retained for reference — legacy watchers were removed in favor of ACP chat.
+#[allow(dead_code)]
 enum SessionSignal {
     Idle {
         turn_id: Option<String>,
@@ -77,7 +81,8 @@ enum SessionSignal {
 }
 
 /// Emit the frontend event for a session signal and, on idle, spawn any pending
-/// review. Shared by provider-specific watchers.
+/// review. Legacy — no longer called after watcher decommission.
+#[allow(dead_code)]
 fn emit_session_signal(
     app: &AppHandle,
     db: &Arc<Mutex<Database>>,
@@ -154,10 +159,8 @@ fn emit_session_signal(
 }
 
 /// Normalize, throttle/de-duplicate, and emit a structured activity line for a
-/// session. Shares `last_activity_line`/`last_activity_at` (and the throttle
-/// window) with the PTY scraper, which is safe because exactly one of the two
-/// paths runs per session — `provider_session(kind).emits_structured_activity`
-/// gates the scraper off for the providers that feed this one.
+/// session. Legacy — ACP chat feeds `session_chat` instead.
+#[allow(dead_code)]
 fn emit_activity_line(
     app: &AppHandle,
     sessions: &Arc<Mutex<HashMap<String, RunningSession>>>,
@@ -200,11 +203,8 @@ fn emit_activity_line(
         });
 }
 
-/// Walk back from the end of `bytes` to the last valid UTF-8 boundary, returning
-/// the valid prefix and the trailing incomplete bytes (at most 3). The event-log
-/// tail is read raw because a multi-byte character can be split across a read
-/// boundary mid-write; the incomplete tail is left for the next read. The common
-/// ASCII-dominant JSONL case returns on the first check.
+/// Walk back from the end of `bytes` to the last valid UTF-8 boundary.
+#[allow(dead_code)]
 fn split_at_utf8_boundary(bytes: &[u8]) -> (&[u8], &[u8]) {
     let mut end = bytes.len();
     loop {
@@ -285,12 +285,8 @@ fn decode_pty_chunk(carry: &mut Vec<u8>, read: &[u8]) -> String {
     text
 }
 
-/// Emit every complete (`\n`-terminated) line in `fragment` via `emit`, trimming a
-/// trailing `\r`, and leave `fragment` holding the trailing partial segment (which
-/// may be empty). A line caught mid-write — no terminator yet — is never emitted
-/// until its `\n` arrives, so each completed line is processed exactly once.
-/// (Counting a partial line as complete would skip the finished line and silently
-/// drop that turn's idle/needs-input event.)
+/// Emit every complete (`\n`-terminated) line in `fragment` via `emit`.
+#[allow(dead_code)]
 fn drain_complete_lines(fragment: &mut String, mut emit: impl FnMut(&str)) {
     while let Some(pos) = fragment.find('\n') {
         let line = fragment[..pos].trim_end_matches('\r').to_string();
@@ -299,14 +295,9 @@ fn drain_complete_lines(fragment: &mut String, mut emit: impl FnMut(&str)) {
     }
 }
 
-/// Tail an append-only event log incrementally, translating each newly completed
-/// line into a [`SessionSignal`] via `parse_line` and emitting it. Polls every
-/// `poll_interval` and exits once the session is no longer running. Tracks a byte
-/// offset and reads only the appended tail each tick (not the whole growing file,
-/// which a long session makes increasingly expensive), carrying any partial
-/// trailing line across ticks via [`drain_complete_lines`]. Shared by the Codex
-/// and Claude watchers.
+/// Tail an append-only event log incrementally. Legacy watcher helper.
 #[allow(clippy::too_many_arguments)]
+#[allow(dead_code)]
 fn watch_event_log<F>(
     app: &AppHandle,
     db: &Arc<Mutex<Database>>,
@@ -668,40 +659,6 @@ impl SessionManager {
             },
         );
 
-        match ps.watcher {
-            WatcherKind::Codex => spawn_codex_event_watcher(
-                app.clone(),
-                db.clone(),
-                self.sessions.clone(),
-                task.id,
-                session_id.clone(),
-                cwd_path.clone(),
-                started_at.clone(),
-            ),
-            WatcherKind::Claude => spawn_claude_event_watcher(
-                app.clone(),
-                db.clone(),
-                self.sessions.clone(),
-                task.id,
-                session_id.clone(),
-                cwd_path.clone(),
-            ),
-            WatcherKind::OpenCode => {
-                if let Some(port) = opencode_port {
-                    spawn_opencode_event_watcher(
-                        app.clone(),
-                        db.clone(),
-                        self.sessions.clone(),
-                        task.id,
-                        session_id.clone(),
-                        cwd_path.clone(),
-                        port,
-                    );
-                }
-            }
-            WatcherKind::None => {}
-        }
-
         spawn_session_reader(
             app,
             db,
@@ -771,9 +728,6 @@ impl SessionManager {
                 .set_last_session(running.session.task_id, &id, label.as_deref())?;
             running.session.resumable_session_id = Some(id);
             running.session.resumable_session_label = label;
-        }
-        if provider_session(running.agent_kind).cleanup_event_sink {
-            cleanup_event_sink(&session_id);
         }
         db.lock()
             .set_active_session(running.session.task_id, None)?;
@@ -1038,33 +992,6 @@ impl SessionManager {
             },
         );
 
-        match provider_session(agent_kind).watcher {
-            WatcherKind::Codex => spawn_codex_event_watcher(
-                app.clone(),
-                db.clone(),
-                self.sessions.clone(),
-                task.id,
-                session_id.clone(),
-                cwd_path.clone(),
-                started_at.clone(),
-            ),
-            WatcherKind::Claude => spawn_claude_event_watcher(
-                app.clone(),
-                db.clone(),
-                self.sessions.clone(),
-                task.id,
-                session_id.clone(),
-                cwd_path.clone(),
-            ),
-            WatcherKind::OpenCode => {
-                tracing::warn!(
-                    session_id = %session_id,
-                    "reattached OpenCode session without its event watcher (server port does not survive restarts)"
-                );
-            }
-            WatcherKind::None => {}
-        }
-
         spawn_session_reader(
             app,
             db,
@@ -1264,9 +1191,6 @@ fn spawn_session_reader(
                         tracing::warn!(?error, task_id, "failed to save latest session")
                     });
             }
-            if provider_session(agent_kind).cleanup_event_sink {
-                cleanup_event_sink(&session_id);
-            }
             let _ = db
                 .lock()
                 .set_active_session(task_id, None)
@@ -1362,10 +1286,8 @@ fn resolve_resumable_metadata(
     }
 }
 
-/// Reduce a structured progress string to a single short, readable line: take
-/// the first line that carries a readable token, strip leading/trailing markdown
-/// chrome (bold/heading/backtick markers), and bound it to [`ACTIVITY_LINE_MAX`].
-/// Returns `None` when nothing readable remains.
+/// Reduce a structured progress string to a single short, readable line. Legacy.
+#[allow(dead_code)]
 fn normalize_activity(raw: &str) -> Option<String> {
     let line = raw
         .lines()
@@ -1378,13 +1300,12 @@ fn normalize_activity(raw: &str) -> Option<String> {
     Some(line.chars().take(ACTIVITY_LINE_MAX).collect())
 }
 
-/// Longest prompt/preview snippet a provider watcher forwards as a needs-input or
-/// activity preview (e.g. the question text behind a `session_needs_input`).
+/// Longest prompt/preview snippet a legacy watcher forwarded.
+#[allow(dead_code)]
 const PROMPT_PREVIEW_LIMIT: usize = 500;
 
-/// Trim `value` and bound it to [`PROMPT_PREVIEW_LIMIT`] characters, returning
-/// `None` when nothing readable remains. Shared by the Codex and Claude watchers,
-/// which both surface short previews of agent prompts/questions.
+/// Trim `value` and bound it to [`PROMPT_PREVIEW_LIMIT`] characters. Legacy.
+#[allow(dead_code)]
 fn prompt_preview(value: &str) -> Option<String> {
     let value = value.trim();
     if value.is_empty() {

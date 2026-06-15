@@ -17,6 +17,9 @@ import { isReviewLoopActive } from "../statusLabels";
 import { isCliConnected } from "../lib/connection";
 import { isCrossRepoTask } from "../lib/taskRepos";
 import { resolveReviewerProfileId } from "../lib/agentProfiles";
+import { usesTerminalPrimary } from "../lib/acpAgent";
+import { useAcpProvidersQuery } from "../queries/core";
+import { useAppStore } from "../store/appStore";
 import { useTaskDiff } from "../hooks/useTaskDiff";
 import { type TaskAttention } from "../sessionAttention";
 import {
@@ -156,7 +159,10 @@ export function TaskWorkspace({
 
   const diff = useTaskDiff(task?.id, activeRepoId);
   const { refresh: refreshDiff } = diff;
-  const [stageTab, setStageTab] = useState<"terminal" | "diff" | "review">("terminal");
+  const acpProviders = useAcpProvidersQuery().data ?? [];
+  const chatWorkingTaskIds = useAppStore((s) => s.chatWorkingTaskIds);
+  const [stageTab, setStageTab] = useState<"terminal" | "diff" | "review" | "chat">("chat");
+  const [diffSelectedFile, setDiffSelectedFile] = useState<string | null>(null);
   const refreshDiffForOpenTab = useEffectEvent(() => {
     void refreshDiff();
   });
@@ -175,6 +181,25 @@ export function TaskWorkspace({
     if (reviewIsRunning && !wasReviewRunning.current) setStageTab("review");
     wasReviewRunning.current = reviewIsRunning;
   }, [reviewIsRunning]);
+
+  const showTerminalTab = task ? usesTerminalPrimary(task.agentKind ?? "custom", acpProviders) : true;
+  const chatWorking = task ? Boolean(chatWorkingTaskIds[task.id]) : false;
+  const openedTaskIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!task) return;
+    if (!showTerminalTab && stageTab === "terminal") setStageTab("chat");
+  }, [task, showTerminalTab, stageTab]);
+
+  useEffect(() => {
+    if (!task) return;
+    const previousTaskId = openedTaskIdRef.current;
+    if (previousTaskId === task.id) return;
+    openedTaskIdRef.current = task.id;
+    if (previousTaskId !== null) {
+      setStageTab(showTerminalTab ? "terminal" : "chat");
+    }
+  }, [task?.id, showTerminalTab]);
 
   if (!task) return null;
 
@@ -218,11 +243,12 @@ export function TaskWorkspace({
   const reviewReadyForNextStep = reviewLoop?.status === "passed";
   const githubReady = isCliConnected(githubStatus);
   const canCreateViaGithub = Boolean(githubReady && task.hasWorktree && !task.prUrl);
-  const canCreatePullRequest = Boolean(!task.prUrl && (canCreateViaGithub || task.activeSessionId));
+  const canShipViaAgent = Boolean(task.activeSessionId || chatWorking || !showTerminalTab);
+  const canCreatePullRequest = Boolean(!task.prUrl && (canCreateViaGithub || canShipViaAgent));
   const createPullRequestDescription = pullRequestActionHint({
     hasPullRequest: Boolean(task.prUrl),
     canCreateViaGithub,
-    hasActiveSession: Boolean(task.activeSessionId),
+    hasActiveSession: canShipViaAgent,
     githubReady,
   });
   const workflowStep = currentWorkflowStep({
@@ -237,6 +263,9 @@ export function TaskWorkspace({
   const startReview = () => {
     if (!reviewerProfileId || startReviewDisabled) return;
     onStartReview(task, reviewerProfileId);
+  };
+  const openChatFile = (path: string) => {
+    setDiffSelectedFile(path);
   };
   // Each step carries the inline action shown when it is the CURRENT step. The
   // prototype attaches the action to the active step (Review controls, then the
@@ -375,7 +404,9 @@ export function TaskWorkspace({
         onRenameTask={onRenameTask}
         stageTab={stageTab}
         onStageTabChange={setStageTab}
+        showTerminalTab={showTerminalTab}
         repoScopePicker={repoScopePicker}
+        diffSelectedFile={diffSelectedFile}
         diff={diff}
         diffFileCount={diffFileCount}
         diffTotals={diffTotals}
@@ -392,6 +423,7 @@ export function TaskWorkspace({
         canResumeSession={canResumeSession}
         onResumeSession={onResumeSession}
         onStartSession={onStartSession}
+        onOpenChatFile={openChatFile}
       />
 
       <TaskWorkspaceFactsRail

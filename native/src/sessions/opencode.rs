@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use super::{emit_session_signal, RunningSession, SessionSignal};
 use crate::db::Database;
 use parking_lot::Mutex;

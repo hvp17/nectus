@@ -14,14 +14,20 @@ import { isBrowserPreview, seedAttention, seedLiveLines } from "../../lib/browse
  */
 export interface SessionRuntimeSlice {
   liveLines: Record<number, string>;
+  /** Tasks with an in-flight ACP agent turn (chat-primary agents). */
+  chatWorkingTaskIds: Record<number, true>;
   taskAttention: TaskAttention[];
   setLiveLines: Dispatch<SetStateAction<Record<number, string>>>;
+  setChatWorkingTaskIds: Dispatch<SetStateAction<Record<number, true>>>;
   setTaskAttention: Dispatch<SetStateAction<TaskAttention[]>>;
 }
 
 export const createSessionRuntimeSlice: StateCreator<AppState, [], [], SessionRuntimeSlice> = (set) => ({
   liveLines: isBrowserPreview ? seedLiveLines : {},
+  chatWorkingTaskIds: {},
   taskAttention: isBrowserPreview ? seedAttention : [],
   setLiveLines: (value) => set((s) => ({ liveLines: applyUpdate(value, s.liveLines) })),
+  setChatWorkingTaskIds: (value) =>
+    set((s) => ({ chatWorkingTaskIds: applyUpdate(value, s.chatWorkingTaskIds) })),
   setTaskAttention: (value) => set((s) => ({ taskAttention: applyUpdate(value, s.taskAttention) })),
 });

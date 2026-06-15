@@ -197,6 +197,16 @@ Current commands:
 | `stop_pair_loop` | Stop reviewer automation for a task. |
 | `get_task_review_loop` | Load a task's current review loop. |
 | `list_task_review_runs` | Load stored reviewer runs for a task. |
+| `list_acp_providers` | Load the static ACP provider descriptor export for Claude Code, OpenCode, and Codex: stable provider id, agent kind, display name, launch argv, and coarse resume/permission/image capability states used by the frontend for gating. |
+| `get_task_chat` | Load the persisted ACP chat session and settled transcript for a task. Optional `agent_profile_id` scopes the read to that profile's latest session; omit it to load the latest session across all profiles. |
+| `acp_start_chat` | Start an ACP chat process for a task/profile in the task cwd. Launch uses the ACP provider descriptor (`native/src/sessions/acp.rs`), the login-shell env, augmented PATH, provider-specific executable env, then profile env as the final override layer. Reuses an already-live session; if the latest persisted row for the same profile has `acp_session_id` and the agent advertises `loadSession`, the runtime calls ACP `session/load`. Otherwise it creates a new `chat_sessions` row and calls `session/new`. |
+| `acp_send_prompt` | Queue a prompt into a live ACP chat session (optional base64 image attachments). The runtime persists and emits the user turn, streams the agent turn, stores the settled reply, and snapshots a git checkpoint after each settled agent turn. |
+| `acp_respond_permission` | Resolve a pending ACP permission request from the Chat tab. Allow/reject-always choices persist in `chat_permission_policies`. |
+| `acp_stop_chat` | Abort a live ACP chat process and drop its in-memory session handle. |
+| `list_chat_permission_policies` | List persisted allow-always / reject-always tool permission policies. |
+| `clear_chat_permission_policies` | Delete all saved chat permission policies. |
+| `list_chat_checkpoints` | List git shadow checkpoints for a chat session (newest first in the DB; the UI reverses for display). |
+| `restore_chat_checkpoint` | `git reset --hard` the task worktree to a checkpoint commit. |
 | `create_pr_review` | Resolve a PR URL to a known project (matching each repo's remote off the DB lock, on the blocking pool), queue a review, and start the background reviewer. Takes `reviewer_profile_ids` + `max_rounds`: one reviewer runs a single review, two or more run a consensus review. |
 | `list_pr_reviews` | Load all PR reviews, newest first. |
 | `get_pr_review` | Load a single PR review by id. |
@@ -220,12 +230,15 @@ Backend-to-frontend events:
 | Event | Payload | Source |
 | --- | --- | --- |
 | `session_output` | PTY output chunk and stream offset. The backend decodes PTY bytes to UTF-8 before emitting: split multi-byte sequences are carried to the next read, genuinely invalid bytes become `U+FFFD`, and `start_offset` is computed after appending the decoded text to the bounded session buffer. | `native/src/sessions/mod.rs` (`decode_pty_chunk`, PTY reader loop) |
-| `session_activity` | Task id, session id, and the agent's latest human-readable activity line (throttled and de-duplicated). Parsed from each provider's structured event stream — Codex `agent_reasoning`/`agent_message`, Claude `PreToolUse` hook, OpenCode `message.part.updated` — so it reads as real progress ("Editing App.tsx", "Running npm test") rather than TUI chrome. Antigravity and custom agents fall back to an ANSI-stripped tail of the PTY output. | `native/src/sessions/mod.rs` (`emit_activity_line`), driven by `codex.rs`, `claude.rs`, `opencode.rs` |
+| `session_activity` | Task id, session id, and the agent's latest human-readable activity line (throttled and de-duplicated). **PTY-only path:** parsed from each provider's structured event stream when a legacy watcher is active, or from an ANSI-stripped PTY tail for Antigravity/custom agents. **ACP-capable agents** (Claude, Codex, OpenCode) no longer spawn those watchers — their left-rail / Mission Control activity line comes from `session_chat` text/tool parts in `useEventBridge` instead. | `native/src/sessions/mod.rs` (`emit_activity_line`), legacy watchers in `codex.rs` / `claude.rs` / `opencode.rs` (retired for ACP agents in `provider.rs`) |
 | `session_exited` | Session id and optional exit code. | `native/src/sessions/mod.rs`, `native/src/lib.rs` |
 | `session_idle` | Task id, session id, turn id, optional message. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL), `claude.rs` (hooks), and `opencode.rs` (local server `/event` `session.idle`) |
 | `session_needs_input` | Task id, session id, reason, optional prompt. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL), `claude.rs` (hooks), and `opencode.rs` (local server `/event` permission/question asks) |
 | `review_loop_updated` | Review-loop state and optional review run. | `native/src/sessions/review_loop.rs` |
 | `review_output` | Task id, a chunk of the task reviewer's live stdout, and the chunk's byte offset (a `0` offset starts a new run). Streamed by the task review loop. | `native/src/sessions/review_loop.rs` |
+| `session_chat` | ACP chat update: task id, chat session id, optional agent profile id, normalized `ChatMessage`, and `done` flag. Streaming updates are cache-only in the frontend (rAF-batched in `useEventBridge`); settled user/agent turns are persisted to `chat_messages`. Also feeds `liveLines`, `chatWorkingTaskIds`, and permission attention for triage. | `native/src/sessions/acp_manager.rs` |
+| `session_chat_usage` | Context-window usage (`used` / `size` token counts) for the active chat session. | `native/src/sessions/acp_manager.rs` |
+| `chat_session_exited` | Chat session id, task id, optional agent profile id. Clears ephemeral chat runtime state (`liveLines`, `chatWorkingTaskIds`, permission attention) when the ACP connection ends. | `native/src/sessions/acp_manager.rs` |
 | `pr_review_output` | Review id, a chunk of a single PR reviewer's live stdout, and the chunk's byte offset (a `0` offset starts a new run). Streamed by single PR reviews so the Reviews-view Terminal toggle can watch the reviewer live; consensus reviews keep their round matrix and do not stream. | `native/src/sessions/pr_review.rs` |
 | `pr_review_updated` | Updated external PR review (status, verdict, metadata, Markdown output), plus an optional `latest_run` carrying the consensus round output that triggered the update. | `native/src/sessions/pr_review.rs`, `native/src/sessions/pr_consensus.rs` |
 | `diagnostic_log` | One captured backend `tracing` line (the same text written to the console), streamed live to the Settings → Diagnostics panel. Emitted from the diagnostics ring buffer, which is independent of the DB lock so the stream keeps flowing during a hang. | `native/src/diagnostics.rs` |
@@ -235,7 +248,8 @@ Frontend event listeners:
 - `src/hooks/useEventBridge.ts` is the single, mount-once bridge (mounted in
   `AppLayout`). It owns every session/review/PR subscription
   (`session_activity` / `session_idle` / `session_needs_input` /
-  `session_exited`, `review_loop_updated`, `pr_review_updated`) and routes each
+  `session_exited`, `session_chat` / `session_chat_usage` / `chat_session_exited`,
+  `review_loop_updated`, `pr_review_updated`) and routes each
   event to the Query cache (tasks, review loop/runs, PR reviews) or the Zustand
   store (`liveLines` / `taskAttention`, toasts/notifications). Each bridge
   channel is subscribed through `src/hooks/useTauriEvent.ts`, which owns the

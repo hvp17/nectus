@@ -8,6 +8,7 @@
 import type {
   AgentProfile,
   AppSettings,
+  ChatTranscript,
   DiffFileEntry,
   GithubStatus,
   JiraProject,
@@ -374,8 +375,69 @@ index 1a2b3c4..5d6e7f8 100644
  }`,
 };
 
+export function seedTaskChat(taskId: number, _agentProfileId?: number | null): ChatTranscript {
+  return {
+    session: {
+      id: "chat-preview",
+      taskId,
+      agentProfileId: 2,
+      acpSessionId: "acp-preview",
+      cwd: "/work",
+      createdAt: ago(10),
+      updatedAt: ago(1),
+    },
+    messages: [
+      {
+        id: "u1",
+        role: "user",
+        parts: [{ type: "text", text: "Fix the failing test in the parser." }],
+        createdAt: ago(9),
+        completedAt: ago(9),
+      },
+      {
+        id: "a1",
+        role: "agent",
+        parts: [
+          { type: "reasoning", text: "Let me read the parser and the failing test to see what's off." },
+          {
+            type: "tool",
+            toolCallId: "t1",
+            title: "Read src/parser.rs",
+            kind: "read",
+            status: "completed",
+            locations: [{ path: "src/parser.rs", line: 42 }],
+            output: "fn parse(tokens: &[Token]) -> Ast { ... }",
+          },
+          { type: "text", text: "The bug is an **off-by-one** in the token slice. Patching it now." },
+          {
+            type: "tool",
+            toolCallId: "t2",
+            title: "Edit src/parser.rs",
+            kind: "edit",
+            status: "completed",
+            locations: [{ path: "src/parser.rs", line: 51 }],
+          },
+          { type: "file_edit", path: "src/parser.rs", additions: 2, deletions: 1, diff: "@@ parser @@" },
+          { type: "text", text: "Done — the test passes now." },
+        ],
+        createdAt: ago(8),
+        completedAt: ago(6),
+      },
+    ],
+  };
+}
+
 export function seedTaskDiffSummary(taskId: number): TaskDiffSummary {
   if (taskId === 1) return { baseLabel: "origin/main", files: seedDiffFiles };
+  if (taskId === 3) {
+    return {
+      baseLabel: "origin/main",
+      files: [
+        { path: "src/index.ts", change: "modified", additions: 6, deletions: 2, binary: false },
+        { path: "src/parser.rs", change: "modified", additions: 2, deletions: 1, binary: false },
+      ],
+    };
+  }
   return {
     baseLabel: "origin/main",
     files: [{ path: "src/index.ts", change: "modified", additions: 6, deletions: 2, binary: false }],

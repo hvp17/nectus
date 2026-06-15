@@ -15,7 +15,10 @@ export const queryKeys = {
   /** The archive view (separate cache from the live `tasks` read). */
   tasksArchived: () => ["tasks-archived"] as const,
   agentProfiles: () => ["agent-profiles"] as const,
+  acpProviders: () => ["acp-providers"] as const,
   settings: () => ["settings"] as const,
+
+  chatPermissionPolicies: () => ["chat-permission-policies"] as const,
 
   github: {
     status: () => ["github", "status"] as const,
@@ -36,6 +39,13 @@ export const queryKeys = {
       ["task", "diff-summary", taskId, repoId ?? null] as const,
     reviewLoop: (taskId: number) => ["task", "review-loop", taskId] as const,
     reviewRuns: (taskId: number) => ["task", "review-runs", taskId] as const,
+    /** ACP chat transcript for a task; kept live by the `session_chat` event bridge. */
+    chat: (taskId: number, agentProfileId?: number | null) =>
+      ["task", "chat", taskId, agentProfileId ?? null] as const,
+    chatCheckpoints: (chatSessionId: string) =>
+      ["task", "chat-checkpoints", chatSessionId] as const,
+    chatUsage: (taskId: number, agentProfileId?: number | null) =>
+      ["task", "chat-usage", taskId, agentProfileId ?? null] as const,
   },
 
   prReviews: {

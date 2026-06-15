@@ -432,6 +432,26 @@ fn list_agent_profiles_rejects_corrupt_args_json() {
 }
 
 #[test]
+fn list_agent_profiles_reads_legacy_gemini_kind_as_antigravity() {
+    let db = Database::open_in_memory().unwrap();
+    db.conn
+        .execute(
+            "INSERT INTO agent_profiles (name, agent_kind, command, model, args_json, env_json, created_at, updated_at)
+             VALUES ('Legacy Gemini', 'gemini', 'agy', 'gemini-pro', '[]', '{}', '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+
+    let profiles = db.list_agent_profiles().unwrap();
+    let legacy = profiles
+        .iter()
+        .find(|profile| profile.name == "Legacy Gemini")
+        .unwrap();
+    assert_eq!(legacy.agent_kind, AgentKind::Antigravity);
+    assert_eq!(legacy.command, "agy");
+}
+
+#[test]
 fn starts_review_loop_and_records_review_runs() {
     let db = Database::open_in_memory().unwrap();
     let repo_dir = tempdir().unwrap();

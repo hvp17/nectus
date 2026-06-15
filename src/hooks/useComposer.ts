@@ -1,17 +1,19 @@
 import { useCallback } from "react";
 import { api } from "../api";
-import { useReposQuery, useSettingsQuery, useRefreshData } from "../queries/core";
+import { useReposQuery, useSettingsQuery, useRefreshData, useAgentProfilesQuery, useAcpProvidersQuery } from "../queries/core";
 import { useJiraRestStatusQuery } from "../queries/jira";
 import { useGuardedAction } from "./useGuardedAction";
+import { isAcpCapableAgent } from "../lib/acpAgent";
 import {
   getSuggestedWorktreeBranchName,
   resolveWorktreeBranchName as resolveBranch,
 } from "../lib/composerForm";
 import { useAppStore } from "../store/appStore";
 import { jiraBrowseUrl } from "../lib/jira";
-import type { JiraWorkItem, Repo, TaskSummary } from "../types";
+import type { AgentProfile, JiraWorkItem, Repo, TaskSummary } from "../types";
 
 const EMPTY_REPOS: Repo[] = [];
+const EMPTY_PROFILES: AgentProfile[] = [];
 
 /** Derive a task title from the draft (trimmed title, else first prompt line). */
 function generatedTitle(title: string, prompt: string): string {
@@ -34,6 +36,8 @@ function generatedTitle(title: string, prompt: string): string {
 export function useComposer() {
   const settings = useSettingsQuery().data;
   const repos = useReposQuery().data ?? EMPTY_REPOS;
+  const agentProfiles = useAgentProfilesQuery().data ?? EMPTY_PROFILES;
+  const acpProviders = useAcpProvidersQuery().data ?? [];
   const jiraRestStatus = useJiraRestStatusQuery().data;
   const jiraSite = jiraRestStatus?.site ?? null;
   const setMessage = useAppStore((s) => s.setMessage);
@@ -66,11 +70,19 @@ export function useComposer() {
       selectRepoId: number,
       agentProfileId: number,
       successMessage: string,
+      initialPrompt: string | null,
     ) => {
       store.setTaskCreationStatus("Starting agent…");
       let startError: string | null = null;
       try {
-        await api.startSession(task.id, agentProfileId);
+        const profile = agentProfiles.find((item) => item.id === agentProfileId);
+        if (profile && isAcpCapableAgent(profile.agentKind, acpProviders)) {
+          const session = await api.acpStartChat(task.id, agentProfileId);
+          const text = initialPrompt?.trim();
+          if (text) await api.acpSendPrompt(session.id, text);
+        } else {
+          await api.startSession(task.id, agentProfileId);
+        }
       } catch (error) {
         startError = String(error);
       }
@@ -137,6 +149,7 @@ export function useComposer() {
               repoIds[0],
               agentProfileId,
               crossRepo ? `Created ${task.branchName} across ${repoIds.length} repos` : `Created ${task.branchName}`,
+              prompt,
             );
           } finally {
             store.setTaskCreationStatus(null);
@@ -177,14 +190,14 @@ export function useComposer() {
             jiraIssueSummary: jiraLink?.summary ?? null,
             jiraIssueUrl: jiraLink?.url ?? null,
           });
-          await finishCreate(task, repoId, agentProfileId, hasWorktree ? `Created ${task.branchName}` : `Created ${task.title}`);
+          await finishCreate(task, repoId, agentProfileId, hasWorktree ? `Created ${task.branchName}` : `Created ${task.title}`, prompt);
         } finally {
           store.setTaskCreationStatus(null);
         }
       },
       { busy: true },
     );
-  }, [settings?.defaultBranchPrefix, run, refresh, setMessage]);
+  }, [settings?.defaultBranchPrefix, run, refresh, setMessage, agentProfiles, acpProviders]);
 
   const createTaskFromStory = useCallback(
     async (item: JiraWorkItem, agentProfileId?: number) => {

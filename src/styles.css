@@ -6,6 +6,9 @@
 @import "@fontsource-variable/jetbrains-mono";
 @import "@fontsource-variable/source-serif-4";
 
+/* Scan Streamdown's compiled classes so the streaming-markdown chat renders styled. */
+@source "../node_modules/streamdown/dist/index.js";
+
 @custom-variant dark (&:is(.dark *));
 
 /* Bridge the raw design tokens (defined in :root/.dark below) to Tailwind so they

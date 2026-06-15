@@ -1,12 +1,34 @@
+import type { ReactNode } from "react";
 import { act, renderHook } from "@testing-library/react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
+import { queryKeys } from "../queries/keys";
+import { createQueryClient } from "../queries/queryClient";
 import { createPrPrompt, mergePrPrompt } from "../lib/githubAgentPrompts";
 import { useGithubShipActions } from "./useGithubShipActions";
-import type { TaskSummary } from "../types";
+import type { AcpProviderInfo, TaskSummary } from "../types";
 
-vi.mock("../api", () => ({ api: { submitSessionInput: vi.fn() } }));
+vi.mock("../api", () => ({
+  api: {
+    submitSessionInput: vi.fn(),
+    listAcpProviders: vi.fn(),
+    acpStartChat: vi.fn(),
+    acpSendPrompt: vi.fn(),
+  },
+}));
 const mockedApi = vi.mocked(api, true);
+
+const acpProviders: AcpProviderInfo[] = [
+  {
+    id: "codex",
+    agentKind: "codex",
+    displayName: "Codex",
+    launch: { command: "codex-acp", args: [] },
+    capabilities: { sessionLoad: "unknown", permissions: "unknown", images: "unknown" },
+    maturity: "preview",
+  },
+];
 
 const task: TaskSummary = {
   id: 42,
@@ -33,41 +55,89 @@ const task: TaskSummary = {
   updatedAt: "2026-06-07T00:00:00.000Z",
 };
 
+function renderShipHook() {
+  const queryClient = createQueryClient();
+  queryClient.setQueryData(queryKeys.task.chat(42, 1), {
+    session: { id: "chat-1", taskId: 42, agentProfileId: 1, acpSessionId: null, cwd: "/tmp/wt", createdAt: "", updatedAt: "" },
+    messages: [],
+  });
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+  return { queryClient, wrapper };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockedApi.submitSessionInput.mockResolvedValue(undefined);
+  mockedApi.listAcpProviders.mockResolvedValue(acpProviders);
+  mockedApi.acpSendPrompt.mockResolvedValue(undefined);
 });
 
 describe("useGithubShipActions", () => {
-  it("submits the create prompt into the running session", async () => {
+  it("submits the create prompt through ACP chat for capable agents", async () => {
     const setMessage = vi.fn();
     const setTaskAttention = vi.fn();
-    const { result } = renderHook(() => useGithubShipActions({ setMessage, setTaskAttention }));
+    const { wrapper } = renderShipHook();
+    const { result } = renderHook(() => useGithubShipActions({ setMessage, setTaskAttention }), { wrapper });
 
     await act(async () => {
       await result.current.createPullRequest(task, { draft: false });
     });
 
-    expect(mockedApi.submitSessionInput).toHaveBeenCalledWith("session-1", createPrPrompt({ draft: false }));
+    expect(mockedApi.acpSendPrompt).toHaveBeenCalledWith("chat-1", createPrPrompt({ draft: false }));
+    expect(mockedApi.submitSessionInput).not.toHaveBeenCalled();
     expect(setTaskAttention).toHaveBeenCalled();
   });
 
   it("submits the merge prompt with the chosen method", async () => {
+    const { wrapper } = renderShipHook();
     const { result } = renderHook(() =>
       useGithubShipActions({ setMessage: vi.fn(), setTaskAttention: vi.fn() }),
+      { wrapper },
     );
 
     await act(async () => {
       await result.current.mergePullRequest(task, "rebase");
     });
 
-    expect(mockedApi.submitSessionInput).toHaveBeenCalledWith("session-1", mergePrPrompt("rebase"));
+    expect(mockedApi.acpSendPrompt).toHaveBeenCalledWith("chat-1", mergePrPrompt("rebase"));
   });
 
-  it("declines with guidance when no session is running", async () => {
+  it("starts chat when shipping without a cached session", async () => {
+    mockedApi.acpStartChat.mockResolvedValue({
+      id: "chat-new",
+      taskId: 42,
+      agentProfileId: 1,
+      acpSessionId: null,
+      cwd: "/tmp/wt",
+      createdAt: "",
+      updatedAt: "",
+    });
+    const queryClient = createQueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() =>
+      useGithubShipActions({ setMessage: vi.fn(), setTaskAttention: vi.fn() }),
+      { wrapper },
+    );
+
+    await act(async () => {
+      await result.current.setPullRequestReady({ ...task, activeSessionId: null });
+    });
+
+    expect(mockedApi.acpStartChat).toHaveBeenCalledWith(42, 1);
+    expect(mockedApi.acpSendPrompt).toHaveBeenCalled();
+  });
+
+  it("declines with guidance when a terminal-only agent has no session", async () => {
+    mockedApi.listAcpProviders.mockResolvedValue([]);
     const setMessage = vi.fn();
+    const { wrapper } = renderShipHook();
     const { result } = renderHook(() =>
       useGithubShipActions({ setMessage, setTaskAttention: vi.fn() }),
+      { wrapper },
     );
 
     await act(async () => {
@@ -75,6 +145,7 @@ describe("useGithubShipActions", () => {
     });
 
     expect(mockedApi.submitSessionInput).not.toHaveBeenCalled();
+    expect(mockedApi.acpSendPrompt).not.toHaveBeenCalled();
     expect(setMessage).toHaveBeenCalledWith(expect.stringMatching(/start or resume the agent/i));
   });
 });

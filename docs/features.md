@@ -290,13 +290,84 @@ Sessions emit these Tauri events: `session_output` (terminal stream),
 File ownership and the authoritative command/event catalog: see
 [AGENTS.md](../AGENTS.md) and [tracking-and-debugging.md](tracking-and-debugging.md).
 
+## Embedded Agent Chat
+
+The task workspace also has a **Chat** tab that drives ACP-capable agent CLIs
+through the Agent Client Protocol instead of through a raw terminal TUI.
+
+Current behavior:
+
+- For **ACP-capable agents** (Claude, Codex, OpenCode, Antigravity when a descriptor exists), **Chat is the default stage tab** and the primary way to work with the agent. Task creation and GitHub ship actions (`create` / `merge` / `mark-ready` / `close` PR) submit prompts through the ACP chat runtime (`acp_send_prompt`) rather than the embedded PTY.
+- The **Terminal** tab remains for **custom** agent profiles (no ACP descriptor) and as a fallback for Antigravity when chat is unavailable.
+- Live activity in Mission Control, the project sidebar, and task cards for ACP agents comes from **`session_chat`** text/tool parts (via `liveLines` and `chatWorkingTaskIds`), not from `session_activity` / JSONL / hook watchers — those legacy decoders are retired for ACP-capable kinds in `native/src/sessions/provider.rs`.
+- Chat is available from the task workspace stage alongside Terminal (when shown), Diff, and Review.
+- On the first prompt, Nectus starts an ACP session for the task's agent profile
+  in the task worktree (or project path for direct-edit tasks). It streams the
+  normalized ACP updates into the transcript and persists settled user/agent
+  turns in SQLite.
+- ACP launch is driven by the Rust provider descriptor in `native/src/sessions/acp.rs`
+  for Claude Code, OpenCode, Codex, and Antigravity (preview). The runtime resolves the descriptor's
+  command, seeds the login-shell environment, adds the augmented PATH, applies any
+  provider-specific executable override, then applies the selected profile's env
+  last so per-profile keys and PATH override the defaults.
+- The same descriptor is exported through `list_acp_providers`, including stable
+  provider ids, launch argv, and coarse capability states (`expected`, `unknown`,
+  or `unsupported`) for resume, permission, and image support. Runtime ACP
+  `initialize` remains authoritative for `session/load`.
+- The Chat tab uses that descriptor export to gate launch and offers a compact
+  chat-agent selector populated from the task's agent profiles. Transcript reads
+  (`get_task_chat`) and live `session_chat` cache updates are scoped to the
+  selected profile's latest session. Switching from one ACP-capable profile to
+  another starts a new chat row for the selected profile rather than sending into
+  a transcript owned by a different agent. If the selected profile has no ACP
+  provider descriptor yet (for example Antigravity or a custom profile), the
+  composer is disabled with an inline callout that points the user back to the
+  Terminal tab.
+- The transcript is rendered with **Vercel AI Elements** (installed under
+  `src/components/ai-elements/`). A thin adapter in `src/lib/chat/renderChatParts.tsx`
+  maps the persisted `ChatPart` v1 model to those presentational primitives — the
+  ACP wire format, `session_chat` events, and TanStack Query cache are unchanged.
+  Structured parts render as: markdown text (`Message`), reasoning blocks, tool
+  cards, file-edit chips, permission confirmations, and plan collapsibles. The
+  conversation shell auto-scrolls; the composer uses `PromptInput` with optional
+  image attach, context-window % (`Context`), and a checkpoint restore menu.
+- Permission confirmations support allow/reject once or always; "always" choices
+  persist in `chat_permission_policies` and are auto-applied on future matching tool
+  titles. File chips switch the workspace to the Diff tab and select the matching
+  changed file so its patch loads immediately.
+- After each settled agent turn, Nectus snapshots `git rev-parse HEAD` into
+  `chat_checkpoints`. The Chat tab exposes a Checkpoints menu to restore a prior
+  turn with `git reset --hard` in the task worktree.
+- The composer queues follow-up prompts on the live ACP connection (serial user/agent
+  turns). Image attach is available when the provider descriptor advertises image
+  support.
+- A **Resumable** badge appears when the persisted row has an `acp_session_id` and
+  the provider supports `session/load`.
+- If the app reloads with a persisted chat session whose ACP process is no longer
+  live, sending a message starts the ACP process again. When the persisted row
+  has an agent `acp_session_id` and the agent advertises ACP `loadSession`,
+  Nectus calls `session/load` so the CLI resumes that conversation; otherwise it
+  starts a fresh ACP session and resends the prompt rather than leaving the
+  composer stuck on "No such chat session".
+- Retired Gemini profile rows are treated as Antigravity when read, matching the
+  startup migration from `agent_kind = 'gemini'` to `antigravity`.
+
+The chat surface is served by `list_acp_providers`, `get_task_chat`, `acp_start_chat`,
+`acp_send_prompt` (optional image attachments), `acp_respond_permission`,
+`acp_stop_chat`, `list_chat_permission_policies`, `clear_chat_permission_policies`,
+`list_chat_checkpoints`, and `restore_chat_checkpoint`; live updates arrive on
+`session_chat` and `session_chat_usage`. Settings → Diagnostics lists saved
+permission policies. When an ACP connection ends, `chat_session_exited` clears
+ephemeral chat runtime state in the shell. File ownership: see [AGENTS.md](../AGENTS.md).
+
 ## Task Diff
 
-The task workspace stage has a `Terminal | Diff | Review` segmented control, so you
-can see what an agent changed without leaving the app. The stage header carries a
+The task workspace stage has a `Terminal | Diff | Review | Chat` segmented control,
+so you can see what an agent changed or talk to it without leaving the app. The stage header carries a
 changed-file count badge and `+a −d` line totals next to the toggle (visible on all
 tabs), the Diff tab adds a manual refresh control, and the Review tab is covered in
-[AI Review](#ai-review).
+[AI Review](#ai-review). The Chat tab is covered in
+[Embedded Agent Chat](#embedded-agent-chat).
 
 Current behavior:
 

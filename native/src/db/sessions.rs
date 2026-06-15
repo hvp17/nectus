@@ -16,6 +16,7 @@ impl Database {
 
     /// Set (or clear) the backend-owned attention signal for a task. `Some("needs_input")`
     /// when the agent is blocked on the user; `None` clears it.
+    #[allow(dead_code)]
     pub fn set_task_attention(&self, task_id: i64, attention: Option<&str>) -> Result<(), String> {
         self.conn
             .execute(

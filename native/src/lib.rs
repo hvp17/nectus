@@ -11,17 +11,18 @@ mod sessions;
 
 use crate::db::Database;
 use crate::models::{
-    AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings, AppSettingsInput,
-    GithubStatus, JiraProject, JiraRestStatus, JiraSprintLane, JiraStatusDef, JiraTransition,
-    JiraWorkItem, PrReview, PrReviewMode, PrReviewRun, PullRequestInfo, Repo, ReviewLoop,
-    ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskDiffSummary, TaskStatus,
-    TaskSummary, Workspace,
+    AcpProviderInfo, AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings,
+    AppSettingsInput, ChatCheckpoint, ChatImageAttachment, ChatPermissionPolicy, ChatSession,
+    ChatTranscript, GithubStatus, JiraProject, JiraRestStatus, JiraSprintLane, JiraStatusDef,
+    JiraTransition, JiraWorkItem, PrReview, PrReviewMode, PrReviewRun, PullRequestInfo, Repo,
+    ReviewLoop, ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskDiffSummary,
+    TaskStatus, TaskSummary, Workspace,
 };
-use crate::sessions::SessionManager;
+use crate::sessions::{AcpManager, SessionManager};
 use parking_lot::Mutex;
 use std::path::Path;
 use std::sync::Arc;
-use tauri::{Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
@@ -29,6 +30,7 @@ use tracing_subscriber::EnvFilter;
 pub struct AppState {
     db: Arc<Mutex<Database>>,
     sessions: SessionManager,
+    acp: AcpManager,
 }
 
 fn app_result<T>(result: Result<T, String>) -> AppResult<T> {
@@ -1073,6 +1075,11 @@ fn list_agent_profiles(state: State<'_, AppState>) -> AppResult<Vec<AgentProfile
 }
 
 #[tauri::command]
+fn list_acp_providers() -> Vec<AcpProviderInfo> {
+    sessions::acp_provider_infos()
+}
+
+#[tauri::command]
 fn upsert_agent_profile(
     profile: AgentProfileInput,
     state: State<'_, AppState>,
@@ -1280,6 +1287,120 @@ fn session_output_snapshot(
     app_result(state.sessions.output_snapshot(&session_id))
 }
 
+// ---- ACP embedded chat -------------------------------------------------------
+
+#[tauri::command]
+async fn acp_start_chat(
+    app: AppHandle,
+    task_id: i64,
+    agent_profile_id: Option<i64>,
+    state: State<'_, AppState>,
+) -> AppResult<ChatSession> {
+    let context = {
+        let db = state.db.lock();
+        task_session_context(&db, task_id, agent_profile_id)?
+    };
+    let db = state.db.clone();
+    let acp = state.acp.clone();
+    app_result(
+        acp.start(app, db, context.task, context.repo, context.agent)
+            .await,
+    )
+}
+
+#[tauri::command]
+async fn acp_send_prompt(
+    session_id: String,
+    text: String,
+    images: Option<Vec<ChatImageAttachment>>,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    // The connection loop persists+emits the user turn (in order with the agent
+    // reply) — this just queues the prompt.
+    let acp = state.acp.clone();
+    app_result(
+        acp.prompt(&session_id, text, images.unwrap_or_default())
+            .await,
+    )
+}
+
+#[tauri::command]
+async fn acp_respond_permission(
+    session_id: String,
+    request_id: String,
+    option_id: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    let acp = state.acp.clone();
+    app_result(
+        acp.respond_permission(&session_id, &request_id, option_id)
+            .await,
+    )
+}
+
+#[tauri::command]
+async fn acp_stop_chat(session_id: String, state: State<'_, AppState>) -> AppResult<()> {
+    let acp = state.acp.clone();
+    app_result(acp.stop(&session_id).await)
+}
+
+#[tauri::command]
+fn get_task_chat(
+    task_id: i64,
+    agent_profile_id: Option<i64>,
+    state: State<'_, AppState>,
+) -> AppResult<ChatTranscript> {
+    app_result(state.db.lock().chat_transcript(task_id, agent_profile_id))
+}
+
+#[tauri::command]
+fn list_chat_permission_policies(
+    state: State<'_, AppState>,
+) -> AppResult<Vec<ChatPermissionPolicy>> {
+    app_result(state.db.lock().list_chat_permission_policies())
+}
+
+#[tauri::command]
+fn clear_chat_permission_policies(state: State<'_, AppState>) -> AppResult<()> {
+    app_result(state.db.lock().clear_chat_permission_policies())
+}
+
+#[tauri::command]
+fn list_chat_checkpoints(
+    chat_session_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<ChatCheckpoint>> {
+    app_result(state.db.lock().list_chat_checkpoints(&chat_session_id))
+}
+
+#[tauri::command]
+async fn restore_chat_checkpoint(
+    checkpoint_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    let (worktree_path, commit) = {
+        let db = state.db.lock();
+        let checkpoint = db
+            .chat_checkpoint_by_id(&checkpoint_id)?
+            .ok_or_else(|| AppError::from("Checkpoint not found"))?;
+        let task = db
+            .task_by_id(checkpoint.task_id)?
+            .ok_or_else(|| AppError::from("Task not found"))?;
+        let repo = db
+            .repo_by_id(task.repo_id)?
+            .ok_or_else(|| AppError::from("Repository not found"))?;
+        let path = task
+            .worktree_path
+            .clone()
+            .unwrap_or_else(|| repo.path.clone());
+        (path, checkpoint.git_commit)
+    };
+    blocking("Failed to restore chat checkpoint", move || {
+        git_ops::restore_chat_checkpoint(Path::new(&worktree_path), &commit)
+    })
+    .await
+}
+
 pub fn run() {
     init_tracing();
 
@@ -1315,6 +1436,7 @@ pub fn run() {
             app.manage(AppState {
                 db: Arc::new(Mutex::new(db)),
                 sessions,
+                acp: AcpManager::new(),
             });
             if !live.is_empty() {
                 let state = app.state::<AppState>();
@@ -1334,6 +1456,9 @@ pub fn run() {
                     state
                         .sessions
                         .stop_all(window.app_handle(), state.db.clone());
+                    // Abort any live ACP chat sessions so agent children don't
+                    // outlive the app.
+                    state.acp.stop_all_blocking();
                 }
             }
         })
@@ -1383,6 +1508,7 @@ pub fn run() {
             list_pr_review_runs,
             rerun_pr_review,
             delete_pr_review,
+            list_acp_providers,
             list_agent_profiles,
             upsert_agent_profile,
             start_pair_loop,
@@ -1397,7 +1523,16 @@ pub fn run() {
             send_session_input,
             submit_session_input,
             session_output_snapshot,
-            get_diagnostic_logs
+            get_diagnostic_logs,
+            acp_start_chat,
+            acp_send_prompt,
+            acp_respond_permission,
+            acp_stop_chat,
+            get_task_chat,
+            list_chat_permission_policies,
+            clear_chat_permission_policies,
+            list_chat_checkpoints,
+            restore_chat_checkpoint
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

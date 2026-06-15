@@ -21,6 +21,7 @@ function renderView(props: Partial<Omit<ComponentProps<typeof TaskDiffView>, "on
       loading={props.loading ?? false}
       error={props.error ?? null}
       files={props.files ?? {}}
+      selectedFile={props.selectedFile}
       onSelectFile={onSelectFile}
     />,
   );
@@ -55,6 +56,13 @@ describe("TaskDiffView", () => {
     const { onSelectFile } = renderView();
     onSelectFile.mockClear();
     fireEvent.click(screen.getByText("b.ts"));
+    expect(onSelectFile).toHaveBeenCalledWith("src/b.ts");
+  });
+
+  it("selects a requested file path from the chat file chip bridge", () => {
+    const { onSelectFile } = renderView({ selectedFile: "src/b.ts" });
+
+    expect(screen.getByText("b.ts").closest("button")).toHaveAttribute("aria-pressed", "true");
     expect(onSelectFile).toHaveBeenCalledWith("src/b.ts");
   });
 

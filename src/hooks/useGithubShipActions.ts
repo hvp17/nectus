@@ -1,5 +1,8 @@
 import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import { queryKeys } from "../queries/keys";
+import { isAcpCapableAgent } from "../lib/acpAgent";
 import { clearTaskAttention, type TaskAttention } from "../sessionAttention";
 import {
   closePrPrompt,
@@ -8,7 +11,7 @@ import {
   mergePrPrompt,
   type PrRepoScope,
 } from "../lib/githubAgentPrompts";
-import type { MergeMethod, TaskSummary } from "../types";
+import type { ChatTranscript, MergeMethod, TaskSummary } from "../types";
 
 const NO_SESSION_MESSAGE = "Start or resume the agent for this task to ship from here.";
 
@@ -20,34 +23,49 @@ interface UseGithubShipActionsInput {
 }
 
 /**
- * The four GitHub ship actions, reworked to drive the task's running agent
- * session instead of calling `gh` directly: each submits a prompt (built in
- * `githubAgentPrompts`) into `task.activeSessionId` via `submit_session_input`,
- * so the agent authors the PR body and handles pushes/conflicts/rebases itself.
- * With no running session the action declines with guidance. The returned shapes
- * match the `on*PullRequest` props `GitHubPanel`/`PullRequestActions` already
- * expect, so the presentational layer is untouched.
+ * The four GitHub ship actions. ACP-capable agents receive prompts through the
+ * chat runtime (`acp_send_prompt`); custom/terminal-only agents still submit
+ * into the embedded PTY via `submit_session_input`.
  */
 export function useGithubShipActions({
   setMessage,
   setTaskAttention,
   repoScope,
 }: UseGithubShipActionsInput) {
+  const queryClient = useQueryClient();
   const [creatingPullRequest, setCreatingPullRequest] = useState(false);
   const [pullRequestBusy, setPullRequestBusy] = useState(false);
 
+  const resolveAcpSessionId = useCallback(
+    async (task: TaskSummary): Promise<string> => {
+      const cached = queryClient.getQueryData<ChatTranscript>(
+        queryKeys.task.chat(task.id, task.agentProfileId ?? null),
+      );
+      if (cached?.session?.id) return cached.session.id;
+      const session = await api.acpStartChat(task.id, task.agentProfileId ?? null);
+      return session.id;
+    },
+    [queryClient],
+  );
+
   const dispatch = useCallback(
     async (task: TaskSummary, prompt: string, working: string, setBusy: (busy: boolean) => void) => {
-      if (!task.activeSessionId) {
-        setMessage(NO_SESSION_MESSAGE);
-        return;
-      }
-      const sessionId = task.activeSessionId;
       setMessage(null);
       setTaskAttention((current) => clearTaskAttention(current, task.id));
       setBusy(true);
       try {
-        await api.submitSessionInput(sessionId, prompt);
+        const providers = await api.listAcpProviders();
+        if (isAcpCapableAgent(task.agentKind ?? "custom", providers)) {
+          const sessionId = await resolveAcpSessionId(task);
+          await api.acpSendPrompt(sessionId, prompt);
+          setMessage(working);
+          return;
+        }
+        if (!task.activeSessionId) {
+          setMessage(NO_SESSION_MESSAGE);
+          return;
+        }
+        await api.submitSessionInput(task.activeSessionId, prompt);
         setMessage(working);
       } catch (error) {
         setMessage(String(error));
@@ -55,7 +73,7 @@ export function useGithubShipActions({
         setBusy(false);
       }
     },
-    [setMessage, setTaskAttention],
+    [resolveAcpSessionId, setMessage, setTaskAttention],
   );
 
   const createPullRequest = useCallback(

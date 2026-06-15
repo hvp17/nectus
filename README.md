@@ -24,7 +24,7 @@ git, SQLite, and PTY work lives in the Rust backend.
 - Create Tasks against a project in direct-edit mode or with a new git worktree;
   blank worktree branch names become generated `task-...` branches.
 - Launch Codex, Claude, Antigravity, OpenCode, or custom CLI agent profiles in an
-  embedded terminal.
+  embedded terminal, with ACP-capable profiles also available from the task Chat tab.
 - Triage every agent across all projects from Mission Control, the default home:
   rows grouped by who needs you (needs-input, running, review, done) carry the
   agent's latest line and an inline action; click a row to open the task.
@@ -249,7 +249,7 @@ src/components/      Mission Control, board, task workspace, settings, GitHub/JI
                      panels, the icon rail, and the inline composer UI
 src/test/            Shared Vitest and Testing Library helpers
 native/src/          Rust Tauri backend: lib.rs (commands), db/ (SQLite),
-                     git_ops/ (git + worktrees), sessions/ (PTY runtime),
+                     git_ops/ (git + worktrees), sessions/ (PTY + ACP runtimes),
                      github.rs, jira*.rs, process_util.rs, models/
 native/src/sessions/agents/
                      Provider-specific Codex, Claude, Antigravity, OpenCode launch behavior

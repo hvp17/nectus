@@ -21,9 +21,10 @@ export function buildSidebarAgents(
   workspaces: Workspace[],
   liveLines: Record<number, string> = {},
   now = Date.now(),
+  chatWorkingTaskIds: Record<number, true> = {},
 ): SidebarAgents {
   const repoNames = new Map(repos.map((repo) => [repo.id, repo.name]));
-  const active = buildAgentRows(tasks, taskAttention, repoNames, liveLines, now).filter((row) =>
+  const active = buildAgentRows(tasks, taskAttention, repoNames, liveLines, now, chatWorkingTaskIds).filter((row) =>
     ACTIVE_AGENT_STATES.includes(row.state),
   );
 

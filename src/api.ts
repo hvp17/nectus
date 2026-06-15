@@ -8,9 +8,15 @@ import { isTauriRuntime } from "./lib/tauriRuntime";
 const seeds = () => import("./lib/browserSeed");
 import { isBrowserPreview } from "./lib/browserPreview";
 import type {
+  AcpProviderInfo,
   AgentProfile,
   AppSettings,
   AppSettingsInput,
+  ChatImageAttachment,
+  ChatCheckpoint,
+  ChatPermissionPolicy,
+  ChatSession,
+  ChatTranscript,
   GithubStatus,
   JiraProject,
   JiraRestStatus,
@@ -54,6 +60,57 @@ const browserFallbackProfiles: AgentProfile[] = [
     env: {},
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+  },
+];
+
+const browserFallbackAcpProviders: AcpProviderInfo[] = [
+  {
+    id: "claude",
+    agentKind: "claude",
+    displayName: "Claude Code",
+    launch: { command: "npx", args: ["-y", "@agentclientprotocol/claude-agent-acp"] },
+    capabilities: {
+      sessionLoad: "expected",
+      permissions: "expected",
+      images: "unknown",
+    },
+    maturity: "stable",
+  },
+  {
+    id: "opencode",
+    agentKind: "opencode",
+    displayName: "OpenCode",
+    launch: { command: "opencode", args: ["acp"] },
+    capabilities: {
+      sessionLoad: "unknown",
+      permissions: "unknown",
+      images: "unknown",
+    },
+    maturity: "preview",
+  },
+  {
+    id: "codex",
+    agentKind: "codex",
+    displayName: "Codex",
+    launch: { command: "codex-acp", args: [] },
+    capabilities: {
+      sessionLoad: "unknown",
+      permissions: "unknown",
+      images: "unknown",
+    },
+    maturity: "preview",
+  },
+  {
+    id: "antigravity",
+    agentKind: "antigravity",
+    displayName: "Antigravity",
+    launch: { command: "agy-acp", args: [] },
+    capabilities: {
+      sessionLoad: "unsupported",
+      permissions: "unsupported",
+      images: "unsupported",
+    },
+    maturity: "preview",
   },
 ];
 
@@ -340,6 +397,10 @@ export const api = {
     if (!isTauriRuntime()) return browserFallbackProfiles;
     return invoke("list_agent_profiles");
   },
+  async listAcpProviders(): Promise<AcpProviderInfo[]> {
+    if (!isTauriRuntime()) return browserFallbackAcpProviders;
+    return invoke("list_acp_providers");
+  },
   async upsertAgentProfile(
     profile: Partial<AgentProfile> & Pick<AgentProfile, "name" | "agentKind" | "command">,
   ): Promise<AgentProfile> {
@@ -358,6 +419,47 @@ export const api = {
     if (isBrowserPreview) return (await seeds()).seedReviewLoop(taskId);
     if (!isTauriRuntime()) return null;
     return invoke("get_task_review_loop", { taskId });
+  },
+  // ---- ACP embedded chat ----
+  async getTaskChat(taskId: number, agentProfileId?: number | null): Promise<ChatTranscript> {
+    if (isBrowserPreview) return (await seeds()).seedTaskChat(taskId, agentProfileId);
+    if (!isTauriRuntime()) return { session: null, messages: [] };
+    return invoke("get_task_chat", { taskId, agentProfileId: agentProfileId ?? null });
+  },
+  async acpStartChat(taskId: number, agentProfileId: number | null): Promise<ChatSession> {
+    return invoke("acp_start_chat", { taskId, agentProfileId });
+  },
+  async acpSendPrompt(
+    sessionId: string,
+    text: string,
+    images?: ChatImageAttachment[],
+  ): Promise<void> {
+    return invoke("acp_send_prompt", { sessionId, text, images: images ?? null });
+  },
+  async acpRespondPermission(
+    sessionId: string,
+    requestId: string,
+    optionId: string | null,
+  ): Promise<void> {
+    return invoke("acp_respond_permission", { sessionId, requestId, optionId });
+  },
+  async acpStopChat(sessionId: string): Promise<void> {
+    return invoke("acp_stop_chat", { sessionId });
+  },
+  async listChatPermissionPolicies(): Promise<ChatPermissionPolicy[]> {
+    if (!isTauriRuntime()) return [];
+    return invoke("list_chat_permission_policies");
+  },
+  async clearChatPermissionPolicies(): Promise<void> {
+    if (!isTauriRuntime()) return;
+    return invoke("clear_chat_permission_policies");
+  },
+  async listChatCheckpoints(chatSessionId: string): Promise<ChatCheckpoint[]> {
+    if (!isTauriRuntime()) return [];
+    return invoke("list_chat_checkpoints", { chatSessionId });
+  },
+  async restoreChatCheckpoint(checkpointId: string): Promise<void> {
+    return invoke("restore_chat_checkpoint", { checkpointId });
   },
   async listTaskReviewRuns(taskId: number): Promise<ReviewRun[]> {
     if (isBrowserPreview) return (await seeds()).seedReviewRuns(taskId);

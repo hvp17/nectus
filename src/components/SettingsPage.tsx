@@ -19,6 +19,7 @@ import { Switch } from "./ui/switch";
 import { SettingsOverviewItem } from "./settings/SettingsOverviewItem";
 import { UpdateCard } from "./settings/UpdateCard";
 import { DiagnosticsCard } from "./settings/DiagnosticsCard";
+import { ChatPermissionPoliciesCard } from "./settings/ChatPermissionPoliciesCard";
 import type { AppUpdateState } from "../hooks/useAppUpdate";
 import {
   createProfileDraft,
@@ -379,11 +380,24 @@ export function SettingsPage({
           </SettingsSection>
 
           <SettingsSection id="diagnostics" icon={<Activity />} title="Diagnostics">
-            <p className="m-0 text-[12.5px] leading-normal text-muted-foreground">
-              Live backend log (the same output Rust prints to the console). Streams while the app runs, so
-              you can see exactly where a hang occurs. Use Copy to share it when reporting an issue.
-            </p>
-            <DiagnosticsCard />
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Chat permission policies
+                </h3>
+                <ChatPermissionPoliciesCard />
+              </div>
+              <div className="flex flex-col gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Backend log
+                </h3>
+                <p className="m-0 text-[12.5px] leading-normal text-muted-foreground">
+                  Live backend log (the same output Rust prints to the console). Streams while the app runs,
+                  so you can see exactly where a hang occurs. Use Copy to share it when reporting an issue.
+                </p>
+                <DiagnosticsCard />
+              </div>
+            </div>
           </SettingsSection>
 
           <SettingsSection id="about" icon={<Info />} title="About & Updates">

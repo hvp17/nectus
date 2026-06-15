@@ -38,12 +38,16 @@ export const ACTIVE_AGENT_STATES: AgentState[] = ["needs_you", "running", "revie
 // through to "idle".
 const REVIEW_STATUSES = new Set<string>(Object.keys(REVIEW_LOOP_STATUS_LABELS));
 
-export function deriveAgentState(task: TaskSummary, attention?: TaskAttention): AgentState {
+export function deriveAgentState(
+  task: TaskSummary,
+  attention?: TaskAttention,
+  chatWorkingTaskIds: Record<number, true> = {},
+): AgentState {
   // The live push (`attention`) reflects an in-session "needs you" immediately;
   // `task.attention` is the backend-persisted copy that survives reload. Either
   // means the agent is blocked on the user.
   if (attention?.kind === "needs_input" || task.attention === "needs_input") return "needs_you";
-  if (task.activeSessionId) return "running";
+  if (task.activeSessionId || chatWorkingTaskIds[task.id]) return "running";
   if (task.reviewLoopStatus && REVIEW_STATUSES.has(task.reviewLoopStatus)) return "review";
   if (task.status === "review") return "review";
   if (task.status === "done") return "done";
@@ -102,11 +106,12 @@ export function buildAgentRows(
   repoNames: Map<number, string>,
   liveLines: Record<number, string> = {},
   now = Date.now(),
+  chatWorkingTaskIds: Record<number, true> = {},
 ): AgentRow[] {
   return tasks
     .map((task) => {
       const attention = getTaskAttention(taskAttention, task.id);
-      const state = deriveAgentState(task, attention);
+      const state = deriveAgentState(task, attention, chatWorkingTaskIds);
       // A running session's live activity line, when we have one, beats the
       // static "Session running" / label fallback.
       const liveLine = state === "running" ? liveLines[task.id]?.trim() : undefined;

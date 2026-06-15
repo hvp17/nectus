@@ -30,9 +30,19 @@ impl_enum_from_sql! {
     PrReviewStatus => "pr review status",
     PrReviewVerdict => "pr review verdict",
     PrReviewMode => "pr review mode",
-    AgentKind => "agent kind",
     ThemeMode => "theme mode",
     DensityMode => "density mode",
+}
+
+impl FromSql for AgentKind {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        let text = value.as_str()?;
+        if text == "gemini" {
+            return Ok(AgentKind::Antigravity);
+        }
+        text.parse()
+            .map_err(|_| FromSqlError::Other(format!("Unknown agent kind: {text}").into()))
+    }
 }
 
 pub(super) fn rows<T, I>(mapped: I) -> Result<Vec<T>, String>

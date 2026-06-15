@@ -50,6 +50,7 @@ pub struct SessionExitedEvent {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct SessionIdleEvent {
     pub session_id: String,
     pub task_id: i64,
@@ -59,6 +60,7 @@ pub struct SessionIdleEvent {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct SessionNeedsInputEvent {
     pub session_id: String,
     pub task_id: i64,

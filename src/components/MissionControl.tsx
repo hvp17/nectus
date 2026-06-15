@@ -13,6 +13,7 @@ import {
   type AgentState,
 } from "../lib/agentState";
 import { cn } from "../lib/utils";
+import { useAppStore } from "../store/appStore";
 import type { TaskAttention } from "../sessionAttention";
 import type { AgentKind, Repo, TaskSummary } from "../types";
 
@@ -45,9 +46,10 @@ export function MissionControl({
   const now = useMinuteNow();
 
   const repoNames = useMemo(() => new Map(repos.map((repo) => [repo.id, repo.name])), [repos]);
+  const chatWorkingTaskIds = useAppStore((s) => s.chatWorkingTaskIds);
   const rows = useMemo(
-    () => buildAgentRows(tasks, taskAttention, repoNames, liveLines, now),
-    [tasks, taskAttention, repoNames, liveLines, now],
+    () => buildAgentRows(tasks, taskAttention, repoNames, liveLines, now, chatWorkingTaskIds),
+    [tasks, taskAttention, repoNames, liveLines, now, chatWorkingTaskIds],
   );
   // Bucket once instead of re-filtering the row list for every pill and group.
   const rowsByState = useMemo(() => {
