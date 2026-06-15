@@ -101,6 +101,7 @@ describe("ChatPane", () => {
 
     renderWithProviders(<ChatPane taskId={42} agentProfileId={2} />);
 
+    await waitFor(() => expect(mockedApi.getTaskChat).toHaveBeenCalled());
     const input = await screen.findByTestId("chat-composer-input");
     fireEvent.change(input, { target: { value: "What is 2+2?" } });
     fireEvent.click(screen.getByTestId("chat-send"));

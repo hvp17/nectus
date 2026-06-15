@@ -321,17 +321,24 @@ Current behavior:
   provider descriptor yet (for example Antigravity or a custom profile), the
   composer is disabled with an inline callout that points the user back to the
   Terminal tab.
-- The transcript renders structured parts: text, reasoning, tool cards, file-edit
-  chips, permission requests, and plan entries. Permission cards support allow/reject
-  once or always; "always" choices persist in `chat_permission_policies` and are
-  auto-applied on future matching tool titles. File chips switch the workspace to
-  the Diff tab and select the matching changed file so its patch loads immediately.
+- The transcript is rendered with **Vercel AI Elements** (installed under
+  `src/components/ai-elements/`). A thin adapter in `src/lib/chat/renderChatParts.tsx`
+  maps the persisted `ChatPart` v1 model to those presentational primitives — the
+  ACP wire format, `session_chat` events, and TanStack Query cache are unchanged.
+  Structured parts render as: markdown text (`Message`), reasoning blocks, tool
+  cards, file-edit chips, permission confirmations, and plan collapsibles. The
+  conversation shell auto-scrolls; the composer uses `PromptInput` with optional
+  image attach, context-window % (`Context`), and a checkpoint restore menu.
+- Permission confirmations support allow/reject once or always; "always" choices
+  persist in `chat_permission_policies` and are auto-applied on future matching tool
+  titles. File chips switch the workspace to the Diff tab and select the matching
+  changed file so its patch loads immediately.
 - After each settled agent turn, Nectus snapshots `git rev-parse HEAD` into
   `chat_checkpoints`. The Chat tab exposes a Checkpoints menu to restore a prior
   turn with `git reset --hard` in the task worktree.
 - The composer queues follow-up prompts on the live ACP connection (serial user/agent
-  turns). When the agent emits usage updates, the Chat tab shows context-window %.
-  Image attach is available when the provider descriptor advertises image support.
+  turns). Image attach is available when the provider descriptor advertises image
+  support.
 - A **Resumable** badge appears when the persisted row has an `acp_session_id` and
   the provider supports `session/load`.
 - If the app reloads with a persisted chat session whose ACP process is no longer

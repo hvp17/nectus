@@ -1,8 +1,10 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
-import { renderWithTooltipProvider, resetAppStore } from "../test/testUtils";
-import type { AgentProfile, ChatTranscript, TaskSummary } from "../types";
+import { queryKeys } from "../queries/keys";
+import { createQueryClient } from "../queries/queryClient";
+import { renderWithProviders, resetAppStore } from "../test/testUtils";
+import type { AgentProfile, AcpProviderInfo, ChatTranscript, TaskSummary } from "../types";
 import { TaskWorkspace } from "./TaskWorkspace";
 
 vi.mock("../api", () => ({
@@ -14,6 +16,7 @@ vi.mock("../api", () => ({
     listAcpProviders: vi.fn(),
     acpRespondPermission: vi.fn(),
     acpStopChat: vi.fn(),
+    listChatCheckpoints: vi.fn().mockResolvedValue([]),
   },
 }));
 
@@ -77,8 +80,24 @@ const chat: ChatTranscript = {
   ],
 };
 
+const acpProviders: AcpProviderInfo[] = [
+  {
+    id: "codex",
+    agentKind: "codex",
+    displayName: "Codex",
+    launch: { command: "codex-acp", args: [] },
+    capabilities: { sessionLoad: "unknown", permissions: "unknown", images: "unknown" },
+    maturity: "preview",
+  },
+];
+
 function renderWorkspace() {
-  return renderWithTooltipProvider(
+  const queryClient = createQueryClient();
+  queryClient.setQueryData(queryKeys.agentProfiles(), [profile]);
+  queryClient.setQueryData(queryKeys.acpProviders(), acpProviders);
+  queryClient.setQueryData(queryKeys.task.chat(42, 1), chat);
+
+  return renderWithProviders(
     <TaskWorkspace
       task={task}
       agentProfiles={[profile]}
@@ -102,6 +121,7 @@ function renderWorkspace() {
       onSessionExit={vi.fn()}
       onSessionInput={vi.fn()}
     />,
+    { queryClient },
   );
 }
 
@@ -119,23 +139,15 @@ describe("TaskWorkspace chat-to-diff bridge", () => {
     mockedApi.taskDiffFile.mockResolvedValue("@@ -1 +1 @@\n-old\n+new");
     mockedApi.getTaskChat.mockResolvedValue(chat);
     mockedApi.listAgentProfiles.mockResolvedValue([profile]);
-    mockedApi.listAcpProviders.mockResolvedValue([
-      {
-        id: "codex",
-        agentKind: "codex",
-        displayName: "Codex",
-        launch: { command: "codex-acp", args: [] },
-        capabilities: { sessionLoad: "unknown", permissions: "unknown", images: "unknown" },
-        maturity: "preview",
-      },
-    ]);
+    mockedApi.listAcpProviders.mockResolvedValue(acpProviders);
   });
 
   it("opens the Diff tab with the clicked chat file selected", async () => {
     renderWorkspace();
 
     fireEvent.click(screen.getByLabelText("Show chat"));
-    fireEvent.click(await screen.findByTestId("chat-file-chip"));
+    await screen.findByTestId("chat-pane", {}, { timeout: 10_000 });
+    fireEvent.click(await screen.findByTestId("chat-file-chip", {}, { timeout: 10_000 }));
 
     expect(await screen.findByLabelText("Task diff")).toBeInTheDocument();
     await waitFor(() => expect(mockedApi.taskDiffFile).toHaveBeenCalledWith(42, "src/parser.rs", undefined));
