@@ -71,6 +71,7 @@ const browserFallbackAcpProviders: AcpProviderInfo[] = [
       permissions: "expected",
       images: "unknown",
     },
+    maturity: "stable",
   },
   {
     id: "opencode",
@@ -82,6 +83,7 @@ const browserFallbackAcpProviders: AcpProviderInfo[] = [
       permissions: "unknown",
       images: "unknown",
     },
+    maturity: "preview",
   },
   {
     id: "codex",
@@ -93,6 +95,19 @@ const browserFallbackAcpProviders: AcpProviderInfo[] = [
       permissions: "unknown",
       images: "unknown",
     },
+    maturity: "preview",
+  },
+  {
+    id: "antigravity",
+    agentKind: "antigravity",
+    displayName: "Antigravity",
+    launch: { command: "agy-acp", args: [] },
+    capabilities: {
+      sessionLoad: "unsupported",
+      permissions: "unsupported",
+      images: "unsupported",
+    },
+    maturity: "preview",
   },
 ];
 

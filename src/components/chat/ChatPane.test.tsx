@@ -77,6 +77,7 @@ describe("ChatPane", () => {
         displayName: "Claude Code",
         launch: { command: "npx", args: ["-y", "@agentclientprotocol/claude-agent-acp"] },
         capabilities: { sessionLoad: "expected", permissions: "expected", images: "unknown" },
+        maturity: "stable",
       },
       {
         id: "opencode",
@@ -84,6 +85,7 @@ describe("ChatPane", () => {
         displayName: "OpenCode",
         launch: { command: "opencode", args: ["acp"] },
         capabilities: { sessionLoad: "unknown", permissions: "unknown", images: "unknown" },
+        maturity: "preview",
       },
     ]);
   });
@@ -144,9 +146,9 @@ describe("ChatPane", () => {
     mockedApi.listAgentProfiles.mockResolvedValue([
       {
         id: 3,
-        name: "Antigravity",
-        agentKind: "antigravity",
-        command: "agy",
+        name: "Custom shell",
+        agentKind: "custom",
+        command: "my-agent",
         model: null,
         args: [],
         env: {},
@@ -158,7 +160,9 @@ describe("ChatPane", () => {
     renderWithProviders(<ChatPane taskId={42} agentProfileId={3} />);
 
     expect(await screen.findByText("ACP chat unavailable")).toBeInTheDocument();
-    expect(screen.getByText("Antigravity does not have an ACP provider descriptor yet. Use Terminal for this task.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Custom shell does not have an ACP provider descriptor yet. Use Terminal for this task."),
+    ).toBeInTheDocument();
     const input = screen.getByTestId("chat-composer-input");
     expect(input).toBeDisabled();
     expect(screen.getByTestId("chat-send")).toBeDisabled();

@@ -24,9 +24,9 @@ use agent_client_protocol::schema::{
 };
 
 use crate::models::{
-    AcpCapabilityState, AcpProviderCapabilities, AcpProviderInfo, AcpProviderLaunch, AgentKind,
-    ChatLocation, ChatMessage, ChatPart, ChatPermissionKind, ChatPermissionOption, ChatPlanEntry,
-    ChatPlanStatus, ChatRole, ChatToolStatus,
+    AcpCapabilityState, AcpProviderCapabilities, AcpProviderInfo, AcpProviderLaunch,
+    AcpProviderMaturity, AgentKind, ChatLocation, ChatMessage, ChatPart, ChatPermissionKind,
+    ChatPermissionOption, ChatPlanEntry, ChatPlanStatus, ChatRole, ChatToolStatus,
 };
 
 /// How to launch an agent CLI in ACP mode over stdio. The ACP axis of the
@@ -57,6 +57,7 @@ pub(crate) struct AcpProviderDescriptor {
     pub launch: AcpLaunch,
     pub executable_env: Option<AcpExecutableEnv>,
     pub capabilities: AcpProviderCapabilities,
+    pub maturity: AcpProviderMaturity,
 }
 
 /// The default ACP provider descriptor per agent (June 2026 ACP registry).
@@ -65,15 +66,17 @@ pub(crate) struct AcpProviderDescriptor {
 ///   mature; loadSession + permissions + plans) — the Phase 0 spike target.
 /// - OpenCode: native `acp` subcommand.
 /// - Codex: the `codex-acp` adapter binary.
-/// - Antigravity (`agy`): no ACP adapter yet (PTY-only) — no default launch.
+/// - Antigravity (`agy`): the community `agy-acp` adapter (preview — no native
+///   ACP mode yet; limited streaming and no `session/load`).
 /// - Custom: no default — ACP launch must be configured by the profile.
 pub(crate) fn acp_provider(kind: AgentKind) -> Option<AcpProviderDescriptor> {
-    let (display_name, command, args, executable_env, capabilities): (
+    let (display_name, command, args, executable_env, capabilities, maturity): (
         &str,
         &str,
         &[&str],
         Option<AcpExecutableEnv>,
         AcpProviderCapabilities,
+        AcpProviderMaturity,
     ) = match kind {
         AgentKind::Claude => (
             "Claude Code",
@@ -88,6 +91,7 @@ pub(crate) fn acp_provider(kind: AgentKind) -> Option<AcpProviderDescriptor> {
                 permissions: AcpCapabilityState::Expected,
                 images: AcpCapabilityState::Unknown,
             },
+            AcpProviderMaturity::Stable,
         ),
         AgentKind::OpenCode => (
             "OpenCode",
@@ -99,6 +103,7 @@ pub(crate) fn acp_provider(kind: AgentKind) -> Option<AcpProviderDescriptor> {
                 permissions: AcpCapabilityState::Unknown,
                 images: AcpCapabilityState::Unknown,
             },
+            AcpProviderMaturity::Preview,
         ),
         AgentKind::Codex => (
             "Codex",
@@ -110,8 +115,24 @@ pub(crate) fn acp_provider(kind: AgentKind) -> Option<AcpProviderDescriptor> {
                 permissions: AcpCapabilityState::Unknown,
                 images: AcpCapabilityState::Unknown,
             },
+            AcpProviderMaturity::Preview,
         ),
-        AgentKind::Antigravity | AgentKind::Custom => return None,
+        AgentKind::Antigravity => (
+            "Antigravity",
+            "agy-acp",
+            &[],
+            Some(AcpExecutableEnv {
+                var: "AGY_EXECUTABLE",
+                command: "agy",
+            }),
+            AcpProviderCapabilities {
+                session_load: AcpCapabilityState::Unsupported,
+                permissions: AcpCapabilityState::Unsupported,
+                images: AcpCapabilityState::Unsupported,
+            },
+            AcpProviderMaturity::Preview,
+        ),
+        AgentKind::Custom => return None,
     };
     Some(AcpProviderDescriptor {
         display_name,
@@ -121,26 +142,33 @@ pub(crate) fn acp_provider(kind: AgentKind) -> Option<AcpProviderDescriptor> {
         },
         executable_env,
         capabilities,
+        maturity,
     })
 }
 
 pub(crate) fn acp_provider_infos() -> Vec<AcpProviderInfo> {
-    [AgentKind::Claude, AgentKind::OpenCode, AgentKind::Codex]
-        .into_iter()
-        .filter_map(|kind| {
-            let descriptor = acp_provider(kind)?;
-            Some(AcpProviderInfo {
-                id: kind.as_str().to_string(),
-                agent_kind: kind,
-                display_name: descriptor.display_name.to_string(),
-                launch: AcpProviderLaunch {
-                    command: descriptor.launch.command,
-                    args: descriptor.launch.args,
-                },
-                capabilities: descriptor.capabilities,
-            })
+    [
+        AgentKind::Claude,
+        AgentKind::OpenCode,
+        AgentKind::Codex,
+        AgentKind::Antigravity,
+    ]
+    .into_iter()
+    .filter_map(|kind| {
+        let descriptor = acp_provider(kind)?;
+        Some(AcpProviderInfo {
+            id: kind.as_str().to_string(),
+            agent_kind: kind,
+            display_name: descriptor.display_name.to_string(),
+            launch: AcpProviderLaunch {
+                command: descriptor.launch.command,
+                args: descriptor.launch.args,
+            },
+            capabilities: descriptor.capabilities,
+            maturity: descriptor.maturity,
         })
-        .collect()
+    })
+    .collect()
 }
 
 /// One ordered segment of a turn. Ordering lives here; tool *state* lives in the
@@ -469,7 +497,10 @@ mod tests {
             acp_provider(AgentKind::Claude).unwrap().launch.command,
             "npx"
         );
-        assert!(acp_provider(AgentKind::Antigravity).is_none());
+        assert_eq!(
+            acp_provider(AgentKind::Antigravity).unwrap().launch.command,
+            "agy-acp"
+        );
         assert_eq!(
             acp_provider(AgentKind::OpenCode).unwrap().launch.args,
             vec!["acp"]
@@ -499,7 +530,9 @@ mod tests {
         assert_eq!(opencode.launch.args, vec!["acp"]);
         assert_eq!(opencode.executable_env, None);
 
-        assert!(acp_provider(AgentKind::Antigravity).is_none());
+        let antigravity = acp_provider(AgentKind::Antigravity).unwrap();
+        assert_eq!(antigravity.launch.command, "agy-acp");
+        assert_eq!(antigravity.maturity, AcpProviderMaturity::Preview);
         assert!(acp_provider(AgentKind::Custom).is_none());
     }
 
@@ -509,7 +542,12 @@ mod tests {
         let kinds: Vec<_> = infos.iter().map(|info| info.agent_kind).collect();
         assert_eq!(
             kinds,
-            vec![AgentKind::Claude, AgentKind::OpenCode, AgentKind::Codex]
+            vec![
+                AgentKind::Claude,
+                AgentKind::OpenCode,
+                AgentKind::Codex,
+                AgentKind::Antigravity,
+            ]
         );
 
         let claude = infos

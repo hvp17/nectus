@@ -53,6 +53,14 @@ pub enum AcpCapabilityState {
     Unsupported,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AcpProviderMaturity {
+    Stable,
+    Preview,
+    Limited,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AcpProviderCapabilities {
@@ -76,6 +84,7 @@ pub struct AcpProviderInfo {
     pub display_name: String,
     pub launch: AcpProviderLaunch,
     pub capabilities: AcpProviderCapabilities,
+    pub maturity: AcpProviderMaturity,
 }
 
 #[cfg(test)]

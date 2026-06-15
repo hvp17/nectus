@@ -218,6 +218,8 @@ export interface AgentProfile {
 
 export type AcpCapabilityState = "expected" | "unknown" | "unsupported";
 
+export type AcpProviderMaturity = "stable" | "preview" | "limited";
+
 export interface AcpProviderCapabilities {
   sessionLoad: AcpCapabilityState;
   permissions: AcpCapabilityState;
@@ -235,6 +237,7 @@ export interface AcpProviderInfo {
   displayName: string;
   launch: AcpProviderLaunch;
   capabilities: AcpProviderCapabilities;
+  maturity: AcpProviderMaturity;
 }
 
 export interface ReviewLoop {

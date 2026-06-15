@@ -172,7 +172,12 @@ describe("api", () => {
   it("returns ACP provider capability descriptors outside Tauri", async () => {
     const providers = await api.listAcpProviders();
 
-    expect(providers.map((provider) => provider.agentKind)).toEqual(["claude", "opencode", "codex"]);
+    expect(providers.map((provider) => provider.agentKind)).toEqual([
+      "claude",
+      "opencode",
+      "codex",
+      "antigravity",
+    ]);
     expect(providers[0]?.capabilities.sessionLoad).toBe("expected");
     expect(providers[0]?.launch.command).toBe("npx");
     expect(mockedInvoke).not.toHaveBeenCalled();
@@ -187,6 +192,7 @@ describe("api", () => {
         displayName: "Claude Code",
         launch: { command: "npx", args: ["-y", "@agentclientprotocol/claude-agent-acp"] },
         capabilities: { sessionLoad: "expected", permissions: "expected", images: "unknown" },
+        maturity: "stable",
       },
     ]);
 

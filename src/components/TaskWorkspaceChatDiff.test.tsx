@@ -126,6 +126,7 @@ describe("TaskWorkspace chat-to-diff bridge", () => {
         displayName: "Codex",
         launch: { command: "codex-acp", args: [] },
         capabilities: { sessionLoad: "unknown", permissions: "unknown", images: "unknown" },
+        maturity: "preview",
       },
     ]);
   });

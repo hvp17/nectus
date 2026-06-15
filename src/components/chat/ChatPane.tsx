@@ -7,6 +7,7 @@ import { useAppStore } from "../../store/appStore";
 import { useTaskChat } from "../../hooks/useTaskChat";
 import { AgentLogo } from "../AgentBrand";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
+import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
@@ -152,7 +153,14 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
           </SelectContent>
         </Select>
         {selectedAcpProvider && (
-          <span className="text-xs text-muted-foreground">{selectedAcpProvider.displayName} ACP</span>
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span>{selectedAcpProvider.displayName} ACP</span>
+            {selectedAcpProvider.maturity !== "stable" && (
+              <Badge variant="outline" className="h-5 px-1.5 text-[10px] capitalize">
+                {selectedAcpProvider.maturity}
+              </Badge>
+            )}
+          </span>
         )}
       </div>
       <form
