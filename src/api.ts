@@ -403,10 +403,10 @@ export const api = {
     return invoke("get_task_review_loop", { taskId });
   },
   // ---- ACP embedded chat ----
-  async getTaskChat(taskId: number): Promise<ChatTranscript> {
-    if (isBrowserPreview) return (await seeds()).seedTaskChat(taskId);
+  async getTaskChat(taskId: number, agentProfileId?: number | null): Promise<ChatTranscript> {
+    if (isBrowserPreview) return (await seeds()).seedTaskChat(taskId, agentProfileId);
     if (!isTauriRuntime()) return { session: null, messages: [] };
-    return invoke("get_task_chat", { taskId });
+    return invoke("get_task_chat", { taskId, agentProfileId: agentProfileId ?? null });
   },
   async acpStartChat(taskId: number, agentProfileId: number | null): Promise<ChatSession> {
     return invoke("acp_start_chat", { taskId, agentProfileId });

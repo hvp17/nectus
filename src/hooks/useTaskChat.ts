@@ -8,9 +8,10 @@ import type { ChatTranscript } from "../types";
  * channel in `useEventBridge` upserts streaming messages into this same cache
  * key, so the pane stays live without a separate store slice.
  */
-export function useTaskChat(taskId: number) {
+export function useTaskChat(taskId: number, agentProfileId?: number | null) {
   return useQuery<ChatTranscript>({
-    queryKey: queryKeys.task.chat(taskId),
-    queryFn: () => api.getTaskChat(taskId),
+    queryKey: queryKeys.task.chat(taskId, agentProfileId),
+    queryFn: () => api.getTaskChat(taskId, agentProfileId),
+    enabled: agentProfileId != null,
   });
 }

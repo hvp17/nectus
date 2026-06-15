@@ -375,7 +375,7 @@ index 1a2b3c4..5d6e7f8 100644
  }`,
 };
 
-export function seedTaskChat(taskId: number): ChatTranscript {
+export function seedTaskChat(taskId: number, _agentProfileId?: number | null): ChatTranscript {
   return {
     session: {
       id: "chat-preview",

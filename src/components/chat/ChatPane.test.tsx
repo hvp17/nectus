@@ -116,8 +116,13 @@ describe("ChatPane", () => {
   });
 
   it("starts a new ACP chat for the selected provider instead of sending to another profile's session", async () => {
-    const transcript: ChatTranscript = { session: staleSession, messages: [] };
-    mockedApi.getTaskChat.mockResolvedValue(transcript);
+    mockedApi.getTaskChat.mockImplementation((_taskId, profileId) =>
+      Promise.resolve(
+        profileId === 4
+          ? { session: null, messages: [] }
+          : { session: staleSession, messages: [] },
+      ),
+    );
     mockedApi.acpStartChat.mockResolvedValue(opencodeSession);
     mockedApi.acpSendPrompt.mockResolvedValue(undefined);
 

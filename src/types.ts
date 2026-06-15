@@ -513,6 +513,7 @@ export interface ChatTranscript {
 export interface ChatMessageEvent {
   sessionId: string;
   taskId: number;
+  agentProfileId?: number | null;
   message: ChatMessage;
   done: boolean;
 }

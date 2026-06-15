@@ -68,6 +68,25 @@ impl Database {
             .map_err(|error| format!("Failed to load chat session: {error}"))
     }
 
+    /// The most recent chat session for a task scoped to one agent profile.
+    pub fn latest_chat_session_for_profile(
+        &self,
+        task_id: i64,
+        agent_profile_id: i64,
+    ) -> Result<Option<ChatSession>, String> {
+        self.conn
+            .query_row(
+                "SELECT id, task_id, agent_profile_id, acp_session_id, cwd, created_at, updated_at
+                 FROM chat_sessions
+                 WHERE task_id = ?1 AND agent_profile_id = ?2
+                 ORDER BY created_at DESC, id DESC LIMIT 1",
+                params![task_id, agent_profile_id],
+                chat_session_from_row,
+            )
+            .optional()
+            .map_err(|error| format!("Failed to load chat session: {error}"))
+    }
+
     /// Append a settled message, or update it in place if a row with the same id
     /// already exists (re-settling a turn). Position is assigned monotonically
     /// within the session.
@@ -148,9 +167,18 @@ impl Database {
         Ok(messages)
     }
 
-    /// The replayable transcript for a task: latest session + its settled messages.
-    pub fn chat_transcript(&self, task_id: i64) -> Result<ChatTranscript, String> {
-        let session = self.latest_chat_session(task_id)?;
+    /// The replayable transcript for a task. When `agent_profile_id` is set, the
+    /// latest session for that profile is returned; otherwise the latest session
+    /// across all profiles (legacy callers).
+    pub fn chat_transcript(
+        &self,
+        task_id: i64,
+        agent_profile_id: Option<i64>,
+    ) -> Result<ChatTranscript, String> {
+        let session = match agent_profile_id {
+            Some(profile_id) => self.latest_chat_session_for_profile(task_id, profile_id)?,
+            None => self.latest_chat_session(task_id)?,
+        };
         let messages = match &session {
             Some(session) => self.list_chat_messages(&session.id)?,
             None => Vec::new(),
@@ -199,7 +227,11 @@ mod tests {
     fn chat_transcript_round_trips_messages_in_order() {
         let (db, _dir, task_id) = db_with_task();
         let session = db.create_chat_session(task_id, None, "/work").unwrap();
-        assert!(db.chat_transcript(task_id).unwrap().messages.is_empty());
+        assert!(db
+            .chat_transcript(task_id, None)
+            .unwrap()
+            .messages
+            .is_empty());
 
         let user_message = ChatMessage {
             id: "u1".into(),
@@ -233,9 +265,46 @@ mod tests {
         db.append_chat_message(&session.id, task_id, &agent_message)
             .unwrap();
 
-        let transcript = db.chat_transcript(task_id).unwrap();
+        let transcript = db.chat_transcript(task_id, None).unwrap();
         assert_eq!(transcript.session.unwrap().id, session.id);
         assert_eq!(transcript.messages, vec![user_message, agent_message]);
+    }
+
+    #[test]
+    fn chat_transcript_scopes_to_agent_profile() {
+        let (db, _dir, task_id) = db_with_task();
+        let claude = db.create_chat_session(task_id, Some(1), "/work").unwrap();
+        let opencode = db.create_chat_session(task_id, Some(2), "/work").unwrap();
+        let claude_message = ChatMessage {
+            id: "claude-1".into(),
+            role: ChatRole::Agent,
+            parts: vec![ChatPart::Text {
+                text: "from claude".into(),
+            }],
+            created_at: "t0".into(),
+            completed_at: Some("t0".into()),
+        };
+        let opencode_message = ChatMessage {
+            id: "opencode-1".into(),
+            role: ChatRole::Agent,
+            parts: vec![ChatPart::Text {
+                text: "from opencode".into(),
+            }],
+            created_at: "t1".into(),
+            completed_at: Some("t1".into()),
+        };
+        db.append_chat_message(&claude.id, task_id, &claude_message)
+            .unwrap();
+        db.append_chat_message(&opencode.id, task_id, &opencode_message)
+            .unwrap();
+
+        let claude_transcript = db.chat_transcript(task_id, Some(1)).unwrap();
+        assert_eq!(claude_transcript.session.unwrap().id, claude.id);
+        assert_eq!(claude_transcript.messages, vec![claude_message]);
+
+        let opencode_transcript = db.chat_transcript(task_id, Some(2)).unwrap();
+        assert_eq!(opencode_transcript.session.unwrap().id, opencode.id);
+        assert_eq!(opencode_transcript.messages, vec![opencode_message]);
     }
 
     #[test]

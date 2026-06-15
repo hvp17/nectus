@@ -185,6 +185,7 @@ pub struct ChatTranscript {
 pub struct ChatMessageEvent {
     pub session_id: String,
     pub task_id: i64,
+    pub agent_profile_id: Option<i64>,
     pub message: ChatMessage,
     pub done: bool,
 }

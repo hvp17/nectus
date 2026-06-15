@@ -196,15 +196,30 @@ export function useEventBridge() {
   useTauriEvent<ChatMessageEvent>(
     "session_chat",
     (payload) => {
-      queryClient.setQueryData<ChatTranscript>(queryKeys.task.chat(payload.taskId), (current) => {
-        const base: ChatTranscript = current ?? { session: null, messages: [] };
-        const index = base.messages.findIndex((message) => message.id === payload.message.id);
-        const messages =
-          index >= 0
-            ? base.messages.map((message, i) => (i === index ? payload.message : message))
-            : [...base.messages, payload.message];
-        return { ...base, messages };
-      });
+      queryClient.setQueryData<ChatTranscript>(
+        queryKeys.task.chat(payload.taskId, payload.agentProfileId ?? null),
+        (current) => {
+          const base: ChatTranscript = current ?? { session: null, messages: [] };
+          const index = base.messages.findIndex((message) => message.id === payload.message.id);
+          const messages =
+            index >= 0
+              ? base.messages.map((message, i) => (i === index ? payload.message : message))
+              : [...base.messages, payload.message];
+          const session =
+            base.session?.id === payload.sessionId
+              ? base.session
+              : base.session ?? {
+                  id: payload.sessionId,
+                  taskId: payload.taskId,
+                  agentProfileId: payload.agentProfileId ?? null,
+                  acpSessionId: null,
+                  cwd: "",
+                  createdAt: payload.message.createdAt,
+                  updatedAt: payload.message.createdAt,
+                };
+          return { session, messages };
+        },
+      );
     },
     { onError: handleSubscriptionError },
   );

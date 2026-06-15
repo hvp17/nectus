@@ -26,7 +26,8 @@ export interface ChatPaneProps {
  * and wires permission answers back to the running ACP session.
  */
 export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) {
-  const chat = useTaskChat(taskId);
+  const [selectedAgentProfileId, setSelectedAgentProfileId] = useState<number | null>(agentProfileId ?? null);
+  const chat = useTaskChat(taskId, selectedAgentProfileId);
   const agentProfilesQuery = useAgentProfilesQuery();
   const agentProfiles = agentProfilesQuery.data ?? [];
   const acpProvidersQuery = useAcpProvidersQuery();
@@ -34,17 +35,12 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
   const queryClient = useQueryClient();
   const messages = chat.data?.messages ?? [];
   const chatSession = chat.data?.session ?? null;
-  const sessionId = chatSession?.id ?? null;
-  const [selectedAgentProfileId, setSelectedAgentProfileId] = useState<number | null>(agentProfileId ?? null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const selectedAgentProfile = agentProfiles.find((profile) => profile.id === selectedAgentProfileId);
   const selectedAcpProvider = acpProviders.find((provider) => provider.agentKind === selectedAgentProfile?.agentKind);
   const selectedProfileIdForStart = selectedAgentProfile?.id ?? selectedAgentProfileId;
-  const selectedSessionId =
-    chatSession && (chatSession.agentProfileId ?? null) === (selectedProfileIdForStart ?? null)
-      ? chatSession.id
-      : null;
+  const activeSessionId = chatSession?.id ?? null;
   const unsupportedAgent = Boolean(selectedAgentProfile && acpProvidersQuery.isSuccess && !selectedAcpProvider);
   const missingAgent = Boolean(agentProfilesQuery.isSuccess && !selectedAgentProfile);
 
@@ -59,26 +55,28 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
 
   const onRespondPermission = useCallback(
     (requestId: string, optionId: string) => {
-      if (!sessionId) return;
+      if (!activeSessionId) return;
       void api
-        .acpRespondPermission(sessionId, requestId, optionId)
+        .acpRespondPermission(activeSessionId, requestId, optionId)
         .catch((error) => useAppStore.getState().setMessage(String(error)));
     },
-    [sessionId],
+    [activeSessionId],
   );
 
   const send = useCallback(async () => {
     const text = draft.trim();
-    if (!text || busy || unsupportedAgent || missingAgent) return;
+    if (!text || busy || unsupportedAgent || missingAgent || selectedProfileIdForStart == null) return;
     setBusy(true);
     try {
       const startChat = async () => {
-        const session = await api.acpStartChat(taskId, selectedProfileIdForStart ?? null);
-        await queryClient.invalidateQueries({ queryKey: queryKeys.task.chat(taskId) });
+        const session = await api.acpStartChat(taskId, selectedProfileIdForStart);
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.task.chat(taskId, selectedProfileIdForStart),
+        });
         return session.id;
       };
 
-      let id = selectedSessionId;
+      let id = activeSessionId;
       if (!id) {
         id = await startChat();
       }
@@ -95,7 +93,16 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
     } finally {
       setBusy(false);
     }
-  }, [draft, busy, unsupportedAgent, missingAgent, selectedSessionId, taskId, selectedProfileIdForStart, queryClient]);
+  }, [
+    draft,
+    busy,
+    unsupportedAgent,
+    missingAgent,
+    activeSessionId,
+    taskId,
+    selectedProfileIdForStart,
+    queryClient,
+  ]);
 
   const composerDisabled = unsupportedAgent || missingAgent;
 
@@ -170,19 +177,19 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
           placeholder={
             unsupportedAgent
               ? "ACP chat is unavailable for this agent"
-              : selectedSessionId
+              : activeSessionId
                 ? "Message the agent… (⌘↵ to send)"
                 : "Start a chat with the agent…"
           }
           data-testid="chat-composer-input"
         />
         <div className="flex shrink-0 flex-col gap-1">
-          {sessionId && (
+          {activeSessionId && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => void api.acpStopChat(sessionId).catch(() => undefined)}
+              onClick={() => void api.acpStopChat(activeSessionId).catch(() => undefined)}
             >
               Stop
             </Button>
@@ -193,7 +200,7 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
             disabled={busy || composerDisabled || !draft.trim()}
             data-testid="chat-send"
           >
-            {selectedSessionId ? "Send" : "Start"}
+            {activeSessionId ? "Send" : "Start"}
           </Button>
         </div>
       </form>

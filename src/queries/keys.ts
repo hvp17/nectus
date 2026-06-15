@@ -38,7 +38,8 @@ export const queryKeys = {
     reviewLoop: (taskId: number) => ["task", "review-loop", taskId] as const,
     reviewRuns: (taskId: number) => ["task", "review-runs", taskId] as const,
     /** ACP chat transcript for a task; kept live by the `session_chat` event bridge. */
-    chat: (taskId: number) => ["task", "chat", taskId] as const,
+    chat: (taskId: number, agentProfileId?: number | null) =>
+      ["task", "chat", taskId, agentProfileId ?? null] as const,
   },
 
   prReviews: {

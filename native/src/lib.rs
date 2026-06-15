@@ -1340,8 +1340,12 @@ async fn acp_stop_chat(session_id: String, state: State<'_, AppState>) -> AppRes
 }
 
 #[tauri::command]
-fn get_task_chat(task_id: i64, state: State<'_, AppState>) -> AppResult<ChatTranscript> {
-    app_result(state.db.lock().chat_transcript(task_id))
+fn get_task_chat(
+    task_id: i64,
+    agent_profile_id: Option<i64>,
+    state: State<'_, AppState>,
+) -> AppResult<ChatTranscript> {
+    app_result(state.db.lock().chat_transcript(task_id, agent_profile_id))
 }
 
 pub fn run() {

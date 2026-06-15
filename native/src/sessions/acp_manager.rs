@@ -133,9 +133,11 @@ impl AcpManager {
         let provider = acp_provider(agent.agent_kind)
             .ok_or_else(|| format!("{} does not support ACP chat", agent.name))?;
 
-        // Reuse an already-live session for this task rather than spawning a
-        // second agent (guards against double-start / double-click).
-        let existing = db.lock().latest_chat_session(task.id)?;
+        // Reuse an already-live session for this task/profile rather than
+        // spawning a second agent (guards against double-start / double-click).
+        let existing = db
+            .lock()
+            .latest_chat_session_for_profile(task.id, agent.id)?;
         if let Some(existing) = &existing {
             if self.sessions.lock().await.contains_key(&existing.id) {
                 return Ok(existing.clone());
@@ -195,6 +197,7 @@ impl AcpManager {
             app,
             db,
             task_id: task.id,
+            agent_profile_id: Some(agent.id),
             chat_session_id: chat_session_id.clone(),
             cwd,
             resume_acp_session_id,
@@ -277,6 +280,7 @@ struct Connection {
     app: AppHandle,
     db: Arc<DbMutex<Database>>,
     task_id: i64,
+    agent_profile_id: Option<i64>,
     chat_session_id: String,
     cwd: String,
     resume_acp_session_id: Option<String>,
@@ -291,6 +295,7 @@ async fn run_connection(connection: Connection) {
         app,
         db,
         task_id,
+        agent_profile_id,
         chat_session_id,
         cwd,
         resume_acp_session_id,
@@ -307,6 +312,7 @@ async fn run_connection(connection: Connection) {
                 &app,
                 &chat_session_id,
                 task_id,
+                agent_profile_id,
                 &format!("Failed to launch agent: {error}"),
             );
             sessions.lock().await.remove(&chat_session_id);
@@ -322,10 +328,12 @@ async fn run_connection(connection: Connection) {
     // the originals).
     let note_app = app.clone();
     let note_session = chat_session_id.clone();
+    let note_profile_id = agent_profile_id;
     let note_current = current.clone();
     let perm_app = app.clone();
     let perm_db = db.clone();
     let perm_session = chat_session_id.clone();
+    let perm_profile_id = agent_profile_id;
     let outer_app = app.clone();
     let outer_session = chat_session_id.clone();
 
@@ -342,6 +350,7 @@ async fn run_connection(connection: Connection) {
                         ChatMessageEvent {
                             session_id: note_session.clone(),
                             task_id,
+                            agent_profile_id: note_profile_id,
                             message,
                             done: false,
                         },
@@ -366,6 +375,7 @@ async fn run_connection(connection: Connection) {
                     ChatMessageEvent {
                         session_id: perm_session.clone(),
                         task_id,
+                        agent_profile_id: perm_profile_id,
                         message,
                         done: false,
                     },
@@ -377,6 +387,7 @@ async fn run_connection(connection: Connection) {
                 let db = perm_db.clone();
                 let app = perm_app.clone();
                 let session = perm_session.clone();
+                let profile_id = perm_profile_id;
                 // Defer the response: awaiting the user's choice here would stall
                 // the dispatch loop. cx.spawn keeps the loop processing updates.
                 cx.spawn(async move {
@@ -404,7 +415,7 @@ async fn run_connection(connection: Connection) {
                         created_at: now(),
                         completed_at: Some(now()),
                     };
-                    persist_and_emit(&db, &app, &session, task_id, &resolved);
+                    persist_and_emit(&db, &app, &session, task_id, profile_id, &resolved);
                     let outcome = match choice {
                         Some(option_id) => RequestPermissionOutcome::Selected(
                             SelectedPermissionOutcome::new(option_id),
@@ -465,7 +476,14 @@ async fn run_connection(connection: Connection) {
                     created_at: now(),
                     completed_at: Some(now()),
                 };
-                persist_and_emit(&db, &app, &chat_session_id, task_id, &user_message);
+                persist_and_emit(
+                    &db,
+                    &app,
+                    &chat_session_id,
+                    task_id,
+                    agent_profile_id,
+                    &user_message,
+                );
 
                 *current.lock().await =
                     Some(TurnAccumulator::new(Uuid::new_v4().to_string(), now()));
@@ -485,13 +503,21 @@ async fn run_connection(connection: Connection) {
                     .filter(|accumulator| !accumulator.is_empty())
                     .map(|accumulator| accumulator.snapshot(Some(now())));
                 if let Some(message) = settled {
-                    persist_and_emit(&db, &app, &chat_session_id, task_id, &message);
+                    persist_and_emit(
+                        &db,
+                        &app,
+                        &chat_session_id,
+                        task_id,
+                        agent_profile_id,
+                        &message,
+                    );
                 }
                 if let Err(error) = prompt_result {
                     emit_error(
                         &app,
                         &chat_session_id,
                         task_id,
+                        agent_profile_id,
                         &format!("Prompt failed: {error}"),
                     );
                 }
@@ -505,6 +531,7 @@ async fn run_connection(connection: Connection) {
             &outer_app,
             &outer_session,
             task_id,
+            agent_profile_id,
             &format!("ACP connection error: {error}"),
         );
     }
@@ -544,6 +571,7 @@ fn persist_and_emit(
     app: &AppHandle,
     session_id: &str,
     task_id: i64,
+    agent_profile_id: Option<i64>,
     message: &ChatMessage,
 ) {
     if let Err(error) = db.lock().append_chat_message(session_id, task_id, message) {
@@ -559,6 +587,7 @@ fn persist_and_emit(
         ChatMessageEvent {
             session_id: session_id.to_string(),
             task_id,
+            agent_profile_id,
             message: message.clone(),
             done: true,
         },
@@ -566,12 +595,19 @@ fn persist_and_emit(
 }
 
 /// Surface a connection-level error to the UI as a settled agent text message.
-fn emit_error(app: &AppHandle, session_id: &str, task_id: i64, message: &str) {
+fn emit_error(
+    app: &AppHandle,
+    session_id: &str,
+    task_id: i64,
+    agent_profile_id: Option<i64>,
+    message: &str,
+) {
     let _ = app.emit(
         "session_chat",
         ChatMessageEvent {
             session_id: session_id.to_string(),
             task_id,
+            agent_profile_id,
             message: ChatMessage {
                 id: format!("error-{}", Uuid::new_v4()),
                 role: ChatRole::Agent,
