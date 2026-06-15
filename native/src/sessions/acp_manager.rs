@@ -33,11 +33,26 @@ use uuid::Uuid;
 use super::acp::{acp_launch, permission_part, TurnAccumulator};
 use crate::db::Database;
 use crate::models::{
-    AgentProfile, ChatMessage, ChatMessageEvent, ChatPart, ChatRole, ChatSession, Repo, TaskSummary,
+    AgentKind, AgentProfile, ChatMessage, ChatMessageEvent, ChatPart, ChatRole, ChatSession, Repo,
+    TaskSummary,
 };
 
 fn now() -> String {
     chrono::Utc::now().to_rfc3339()
+}
+
+/// Whether `name` is a valid POSIX env-var identifier. `AcpAgent::from_args`
+/// treats a leading argv token as an env assignment only if its name matches
+/// this shape and otherwise stops env parsing and takes the token as the command
+/// — so a login-shell pair with a non-identifier key (e.g. a `BASH_FUNC_x%%`
+/// export) must be dropped before it corrupts the spawned argv.
+fn is_env_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) if first.is_ascii_alphabetic() || first == '_' => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 /// A pending permission map: our request id → the channel that delivers the
@@ -103,17 +118,39 @@ impl AcpManager {
         let permissions: PendingPermissions = Arc::new(Mutex::new(HashMap::new()));
 
         // Build the ACP argv as discrete tokens for `AcpAgent::from_args` (no
-        // shell re-split). A leading `PATH=…` token is parsed into the child env,
-        // and the binary is resolved to an absolute path — both halves of the
-        // macOS GUI-PATH rule, so npx/node-based adapters resolve and `node`
-        // execs (otherwise: `env: node: No such file or directory`, exit 127).
+        // shell re-split): leading `NAME=value` tokens become the child env, then
+        // the resolved binary, then its args. This satisfies all three halves of
+        // the macOS GUI-spawn rule (CLAUDE.md → Spawning External CLIs): the
+        // binary is resolved to an absolute path; `PATH` is the augmented path so
+        // nested `node` execs (else `env: node: No such file or directory`, exit
+        // 127); and the login-shell env is seeded so provider keys
+        // (ANTHROPIC_API_KEY/OPENAI_API_KEY, HOME, …) reach the agent from a
+        // Finder-launched .app (else "API key is missing"). `PATH` is appended
+        // after the login env (which excludes it) so the augmented one wins.
         let path_env = crate::process_util::augmented_path()
             .to_string_lossy()
             .into_owned();
         let resolved = crate::process_util::resolve_executable(&launch.command)
             .to_string_lossy()
             .into_owned();
-        let mut argv = vec![format!("PATH={path_env}"), resolved];
+        let mut argv: Vec<String> = crate::process_util::login_shell_environment()
+            .into_iter()
+            .filter(|(key, value)| is_env_name(key) && !value.contains('\n'))
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect();
+        argv.push(format!("PATH={path_env}"));
+        // Upstream workaround: @anthropic-ai/claude-agent-sdk extracts and spawns
+        // its *bundled* Bun-compiled `claude`, which fails to exec on macOS with
+        // "spawn Unknown system error -88" (EBADMACHO). The adapter honors
+        // CLAUDE_CODE_EXECUTABLE, so point it at the user's installed `claude`.
+        // Drop this once the bundled binary execs cleanly.
+        if matches!(agent.agent_kind, AgentKind::Claude) {
+            let claude = crate::process_util::resolve_executable("claude")
+                .to_string_lossy()
+                .into_owned();
+            argv.push(format!("CLAUDE_CODE_EXECUTABLE={claude}"));
+        }
+        argv.push(resolved);
         argv.extend(launch.args);
 
         let abort = tauri::async_runtime::spawn(run_connection(Connection {
