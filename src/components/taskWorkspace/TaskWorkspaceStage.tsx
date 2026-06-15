@@ -1,10 +1,11 @@
-import { Fragment, lazy, Suspense, type ReactNode } from "react";
+import { Fragment, lazy, Suspense, useCallback, type ReactNode } from "react";
 import {
   ArrowLeft,
   Check,
   ChevronRight,
   FileDiff,
   LoaderCircle,
+  MessagesSquare,
   RotateCw,
   ScanEye,
   TerminalSquare,
@@ -31,7 +32,7 @@ import { EditableTaskTitle } from "./EditableTaskTitle";
 import { TaskStatusBadges } from "./TaskStatusBadges";
 import { TaskTerminalLauncher } from "./TaskTerminalLauncher";
 
-type StageTab = "terminal" | "diff" | "review";
+type StageTab = "terminal" | "diff" | "review" | "chat";
 type TaskDiff = ReturnType<typeof useTaskDiff>;
 
 const TaskDiffView = lazy(() => import("../TaskDiffView").then((module) => ({ default: module.TaskDiffView })));
@@ -39,6 +40,7 @@ const ReviewTerminalPane = lazy(() =>
   import("../ReviewTerminalPane").then((module) => ({ default: module.ReviewTerminalPane })),
 );
 const TerminalPane = lazy(() => import("../../TerminalPane").then((module) => ({ default: module.TerminalPane })));
+const ChatPane = lazy(() => import("../chat/ChatPane").then((module) => ({ default: module.ChatPane })));
 
 /// One step of the task workflow ribbon. `action` is the inline control rendered
 /// only while the step is current.
@@ -109,6 +111,9 @@ export function TaskWorkspaceStage({
   onResumeSession,
   onStartSession,
 }: TaskWorkspaceStageProps) {
+  // Stable so ChatPane's memoized parts aren't re-rendered on every chat snapshot.
+  const handleOpenChatFile = useCallback(() => onStageTabChange("diff"), [onStageTabChange]);
+
   return (
     <main className="flex min-h-0 min-w-0 flex-col gap-3 bg-gradient-to-b from-muted/25 to-transparent to-30% p-4">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -216,6 +221,10 @@ export function TaskWorkspaceStage({
                   />
                 )}
               </ToggleGroupItem>
+              <ToggleGroupItem value="chat" aria-label="Show chat" className="h-7 gap-1.5 px-2.5 text-xs">
+                <MessagesSquare className="size-3.5" aria-hidden="true" />
+                Chat
+              </ToggleGroupItem>
             </ToggleGroup>
 
             {(diffTotals.additions > 0 || diffTotals.deletions > 0) && (
@@ -250,7 +259,9 @@ export function TaskWorkspaceStage({
 
         <div className="min-h-0 flex-1 overflow-hidden">
           <Suspense fallback={<div className="h-full" />}>
-            {stageTab === "diff" ? (
+            {stageTab === "chat" ? (
+              <ChatPane taskId={task.id} agentProfileId={task.agentProfileId} onOpenFile={handleOpenChatFile} />
+            ) : stageTab === "diff" ? (
               <TaskDiffView
                 summary={diff.summary}
                 loading={diff.loading}

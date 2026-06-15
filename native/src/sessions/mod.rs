@@ -15,6 +15,8 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
+mod acp;
+mod acp_manager;
 mod agents;
 mod claude;
 mod codex;
@@ -33,6 +35,8 @@ mod reviewer_output;
 mod terminal_io;
 mod tmux;
 mod verdict;
+
+pub use acp_manager::AcpManager;
 
 use agents::configure_agent_command;
 use claude::{cleanup_event_sink, spawn_claude_event_watcher};

@@ -3,6 +3,7 @@
 //! the type.
 
 mod agent;
+mod chat;
 mod error;
 mod github;
 mod jira;
@@ -13,6 +14,7 @@ mod task;
 mod workspace;
 
 pub use agent::*;
+pub use chat::*;
 pub use error::*;
 pub use github::*;
 pub use jira::*;

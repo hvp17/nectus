@@ -12,16 +12,16 @@ mod sessions;
 use crate::db::Database;
 use crate::models::{
     AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings, AppSettingsInput,
-    GithubStatus, JiraProject, JiraRestStatus, JiraSprintLane, JiraStatusDef, JiraTransition,
-    JiraWorkItem, PrReview, PrReviewMode, PrReviewRun, PullRequestInfo, Repo, ReviewLoop,
-    ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskDiffSummary, TaskStatus,
-    TaskSummary, Workspace,
+    ChatSession, ChatTranscript, GithubStatus, JiraProject, JiraRestStatus, JiraSprintLane,
+    JiraStatusDef, JiraTransition, JiraWorkItem, PrReview, PrReviewMode, PrReviewRun,
+    PullRequestInfo, Repo, ReviewLoop, ReviewRun, Session, SessionExitedEvent,
+    SessionOutputSnapshot, TaskDiffSummary, TaskStatus, TaskSummary, Workspace,
 };
-use crate::sessions::SessionManager;
+use crate::sessions::{AcpManager, SessionManager};
 use parking_lot::Mutex;
 use std::path::Path;
 use std::sync::Arc;
-use tauri::{Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
@@ -29,6 +29,7 @@ use tracing_subscriber::EnvFilter;
 pub struct AppState {
     db: Arc<Mutex<Database>>,
     sessions: SessionManager,
+    acp: AcpManager,
 }
 
 fn app_result<T>(result: Result<T, String>) -> AppResult<T> {
@@ -1280,6 +1281,64 @@ fn session_output_snapshot(
     app_result(state.sessions.output_snapshot(&session_id))
 }
 
+// ---- ACP embedded chat -------------------------------------------------------
+
+#[tauri::command]
+async fn acp_start_chat(
+    app: AppHandle,
+    task_id: i64,
+    agent_profile_id: Option<i64>,
+    state: State<'_, AppState>,
+) -> AppResult<ChatSession> {
+    let context = {
+        let db = state.db.lock();
+        task_session_context(&db, task_id, agent_profile_id)?
+    };
+    let db = state.db.clone();
+    let acp = state.acp.clone();
+    app_result(
+        acp.start(app, db, context.task, context.repo, context.agent)
+            .await,
+    )
+}
+
+#[tauri::command]
+async fn acp_send_prompt(
+    session_id: String,
+    text: String,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    // The connection loop persists+emits the user turn (in order with the agent
+    // reply) — this just queues the prompt.
+    let acp = state.acp.clone();
+    app_result(acp.prompt(&session_id, text).await)
+}
+
+#[tauri::command]
+async fn acp_respond_permission(
+    session_id: String,
+    request_id: String,
+    option_id: Option<String>,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    let acp = state.acp.clone();
+    app_result(
+        acp.respond_permission(&session_id, &request_id, option_id)
+            .await,
+    )
+}
+
+#[tauri::command]
+async fn acp_stop_chat(session_id: String, state: State<'_, AppState>) -> AppResult<()> {
+    let acp = state.acp.clone();
+    app_result(acp.stop(&session_id).await)
+}
+
+#[tauri::command]
+fn get_task_chat(task_id: i64, state: State<'_, AppState>) -> AppResult<ChatTranscript> {
+    app_result(state.db.lock().chat_transcript(task_id))
+}
+
 pub fn run() {
     init_tracing();
 
@@ -1315,6 +1374,7 @@ pub fn run() {
             app.manage(AppState {
                 db: Arc::new(Mutex::new(db)),
                 sessions,
+                acp: AcpManager::new(),
             });
             if !live.is_empty() {
                 let state = app.state::<AppState>();
@@ -1334,6 +1394,9 @@ pub fn run() {
                     state
                         .sessions
                         .stop_all(window.app_handle(), state.db.clone());
+                    // Abort any live ACP chat sessions so agent children don't
+                    // outlive the app.
+                    state.acp.stop_all_blocking();
                 }
             }
         })
@@ -1397,7 +1460,12 @@ pub fn run() {
             send_session_input,
             submit_session_input,
             session_output_snapshot,
-            get_diagnostic_logs
+            get_diagnostic_logs,
+            acp_start_chat,
+            acp_send_prompt,
+            acp_respond_permission,
+            acp_stop_chat,
+            get_task_chat
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

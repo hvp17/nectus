@@ -11,6 +11,8 @@ import type {
   AgentProfile,
   AppSettings,
   AppSettingsInput,
+  ChatSession,
+  ChatTranscript,
   GithubStatus,
   JiraProject,
   JiraRestStatus,
@@ -358,6 +360,28 @@ export const api = {
     if (isBrowserPreview) return (await seeds()).seedReviewLoop(taskId);
     if (!isTauriRuntime()) return null;
     return invoke("get_task_review_loop", { taskId });
+  },
+  // ---- ACP embedded chat ----
+  async getTaskChat(taskId: number): Promise<ChatTranscript> {
+    if (isBrowserPreview) return (await seeds()).seedTaskChat(taskId);
+    if (!isTauriRuntime()) return { session: null, messages: [] };
+    return invoke("get_task_chat", { taskId });
+  },
+  async acpStartChat(taskId: number, agentProfileId: number | null): Promise<ChatSession> {
+    return invoke("acp_start_chat", { taskId, agentProfileId });
+  },
+  async acpSendPrompt(sessionId: string, text: string): Promise<void> {
+    return invoke("acp_send_prompt", { sessionId, text });
+  },
+  async acpRespondPermission(
+    sessionId: string,
+    requestId: string,
+    optionId: string | null,
+  ): Promise<void> {
+    return invoke("acp_respond_permission", { sessionId, requestId, optionId });
+  },
+  async acpStopChat(sessionId: string): Promise<void> {
+    return invoke("acp_stop_chat", { sessionId });
   },
   async listTaskReviewRuns(taskId: number): Promise<ReviewRun[]> {
     if (isBrowserPreview) return (await seeds()).seedReviewRuns(taskId);

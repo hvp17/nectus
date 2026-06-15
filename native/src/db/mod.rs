@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use uuid::Uuid;
 
 mod agent_profiles;
+mod chat;
 mod pr_reviews;
 mod review_loops;
 mod rows;

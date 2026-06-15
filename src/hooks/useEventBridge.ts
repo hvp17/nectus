@@ -13,6 +13,8 @@ import {
 import { upsertById, upsertNewestById } from "../lib/listState";
 import { useTauriEvent } from "./useTauriEvent";
 import type {
+  ChatMessageEvent,
+  ChatTranscript,
   PrReview,
   PrReviewRun,
   PrReviewUpdatedEvent,
@@ -184,6 +186,25 @@ export function useEventBridge() {
         useAppStore.getState().setMessage(`PR review failed: ${errorDetail}`);
         void notifySessionEvent("PR review failed", errorDetail);
       }
+    },
+    { onError: handleSubscriptionError },
+  );
+
+  // ACP chat: each event is the full current message snapshot (upsert by id);
+  // `done` marks it settled. Routed into the task's chat transcript cache so
+  // `useTaskChat` reflects the live stream without a separate store slice.
+  useTauriEvent<ChatMessageEvent>(
+    "session_chat",
+    (payload) => {
+      queryClient.setQueryData<ChatTranscript>(queryKeys.task.chat(payload.taskId), (current) => {
+        const base: ChatTranscript = current ?? { session: null, messages: [] };
+        const index = base.messages.findIndex((message) => message.id === payload.message.id);
+        const messages =
+          index >= 0
+            ? base.messages.map((message, i) => (i === index ? payload.message : message))
+            : [...base.messages, payload.message];
+        return { ...base, messages };
+      });
     },
     { onError: handleSubscriptionError },
   );

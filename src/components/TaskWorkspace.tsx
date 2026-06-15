@@ -156,7 +156,7 @@ export function TaskWorkspace({
 
   const diff = useTaskDiff(task?.id, activeRepoId);
   const { refresh: refreshDiff } = diff;
-  const [stageTab, setStageTab] = useState<"terminal" | "diff" | "review">("terminal");
+  const [stageTab, setStageTab] = useState<"terminal" | "diff" | "review" | "chat">("terminal");
   const refreshDiffForOpenTab = useEffectEvent(() => {
     void refreshDiff();
   });

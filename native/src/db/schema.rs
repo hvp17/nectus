@@ -193,6 +193,40 @@ impl Database {
 
                 CREATE INDEX IF NOT EXISTS pr_review_runs_review_idx
                 ON pr_review_runs(pr_review_id, id);
+
+                -- Embedded agent chat (ACP). A chat session is one connection to
+                -- an agent CLI for a task; acp_session_id is the agent's own
+                -- session id, kept for session/load resume where supported.
+                CREATE TABLE IF NOT EXISTS chat_sessions (
+                  id TEXT PRIMARY KEY,
+                  task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                  agent_profile_id INTEGER REFERENCES agent_profiles(id),
+                  acp_session_id TEXT,
+                  cwd TEXT NOT NULL,
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS chat_sessions_task_idx
+                ON chat_sessions(task_id, id);
+
+                -- One settled message turn. `parts_json` is the normalized
+                -- ChatPart[] (opaque to SQL); `schema_version` records the part
+                -- model version so a future shape change can migrate old rows.
+                CREATE TABLE IF NOT EXISTS chat_messages (
+                  id TEXT PRIMARY KEY,
+                  chat_session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+                  task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                  role TEXT NOT NULL,
+                  parts_json TEXT NOT NULL,
+                  schema_version INTEGER NOT NULL DEFAULT 1,
+                  position INTEGER NOT NULL,
+                  created_at TEXT NOT NULL,
+                  completed_at TEXT
+                );
+
+                CREATE INDEX IF NOT EXISTS chat_messages_session_idx
+                ON chat_messages(chat_session_id, position);
                 ",
             )
             .map_err(|error| format!("Failed to create database schema: {error}"))?;

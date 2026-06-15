@@ -407,3 +407,91 @@ export interface SessionActivityEvent {
   taskId: number;
   line: string;
 }
+
+// ---------------------------------------------------------------------------
+// Embedded agent chat (ACP). The normalized part model — the single contract
+// between the Rust ACP normalization layer and the chat renderers. Mirrors
+// `native/src/models/chat.rs`; keep the two in sync (schema version 1).
+// ---------------------------------------------------------------------------
+
+export type ChatRole = "user" | "agent";
+export type ChatToolStatus = "pending" | "running" | "completed" | "failed";
+export type ChatPermissionKind = "allow_once" | "allow_always" | "reject_once" | "reject_always";
+export type ChatPlanStatus = "pending" | "in_progress" | "completed";
+
+/** A source location a tool touched — the bridge from a tool card to the diff pane. */
+export interface ChatLocation {
+  path: string;
+  line?: number | null;
+}
+
+/** One selectable answer to a permission request. */
+export interface ChatPermissionOption {
+  optionId: string;
+  label: string;
+  kind: ChatPermissionKind;
+}
+
+/** One entry of an agent's plan/todo list. */
+export interface ChatPlanEntry {
+  content: string;
+  status: ChatPlanStatus;
+  priority?: string | null;
+}
+
+/** One normalized, renderable part of a turn (discriminated on `type`). */
+export type ChatPart =
+  | { type: "text"; text: string }
+  | { type: "reasoning"; text: string }
+  | {
+      type: "tool";
+      toolCallId: string;
+      title: string;
+      kind?: string | null;
+      status: ChatToolStatus;
+      locations: ChatLocation[];
+      rawInput?: unknown;
+      output?: string | null;
+    }
+  | { type: "file_edit"; path: string; additions: number; deletions: number; diff?: string | null }
+  | { type: "permission"; requestId: string; title: string; options: ChatPermissionOption[] }
+  | { type: "plan"; entries: ChatPlanEntry[] };
+
+/** One message turn: an ordered list of parts plus lifecycle timestamps. */
+export interface ChatMessage {
+  id: string;
+  role: ChatRole;
+  parts: ChatPart[];
+  createdAt: string;
+  /** Set when the turn is settled (no further parts will arrive). */
+  completedAt?: string | null;
+}
+
+/** A persisted chat session for a task; `acpSessionId` powers `session/load` resume. */
+export interface ChatSession {
+  id: string;
+  taskId: number;
+  agentProfileId?: number | null;
+  acpSessionId?: string | null;
+  cwd: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The replayable transcript for a task: latest session + its settled messages. */
+export interface ChatTranscript {
+  session?: ChatSession | null;
+  messages: ChatMessage[];
+}
+
+/**
+ * Pushed on every chat update. Carries the full current message snapshot
+ * (upsert by `message.id`); `done` flips it to settled. Snapshot-per-update is
+ * the v1 wire format — deltas are a later optimization behind this same event.
+ */
+export interface ChatMessageEvent {
+  sessionId: string;
+  taskId: number;
+  message: ChatMessage;
+  done: boolean;
+}
