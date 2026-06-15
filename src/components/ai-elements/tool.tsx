@@ -25,7 +25,7 @@ export type ToolProps = ComponentProps<typeof Collapsible>;
 
 export const Tool = ({ className, ...props }: ToolProps) => (
   <Collapsible
-    className={cn("group not-prose mb-4 w-full rounded-md border", className)}
+    className={cn("group not-prose mb-1 w-full rounded-md border", className)}
     {...props}
   />
 );
@@ -54,6 +54,16 @@ const statusLabels: Record<ToolPart["state"], string> = {
   "output-error": "Error",
 };
 
+const statusLabelsCompact: Record<ToolPart["state"], string> = {
+  "approval-requested": "Awaiting",
+  "approval-responded": "Responded",
+  "input-available": "Running",
+  "input-streaming": "Pending",
+  "output-available": "Done",
+  "output-denied": "Denied",
+  "output-error": "Error",
+};
+
 const statusIcons: Record<ToolPart["state"], ReactNode> = {
   "approval-requested": <ClockIcon className="size-4 text-yellow-600" />,
   "approval-responded": <CheckCircleIcon className="size-4 text-blue-600" />,
@@ -64,12 +74,29 @@ const statusIcons: Record<ToolPart["state"], ReactNode> = {
   "output-error": <XCircleIcon className="size-4 text-red-600" />,
 };
 
-export const getStatusBadge = (status: ToolPart["state"]) => (
-  <Badge className="gap-1.5 rounded-full text-xs" variant="secondary">
-    {statusIcons[status]}
-    {statusLabels[status]}
-  </Badge>
-);
+export const getStatusBadge = (status: ToolPart["state"], compact = false) => {
+  const label = compact ? statusLabelsCompact[status] : statusLabels[status];
+  const iconOnly =
+    compact &&
+    (status === "output-available" ||
+      status === "output-error" ||
+      status === "output-denied" ||
+      status === "input-available" ||
+      status === "input-streaming");
+
+  return (
+    <Badge
+      className={cn(
+        "shrink-0 gap-1 rounded-full text-xs",
+        iconOnly ? "size-5 justify-center p-0" : "gap-1.5",
+      )}
+      variant="secondary"
+    >
+      {statusIcons[status]}
+      {iconOnly ? <span className="sr-only">{label}</span> : label}
+    </Badge>
+  );
+};
 
 export const ToolHeader = ({
   className,
@@ -77,25 +104,58 @@ export const ToolHeader = ({
   type,
   state,
   toolName,
+  compact = false,
+  expandable = true,
   ...props
-}: ToolHeaderProps) => {
+}: ToolHeaderProps & { compact?: boolean; expandable?: boolean }) => {
   const derivedName =
     type === "dynamic-tool" ? toolName : type.split("-").slice(1).join("-");
 
-  return (
-    <CollapsibleTrigger
-      className={cn(
-        "flex w-full items-center justify-between gap-4 p-3",
-        className
-      )}
-      {...props}
-    >
-      <div className="flex items-center gap-2">
-        <WrenchIcon className="size-4 text-muted-foreground" />
-        <span className="font-medium text-sm">{title ?? derivedName}</span>
-        {getStatusBadge(state)}
+  const row = (
+    <>
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <WrenchIcon
+          className={cn("shrink-0 text-muted-foreground", compact ? "size-3" : "size-4")}
+        />
+        <span
+          className={cn(
+            "truncate font-medium",
+            compact ? "text-xs" : "text-sm",
+          )}
+          title={title ?? derivedName}
+        >
+          {title ?? derivedName}
+        </span>
+        {getStatusBadge(state, compact)}
       </div>
-      <ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+      {expandable && (
+        <ChevronDownIcon
+          className={cn(
+            "shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180",
+            compact ? "size-3" : "size-4",
+          )}
+        />
+      )}
+    </>
+  );
+
+  const triggerClass = cn(
+    "flex w-full items-center justify-between gap-2",
+    compact ? "px-2 py-1" : "gap-4 p-3",
+    className,
+  );
+
+  if (!expandable) {
+    return (
+      <div className={triggerClass} data-testid="tool-header-static">
+        {row}
+      </div>
+    );
+  }
+
+  return (
+    <CollapsibleTrigger className={triggerClass} {...props}>
+      {row}
     </CollapsibleTrigger>
   );
 };
@@ -105,7 +165,7 @@ export type ToolContentProps = ComponentProps<typeof CollapsibleContent>;
 export const ToolContent = ({ className, ...props }: ToolContentProps) => (
   <CollapsibleContent
     className={cn(
-      "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 space-y-4 p-4 text-popover-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in",
+      "space-y-3 border-t px-3 py-2 text-popover-foreground outline-none data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 data-[state=closed]:animate-out data-[state=open]:animate-in",
       className
     )}
     {...props}

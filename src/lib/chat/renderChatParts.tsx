@@ -33,6 +33,7 @@ import {
   ToolOutput,
 } from "@/components/ai-elements/tool";
 import { cn } from "@/lib/utils";
+import { formatToolDisplayName } from "@/lib/chat/toolDisplayName";
 import type {
   ChatMessage,
   ChatPart,
@@ -111,11 +112,14 @@ export function renderChatPart({
       const state = mapToolState(part.status);
       const hasBody =
         part.locations.length > 0 || Boolean(part.output) || part.rawInput != null;
+      const displayName = formatToolDisplayName(part.title, part.kind);
       return (
-        <Tool key={partKey} className="mb-2" data-status={part.status} data-testid="chat-tool" defaultOpen={false}>
+        <Tool key={partKey} data-status={part.status} data-testid="chat-tool" defaultOpen={false}>
           <ToolHeader
+            compact
+            expandable={hasBody}
             state={state}
-            title={part.title}
+            title={displayName}
             toolName={part.kind ?? "tool"}
             type="dynamic-tool"
           />
