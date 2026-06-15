@@ -9,7 +9,8 @@
 
 use super::{now, Database};
 use crate::models::{
-    ChatMessage, ChatPart, ChatRole, ChatSession, ChatTranscript, CHAT_PART_SCHEMA_VERSION,
+    ChatCheckpoint, ChatMessage, ChatPart, ChatPermissionPolicy, ChatPermissionPolicyKind,
+    ChatRole, ChatSession, ChatTranscript, CHAT_PART_SCHEMA_VERSION,
 };
 use rusqlite::{params, OptionalExtension};
 use uuid::Uuid;
@@ -185,6 +186,165 @@ impl Database {
         };
         Ok(ChatTranscript { session, messages })
     }
+
+    pub fn remember_chat_permission_policy(
+        &self,
+        tool_title: &str,
+        kind: ChatPermissionPolicyKind,
+    ) -> Result<(), String> {
+        let timestamp = now();
+        self.conn
+            .execute(
+                "INSERT INTO chat_permission_policies (tool_title, policy_kind, created_at)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(tool_title) DO UPDATE SET
+                   policy_kind = excluded.policy_kind,
+                   created_at = excluded.created_at",
+                params![tool_title, permission_policy_kind_as_str(kind), timestamp],
+            )
+            .map_err(|error| format!("Failed to save chat permission policy: {error}"))?;
+        Ok(())
+    }
+
+    pub fn chat_permission_policy(
+        &self,
+        tool_title: &str,
+    ) -> Result<Option<ChatPermissionPolicyKind>, String> {
+        self.conn
+            .query_row(
+                "SELECT policy_kind FROM chat_permission_policies WHERE tool_title = ?1",
+                params![tool_title],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(|error| format!("Failed to load chat permission policy: {error}"))
+            .map(|value| value.and_then(|kind| parse_permission_policy_kind(&kind)))
+    }
+
+    pub fn list_chat_permission_policies(&self) -> Result<Vec<ChatPermissionPolicy>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT tool_title, policy_kind, created_at FROM chat_permission_policies ORDER BY created_at",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })
+            .map_err(|error| error.to_string())?;
+        let mut policies = Vec::new();
+        for row in rows {
+            let (tool_title, kind, created_at) = row.map_err(|error| error.to_string())?;
+            let Some(kind) = parse_permission_policy_kind(&kind) else {
+                continue;
+            };
+            policies.push(ChatPermissionPolicy {
+                tool_title,
+                kind,
+                created_at,
+            });
+        }
+        Ok(policies)
+    }
+
+    pub fn clear_chat_permission_policies(&self) -> Result<(), String> {
+        self.conn
+            .execute("DELETE FROM chat_permission_policies", [])
+            .map_err(|error| format!("Failed to clear chat permission policies: {error}"))?;
+        Ok(())
+    }
+
+    pub fn insert_chat_checkpoint(
+        &self,
+        chat_session_id: &str,
+        task_id: i64,
+        message_id: &str,
+        git_commit: &str,
+        label: &str,
+    ) -> Result<ChatCheckpoint, String> {
+        let id = Uuid::new_v4().to_string();
+        let timestamp = now();
+        self.conn
+            .execute(
+                "INSERT INTO chat_checkpoints
+                   (id, chat_session_id, task_id, message_id, git_commit, label, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    id,
+                    chat_session_id,
+                    task_id,
+                    message_id,
+                    git_commit,
+                    label,
+                    timestamp
+                ],
+            )
+            .map_err(|error| format!("Failed to save chat checkpoint: {error}"))?;
+        Ok(ChatCheckpoint {
+            id,
+            chat_session_id: chat_session_id.to_string(),
+            task_id,
+            message_id: message_id.to_string(),
+            git_commit: git_commit.to_string(),
+            label: label.to_string(),
+            created_at: timestamp,
+        })
+    }
+
+    pub fn list_chat_checkpoints(
+        &self,
+        chat_session_id: &str,
+    ) -> Result<Vec<ChatCheckpoint>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, chat_session_id, task_id, message_id, git_commit, label, created_at
+                 FROM chat_checkpoints WHERE chat_session_id = ?1 ORDER BY created_at",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = stmt
+            .query_map(params![chat_session_id], |row| {
+                Ok(ChatCheckpoint {
+                    id: row.get(0)?,
+                    chat_session_id: row.get(1)?,
+                    task_id: row.get(2)?,
+                    message_id: row.get(3)?,
+                    git_commit: row.get(4)?,
+                    label: row.get(5)?,
+                    created_at: row.get(6)?,
+                })
+            })
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn chat_checkpoint_by_id(&self, id: &str) -> Result<Option<ChatCheckpoint>, String> {
+        self.conn
+            .query_row(
+                "SELECT id, chat_session_id, task_id, message_id, git_commit, label, created_at
+                 FROM chat_checkpoints WHERE id = ?1",
+                params![id],
+                |row| {
+                    Ok(ChatCheckpoint {
+                        id: row.get(0)?,
+                        chat_session_id: row.get(1)?,
+                        task_id: row.get(2)?,
+                        message_id: row.get(3)?,
+                        git_commit: row.get(4)?,
+                        label: row.get(5)?,
+                        created_at: row.get(6)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|error| format!("Failed to load chat checkpoint: {error}"))
+    }
 }
 
 fn chat_session_from_row(row: &rusqlite::Row) -> rusqlite::Result<ChatSession> {
@@ -197,6 +357,21 @@ fn chat_session_from_row(row: &rusqlite::Row) -> rusqlite::Result<ChatSession> {
         created_at: row.get(5)?,
         updated_at: row.get(6)?,
     })
+}
+
+fn permission_policy_kind_as_str(kind: ChatPermissionPolicyKind) -> &'static str {
+    match kind {
+        ChatPermissionPolicyKind::AllowAlways => "allow_always",
+        ChatPermissionPolicyKind::RejectAlways => "reject_always",
+    }
+}
+
+fn parse_permission_policy_kind(value: &str) -> Option<ChatPermissionPolicyKind> {
+    match value {
+        "allow_always" => Some(ChatPermissionPolicyKind::AllowAlways),
+        "reject_always" => Some(ChatPermissionPolicyKind::RejectAlways),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -347,5 +522,32 @@ mod tests {
                 .as_deref(),
             Some("acp-xyz")
         );
+    }
+
+    #[test]
+    fn permission_policy_round_trips() {
+        let (db, _dir, _task_id) = db_with_task();
+        db.remember_chat_permission_policy("Bash", ChatPermissionPolicyKind::AllowAlways)
+            .unwrap();
+        assert_eq!(
+            db.chat_permission_policy("Bash").unwrap(),
+            Some(ChatPermissionPolicyKind::AllowAlways)
+        );
+        let policies = db.list_chat_permission_policies().unwrap();
+        assert_eq!(policies.len(), 1);
+        assert_eq!(policies[0].tool_title, "Bash");
+        db.clear_chat_permission_policies().unwrap();
+        assert!(db.list_chat_permission_policies().unwrap().is_empty());
+    }
+
+    #[test]
+    fn chat_checkpoint_lists_by_session() {
+        let (db, _dir, task_id) = db_with_task();
+        let session = db.create_chat_session(task_id, None, "/work").unwrap();
+        let checkpoint = db
+            .insert_chat_checkpoint(&session.id, task_id, "msg-1", "abc123", "First turn")
+            .unwrap();
+        let listed = db.list_chat_checkpoints(&session.id).unwrap();
+        assert_eq!(listed, vec![checkpoint]);
     }
 }

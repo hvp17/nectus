@@ -19,10 +19,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use agent_client_protocol::schema::{
-    AgentCapabilities, ContentBlock, InitializeRequest, LoadSessionRequest, NewSessionRequest,
-    PromptRequest, ProtocolVersion, RequestPermissionOutcome, RequestPermissionRequest,
-    RequestPermissionResponse, SelectedPermissionOutcome, SessionId, SessionNotification,
-    TextContent,
+    AgentCapabilities, ContentBlock, ImageContent, InitializeRequest, LoadSessionRequest,
+    NewSessionRequest, PermissionOptionKind, PromptRequest, ProtocolVersion,
+    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
+    SelectedPermissionOutcome, SessionId, SessionNotification, SessionUpdate, TextContent,
 };
 use agent_client_protocol::{AcpAgent, Agent, Client, ConnectionTo};
 use parking_lot::Mutex as DbMutex;
@@ -31,11 +31,23 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::{mpsc, oneshot, Mutex};
 use uuid::Uuid;
 
-use super::acp::{acp_provider, permission_part, AcpLaunch, TurnAccumulator};
-use crate::db::Database;
-use crate::models::{
-    AgentProfile, ChatMessage, ChatMessageEvent, ChatPart, ChatRole, ChatSession, Repo, TaskSummary,
+use super::acp::{
+    acp_provider, permission_option_id_for_kinds, permission_option_kind_for_id, permission_part,
+    permission_request_title, AcpLaunch, TurnAccumulator,
 };
+use crate::db::Database;
+use crate::git_ops;
+use crate::models::{
+    AgentProfile, ChatImageAttachment, ChatMessage, ChatMessageEvent, ChatPart,
+    ChatPermissionPolicyKind, ChatRole, ChatSession, ChatUsageEvent, Repo, TaskSummary,
+};
+
+/// A queued user prompt (text plus optional image blocks).
+#[derive(Debug, Clone)]
+struct PromptPayload {
+    text: String,
+    images: Vec<ChatImageAttachment>,
+}
 
 fn now() -> String {
     chrono::Utc::now().to_rfc3339()
@@ -104,7 +116,7 @@ pub struct AcpManager {
 }
 
 struct AcpSessionHandle {
-    prompt_tx: mpsc::UnboundedSender<String>,
+    prompt_tx: mpsc::UnboundedSender<PromptPayload>,
     permissions: PendingPermissions,
     /// Aborting this drops the connection future, which drops the agent's
     /// `ChildGuard` and kills the child — the only way to stop a session that is
@@ -157,7 +169,7 @@ impl AcpManager {
         let chat_session_id = chat_session.id.clone();
         let resume_acp_session_id = chat_session.acp_session_id.clone();
 
-        let (prompt_tx, prompt_rx) = mpsc::unbounded_channel::<String>();
+        let (prompt_tx, prompt_rx) = mpsc::unbounded_channel::<PromptPayload>();
         let permissions: PendingPermissions = Arc::new(Mutex::new(HashMap::new()));
 
         // Build the ACP argv as discrete tokens for `AcpAgent::from_args` (no
@@ -221,14 +233,19 @@ impl AcpManager {
 
     /// Queue a prompt to a running session. The connection loop persists+emits
     /// the user turn, sends it as `session/prompt`, and streams the response.
-    pub async fn prompt(&self, session_id: &str, text: String) -> Result<(), String> {
+    pub async fn prompt(
+        &self,
+        session_id: &str,
+        text: String,
+        images: Vec<ChatImageAttachment>,
+    ) -> Result<(), String> {
         let sessions = self.sessions.lock().await;
         let handle = sessions
             .get(session_id)
             .ok_or_else(|| "No such chat session".to_string())?;
         handle
             .prompt_tx
-            .send(text)
+            .send(PromptPayload { text, images })
             .map_err(|_| "Chat session has ended".to_string())
     }
 
@@ -286,7 +303,7 @@ struct Connection {
     resume_acp_session_id: Option<String>,
     argv: Vec<String>,
     permissions: PendingPermissions,
-    prompt_rx: mpsc::UnboundedReceiver<String>,
+    prompt_rx: mpsc::UnboundedReceiver<PromptPayload>,
     sessions: SessionMap,
 }
 
@@ -342,6 +359,19 @@ async fn run_connection(connection: Connection) {
         .name("nectus-desktop")
         .on_receive_notification(
             async move |notification: SessionNotification, _cx| {
+                if let SessionUpdate::UsageUpdate(usage) = &notification.update {
+                    let _ = note_app.emit(
+                        "session_chat_usage",
+                        ChatUsageEvent {
+                            session_id: note_session.clone(),
+                            task_id,
+                            agent_profile_id: note_profile_id,
+                            used: usage.used,
+                            size: usage.size,
+                        },
+                    );
+                    return Ok(());
+                }
                 if let Some(accumulator) = note_current.lock().await.as_mut() {
                     accumulator.apply(&notification.update);
                     let message = accumulator.snapshot(None);
@@ -363,8 +393,56 @@ async fn run_connection(connection: Connection) {
         .on_receive_request(
             async move |request: RequestPermissionRequest, responder, cx| {
                 let request_id = Uuid::new_v4().to_string();
+                let perm_message_id = format!("perm-{request_id}");
+                let tool_title = permission_request_title(&request);
+                let auto_option_id = {
+                    let guard = perm_db.lock();
+                    match guard.chat_permission_policy(&tool_title).ok().flatten() {
+                        Some(ChatPermissionPolicyKind::AllowAlways) => {
+                            permission_option_id_for_kinds(
+                                &request,
+                                &[
+                                    PermissionOptionKind::AllowAlways,
+                                    PermissionOptionKind::AllowOnce,
+                                ],
+                            )
+                        }
+                        Some(ChatPermissionPolicyKind::RejectAlways) => {
+                            permission_option_id_for_kinds(
+                                &request,
+                                &[
+                                    PermissionOptionKind::RejectAlways,
+                                    PermissionOptionKind::RejectOnce,
+                                ],
+                            )
+                        }
+                        None => None,
+                    }
+                };
+
+                if let Some(option_id) = auto_option_id {
+                    let resolved = resolved_permission_message(
+                        Some(&option_id),
+                        &request,
+                        &perm_message_id,
+                    );
+                    persist_and_emit(
+                        &perm_db,
+                        &perm_app,
+                        &perm_session,
+                        task_id,
+                        perm_profile_id,
+                        &resolved,
+                    );
+                    let outcome = RequestPermissionOutcome::Selected(
+                        SelectedPermissionOutcome::new(option_id),
+                    );
+                    let _ = responder.respond(RequestPermissionResponse::new(outcome));
+                    return Ok(());
+                }
+
                 let message = ChatMessage {
-                    id: format!("perm-{request_id}"),
+                    id: perm_message_id.clone(),
                     role: ChatRole::Agent,
                     parts: vec![permission_part(&request_id, &request)],
                     created_at: now(),
@@ -382,39 +460,40 @@ async fn run_connection(connection: Connection) {
                 );
                 let (sender, receiver) = oneshot::channel::<Option<String>>();
                 permissions.lock().await.insert(request_id.clone(), sender);
-                // FnMut closure: clone per-call for the spawned task (can't move
-                // captured state out across calls).
                 let db = perm_db.clone();
                 let app = perm_app.clone();
                 let session = perm_session.clone();
                 let profile_id = perm_profile_id;
-                // Defer the response: awaiting the user's choice here would stall
-                // the dispatch loop. cx.spawn keeps the loop processing updates.
+                let tool_title = tool_title.clone();
+                let perm_message_id = perm_message_id.clone();
                 cx.spawn(async move {
                     let choice = receiver.await.ok().flatten();
-                    // Resolve the live permission card to a settled note (same id,
-                    // so the frontend upsert replaces it and a refetch keeps it).
-                    let resolved_text = match &choice {
-                        Some(option_id) => {
-                            let label = request
-                                .options
-                                .iter()
-                                .find(|option| option.option_id.0.to_string() == *option_id)
-                                .map(|option| option.name.clone())
-                                .unwrap_or_else(|| option_id.clone());
-                            format!("✓ Permission granted: {label}")
+                    if let Some(ref option_id) = choice {
+                        if let Some(kind) = permission_option_kind_for_id(&request, option_id) {
+                            use crate::models::ChatPermissionKind;
+                            let policy = match kind {
+                                ChatPermissionKind::AllowAlways => {
+                                    Some(ChatPermissionPolicyKind::AllowAlways)
+                                }
+                                ChatPermissionKind::RejectAlways => {
+                                    Some(ChatPermissionPolicyKind::RejectAlways)
+                                }
+                                _ => None,
+                            };
+                            if let Some(policy) = policy {
+                                if let Err(error) =
+                                    db.lock().remember_chat_permission_policy(&tool_title, policy)
+                                {
+                                    tracing::warn!(?error, tool_title, "failed to save permission policy");
+                                }
+                            }
                         }
-                        None => "✗ Permission denied".to_string(),
-                    };
-                    let resolved = ChatMessage {
-                        id: format!("perm-{request_id}"),
-                        role: ChatRole::Agent,
-                        parts: vec![ChatPart::Text {
-                            text: resolved_text,
-                        }],
-                        created_at: now(),
-                        completed_at: Some(now()),
-                    };
+                    }
+                    let resolved = resolved_permission_message(
+                        choice.as_deref(),
+                        &request,
+                        &perm_message_id,
+                    );
                     persist_and_emit(&db, &app, &session, task_id, profile_id, &resolved);
                     let outcome = match choice {
                         Some(option_id) => RequestPermissionOutcome::Selected(
@@ -422,8 +501,6 @@ async fn run_connection(connection: Connection) {
                         ),
                         None => RequestPermissionOutcome::Cancelled,
                     };
-                    // A failed respond only means the connection is already gone;
-                    // don't escalate it into a fatal task error.
                     let _ = responder.respond(RequestPermissionResponse::new(outcome));
                     Ok(())
                 })?;
@@ -464,7 +541,9 @@ async fn run_connection(connection: Connection) {
                 }
             };
 
-            while let Some(prompt_text) = prompt_rx.recv().await {
+            while let Some(prompt_payload) = prompt_rx.recv().await {
+                let prompt_text = prompt_payload.text;
+                let prompt_images = prompt_payload.images;
                 // Persist + emit the user turn on the serial loop so each
                 // user/agent pair lands adjacently and in order.
                 let user_message = ChatMessage {
@@ -487,10 +566,17 @@ async fn run_connection(connection: Connection) {
 
                 *current.lock().await =
                     Some(TurnAccumulator::new(Uuid::new_v4().to_string(), now()));
+                let mut content_blocks = vec![ContentBlock::Text(TextContent::new(prompt_text))];
+                for image in prompt_images {
+                    content_blocks.push(ContentBlock::Image(ImageContent::new(
+                        image.data,
+                        image.mime_type,
+                    )));
+                }
                 let prompt_result = cx
                     .send_request(PromptRequest::new(
                         acp_session_id.clone(),
-                        vec![ContentBlock::Text(TextContent::new(prompt_text))],
+                        content_blocks,
                     ))
                     .block_task()
                     .await;
@@ -509,6 +595,13 @@ async fn run_connection(connection: Connection) {
                         &chat_session_id,
                         task_id,
                         agent_profile_id,
+                        &message,
+                    );
+                    maybe_capture_checkpoint(
+                        &db,
+                        &cwd,
+                        &chat_session_id,
+                        task_id,
                         &message,
                     );
                 }
@@ -620,6 +713,81 @@ fn emit_error(
             done: true,
         },
     );
+}
+
+fn maybe_capture_checkpoint(
+    db: &Arc<DbMutex<Database>>,
+    cwd: &str,
+    chat_session_id: &str,
+    task_id: i64,
+    message: &ChatMessage,
+) {
+    let label = checkpoint_label(message);
+    match git_ops::snapshot_chat_checkpoint(std::path::Path::new(cwd)) {
+        Ok(commit) => {
+            if let Err(error) = db.lock().insert_chat_checkpoint(
+                chat_session_id,
+                task_id,
+                &message.id,
+                &commit,
+                &label,
+            ) {
+                tracing::warn!(?error, chat_session_id, "failed to save chat checkpoint");
+            }
+        }
+        Err(error) => tracing::warn!(
+            ?error,
+            chat_session_id,
+            "failed to snapshot chat checkpoint"
+        ),
+    }
+}
+
+fn checkpoint_label(message: &ChatMessage) -> String {
+    for part in &message.parts {
+        if let ChatPart::Text { text } = part {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                let char_count = trimmed.chars().count();
+                let preview: String = trimmed.chars().take(48).collect();
+                return if char_count > 48 {
+                    format!("{preview}…")
+                } else {
+                    preview
+                };
+            }
+        }
+    }
+    let suffix = message.id.chars().take(8).collect::<String>();
+    format!("Turn {suffix}")
+}
+
+fn resolved_permission_message(
+    choice: Option<&str>,
+    request: &RequestPermissionRequest,
+    message_id: &str,
+) -> ChatMessage {
+    let resolved_text = match choice {
+        Some(option_id) => {
+            let label = request
+                .options
+                .iter()
+                .find(|option| option.option_id.0.to_string() == option_id)
+                .map(|option| option.name.clone())
+                .unwrap_or_else(|| option_id.to_string());
+            format!("✓ Permission granted: {label}")
+        }
+        None => "✗ Permission denied".to_string(),
+    };
+    ChatMessage {
+        id: message_id.to_string(),
+        role: ChatRole::Agent,
+        parts: vec![ChatPart::Text {
+            text: resolved_text,
+        }],
+        created_at: now(),
+        completed_at: Some(now()),
+    }
 }
 
 #[cfg(test)]

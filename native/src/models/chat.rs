@@ -190,6 +190,54 @@ pub struct ChatMessageEvent {
     pub done: bool,
 }
 
+/// Persisted allow-once/always decision for a permission prompt title.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatPermissionPolicyKind {
+    AllowAlways,
+    RejectAlways,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatPermissionPolicy {
+    pub tool_title: String,
+    pub kind: ChatPermissionPolicyKind,
+    pub created_at: String,
+}
+
+/// A git shadow commit captured after an agent turn for checkpoint restore.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatCheckpoint {
+    pub id: String,
+    pub chat_session_id: String,
+    pub task_id: i64,
+    pub message_id: String,
+    pub git_commit: String,
+    pub label: String,
+    pub created_at: String,
+}
+
+/// Base64 image block attached to a chat prompt (for agents with image capability).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatImageAttachment {
+    pub mime_type: String,
+    pub data: String,
+}
+
+/// Context-window usage pushed when the agent emits a `usage_update` session event.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatUsageEvent {
+    pub session_id: String,
+    pub task_id: i64,
+    pub agent_profile_id: Option<i64>,
+    pub used: u64,
+    pub size: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -227,6 +227,25 @@ impl Database {
 
                 CREATE INDEX IF NOT EXISTS chat_messages_session_idx
                 ON chat_messages(chat_session_id, position);
+
+                CREATE TABLE IF NOT EXISTS chat_permission_policies (
+                  tool_title TEXT PRIMARY KEY,
+                  policy_kind TEXT NOT NULL,
+                  created_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS chat_checkpoints (
+                  id TEXT PRIMARY KEY,
+                  chat_session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+                  task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                  message_id TEXT NOT NULL,
+                  git_commit TEXT NOT NULL,
+                  label TEXT NOT NULL,
+                  created_at TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS chat_checkpoints_session_idx
+                ON chat_checkpoints(chat_session_id, created_at);
                 ",
             )
             .map_err(|error| format!("Failed to create database schema: {error}"))?;
@@ -340,6 +359,7 @@ impl Database {
         // The original started_at of the last session, so a tmux reattach can
         // re-spawn the Codex rollout watcher with the real session start.
         self.add_column_if_missing("tasks", "last_session_started_at", "TEXT")?;
+        self.ensure_chat_extension_tables()?;
         // Google retired the Gemini CLI in favor of the Antigravity CLI (`agy`);
         // migrate any existing Gemini profile in place. The stored model may be
         // a legacy Gemini-CLI name — left as-is for the user to update.
@@ -464,6 +484,36 @@ impl Database {
                 ],
             )
             .map_err(|error| format!("Failed to seed app settings: {error}"))?;
+        Ok(())
+    }
+
+    /// Idempotent chat extension tables for databases created before permission
+    /// policies and checkpoints shipped.
+    fn ensure_chat_extension_tables(&self) -> Result<(), String> {
+        self.conn
+            .execute_batch(
+                "
+                CREATE TABLE IF NOT EXISTS chat_permission_policies (
+                  tool_title TEXT PRIMARY KEY,
+                  policy_kind TEXT NOT NULL,
+                  created_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS chat_checkpoints (
+                  id TEXT PRIMARY KEY,
+                  chat_session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+                  task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                  message_id TEXT NOT NULL,
+                  git_commit TEXT NOT NULL,
+                  label TEXT NOT NULL,
+                  created_at TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS chat_checkpoints_session_idx
+                ON chat_checkpoints(chat_session_id, created_at);
+                ",
+            )
+            .map_err(|error| format!("Failed to ensure chat extension tables: {error}"))?;
         Ok(())
     }
 

@@ -312,6 +312,41 @@ fn content_block_text(content: &ContentBlock) -> String {
 /// Build the permission part for a `session/request_permission` request.
 /// `request_id` is our own id (the live layer mints it and routes the user's
 /// answer back through `acp_respond_permission`), not an ACP field.
+/// Human-facing title for a permission request — also the policy lookup key.
+pub(crate) fn permission_request_title(request: &RequestPermissionRequest) -> String {
+    request
+        .tool_call
+        .fields
+        .title
+        .clone()
+        .unwrap_or_else(|| "Permission required".to_string())
+}
+
+/// Resolve the normalized kind for a chosen option id.
+pub(crate) fn permission_option_kind_for_id(
+    request: &RequestPermissionRequest,
+    option_id: &str,
+) -> Option<ChatPermissionKind> {
+    request
+        .options
+        .iter()
+        .find(|option| option.option_id.0.to_string() == option_id)
+        .map(|option| map_permission_kind(option.kind))
+}
+
+/// Pick the first matching option id for any of the given ACP kinds (preference order).
+pub(crate) fn permission_option_id_for_kinds(
+    request: &RequestPermissionRequest,
+    kinds: &[PermissionOptionKind],
+) -> Option<String> {
+    for kind in kinds {
+        if let Some(option) = request.options.iter().find(|option| option.kind == *kind) {
+            return Some(option.option_id.0.to_string());
+        }
+    }
+    None
+}
+
 pub(crate) fn permission_part(
     request_id: impl Into<String>,
     request: &RequestPermissionRequest,
@@ -567,9 +602,14 @@ mod tests {
         );
         assert_eq!(claude.capabilities.images, AcpCapabilityState::Unknown);
 
+        let antigravity = infos
+            .iter()
+            .find(|info| info.agent_kind == AgentKind::Antigravity)
+            .unwrap();
+        assert_eq!(antigravity.maturity, AcpProviderMaturity::Preview);
         assert!(!infos
             .iter()
-            .any(|info| matches!(info.agent_kind, AgentKind::Antigravity | AgentKind::Custom)));
+            .any(|info| info.agent_kind == AgentKind::Custom));
     }
 
     #[test]

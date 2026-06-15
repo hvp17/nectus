@@ -468,6 +468,32 @@ pub fn prune_worktrees(repo_path: &Path) {
     let _ = git_command(repo_path).args(["worktree", "prune"]).output();
 }
 
+/// Capture the current HEAD commit for chat checkpoint restore.
+pub fn snapshot_chat_checkpoint(repo_path: &Path) -> Result<String, String> {
+    let output = git_output(repo_path, &["rev-parse", "HEAD"], "Failed to read HEAD")?;
+    let commit = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if commit.is_empty() {
+        return Err("Failed to read HEAD commit".to_string());
+    }
+    Ok(commit)
+}
+
+/// Restore a worktree to a prior checkpoint commit (`git reset --hard`).
+pub fn restore_chat_checkpoint(repo_path: &Path, commit: &str) -> Result<(), String> {
+    if commit.trim().is_empty() {
+        return Err("Checkpoint commit is empty".to_string());
+    }
+    let output = git_output(
+        repo_path,
+        &["reset", "--hard", commit],
+        "Failed to restore chat checkpoint",
+    )?;
+    if !output.status.success() {
+        return Err(command_error(&output, "git reset --hard failed"));
+    }
+    Ok(())
+}
+
 /// Whether every commit on `branch` is already present on some remote — i.e.
 /// deleting the local branch would lose nothing.
 #[cfg(test)]

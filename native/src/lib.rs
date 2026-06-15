@@ -12,10 +12,11 @@ mod sessions;
 use crate::db::Database;
 use crate::models::{
     AcpProviderInfo, AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings,
-    AppSettingsInput, ChatSession, ChatTranscript, GithubStatus, JiraProject, JiraRestStatus,
-    JiraSprintLane, JiraStatusDef, JiraTransition, JiraWorkItem, PrReview, PrReviewMode,
-    PrReviewRun, PullRequestInfo, Repo, ReviewLoop, ReviewRun, Session, SessionExitedEvent,
-    SessionOutputSnapshot, TaskDiffSummary, TaskStatus, TaskSummary, Workspace,
+    AppSettingsInput, ChatCheckpoint, ChatImageAttachment, ChatPermissionPolicy, ChatSession,
+    ChatTranscript, GithubStatus, JiraProject, JiraRestStatus, JiraSprintLane, JiraStatusDef,
+    JiraTransition, JiraWorkItem, PrReview, PrReviewMode, PrReviewRun, PullRequestInfo, Repo,
+    ReviewLoop, ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskDiffSummary,
+    TaskStatus, TaskSummary, Workspace,
 };
 use crate::sessions::{AcpManager, SessionManager};
 use parking_lot::Mutex;
@@ -1311,12 +1312,16 @@ async fn acp_start_chat(
 async fn acp_send_prompt(
     session_id: String,
     text: String,
+    images: Option<Vec<ChatImageAttachment>>,
     state: State<'_, AppState>,
 ) -> AppResult<()> {
     // The connection loop persists+emits the user turn (in order with the agent
     // reply) — this just queues the prompt.
     let acp = state.acp.clone();
-    app_result(acp.prompt(&session_id, text).await)
+    app_result(
+        acp.prompt(&session_id, text, images.unwrap_or_default())
+            .await,
+    )
 }
 
 #[tauri::command]
@@ -1346,6 +1351,54 @@ fn get_task_chat(
     state: State<'_, AppState>,
 ) -> AppResult<ChatTranscript> {
     app_result(state.db.lock().chat_transcript(task_id, agent_profile_id))
+}
+
+#[tauri::command]
+fn list_chat_permission_policies(
+    state: State<'_, AppState>,
+) -> AppResult<Vec<ChatPermissionPolicy>> {
+    app_result(state.db.lock().list_chat_permission_policies())
+}
+
+#[tauri::command]
+fn clear_chat_permission_policies(state: State<'_, AppState>) -> AppResult<()> {
+    app_result(state.db.lock().clear_chat_permission_policies())
+}
+
+#[tauri::command]
+fn list_chat_checkpoints(
+    chat_session_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<ChatCheckpoint>> {
+    app_result(state.db.lock().list_chat_checkpoints(&chat_session_id))
+}
+
+#[tauri::command]
+async fn restore_chat_checkpoint(
+    checkpoint_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    let (worktree_path, commit) = {
+        let db = state.db.lock();
+        let checkpoint = db
+            .chat_checkpoint_by_id(&checkpoint_id)?
+            .ok_or_else(|| AppError::from("Checkpoint not found"))?;
+        let task = db
+            .task_by_id(checkpoint.task_id)?
+            .ok_or_else(|| AppError::from("Task not found"))?;
+        let repo = db
+            .repo_by_id(task.repo_id)?
+            .ok_or_else(|| AppError::from("Repository not found"))?;
+        let path = task
+            .worktree_path
+            .clone()
+            .unwrap_or_else(|| repo.path.clone());
+        (path, checkpoint.git_commit)
+    };
+    blocking("Failed to restore chat checkpoint", move || {
+        git_ops::restore_chat_checkpoint(Path::new(&worktree_path), &commit)
+    })
+    .await
 }
 
 pub fn run() {
@@ -1475,7 +1528,11 @@ pub fn run() {
             acp_send_prompt,
             acp_respond_permission,
             acp_stop_chat,
-            get_task_chat
+            get_task_chat,
+            list_chat_permission_policies,
+            clear_chat_permission_policies,
+            list_chat_checkpoints,
+            restore_chat_checkpoint
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
