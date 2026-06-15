@@ -49,6 +49,15 @@ export function useAgentProfilesQuery() {
   });
 }
 
+export function useAcpProvidersQuery() {
+  return useQuery({
+    queryKey: queryKeys.acpProviders(),
+    queryFn: () => api.listAcpProviders(),
+    staleTime: REFERENCE_STALE_TIME,
+    meta: SURFACE_ERRORS,
+  });
+}
+
 export function useSettingsQuery() {
   return useQuery({
     queryKey: queryKeys.settings(),

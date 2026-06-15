@@ -169,6 +169,33 @@ describe("api", () => {
     expect(mockedInvoke).not.toHaveBeenCalled();
   });
 
+  it("returns ACP provider capability descriptors outside Tauri", async () => {
+    const providers = await api.listAcpProviders();
+
+    expect(providers.map((provider) => provider.agentKind)).toEqual(["claude", "opencode", "codex"]);
+    expect(providers[0]?.capabilities.sessionLoad).toBe("expected");
+    expect(providers[0]?.launch.command).toBe("npx");
+    expect(mockedInvoke).not.toHaveBeenCalled();
+  });
+
+  it("loads ACP provider capability descriptors inside Tauri", async () => {
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+    mockedInvoke.mockResolvedValueOnce([
+      {
+        id: "claude",
+        agentKind: "claude",
+        displayName: "Claude Code",
+        launch: { command: "npx", args: ["-y", "@agentclientprotocol/claude-agent-acp"] },
+        capabilities: { sessionLoad: "expected", permissions: "expected", images: "unknown" },
+      },
+    ]);
+
+    const providers = await api.listAcpProviders();
+
+    expect(providers[0]?.displayName).toBe("Claude Code");
+    expect(mockedInvoke).toHaveBeenCalledWith("list_acp_providers");
+  });
+
   it("returns a disconnected GitHub status outside Tauri", async () => {
     const status = await api.githubStatus();
 

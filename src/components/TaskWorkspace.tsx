@@ -157,6 +157,7 @@ export function TaskWorkspace({
   const diff = useTaskDiff(task?.id, activeRepoId);
   const { refresh: refreshDiff } = diff;
   const [stageTab, setStageTab] = useState<"terminal" | "diff" | "review" | "chat">("terminal");
+  const [diffSelectedFile, setDiffSelectedFile] = useState<string | null>(null);
   const refreshDiffForOpenTab = useEffectEvent(() => {
     void refreshDiff();
   });
@@ -237,6 +238,9 @@ export function TaskWorkspace({
   const startReview = () => {
     if (!reviewerProfileId || startReviewDisabled) return;
     onStartReview(task, reviewerProfileId);
+  };
+  const openChatFile = (path: string) => {
+    setDiffSelectedFile(path);
   };
   // Each step carries the inline action shown when it is the CURRENT step. The
   // prototype attaches the action to the active step (Review controls, then the
@@ -376,6 +380,7 @@ export function TaskWorkspace({
         stageTab={stageTab}
         onStageTabChange={setStageTab}
         repoScopePicker={repoScopePicker}
+        diffSelectedFile={diffSelectedFile}
         diff={diff}
         diffFileCount={diffFileCount}
         diffTotals={diffTotals}
@@ -392,6 +397,7 @@ export function TaskWorkspace({
         canResumeSession={canResumeSession}
         onResumeSession={onResumeSession}
         onStartSession={onStartSession}
+        onOpenChatFile={openChatFile}
       />
 
       <TaskWorkspaceFactsRail

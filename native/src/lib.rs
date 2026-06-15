@@ -11,10 +11,10 @@ mod sessions;
 
 use crate::db::Database;
 use crate::models::{
-    AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings, AppSettingsInput,
-    ChatSession, ChatTranscript, GithubStatus, JiraProject, JiraRestStatus, JiraSprintLane,
-    JiraStatusDef, JiraTransition, JiraWorkItem, PrReview, PrReviewMode, PrReviewRun,
-    PullRequestInfo, Repo, ReviewLoop, ReviewRun, Session, SessionExitedEvent,
+    AcpProviderInfo, AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings,
+    AppSettingsInput, ChatSession, ChatTranscript, GithubStatus, JiraProject, JiraRestStatus,
+    JiraSprintLane, JiraStatusDef, JiraTransition, JiraWorkItem, PrReview, PrReviewMode,
+    PrReviewRun, PullRequestInfo, Repo, ReviewLoop, ReviewRun, Session, SessionExitedEvent,
     SessionOutputSnapshot, TaskDiffSummary, TaskStatus, TaskSummary, Workspace,
 };
 use crate::sessions::{AcpManager, SessionManager};
@@ -1074,6 +1074,11 @@ fn list_agent_profiles(state: State<'_, AppState>) -> AppResult<Vec<AgentProfile
 }
 
 #[tauri::command]
+fn list_acp_providers() -> Vec<AcpProviderInfo> {
+    sessions::acp_provider_infos()
+}
+
+#[tauri::command]
 fn upsert_agent_profile(
     profile: AgentProfileInput,
     state: State<'_, AppState>,
@@ -1446,6 +1451,7 @@ pub fn run() {
             list_pr_review_runs,
             rerun_pr_review,
             delete_pr_review,
+            list_acp_providers,
             list_agent_profiles,
             upsert_agent_profile,
             start_pair_loop,

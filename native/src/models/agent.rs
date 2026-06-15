@@ -45,6 +45,39 @@ pub struct AgentProfileInput {
     pub env: BTreeMap<String, String>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AcpCapabilityState {
+    Expected,
+    Unknown,
+    Unsupported,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpProviderCapabilities {
+    pub session_load: AcpCapabilityState,
+    pub permissions: AcpCapabilityState,
+    pub images: AcpCapabilityState,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpProviderLaunch {
+    pub command: String,
+    pub args: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpProviderInfo {
+    pub id: String,
+    pub agent_kind: AgentKind,
+    pub display_name: String,
+    pub launch: AcpProviderLaunch,
+    pub capabilities: AcpProviderCapabilities,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

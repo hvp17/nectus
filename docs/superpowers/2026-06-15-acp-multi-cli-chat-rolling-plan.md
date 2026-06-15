@@ -1,9 +1,16 @@
 # Multi-CLI Embedded Agent Chat (ACP) — Rolling Plan
 
-> **Status:** Planning / exploratory — not yet committed to build.
+> **Status:** In progress on `feat/acp-multi-cli-chat`: Phase 0/1 vertical slice
+> is implemented in the real Tauri app; capability-gated `session/load` resume
+> has begun; Phase 2 provider-descriptor extraction has started for ACP launch
+> metadata, profile-env layering, frontend-readable capability metadata, and
+> unsupported-provider chat gating, plus the Chat-tab ACP profile selector and
+> file-chip-to-diff selection bridge.
 > **Date:** 2026-06-15
 > **Decision:** Embed multiple existing agent CLIs (Codex, Claude Code, OpenCode, Gemini, …) behind one chat surface via **ACP (Agent Client Protocol)**.
-> **Scope note:** This is a design/intent doc. It records the chosen direction and a rolling-wave plan; it is not current shipped behavior.
+> **Scope note:** This is a design/intent doc plus rolling implementation notes.
+> Check `docs/features.md` and `docs/tracking-and-debugging.md` for current
+> shipped behavior.
 
 ---
 

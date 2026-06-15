@@ -216,6 +216,27 @@ export interface AgentProfile {
   updatedAt: string;
 }
 
+export type AcpCapabilityState = "expected" | "unknown" | "unsupported";
+
+export interface AcpProviderCapabilities {
+  sessionLoad: AcpCapabilityState;
+  permissions: AcpCapabilityState;
+  images: AcpCapabilityState;
+}
+
+export interface AcpProviderLaunch {
+  command: string;
+  args: string[];
+}
+
+export interface AcpProviderInfo {
+  id: string;
+  agentKind: AgentKind;
+  displayName: string;
+  launch: AcpProviderLaunch;
+  capabilities: AcpProviderCapabilities;
+}
+
 export interface ReviewLoop {
   taskId: number;
   reviewerProfileId: number;

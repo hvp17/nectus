@@ -64,6 +64,8 @@ export interface TaskWorkspaceStageProps {
   onStageTabChange: (tab: StageTab) => void;
   /** Cross-repo member switcher shown with the Diff controls (null for single-repo tasks). */
   repoScopePicker?: React.ReactNode;
+  /** File path requested by another surface, such as a chat file chip. */
+  diffSelectedFile?: string | null;
   diff: TaskDiff;
   diffFileCount: number;
   diffTotals: { additions: number; deletions: number };
@@ -80,6 +82,7 @@ export interface TaskWorkspaceStageProps {
   canResumeSession: boolean;
   onResumeSession: (task: TaskSummary) => void;
   onStartSession: (task: TaskSummary) => void;
+  onOpenChatFile?: (path: string) => void;
 }
 
 /// The working stage: header, the workflow ribbon, and the
@@ -94,6 +97,7 @@ export function TaskWorkspaceStage({
   stageTab,
   onStageTabChange,
   repoScopePicker,
+  diffSelectedFile,
   diff,
   diffFileCount,
   diffTotals,
@@ -110,9 +114,16 @@ export function TaskWorkspaceStage({
   canResumeSession,
   onResumeSession,
   onStartSession,
+  onOpenChatFile,
 }: TaskWorkspaceStageProps) {
   // Stable so ChatPane's memoized parts aren't re-rendered on every chat snapshot.
-  const handleOpenChatFile = useCallback(() => onStageTabChange("diff"), [onStageTabChange]);
+  const handleOpenChatFile = useCallback(
+    (path: string) => {
+      onOpenChatFile?.(path);
+      onStageTabChange("diff");
+    },
+    [onOpenChatFile, onStageTabChange],
+  );
 
   return (
     <main className="flex min-h-0 min-w-0 flex-col gap-3 bg-gradient-to-b from-muted/25 to-transparent to-30% p-4">
@@ -267,6 +278,7 @@ export function TaskWorkspaceStage({
                 loading={diff.loading}
                 error={diff.error}
                 files={diff.files}
+                selectedFile={diffSelectedFile}
                 onSelectFile={diff.loadFile}
               />
             ) : stageTab === "review" ? (

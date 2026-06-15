@@ -197,8 +197,9 @@ Current commands:
 | `stop_pair_loop` | Stop reviewer automation for a task. |
 | `get_task_review_loop` | Load a task's current review loop. |
 | `list_task_review_runs` | Load stored reviewer runs for a task. |
+| `list_acp_providers` | Load the static ACP provider descriptor export for Claude Code, OpenCode, and Codex: stable provider id, agent kind, display name, launch argv, and coarse resume/permission/image capability states used by the frontend for gating. |
 | `get_task_chat` | Load the latest persisted ACP chat session and settled transcript for a task. |
-| `acp_start_chat` | Start an ACP chat process for a task/profile in the task cwd and create a persisted `chat_sessions` row. |
+| `acp_start_chat` | Start an ACP chat process for a task/profile in the task cwd. Launch uses the ACP provider descriptor (`native/src/sessions/acp.rs`), the login-shell env, augmented PATH, provider-specific executable env, then profile env as the final override layer. Reuses an already-live session; if the latest persisted row for the same profile has `acp_session_id` and the agent advertises `loadSession`, the runtime calls ACP `session/load`. Otherwise it creates a new `chat_sessions` row and calls `session/new`. |
 | `acp_send_prompt` | Queue a prompt into a live ACP chat session. The runtime persists and emits the user turn, streams the agent turn, and stores the settled reply. |
 | `acp_respond_permission` | Resolve a pending ACP permission request from the Chat tab. |
 | `acp_stop_chat` | Abort a live ACP chat process and drop its in-memory session handle. |

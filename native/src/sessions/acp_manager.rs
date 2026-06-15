@@ -14,14 +14,15 @@
 //! end-to-end behavior is exercised by running the desktop app against a real
 //! agent (`pnpm desktop:dev`).
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use agent_client_protocol::schema::{
-    ContentBlock, InitializeRequest, NewSessionRequest, PromptRequest, ProtocolVersion,
-    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
-    SelectedPermissionOutcome, SessionNotification, TextContent,
+    AgentCapabilities, ContentBlock, InitializeRequest, LoadSessionRequest, NewSessionRequest,
+    PromptRequest, ProtocolVersion, RequestPermissionOutcome, RequestPermissionRequest,
+    RequestPermissionResponse, SelectedPermissionOutcome, SessionId, SessionNotification,
+    TextContent,
 };
 use agent_client_protocol::{AcpAgent, Agent, Client, ConnectionTo};
 use parking_lot::Mutex as DbMutex;
@@ -30,11 +31,10 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::{mpsc, oneshot, Mutex};
 use uuid::Uuid;
 
-use super::acp::{acp_launch, permission_part, TurnAccumulator};
+use super::acp::{acp_provider, permission_part, AcpLaunch, TurnAccumulator};
 use crate::db::Database;
 use crate::models::{
-    AgentKind, AgentProfile, ChatMessage, ChatMessageEvent, ChatPart, ChatRole, ChatSession, Repo,
-    TaskSummary,
+    AgentProfile, ChatMessage, ChatMessageEvent, ChatPart, ChatRole, ChatSession, Repo, TaskSummary,
 };
 
 fn now() -> String {
@@ -53,6 +53,42 @@ fn is_env_name(name: &str) -> bool {
         _ => return false,
     }
     chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+fn env_assignment(key: &str, value: &str) -> Option<String> {
+    if is_env_name(key) && !value.contains('\n') {
+        Some(format!("{key}={value}"))
+    } else {
+        None
+    }
+}
+
+fn build_acp_argv(
+    launch: &AcpLaunch,
+    path_env: String,
+    resolved_command: String,
+    login_env: impl IntoIterator<Item = (String, String)>,
+    provider_env: impl IntoIterator<Item = (String, String)>,
+    profile_env: &BTreeMap<String, String>,
+) -> Vec<String> {
+    let mut argv: Vec<String> = login_env
+        .into_iter()
+        .filter_map(|(key, value)| env_assignment(&key, &value))
+        .collect();
+    argv.push(format!("PATH={path_env}"));
+    argv.extend(
+        provider_env
+            .into_iter()
+            .filter_map(|(key, value)| env_assignment(&key, &value)),
+    );
+    argv.extend(
+        profile_env
+            .iter()
+            .filter_map(|(key, value)| env_assignment(key, value)),
+    );
+    argv.push(resolved_command);
+    argv.extend(launch.args.iter().cloned());
+    argv
 }
 
 /// A pending permission map: our request id → the channel that delivers the
@@ -82,9 +118,10 @@ impl AcpManager {
     }
 
     /// Start an ACP chat session for a task. If a live session already exists for
-    /// the task it is reused (no duplicate agent process). Creates the session
-    /// row, spawns the agent connection on Tauri's runtime, and returns the
-    /// persisted session.
+    /// the task it is reused (no duplicate agent process). If the latest persisted
+    /// session belongs to the same profile and has an ACP session id, the spawned
+    /// connection attempts `session/load`; otherwise it creates a new chat row and
+    /// uses `session/new`.
     pub async fn start(
         &self,
         app: AppHandle,
@@ -93,15 +130,15 @@ impl AcpManager {
         repo: Repo,
         agent: AgentProfile,
     ) -> Result<ChatSession, String> {
-        let launch = acp_launch(agent.agent_kind)
+        let provider = acp_provider(agent.agent_kind)
             .ok_or_else(|| format!("{} does not support ACP chat", agent.name))?;
 
         // Reuse an already-live session for this task rather than spawning a
         // second agent (guards against double-start / double-click).
         let existing = db.lock().latest_chat_session(task.id)?;
-        if let Some(existing) = existing {
+        if let Some(existing) = &existing {
             if self.sessions.lock().await.contains_key(&existing.id) {
-                return Ok(existing);
+                return Ok(existing.clone());
             }
         }
 
@@ -109,10 +146,14 @@ impl AcpManager {
             .worktree_path
             .clone()
             .unwrap_or_else(|| repo.path.clone());
-        let chat_session = db
-            .lock()
-            .create_chat_session(task.id, Some(agent.id), &cwd)?;
+        let chat_session = existing
+            .filter(|session| {
+                session.agent_profile_id == Some(agent.id) && session.acp_session_id.is_some()
+            })
+            .map(Ok)
+            .unwrap_or_else(|| db.lock().create_chat_session(task.id, Some(agent.id), &cwd))?;
         let chat_session_id = chat_session.id.clone();
+        let resume_acp_session_id = chat_session.acp_session_id.clone();
 
         let (prompt_tx, prompt_rx) = mpsc::unbounded_channel::<String>();
         let permissions: PendingPermissions = Arc::new(Mutex::new(HashMap::new()));
@@ -125,33 +166,30 @@ impl AcpManager {
         // nested `node` execs (else `env: node: No such file or directory`, exit
         // 127); and the login-shell env is seeded so provider keys
         // (ANTHROPIC_API_KEY/OPENAI_API_KEY, HOME, …) reach the agent from a
-        // Finder-launched .app (else "API key is missing"). `PATH` is appended
-        // after the login env (which excludes it) so the augmented one wins.
+        // Finder-launched .app (else "API key is missing"). The selected profile's
+        // env is appended last so profile-specific keys/PATH still win.
         let path_env = crate::process_util::augmented_path()
             .to_string_lossy()
             .into_owned();
-        let resolved = crate::process_util::resolve_executable(&launch.command)
+        let resolved = crate::process_util::resolve_executable(&provider.launch.command)
             .to_string_lossy()
             .into_owned();
-        let mut argv: Vec<String> = crate::process_util::login_shell_environment()
-            .into_iter()
-            .filter(|(key, value)| is_env_name(key) && !value.contains('\n'))
-            .map(|(key, value)| format!("{key}={value}"))
-            .collect();
-        argv.push(format!("PATH={path_env}"));
-        // Upstream workaround: @anthropic-ai/claude-agent-sdk extracts and spawns
-        // its *bundled* Bun-compiled `claude`, which fails to exec on macOS with
-        // "spawn Unknown system error -88" (EBADMACHO). The adapter honors
-        // CLAUDE_CODE_EXECUTABLE, so point it at the user's installed `claude`.
-        // Drop this once the bundled binary execs cleanly.
-        if matches!(agent.agent_kind, AgentKind::Claude) {
-            let claude = crate::process_util::resolve_executable("claude")
-                .to_string_lossy()
-                .into_owned();
-            argv.push(format!("CLAUDE_CODE_EXECUTABLE={claude}"));
-        }
-        argv.push(resolved);
-        argv.extend(launch.args);
+        let provider_env = provider.executable_env.into_iter().map(|executable| {
+            (
+                executable.var.to_string(),
+                crate::process_util::resolve_executable(executable.command)
+                    .to_string_lossy()
+                    .into_owned(),
+            )
+        });
+        let argv = build_acp_argv(
+            &provider.launch,
+            path_env,
+            resolved,
+            crate::process_util::login_shell_environment(),
+            provider_env,
+            &agent.env,
+        );
 
         let abort = tauri::async_runtime::spawn(run_connection(Connection {
             app,
@@ -159,6 +197,7 @@ impl AcpManager {
             task_id: task.id,
             chat_session_id: chat_session_id.clone(),
             cwd,
+            resume_acp_session_id,
             argv,
             permissions: permissions.clone(),
             prompt_rx,
@@ -240,6 +279,7 @@ struct Connection {
     task_id: i64,
     chat_session_id: String,
     cwd: String,
+    resume_acp_session_id: Option<String>,
     argv: Vec<String>,
     permissions: PendingPermissions,
     prompt_rx: mpsc::UnboundedReceiver<String>,
@@ -253,6 +293,7 @@ async fn run_connection(connection: Connection) {
         task_id,
         chat_session_id,
         cwd,
+        resume_acp_session_id,
         argv,
         permissions,
         mut prompt_rx,
@@ -380,20 +421,37 @@ async fn run_connection(connection: Connection) {
             agent_client_protocol::on_receive_request!(),
         )
         .connect_with(transport, move |cx: ConnectionTo<Agent>| async move {
-            cx.send_request(InitializeRequest::new(ProtocolVersion::V1))
+            let initialize = cx
+                .send_request(InitializeRequest::new(ProtocolVersion::V1))
                 .block_task()
                 .await?;
-            let new_session = cx
-                .send_request(NewSessionRequest::new(PathBuf::from(&cwd)))
-                .block_task()
-                .await?;
-            let acp_session_id = new_session.session_id;
-            if let Err(error) = db
-                .lock()
-                .set_chat_acp_session_id(&chat_session_id, &acp_session_id.to_string())
-            {
-                tracing::warn!(?error, chat_session_id, "failed to persist acp session id");
-            }
+            let acp_session_id = match session_start_request(
+                &cwd,
+                resume_acp_session_id.as_deref(),
+                &initialize.agent_capabilities,
+            ) {
+                AcpSessionStartRequest::Load { session_id, cwd } => {
+                    tracing::info!(chat_session_id, acp_session_id = %session_id, "loading ACP session");
+                    cx.send_request(LoadSessionRequest::new(session_id.clone(), cwd))
+                        .block_task()
+                        .await?;
+                    session_id
+                }
+                AcpSessionStartRequest::New { cwd } => {
+                    let new_session = cx
+                        .send_request(NewSessionRequest::new(cwd))
+                        .block_task()
+                        .await?;
+                    let acp_session_id = new_session.session_id;
+                    if let Err(error) = db
+                        .lock()
+                        .set_chat_acp_session_id(&chat_session_id, &acp_session_id.to_string())
+                    {
+                        tracing::warn!(?error, chat_session_id, "failed to persist acp session id");
+                    }
+                    acp_session_id
+                }
+            };
 
             while let Some(prompt_text) = prompt_rx.recv().await {
                 // Persist + emit the user turn on the serial loop so each
@@ -457,6 +515,28 @@ async fn run_connection(connection: Connection) {
     sessions.lock().await.remove(&outer_session);
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum AcpSessionStartRequest {
+    New { cwd: PathBuf },
+    Load { session_id: SessionId, cwd: PathBuf },
+}
+
+fn session_start_request(
+    cwd: &str,
+    resume_acp_session_id: Option<&str>,
+    agent_capabilities: &AgentCapabilities,
+) -> AcpSessionStartRequest {
+    match resume_acp_session_id {
+        Some(session_id) if agent_capabilities.load_session => AcpSessionStartRequest::Load {
+            session_id: SessionId::new(session_id),
+            cwd: PathBuf::from(cwd),
+        },
+        _ => AcpSessionStartRequest::New {
+            cwd: PathBuf::from(cwd),
+        },
+    }
+}
+
 /// Persist a settled message (logging — not swallowing — a failure, like the
 /// sibling session modules) and emit it to the UI as `done: true`.
 fn persist_and_emit(
@@ -504,4 +584,85 @@ fn emit_error(app: &AppHandle, session_id: &str, task_id: i64, message: &str) {
             done: true,
         },
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use agent_client_protocol::schema::{AgentCapabilities, SessionId};
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn start_request_loads_existing_session_only_when_agent_advertises_support() {
+        let cwd = "/tmp/worktree";
+        let load_capable = AgentCapabilities::new().load_session(true);
+        let not_load_capable = AgentCapabilities::new();
+
+        assert!(matches!(
+            session_start_request(cwd, Some("acp-123"), &load_capable),
+            AcpSessionStartRequest::Load {
+                session_id,
+                cwd: request_cwd
+            } if session_id == SessionId::new("acp-123")
+                && request_cwd.as_path() == std::path::Path::new(cwd)
+        ));
+        assert!(matches!(
+            session_start_request(cwd, Some("acp-123"), &not_load_capable),
+            AcpSessionStartRequest::New { cwd: request_cwd }
+                if request_cwd.as_path() == std::path::Path::new(cwd)
+        ));
+        assert!(matches!(
+            session_start_request(cwd, None, &load_capable),
+            AcpSessionStartRequest::New { cwd: request_cwd }
+                if request_cwd.as_path() == std::path::Path::new(cwd)
+        ));
+    }
+
+    #[test]
+    fn acp_argv_applies_profile_env_after_login_path_and_provider_env() {
+        let launch = super::super::acp::AcpLaunch {
+            command: "npx".to_string(),
+            args: vec!["-y".to_string(), "@agent/adapter".to_string()],
+        };
+        let profile_env = BTreeMap::from([
+            ("ANTHROPIC_API_KEY".to_string(), "profile-key".to_string()),
+            (
+                "CLAUDE_CODE_EXECUTABLE".to_string(),
+                "/custom/claude".to_string(),
+            ),
+            ("PATH".to_string(), "/profile/bin".to_string()),
+            ("BAD-NAME".to_string(), "ignored".to_string()),
+            ("MULTILINE".to_string(), "ignored\nvalue".to_string()),
+        ]);
+
+        let argv = build_acp_argv(
+            &launch,
+            "/augmented/bin".to_string(),
+            "/resolved/npx".to_string(),
+            vec![
+                ("ANTHROPIC_API_KEY".to_string(), "login-key".to_string()),
+                ("BASH_FUNC_bad%%".to_string(), "ignored".to_string()),
+            ],
+            vec![(
+                "CLAUDE_CODE_EXECUTABLE".to_string(),
+                "/resolved/claude".to_string(),
+            )],
+            &profile_env,
+        );
+
+        assert_eq!(
+            argv,
+            vec![
+                "ANTHROPIC_API_KEY=login-key",
+                "PATH=/augmented/bin",
+                "CLAUDE_CODE_EXECUTABLE=/resolved/claude",
+                "ANTHROPIC_API_KEY=profile-key",
+                "CLAUDE_CODE_EXECUTABLE=/custom/claude",
+                "PATH=/profile/bin",
+                "/resolved/npx",
+                "-y",
+                "@agent/adapter",
+            ]
+        );
+    }
 }

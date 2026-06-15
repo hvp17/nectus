@@ -15,6 +15,7 @@ export const queryKeys = {
   /** The archive view (separate cache from the live `tasks` read). */
   tasksArchived: () => ["tasks-archived"] as const,
   agentProfiles: () => ["agent-profiles"] as const,
+  acpProviders: () => ["acp-providers"] as const,
   settings: () => ["settings"] as const,
 
   github: {

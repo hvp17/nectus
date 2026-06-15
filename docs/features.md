@@ -303,16 +303,37 @@ Current behavior:
   in the task worktree (or project path for direct-edit tasks). It streams the
   normalized ACP updates into the transcript and persists settled user/agent
   turns in SQLite.
+- ACP launch is driven by the Rust provider descriptor in `native/src/sessions/acp.rs`
+  for Claude Code, OpenCode, and Codex. The runtime resolves the descriptor's
+  command, seeds the login-shell environment, adds the augmented PATH, applies any
+  provider-specific executable override, then applies the selected profile's env
+  last so per-profile keys and PATH override the defaults.
+- The same descriptor is exported through `list_acp_providers`, including stable
+  provider ids, launch argv, and coarse capability states (`expected`, `unknown`,
+  or `unsupported`) for resume, permission, and image support. Runtime ACP
+  `initialize` remains authoritative for `session/load`.
+- The Chat tab uses that descriptor export to gate launch and offers a compact
+  chat-agent selector populated from the task's agent profiles. Switching from
+  one ACP-capable profile to another starts a new chat row for the selected
+  profile rather than sending into a transcript owned by a different agent. If
+  the selected profile has no ACP provider descriptor yet (for example
+  Antigravity or a custom profile), the transcript remains readable but the
+  composer is disabled with an inline callout that points the user back to the
+  Terminal tab.
 - The transcript renders structured parts: text, reasoning, tool cards, file-edit
   chips, permission requests, and plan entries. File chips switch the workspace
-  to the Diff tab.
+  to the Diff tab and select the matching changed file so its patch loads
+  immediately.
 - If the app reloads with a persisted chat session whose ACP process is no longer
-  live, sending a message starts a fresh ACP session and resends the prompt rather
-  than leaving the composer stuck on "No such chat session".
+  live, sending a message starts the ACP process again. When the persisted row
+  has an agent `acp_session_id` and the agent advertises ACP `loadSession`,
+  Nectus calls `session/load` so the CLI resumes that conversation; otherwise it
+  starts a fresh ACP session and resends the prompt rather than leaving the
+  composer stuck on "No such chat session".
 - Retired Gemini profile rows are treated as Antigravity when read, matching the
   startup migration from `agent_kind = 'gemini'` to `antigravity`.
 
-The chat surface is served by `get_task_chat`, `acp_start_chat`,
+The chat surface is served by `list_acp_providers`, `get_task_chat`, `acp_start_chat`,
 `acp_send_prompt`, `acp_respond_permission`, and `acp_stop_chat`; live updates
 arrive on `session_chat`. File ownership: see [AGENTS.md](../AGENTS.md).
 

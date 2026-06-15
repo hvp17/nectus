@@ -8,6 +8,7 @@ import { isTauriRuntime } from "./lib/tauriRuntime";
 const seeds = () => import("./lib/browserSeed");
 import { isBrowserPreview } from "./lib/browserPreview";
 import type {
+  AcpProviderInfo,
   AgentProfile,
   AppSettings,
   AppSettingsInput,
@@ -56,6 +57,42 @@ const browserFallbackProfiles: AgentProfile[] = [
     env: {},
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+  },
+];
+
+const browserFallbackAcpProviders: AcpProviderInfo[] = [
+  {
+    id: "claude",
+    agentKind: "claude",
+    displayName: "Claude Code",
+    launch: { command: "npx", args: ["-y", "@agentclientprotocol/claude-agent-acp"] },
+    capabilities: {
+      sessionLoad: "expected",
+      permissions: "expected",
+      images: "unknown",
+    },
+  },
+  {
+    id: "opencode",
+    agentKind: "opencode",
+    displayName: "OpenCode",
+    launch: { command: "opencode", args: ["acp"] },
+    capabilities: {
+      sessionLoad: "unknown",
+      permissions: "unknown",
+      images: "unknown",
+    },
+  },
+  {
+    id: "codex",
+    agentKind: "codex",
+    displayName: "Codex",
+    launch: { command: "codex-acp", args: [] },
+    capabilities: {
+      sessionLoad: "unknown",
+      permissions: "unknown",
+      images: "unknown",
+    },
   },
 ];
 
@@ -341,6 +378,10 @@ export const api = {
     if (isBrowserPreview) return (await seeds()).seedProfiles;
     if (!isTauriRuntime()) return browserFallbackProfiles;
     return invoke("list_agent_profiles");
+  },
+  async listAcpProviders(): Promise<AcpProviderInfo[]> {
+    if (!isTauriRuntime()) return browserFallbackAcpProviders;
+    return invoke("list_acp_providers");
   },
   async upsertAgentProfile(
     profile: Partial<AgentProfile> & Pick<AgentProfile, "name" | "agentKind" | "command">,

@@ -13,6 +13,8 @@ export interface TaskDiffViewProps {
   loading: boolean;
   error: string | null;
   files: Record<string, FileDiffState>;
+  /** File path requested by another surface, such as a chat file chip. */
+  selectedFile?: string | null;
   /** Asks the owner to lazy-load the patch for a file (idempotent). */
   onSelectFile: (file: string) => void;
 }
@@ -63,7 +65,7 @@ function classifyLine(line: string): DiffLineKind {
   return "context";
 }
 
-export function TaskDiffView({ summary, loading, error, files, onSelectFile }: TaskDiffViewProps) {
+export function TaskDiffView({ summary, loading, error, files, selectedFile, onSelectFile }: TaskDiffViewProps) {
   const fileList = summary?.files ?? EMPTY_FILES;
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -74,10 +76,11 @@ export function TaskDiffView({ summary, loading, error, files, onSelectFile }: T
       setSelected(null);
       return;
     }
-    setSelected((current) =>
-      current && fileList.some((file) => file.path === current) ? current : fileList[0].path,
-    );
-  }, [fileList]);
+    setSelected((current) => {
+      if (selectedFile && fileList.some((file) => file.path === selectedFile)) return selectedFile;
+      return current && fileList.some((file) => file.path === current) ? current : fileList[0].path;
+    });
+  }, [fileList, selectedFile]);
 
   const selectedMeta = fileList.find((file) => file.path === selected);
 

@@ -36,6 +36,7 @@ mod terminal_io;
 mod tmux;
 mod verdict;
 
+pub(crate) use acp::acp_provider_infos;
 pub use acp_manager::AcpManager;
 
 use agents::configure_agent_command;

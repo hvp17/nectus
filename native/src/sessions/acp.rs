@@ -5,8 +5,8 @@
 //! [`crate::models`] chat part model — the single contract the chat UI renders.
 //!
 //! Two layers:
-//! - [`acp_launch`]: the provider registry's ACP axis — how to launch each agent
-//!   in ACP mode over stdio. Adding an agent is one entry here.
+//! - [`acp_provider`]: the provider registry's ACP axis — how to launch each
+//!   agent in ACP mode over stdio. Adding an agent is one entry here.
 //! - [`TurnAccumulator`] + the `map_*` helpers: the **pure, deterministic**
 //!   ACP→part normalization. This is the unit-tested heart; the live session glue
 //!   (the `AcpManager`, added separately) feeds it updates and emits a snapshot
@@ -24,8 +24,9 @@ use agent_client_protocol::schema::{
 };
 
 use crate::models::{
-    AgentKind, ChatLocation, ChatMessage, ChatPart, ChatPermissionKind, ChatPermissionOption,
-    ChatPlanEntry, ChatPlanStatus, ChatRole, ChatToolStatus,
+    AcpCapabilityState, AcpProviderCapabilities, AcpProviderInfo, AcpProviderLaunch, AgentKind,
+    ChatLocation, ChatMessage, ChatPart, ChatPermissionKind, ChatPermissionOption, ChatPlanEntry,
+    ChatPlanStatus, ChatRole, ChatToolStatus,
 };
 
 /// How to launch an agent CLI in ACP mode over stdio. The ACP axis of the
@@ -39,7 +40,26 @@ pub(crate) struct AcpLaunch {
     pub args: Vec<String>,
 }
 
-/// The default ACP launch command per agent (June 2026 ACP registry).
+/// A provider-specific executable path that must be injected into the ACP
+/// adapter's environment before launch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AcpExecutableEnv {
+    pub var: &'static str,
+    pub command: &'static str,
+}
+
+/// The ACP axis of the provider registry. This is intentionally narrower than
+/// the PTY lifecycle descriptor in `provider.rs`: it only records facts needed
+/// to start a provider through ACP.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AcpProviderDescriptor {
+    pub display_name: &'static str,
+    pub launch: AcpLaunch,
+    pub executable_env: Option<AcpExecutableEnv>,
+    pub capabilities: AcpProviderCapabilities,
+}
+
+/// The default ACP provider descriptor per agent (June 2026 ACP registry).
 ///
 /// - Claude Code: the `@agentclientprotocol/claude-agent-acp` adapter (most
 ///   mature; loadSession + permissions + plans) — the Phase 0 spike target.
@@ -47,17 +67,80 @@ pub(crate) struct AcpLaunch {
 /// - Codex: the `codex-acp` adapter binary.
 /// - Antigravity (`agy`): no ACP adapter yet (PTY-only) — no default launch.
 /// - Custom: no default — ACP launch must be configured by the profile.
-pub(crate) fn acp_launch(kind: AgentKind) -> Option<AcpLaunch> {
-    let (command, args): (&str, &[&str]) = match kind {
-        AgentKind::Claude => ("npx", &["-y", "@agentclientprotocol/claude-agent-acp"]),
-        AgentKind::OpenCode => ("opencode", &["acp"]),
-        AgentKind::Codex => ("codex-acp", &[]),
+pub(crate) fn acp_provider(kind: AgentKind) -> Option<AcpProviderDescriptor> {
+    let (display_name, command, args, executable_env, capabilities): (
+        &str,
+        &str,
+        &[&str],
+        Option<AcpExecutableEnv>,
+        AcpProviderCapabilities,
+    ) = match kind {
+        AgentKind::Claude => (
+            "Claude Code",
+            "npx",
+            &["-y", "@agentclientprotocol/claude-agent-acp"],
+            Some(AcpExecutableEnv {
+                var: "CLAUDE_CODE_EXECUTABLE",
+                command: "claude",
+            }),
+            AcpProviderCapabilities {
+                session_load: AcpCapabilityState::Expected,
+                permissions: AcpCapabilityState::Expected,
+                images: AcpCapabilityState::Unknown,
+            },
+        ),
+        AgentKind::OpenCode => (
+            "OpenCode",
+            "opencode",
+            &["acp"],
+            None,
+            AcpProviderCapabilities {
+                session_load: AcpCapabilityState::Unknown,
+                permissions: AcpCapabilityState::Unknown,
+                images: AcpCapabilityState::Unknown,
+            },
+        ),
+        AgentKind::Codex => (
+            "Codex",
+            "codex-acp",
+            &[],
+            None,
+            AcpProviderCapabilities {
+                session_load: AcpCapabilityState::Unknown,
+                permissions: AcpCapabilityState::Unknown,
+                images: AcpCapabilityState::Unknown,
+            },
+        ),
         AgentKind::Antigravity | AgentKind::Custom => return None,
     };
-    Some(AcpLaunch {
-        command: command.to_string(),
-        args: args.iter().map(|value| value.to_string()).collect(),
+    Some(AcpProviderDescriptor {
+        display_name,
+        launch: AcpLaunch {
+            command: command.to_string(),
+            args: args.iter().map(|value| value.to_string()).collect(),
+        },
+        executable_env,
+        capabilities,
     })
+}
+
+pub(crate) fn acp_provider_infos() -> Vec<AcpProviderInfo> {
+    [AgentKind::Claude, AgentKind::OpenCode, AgentKind::Codex]
+        .into_iter()
+        .filter_map(|kind| {
+            let descriptor = acp_provider(kind)?;
+            Some(AcpProviderInfo {
+                id: kind.as_str().to_string(),
+                agent_kind: kind,
+                display_name: descriptor.display_name.to_string(),
+                launch: AcpProviderLaunch {
+                    command: descriptor.launch.command,
+                    args: descriptor.launch.args,
+                },
+                capabilities: descriptor.capabilities,
+            })
+        })
+        .collect()
 }
 
 /// One ordered segment of a turn. Ordering lives here; tool *state* lives in the
@@ -382,11 +465,73 @@ mod tests {
 
     #[test]
     fn launch_matrix_covers_acp_agents_and_skips_custom() {
-        assert_eq!(acp_launch(AgentKind::Claude).unwrap().command, "npx");
-        assert!(acp_launch(AgentKind::Antigravity).is_none());
-        assert_eq!(acp_launch(AgentKind::OpenCode).unwrap().args, vec!["acp"]);
-        assert_eq!(acp_launch(AgentKind::Codex).unwrap().command, "codex-acp");
-        assert!(acp_launch(AgentKind::Custom).is_none());
+        assert_eq!(
+            acp_provider(AgentKind::Claude).unwrap().launch.command,
+            "npx"
+        );
+        assert!(acp_provider(AgentKind::Antigravity).is_none());
+        assert_eq!(
+            acp_provider(AgentKind::OpenCode).unwrap().launch.args,
+            vec!["acp"]
+        );
+        assert_eq!(
+            acp_provider(AgentKind::Codex).unwrap().launch.command,
+            "codex-acp"
+        );
+        assert!(acp_provider(AgentKind::Custom).is_none());
+    }
+
+    #[test]
+    fn provider_descriptor_carries_acp_launch_and_env_metadata() {
+        let claude = acp_provider(AgentKind::Claude).unwrap();
+        assert_eq!(claude.display_name, "Claude Code");
+        assert_eq!(claude.launch.command, "npx");
+        assert_eq!(
+            claude.executable_env,
+            Some(AcpExecutableEnv {
+                var: "CLAUDE_CODE_EXECUTABLE",
+                command: "claude",
+            })
+        );
+
+        let opencode = acp_provider(AgentKind::OpenCode).unwrap();
+        assert_eq!(opencode.display_name, "OpenCode");
+        assert_eq!(opencode.launch.args, vec!["acp"]);
+        assert_eq!(opencode.executable_env, None);
+
+        assert!(acp_provider(AgentKind::Antigravity).is_none());
+        assert!(acp_provider(AgentKind::Custom).is_none());
+    }
+
+    #[test]
+    fn provider_infos_export_capabilities_for_the_ui() {
+        let infos = acp_provider_infos();
+        let kinds: Vec<_> = infos.iter().map(|info| info.agent_kind).collect();
+        assert_eq!(
+            kinds,
+            vec![AgentKind::Claude, AgentKind::OpenCode, AgentKind::Codex]
+        );
+
+        let claude = infos
+            .iter()
+            .find(|info| info.agent_kind == AgentKind::Claude)
+            .unwrap();
+        assert_eq!(claude.id, "claude");
+        assert_eq!(claude.display_name, "Claude Code");
+        assert_eq!(claude.launch.command, "npx");
+        assert_eq!(
+            claude.capabilities.session_load,
+            AcpCapabilityState::Expected
+        );
+        assert_eq!(
+            claude.capabilities.permissions,
+            AcpCapabilityState::Expected
+        );
+        assert_eq!(claude.capabilities.images, AcpCapabilityState::Unknown);
+
+        assert!(!infos
+            .iter()
+            .any(|info| matches!(info.agent_kind, AgentKind::Antigravity | AgentKind::Custom)));
     }
 
     #[test]

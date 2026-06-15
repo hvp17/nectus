@@ -429,6 +429,15 @@ export function seedTaskChat(taskId: number): ChatTranscript {
 
 export function seedTaskDiffSummary(taskId: number): TaskDiffSummary {
   if (taskId === 1) return { baseLabel: "origin/main", files: seedDiffFiles };
+  if (taskId === 3) {
+    return {
+      baseLabel: "origin/main",
+      files: [
+        { path: "src/index.ts", change: "modified", additions: 6, deletions: 2, binary: false },
+        { path: "src/parser.rs", change: "modified", additions: 2, deletions: 1, binary: false },
+      ],
+    };
+  }
   return {
     baseLabel: "origin/main",
     files: [{ path: "src/index.ts", change: "modified", additions: 6, deletions: 2, binary: false }],
