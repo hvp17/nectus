@@ -197,6 +197,11 @@ Current commands:
 | `stop_pair_loop` | Stop reviewer automation for a task. |
 | `get_task_review_loop` | Load a task's current review loop. |
 | `list_task_review_runs` | Load stored reviewer runs for a task. |
+| `get_task_chat` | Load the latest persisted ACP chat session and settled transcript for a task. |
+| `acp_start_chat` | Start an ACP chat process for a task/profile in the task cwd and create a persisted `chat_sessions` row. |
+| `acp_send_prompt` | Queue a prompt into a live ACP chat session. The runtime persists and emits the user turn, streams the agent turn, and stores the settled reply. |
+| `acp_respond_permission` | Resolve a pending ACP permission request from the Chat tab. |
+| `acp_stop_chat` | Abort a live ACP chat process and drop its in-memory session handle. |
 | `create_pr_review` | Resolve a PR URL to a known project (matching each repo's remote off the DB lock, on the blocking pool), queue a review, and start the background reviewer. Takes `reviewer_profile_ids` + `max_rounds`: one reviewer runs a single review, two or more run a consensus review. |
 | `list_pr_reviews` | Load all PR reviews, newest first. |
 | `get_pr_review` | Load a single PR review by id. |
@@ -226,6 +231,7 @@ Backend-to-frontend events:
 | `session_needs_input` | Task id, session id, reason, optional prompt. | `native/src/sessions/mod.rs` (`emit_session_signal`), driven by `codex.rs` (JSONL), `claude.rs` (hooks), and `opencode.rs` (local server `/event` permission/question asks) |
 | `review_loop_updated` | Review-loop state and optional review run. | `native/src/sessions/review_loop.rs` |
 | `review_output` | Task id, a chunk of the task reviewer's live stdout, and the chunk's byte offset (a `0` offset starts a new run). Streamed by the task review loop. | `native/src/sessions/review_loop.rs` |
+| `session_chat` | ACP chat update: task id, chat session id, normalized `ChatMessage`, and `done` flag. Streaming updates are cache-only in the frontend; settled user/agent turns are persisted to `chat_messages`. | `native/src/sessions/acp_manager.rs` |
 | `pr_review_output` | Review id, a chunk of a single PR reviewer's live stdout, and the chunk's byte offset (a `0` offset starts a new run). Streamed by single PR reviews so the Reviews-view Terminal toggle can watch the reviewer live; consensus reviews keep their round matrix and do not stream. | `native/src/sessions/pr_review.rs` |
 | `pr_review_updated` | Updated external PR review (status, verdict, metadata, Markdown output), plus an optional `latest_run` carrying the consensus round output that triggered the update. | `native/src/sessions/pr_review.rs`, `native/src/sessions/pr_consensus.rs` |
 | `diagnostic_log` | One captured backend `tracing` line (the same text written to the console), streamed live to the Settings → Diagnostics panel. Emitted from the diagnostics ring buffer, which is independent of the DB lock so the stream keeps flowing during a hang. | `native/src/diagnostics.rs` |

@@ -50,7 +50,15 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
         id = session.id;
         await queryClient.invalidateQueries({ queryKey: queryKeys.task.chat(taskId) });
       }
-      await api.acpSendPrompt(id, text);
+      try {
+        await api.acpSendPrompt(id, text);
+      } catch (error) {
+        if (!sessionId || !isStaleChatSessionError(error)) throw error;
+        const session = await api.acpStartChat(taskId, agentProfileId ?? null);
+        id = session.id;
+        await queryClient.invalidateQueries({ queryKey: queryKeys.task.chat(taskId) });
+        await api.acpSendPrompt(id, text);
+      }
       setDraft("");
     } catch (error) {
       useAppStore.getState().setMessage(String(error));
@@ -107,4 +115,8 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
       </form>
     </div>
   );
+}
+
+function isStaleChatSessionError(error: unknown) {
+  return String(error).includes("No such chat session");
 }

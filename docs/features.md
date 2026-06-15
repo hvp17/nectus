@@ -290,13 +290,40 @@ Sessions emit these Tauri events: `session_output` (terminal stream),
 File ownership and the authoritative command/event catalog: see
 [AGENTS.md](../AGENTS.md) and [tracking-and-debugging.md](tracking-and-debugging.md).
 
+## Embedded Agent Chat
+
+The task workspace also has a **Chat** tab that drives ACP-capable agent CLIs
+through the Agent Client Protocol instead of through a raw terminal TUI.
+
+Current behavior:
+
+- Chat is available from the task workspace stage alongside Terminal, Diff, and
+  Review.
+- On the first prompt, Nectus starts an ACP session for the task's agent profile
+  in the task worktree (or project path for direct-edit tasks). It streams the
+  normalized ACP updates into the transcript and persists settled user/agent
+  turns in SQLite.
+- The transcript renders structured parts: text, reasoning, tool cards, file-edit
+  chips, permission requests, and plan entries. File chips switch the workspace
+  to the Diff tab.
+- If the app reloads with a persisted chat session whose ACP process is no longer
+  live, sending a message starts a fresh ACP session and resends the prompt rather
+  than leaving the composer stuck on "No such chat session".
+- Retired Gemini profile rows are treated as Antigravity when read, matching the
+  startup migration from `agent_kind = 'gemini'` to `antigravity`.
+
+The chat surface is served by `get_task_chat`, `acp_start_chat`,
+`acp_send_prompt`, `acp_respond_permission`, and `acp_stop_chat`; live updates
+arrive on `session_chat`. File ownership: see [AGENTS.md](../AGENTS.md).
+
 ## Task Diff
 
-The task workspace stage has a `Terminal | Diff | Review` segmented control, so you
-can see what an agent changed without leaving the app. The stage header carries a
+The task workspace stage has a `Terminal | Diff | Review | Chat` segmented control,
+so you can see what an agent changed or talk to it without leaving the app. The stage header carries a
 changed-file count badge and `+a −d` line totals next to the toggle (visible on all
 tabs), the Diff tab adds a manual refresh control, and the Review tab is covered in
-[AI Review](#ai-review).
+[AI Review](#ai-review). The Chat tab is covered in
+[Embedded Agent Chat](#embedded-agent-chat).
 
 Current behavior:
 
