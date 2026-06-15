@@ -1,10 +1,18 @@
 # Multi-CLI Embedded Agent Chat (ACP) — Rolling Plan
 
-> **Status:** Implemented on `feat/acp-multi-cli-chat`: Phases 0–6 of the rolling
-> plan are in the app (PTY terminal remains the fallback; per-provider JSONL/hook
-> watchers are not decommissioned). Capability-gated `session/load` resume, per-profile
-> transcripts, permission policies, git checkpoints, usage %, image attach, and
-> rAF-batched `session_chat` streaming are shipped behind the Chat tab.
+> **Status:** **Shipped on `main` (2026-06-15).** Phases 0–6 of the rolling plan
+> are in the app. Chat is the default stage for ACP-capable agents (Claude, Codex,
+> OpenCode); the PTY terminal remains for custom agents and as an optional
+> "Show terminal" fallback. Per-provider JSONL/hook/SSE **watchers are fully
+> removed** — `provider.rs` no longer spawns them and the watcher source in
+> `codex.rs` / `claude.rs` / `opencode.rs` is trimmed to resume-metadata probes
+> (Codex/OpenCode) and Claude PTY hook settings only. Left-rail / Mission Control
+> live state for ACP agents comes from `session_chat` + `chat_session_exited`.
+> Capability-gated `session/load` resume, per-profile transcripts, permission
+> policies, git checkpoints, usage %, image attach, rAF-batched `session_chat`
+> streaming, a11y (`aria-live`), and part-coverage telemetry are shipped.
+> **Still open:** transcript virtualization, boot-time ACP reattach, multi-session
+> management UI, explicit feature flag (chat is default-on for ACP agents).
 > **Date:** 2026-06-15
 > **Decision:** Embed multiple existing agent CLIs (Codex, Claude Code, OpenCode, Gemini, …) behind one chat surface via **ACP (Agent Client Protocol)**.
 > **Scope note:** This is a design/intent doc plus rolling implementation notes.

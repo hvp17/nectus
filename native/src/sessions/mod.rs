@@ -1,14 +1,13 @@
 use crate::db::Database;
 use crate::models::{
     AgentKind, AgentProfile, Repo, Session, SessionActivityEvent, SessionExitedEvent,
-    SessionIdleEvent, SessionNeedsInputEvent, SessionOutputEvent, SessionOutputSnapshot,
-    SessionState, TaskSummary,
+    SessionOutputEvent, SessionOutputSnapshot, SessionState, TaskSummary,
 };
 use chrono::Utc;
 use parking_lot::Mutex;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use std::collections::HashMap;
-use std::io::{BufReader, Read, Seek, SeekFrom, Write};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -20,8 +19,6 @@ mod acp_manager;
 mod agents;
 mod claude;
 mod codex;
-#[cfg(test)]
-mod codex_tests;
 mod command;
 mod opencode;
 mod pr_consensus;
@@ -58,165 +55,6 @@ const ACTIVITY_THROTTLE: Duration = Duration::from_millis(300);
 // session's recorded size, so this is also the width early output is generated at.
 const DEFAULT_PTY_ROWS: u16 = 28;
 const DEFAULT_PTY_COLS: u16 = 100;
-
-/// A turn-completion or input-request signal parsed from an agent-specific event
-/// source. Retained for reference — legacy watchers were removed in favor of ACP chat.
-#[allow(dead_code)]
-enum SessionSignal {
-    Idle {
-        turn_id: Option<String>,
-        message: Option<String>,
-    },
-    NeedsInput {
-        turn_id: Option<String>,
-        reason: String,
-        prompt: Option<String>,
-    },
-    /// A human-readable "what the agent is doing now" line, parsed from the
-    /// provider's structured event stream (Codex reasoning/messages, Claude
-    /// tool-use hooks, OpenCode message parts). Replaces the raw-PTY scraper for
-    /// those providers, which on a full-screen TUI only surfaced statusline
-    /// chrome and echoed keystrokes.
-    Activity { text: String },
-}
-
-/// Emit the frontend event for a session signal and, on idle, spawn any pending
-/// review. Legacy — no longer called after watcher decommission.
-#[allow(dead_code)]
-fn emit_session_signal(
-    app: &AppHandle,
-    db: &Arc<Mutex<Database>>,
-    sessions: &Arc<Mutex<HashMap<String, RunningSession>>>,
-    task_id: i64,
-    session_id: &str,
-    cwd: &Path,
-    signal: SessionSignal,
-) {
-    match signal {
-        SessionSignal::Idle { turn_id, message } => {
-            // Idle is the default state, not a persisted attention — clear any prior
-            // "needs you" wait so the badge resolves when the agent finishes a turn.
-            let _ = db
-                .lock()
-                .set_task_attention(task_id, None)
-                .inspect_err(|error| {
-                    tracing::warn!(?error, task_id, "failed to clear task attention")
-                });
-            let _ = app
-                .emit(
-                    "session_idle",
-                    SessionIdleEvent {
-                        session_id: session_id.to_string(),
-                        task_id,
-                        turn_id,
-                        message,
-                    },
-                )
-                .inspect_err(|error| {
-                    tracing::warn!(?error, session_id = %session_id, "failed to emit session_idle")
-                });
-            spawn_review_on_session_idle(
-                app.clone(),
-                db.clone(),
-                sessions.clone(),
-                task_id,
-                session_id.to_string(),
-                cwd.to_path_buf(),
-            );
-        }
-        SessionSignal::NeedsInput {
-            turn_id,
-            reason,
-            prompt,
-        } => {
-            // Persist the "needs you" signal so it survives an app reload; the
-            // frontend reads it back off the task, not an ephemeral store.
-            let _ = db
-                .lock()
-                .set_task_attention(task_id, Some("needs_input"))
-                .inspect_err(|error| {
-                    tracing::warn!(?error, task_id, "failed to set task attention")
-                });
-            let _ = app
-                .emit(
-                    "session_needs_input",
-                    SessionNeedsInputEvent {
-                        session_id: session_id.to_string(),
-                        task_id,
-                        turn_id,
-                        reason,
-                        prompt,
-                    },
-                )
-                .inspect_err(|error| {
-                    tracing::warn!(?error, session_id = %session_id, "failed to emit session_needs_input")
-                });
-        }
-        SessionSignal::Activity { text } => {
-            emit_activity_line(app, sessions, task_id, session_id, &text);
-        }
-    }
-}
-
-/// Normalize, throttle/de-duplicate, and emit a structured activity line for a
-/// session. Legacy — ACP chat feeds `session_chat` instead.
-#[allow(dead_code)]
-fn emit_activity_line(
-    app: &AppHandle,
-    sessions: &Arc<Mutex<HashMap<String, RunningSession>>>,
-    task_id: i64,
-    session_id: &str,
-    text: &str,
-) {
-    let candidate = normalize_activity(text);
-    let now = Instant::now();
-    let line = {
-        let mut guard = sessions.lock();
-        let Some(running) = guard.get_mut(session_id) else {
-            return;
-        };
-        match activity_to_emit(
-            candidate,
-            running.last_activity_line.as_deref(),
-            running.last_activity_at,
-            now,
-        ) {
-            Some(line) => {
-                running.last_activity_line = Some(line.clone());
-                running.last_activity_at = Some(now);
-                line
-            }
-            None => return,
-        }
-    };
-    let _ = app
-        .emit(
-            "session_activity",
-            SessionActivityEvent {
-                session_id: session_id.to_string(),
-                task_id,
-                line,
-            },
-        )
-        .inspect_err(|error| {
-            tracing::warn!(?error, session_id = %session_id, "failed to emit session activity")
-        });
-}
-
-/// Walk back from the end of `bytes` to the last valid UTF-8 boundary.
-#[allow(dead_code)]
-fn split_at_utf8_boundary(bytes: &[u8]) -> (&[u8], &[u8]) {
-    let mut end = bytes.len();
-    loop {
-        if std::str::from_utf8(&bytes[..end]).is_ok() {
-            return (&bytes[..end], &bytes[end..]);
-        }
-        if end == 0 {
-            return (&[], bytes);
-        }
-        end -= 1;
-    }
-}
 
 /// Decode `bytes` to text, substituting `�` for genuinely invalid sequences (as
 /// [`String::from_utf8_lossy`] does) but *deferring* a final incomplete multi-byte
@@ -283,101 +121,6 @@ fn decode_pty_chunk(carry: &mut Vec<u8>, read: &[u8]) -> String {
     let consumed = carry.len() - tail;
     carry.drain(..consumed);
     text
-}
-
-/// Emit every complete (`\n`-terminated) line in `fragment` via `emit`.
-#[allow(dead_code)]
-fn drain_complete_lines(fragment: &mut String, mut emit: impl FnMut(&str)) {
-    while let Some(pos) = fragment.find('\n') {
-        let line = fragment[..pos].trim_end_matches('\r').to_string();
-        emit(&line);
-        fragment.drain(..=pos);
-    }
-}
-
-/// Tail an append-only event log incrementally. Legacy watcher helper.
-#[allow(clippy::too_many_arguments)]
-#[allow(dead_code)]
-fn watch_event_log<F>(
-    app: &AppHandle,
-    db: &Arc<Mutex<Database>>,
-    sessions: &Arc<Mutex<HashMap<String, RunningSession>>>,
-    task_id: i64,
-    session_id: &str,
-    cwd: &Path,
-    log_path: &Path,
-    poll_interval: Duration,
-    parse_line: F,
-) where
-    F: Fn(&str) -> Option<SessionSignal>,
-{
-    let mut read_offset: u64 = 0;
-    let mut fragment = String::new();
-    loop {
-        if !sessions.lock().contains_key(session_id) {
-            return;
-        }
-
-        // The log may not exist yet (Codex races metadata discovery against the
-        // first rollout write); wait and retry, as the old full-read path did.
-        let Ok(file) = std::fs::File::open(log_path) else {
-            std::thread::sleep(poll_interval);
-            continue;
-        };
-
-        // The file shrank behind our offset → truncation or rotation (the Claude
-        // hook sink is truncated to empty on resume). Reset and re-read from 0.
-        let file_len = file.metadata().map(|meta| meta.len()).unwrap_or(0);
-        if file_len < read_offset {
-            read_offset = 0;
-            fragment.clear();
-        }
-        if file_len == read_offset {
-            std::thread::sleep(poll_interval);
-            continue;
-        }
-
-        let mut reader = BufReader::new(file);
-        if reader.seek(SeekFrom::Start(read_offset)).is_err() {
-            std::thread::sleep(poll_interval);
-            continue;
-        }
-        let mut raw = Vec::new();
-        match reader.read_to_end(&mut raw) {
-            Ok(0) => {
-                std::thread::sleep(poll_interval);
-                continue;
-            }
-            Ok(_) => {}
-            Err(_) => {
-                std::thread::sleep(poll_interval);
-                continue;
-            }
-        }
-
-        // A multi-byte char may be split across the read boundary mid-write; keep
-        // only the valid UTF-8 prefix and re-read the few trailing bytes next tick.
-        let (valid, _) = split_at_utf8_boundary(&raw);
-        match std::str::from_utf8(valid) {
-            Ok(text) => {
-                read_offset += valid.len() as u64;
-                fragment.push_str(text);
-            }
-            // Unreachable: split_at_utf8_boundary returns a valid prefix. Don't
-            // advance the offset, so the bytes are re-read next tick.
-            Err(_) => {
-                std::thread::sleep(poll_interval);
-                continue;
-            }
-        }
-
-        drain_complete_lines(&mut fragment, |line| {
-            if let Some(signal) = parse_line(line) {
-                emit_session_signal(app, db, sessions, task_id, session_id, cwd, signal);
-            }
-        });
-        std::thread::sleep(poll_interval);
-    }
 }
 
 /// Cheap to clone: the only field is an `Arc`, so a clone shares the same live
@@ -1286,35 +1029,6 @@ fn resolve_resumable_metadata(
     }
 }
 
-/// Reduce a structured progress string to a single short, readable line. Legacy.
-#[allow(dead_code)]
-fn normalize_activity(raw: &str) -> Option<String> {
-    let line = raw
-        .lines()
-        .map(str::trim)
-        .find(|line| line.chars().any(char::is_alphanumeric))?;
-    let line = line.trim_matches(|c: char| matches!(c, '*' | '#' | '`') || c.is_whitespace());
-    if line.is_empty() {
-        return None;
-    }
-    Some(line.chars().take(ACTIVITY_LINE_MAX).collect())
-}
-
-/// Longest prompt/preview snippet a legacy watcher forwarded.
-#[allow(dead_code)]
-const PROMPT_PREVIEW_LIMIT: usize = 500;
-
-/// Trim `value` and bound it to [`PROMPT_PREVIEW_LIMIT`] characters. Legacy.
-#[allow(dead_code)]
-fn prompt_preview(value: &str) -> Option<String> {
-    let value = value.trim();
-    if value.is_empty() {
-        None
-    } else {
-        Some(value.chars().take(PROMPT_PREVIEW_LIMIT).collect())
-    }
-}
-
 /// Derive the agent's latest human-readable activity line from raw PTY output.
 ///
 /// Agents render full-screen TUIs, so the raw tail is mostly ANSI escapes,
@@ -1482,39 +1196,6 @@ mod tests {
     }
 
     #[test]
-    fn normalize_activity_strips_markdown_chrome_and_takes_first_real_line() {
-        assert_eq!(
-            normalize_activity("**Investigating the failing test**\n\ndetails follow"),
-            Some("Investigating the failing test".to_string())
-        );
-        assert_eq!(
-            normalize_activity("## Editing styles.css"),
-            Some("Editing styles.css".to_string())
-        );
-        assert_eq!(
-            normalize_activity("`cargo test`"),
-            Some("cargo test".to_string())
-        );
-    }
-
-    #[test]
-    fn normalize_activity_skips_blank_and_symbol_only_lines() {
-        assert_eq!(
-            normalize_activity("\n\n   \n---\nRunning tests"),
-            Some("Running tests".to_string())
-        );
-        assert_eq!(normalize_activity("   \n***\n"), None);
-        assert_eq!(normalize_activity(""), None);
-    }
-
-    #[test]
-    fn normalize_activity_truncates_to_payload_cap() {
-        let line =
-            normalize_activity(&"x".repeat(ACTIVITY_LINE_MAX + 50)).expect("a long line survives");
-        assert_eq!(line.chars().count(), ACTIVITY_LINE_MAX);
-    }
-
-    #[test]
     fn activity_line_picks_last_meaningful_line() {
         let buffer = "Editing styles.css\nRunning tests\n";
         assert_eq!(
@@ -1612,58 +1293,6 @@ mod tests {
     fn activity_emit_skips_when_no_candidate() {
         let now = Instant::now();
         assert_eq!(activity_to_emit(None, Some("Older line"), None, now), None);
-    }
-
-    fn drain(fragment: &mut String) -> Vec<String> {
-        let mut emitted = Vec::new();
-        drain_complete_lines(fragment, |line| emitted.push(line.to_string()));
-        emitted
-    }
-
-    #[test]
-    fn drain_complete_lines_defers_partial_trailing_fragment() {
-        // First tick: two complete lines plus a fragment caught mid-write.
-        let mut fragment = "a\nb\npar".to_string();
-        assert_eq!(drain(&mut fragment), vec!["a", "b"]);
-        assert_eq!(fragment, "par");
-
-        // Next tick: the rest of the line plus its newline arrives; the line must
-        // be emitted exactly once (the partial fragment was never skipped).
-        fragment.push_str("tial\n");
-        assert_eq!(drain(&mut fragment), vec!["partial"]);
-        assert!(fragment.is_empty());
-    }
-
-    #[test]
-    fn drain_complete_lines_trims_crlf() {
-        let mut fragment = "x\r\ny\r\n".to_string();
-        assert_eq!(drain(&mut fragment), vec!["x", "y"]);
-        assert!(fragment.is_empty());
-    }
-
-    #[test]
-    fn drain_complete_lines_ignores_a_lone_partial_line() {
-        let mut fragment = "still writing".to_string();
-        assert!(drain(&mut fragment).is_empty());
-        assert_eq!(fragment, "still writing");
-    }
-
-    #[test]
-    fn split_at_utf8_boundary_passes_through_clean_ascii() {
-        let bytes = b"hello\nworld\n";
-        let (valid, leftover) = split_at_utf8_boundary(bytes);
-        assert_eq!(valid, bytes);
-        assert!(leftover.is_empty());
-    }
-
-    #[test]
-    fn split_at_utf8_boundary_backs_off_incomplete_multibyte() {
-        // U+00E9 (é) encodes as [0xC3, 0xA9]; simulate only the first byte arriving.
-        let mut bytes = b"abc\n".to_vec();
-        bytes.push(0xC3);
-        let (valid, leftover) = split_at_utf8_boundary(&bytes);
-        assert_eq!(std::str::from_utf8(valid).unwrap(), "abc\n");
-        assert_eq!(leftover, &[0xC3u8]);
     }
 
     #[test]

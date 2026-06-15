@@ -430,32 +430,14 @@ explicitly.
 
 Attention tracking is UI state derived from backend events.
 
-- `session_idle` creates a finished attention marker.
-- `session_needs_input` creates a needs-input marker.
-- Codex `session_idle` comes from persisted JSONL `task_complete` or
-  `turn_complete` events.
-- Codex `session_needs_input` comes from explicit input-request events when
-  present, and from persisted `response_item` function calls named
-  `request_user_input`.
-- Codex rollout metadata discovery stays active for the life of the running
-  task session, so blank sessions can still emit attention markers after their
-  first user turn writes JSONL metadata.
-- Codex subagent metadata, including auto-review or guardian approval sessions,
-  is ignored so those internal completions do not mark the user task finished.
-- Codex `session_needs_input` remains best-effort because several
-  input-request event names are defined by Codex but are not persisted by
-  default.
-- Claude sessions emit the same two markers through Claude Code hooks instead of
-  a rollout JSONL: the `Stop` hook maps to `session_idle` and the `Notification`
-  hook maps to `session_needs_input`.
-- OpenCode sessions are launched with a local server port. Nectus discovers the
-  matching top-level session through `/session`, then subscribes to the server's
-  `/event` SSE stream: `session.idle` maps to `session_idle`, and the permission
-  and question asks (`permission.asked`, `permission.v2.asked`, `question.asked`,
-  `question.v2.asked`) map to `session_needs_input`. Events for subagent sessions
-  are ignored.
-- Codex, Claude, and OpenCode funnel through the shared `emit_session_signal` in
-  `native/src/sessions/mod.rs`.
+- **ACP chat (Claude, Codex, OpenCode):** permission parts in `session_chat` set
+  `needs_input` attention; settled turns and `chat_session_exited` clear working
+  state. Live lines come from chat text/tool parts via `useEventBridge`.
+- **PTY (Antigravity, custom):** `session_activity` from the ANSI-stripped tail;
+  legacy `session_idle` / `session_needs_input` from per-provider JSONL/hook/SSE
+  watchers were removed — PTY custom agents do not drive those markers today.
+- Codex/OpenCode **resume metadata** after PTY exit still probes rollout
+  `session_meta` (`codex.rs`) and `GET /session` (`opencode.rs`).
 - Starting, resuming, stopping, marking done, or sending input clears the marker
   for that task.
 - Counts are shown as Mission Control summary pills and the icon-rail needs-input
@@ -477,11 +459,13 @@ Attention tracking is UI state derived from backend events.
   formatter cleans the macOS notification body.
 
 Session/review/PR events are subscribed once in the mount-once event bridge and
-routed to the query cache or the UI store; the per-provider event sources are the
-Codex rollout JSONL (`native/src/sessions/codex.rs`), the Claude Code hook bridge
-(`native/src/sessions/claude.rs`), and the OpenCode `/event` SSE stream
-(`native/src/sessions/opencode.rs`), all funneling through `emit_session_signal` in
-`native/src/sessions/mod.rs`. File ownership: see [AGENTS.md](../AGENTS.md).
+routed to the query cache or the UI store. **ACP chat** drives Claude/Codex/OpenCode
+attention and live lines via `session_chat` / `chat_session_exited`. **PTY sessions**
+remain for custom agents (and optional terminal fallback); Antigravity/custom
+`session_activity` comes from the ANSI-stripped PTY tail in `mod.rs`. Resume metadata
+after PTY exit still probes Codex rollout `session_meta` (`codex.rs`) and OpenCode
+`GET /session` (`opencode.rs`); Claude PTY launch still embeds hook settings from
+`claude.rs`. File ownership: see [AGENTS.md](../AGENTS.md).
 
 ## AI Review
 
