@@ -313,11 +313,12 @@ Current behavior:
   or `unsupported`) for resume, permission, and image support. Runtime ACP
   `initialize` remains authoritative for `session/load`.
 - The Chat tab uses that descriptor export to gate launch and offers a compact
-  chat-agent selector populated from the task's agent profiles. Switching from
-  one ACP-capable profile to another starts a new chat row for the selected
-  profile rather than sending into a transcript owned by a different agent. If
-  the selected profile has no ACP provider descriptor yet (for example
-  Antigravity or a custom profile), the transcript remains readable but the
+  chat-agent selector populated from the task's agent profiles. Transcript reads
+  (`get_task_chat`) and live `session_chat` cache updates are scoped to the
+  selected profile's latest session. Switching from one ACP-capable profile to
+  another starts a new chat row for the selected profile rather than sending into
+  a transcript owned by a different agent. If the selected profile has no ACP
+  provider descriptor yet (for example Antigravity or a custom profile), the
   composer is disabled with an inline callout that points the user back to the
   Terminal tab.
 - The transcript renders structured parts: text, reasoning, tool cards, file-edit
