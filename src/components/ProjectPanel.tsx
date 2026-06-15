@@ -94,11 +94,12 @@ export function ProjectPanel({
   // among the persistent chrome displays them.
   const taskAttention = useAppStore((s) => s.taskAttention);
   const liveLines = useAppStore((s) => s.liveLines);
+  const chatWorkingTaskIds = useAppStore((s) => s.chatWorkingTaskIds);
 
   const repoNames = useMemo(() => new Map(repos.map((repo) => [repo.id, repo.name])), [repos]);
   const { byRepo, byWorkspace } = useMemo(
-    () => buildSidebarAgents(tasks, taskAttention, repos, workspaces, liveLines, now),
-    [tasks, taskAttention, repos, workspaces, liveLines, now],
+    () => buildSidebarAgents(tasks, taskAttention, repos, workspaces, liveLines, now, chatWorkingTaskIds),
+    [tasks, taskAttention, repos, workspaces, liveLines, now, chatWorkingTaskIds],
   );
 
   return (

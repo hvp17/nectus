@@ -11,9 +11,11 @@ import {
   taskToastFromContent,
 } from "../taskNotification";
 import { upsertById, upsertNewestById } from "../lib/listState";
+import { applyChatRuntimeUpdate, clearChatRuntimeForTask } from "../lib/chat/applyChatRuntime";
 import { useTauriEvent } from "./useTauriEvent";
 import type {
   ChatMessageEvent,
+  ChatSessionExitedEvent,
   ChatTranscript,
   ChatUsageEvent,
   PrReview,
@@ -69,6 +71,7 @@ export function useEventBridge() {
 
   const applyChatEvent = useCallback(
     (payload: ChatMessageEvent) => {
+      let messagesAfter: ChatTranscript["messages"] = [];
       queryClient.setQueryData<ChatTranscript>(
         queryKeys.task.chat(payload.taskId, payload.agentProfileId ?? null),
         (current) => {
@@ -78,6 +81,7 @@ export function useEventBridge() {
             index >= 0
               ? base.messages.map((message, i) => (i === index ? payload.message : message))
               : [...base.messages, payload.message];
+          messagesAfter = messages;
           const session =
             base.session?.id === payload.sessionId
               ? base.session
@@ -93,6 +97,8 @@ export function useEventBridge() {
           return { session, messages };
         },
       );
+      const task = tasksRef.current.find((item) => item.id === payload.taskId);
+      applyChatRuntimeUpdate(useAppStore.getState(), payload, task, messagesAfter);
     },
     [queryClient],
   );
@@ -259,6 +265,14 @@ export function useEventBridge() {
         used: payload.used,
         size: payload.size,
       });
+    },
+    { onError: handleSubscriptionError },
+  );
+
+  useTauriEvent<ChatSessionExitedEvent>(
+    "chat_session_exited",
+    (payload) => {
+      clearChatRuntimeForTask(useAppStore.getState(), payload.taskId);
     },
     { onError: handleSubscriptionError },
   );

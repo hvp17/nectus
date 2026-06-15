@@ -1,3 +1,7 @@
+//! Legacy JSONL / hook / SSE watchers — retained for reference and session-metadata
+//! probes; ACP chat is the primary surface for Claude/Codex/OpenCode.
+#![allow(dead_code)]
+
 use super::{prompt_preview, watch_event_log, RunningSession, SessionSignal};
 use crate::db::Database;
 use parking_lot::Mutex;

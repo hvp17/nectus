@@ -64,6 +64,14 @@ describe("buildAgentRows live line", () => {
     expect(row.line).toBe("Editing TaskCard.tsx");
   });
 
+  it("treats an in-flight ACP chat turn as running without a PTY session", () => {
+    const chatting = task({ id: 2, activeSessionId: null });
+    const [row] = buildAgentRows([chatting], [], repoNames, { 2: "Editing lib.rs" }, Date.now(), { 2: true });
+
+    expect(row.state).toBe("running");
+    expect(row.line).toBe("Editing lib.rs");
+  });
+
   it("falls back to the running label when there is no live line", () => {
     const running = task({ id: 1, activeSessionId: "s-1" });
     const [row] = buildAgentRows([running], [], repoNames, {});

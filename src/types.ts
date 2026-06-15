@@ -551,3 +551,10 @@ export interface ChatUsageEvent {
   used: number;
   size: number;
 }
+
+/** Emitted when an ACP chat connection ends (stop, crash, or connection error). */
+export interface ChatSessionExitedEvent {
+  sessionId: string;
+  taskId: number;
+  agentProfileId?: number | null;
+}

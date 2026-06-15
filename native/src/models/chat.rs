@@ -238,6 +238,15 @@ pub struct ChatUsageEvent {
     pub size: u64,
 }
 
+/// Emitted when an ACP chat connection ends (user stop, crash, or connection error).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatSessionExitedEvent {
+    pub session_id: String,
+    pub task_id: i64,
+    pub agent_profile_id: Option<i64>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

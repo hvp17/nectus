@@ -145,7 +145,6 @@ describe("TaskWorkspace chat-to-diff bridge", () => {
   it("opens the Diff tab with the clicked chat file selected", async () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByLabelText("Show chat"));
     await screen.findByTestId("chat-pane", {}, { timeout: 10_000 });
     fireEvent.click(await screen.findByTestId("chat-file-chip", {}, { timeout: 10_000 }));
 

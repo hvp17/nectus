@@ -1,8 +1,10 @@
 import { fireEvent, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { openExternal } from "../lib/openExternal";
+import { queryKeys } from "../queries/keys";
+import { createQueryClient } from "../queries/queryClient";
 import type { TaskAttention } from "../sessionAttention";
-import { renderWithTooltipProvider } from "../test/testUtils";
+import { renderWithProviders } from "../test/testUtils";
 import type { AgentProfile, GithubStatus, PullRequestInfo, ReviewLoop, ReviewRun, TaskSummary } from "../types";
 import { TaskWorkspace } from "./TaskWorkspace";
 
@@ -104,7 +106,9 @@ function renderTaskWorkspace(input?: {
   onRenameTask?: (task: TaskSummary, title: string) => void;
   onDeleteTask?: (task: TaskSummary) => void;
 }) {
-  return renderWithTooltipProvider(
+  const queryClient = createQueryClient();
+  queryClient.setQueryData(queryKeys.acpProviders(), []);
+  return renderWithProviders(
     <TaskWorkspace
       task={input?.task ?? task}
       attention={input?.attention}
@@ -132,6 +136,7 @@ function renderTaskWorkspace(input?: {
       onSessionExit={vi.fn()}
       onSessionInput={vi.fn()}
     />,
+    { queryClient },
   );
 }
 
@@ -170,6 +175,7 @@ describe("TaskWorkspace", () => {
 
     renderTaskWorkspace({ task: resumableTask, onResumeSession, onStartSession });
 
+    fireEvent.click(screen.getByLabelText("Show terminal"));
     expect(screen.getByRole("region", { name: /agent workspace stage/i })).toHaveTextContent("No active session");
     screen.getByRole("button", { name: /resume session/i }).click();
     screen.getByRole("button", { name: /restart agent/i }).click();
@@ -192,6 +198,7 @@ describe("TaskWorkspace", () => {
 
     renderTaskWorkspace({ task: resumableTask, onResumeSession });
 
+    fireEvent.click(screen.getByLabelText("Show terminal"));
     screen.getByRole("button", { name: /resume session/i }).click();
     expect(onResumeSession).toHaveBeenCalledWith(resumableTask);
   });

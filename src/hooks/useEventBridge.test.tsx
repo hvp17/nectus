@@ -87,6 +87,66 @@ describe("useEventBridge", () => {
     expect(liveLines()).toEqual({ 7: "Running tests" });
   });
 
+  it("mirrors ACP chat streaming into liveLines and chatWorkingTaskIds", async () => {
+    const queryClient = await mountBridge([{ ...baseTask, activeSessionId: null }]);
+
+    act(() => {
+      listeners.get("session_chat")?.({
+        payload: {
+          sessionId: "chat-1",
+          taskId: 7,
+          agentProfileId: 1,
+          done: false,
+          message: {
+            id: "agent-1",
+            role: "agent",
+            parts: [{ type: "tool", toolCallId: "t1", title: "Read src/lib.rs", status: "running", locations: [] }],
+            createdAt: "2026-06-15T00:00:00.000Z",
+            completedAt: null,
+          },
+        },
+      });
+    });
+
+    await waitFor(() => expect(liveLines()).toEqual({ 7: "Read src/lib.rs" }));
+    expect(useAppStore.getState().chatWorkingTaskIds).toEqual({ 7: true });
+
+    act(() => {
+      listeners.get("session_chat")?.({
+        payload: {
+          sessionId: "chat-1",
+          taskId: 7,
+          agentProfileId: 1,
+          done: true,
+          message: {
+            id: "agent-1",
+            role: "agent",
+            parts: [{ type: "text", text: "Done editing." }],
+            createdAt: "2026-06-15T00:00:00.000Z",
+            completedAt: "2026-06-15T00:01:00.000Z",
+          },
+        },
+      });
+    });
+
+    await waitFor(() => expect(useAppStore.getState().chatWorkingTaskIds).toEqual({}));
+    expect(queryClient.getQueryData<import("../types").ChatTranscript>(queryKeys.task.chat(7, 1))?.messages).toHaveLength(1);
+  });
+
+  it("clears chat runtime when chat_session_exited fires", async () => {
+    useAppStore.setState({ liveLines: { 7: "Working" }, chatWorkingTaskIds: { 7: true } });
+    await mountBridge([baseTask]);
+
+    act(() => {
+      listeners.get("chat_session_exited")?.({
+        payload: { sessionId: "chat-1", taskId: 7, agentProfileId: 1 },
+      });
+    });
+
+    expect(liveLines()).toEqual({});
+    expect(useAppStore.getState().chatWorkingTaskIds).toEqual({});
+  });
+
   it("clears the live line and attention when its session exits", async () => {
     useAppStore.setState({ taskAttention: upsertTaskAttention([], baseTask, idleNeedsInput) });
     await mountBridge([baseTask]);

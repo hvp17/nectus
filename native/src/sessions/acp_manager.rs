@@ -39,7 +39,8 @@ use crate::db::Database;
 use crate::git_ops;
 use crate::models::{
     AgentProfile, ChatImageAttachment, ChatMessage, ChatMessageEvent, ChatPart,
-    ChatPermissionPolicyKind, ChatRole, ChatSession, ChatUsageEvent, Repo, TaskSummary,
+    ChatPermissionPolicyKind, ChatRole, ChatSession, ChatSessionExitedEvent, ChatUsageEvent, Repo,
+    TaskSummary,
 };
 
 /// A queued user prompt (text plus optional image blocks).
@@ -332,6 +333,7 @@ async fn run_connection(connection: Connection) {
                 agent_profile_id,
                 &format!("Failed to launch agent: {error}"),
             );
+            emit_chat_session_exited(&app, &chat_session_id, task_id, agent_profile_id);
             sessions.lock().await.remove(&chat_session_id);
             return;
         }
@@ -628,6 +630,7 @@ async fn run_connection(connection: Connection) {
             &format!("ACP connection error: {error}"),
         );
     }
+    emit_chat_session_exited(&outer_app, &outer_session, task_id, agent_profile_id);
     // The connection ended (loop drained, or error): drop our own handle so the
     // map doesn't accumulate dead sessions. `chat_session_id` was moved into the
     // connect_with closure, so use the outer clone. (A bare `remove` detaches this
@@ -675,6 +678,9 @@ fn persist_and_emit(
             "failed to persist chat message"
         );
     }
+    if message.role == ChatRole::Agent {
+        log_turn_part_coverage(message);
+    }
     let _ = app.emit(
         "session_chat",
         ChatMessageEvent {
@@ -713,6 +719,38 @@ fn emit_error(
             done: true,
         },
     );
+}
+
+fn emit_chat_session_exited(
+    app: &AppHandle,
+    session_id: &str,
+    task_id: i64,
+    agent_profile_id: Option<i64>,
+) {
+    let _ = app.emit(
+        "chat_session_exited",
+        ChatSessionExitedEvent {
+            session_id: session_id.to_string(),
+            task_id,
+            agent_profile_id,
+        },
+    );
+}
+
+fn log_turn_part_coverage(message: &ChatMessage) {
+    let mut counts: HashMap<&'static str, usize> = HashMap::new();
+    for part in &message.parts {
+        let key = match part {
+            ChatPart::Text { .. } => "text",
+            ChatPart::Reasoning { .. } => "reasoning",
+            ChatPart::Tool { .. } => "tool",
+            ChatPart::FileEdit { .. } => "file_edit",
+            ChatPart::Permission { .. } => "permission",
+            ChatPart::Plan { .. } => "plan",
+        };
+        *counts.entry(key).or_insert(0) += 1;
+    }
+    tracing::info!(target: "acp.telemetry", part_counts = ?counts, "chat turn settled");
 }
 
 fn maybe_capture_checkpoint(

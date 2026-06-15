@@ -62,6 +62,8 @@ export interface TaskWorkspaceStageProps {
   onRenameTask: (task: TaskSummary, title: string) => void;
   stageTab: StageTab;
   onStageTabChange: (tab: StageTab) => void;
+  /** False for ACP-capable agents — chat is the primary surface. */
+  showTerminalTab?: boolean;
   /** Cross-repo member switcher shown with the Diff controls (null for single-repo tasks). */
   repoScopePicker?: React.ReactNode;
   /** File path requested by another surface, such as a chat file chip. */
@@ -96,6 +98,7 @@ export function TaskWorkspaceStage({
   onRenameTask,
   stageTab,
   onStageTabChange,
+  showTerminalTab = true,
   repoScopePicker,
   diffSelectedFile,
   diff,
@@ -209,10 +212,12 @@ export function TaskWorkspaceStage({
               onValueChange={(value) => value && onStageTabChange(value as StageTab)}
               variant="outline"
             >
-              <ToggleGroupItem value="terminal" aria-label="Show terminal" className="h-7 gap-1.5 px-2.5 text-xs">
-                <TerminalSquare className="size-3.5" aria-hidden="true" />
-                Terminal
-              </ToggleGroupItem>
+              {showTerminalTab && (
+                <ToggleGroupItem value="terminal" aria-label="Show terminal" className="h-7 gap-1.5 px-2.5 text-xs">
+                  <TerminalSquare className="size-3.5" aria-hidden="true" />
+                  Terminal
+                </ToggleGroupItem>
+              )}
               <ToggleGroupItem value="diff" aria-label="Show diff" className="h-7 gap-1.5 px-2.5 text-xs">
                 <FileDiff className="size-3.5" aria-hidden="true" />
                 Diff
@@ -300,7 +305,7 @@ export function TaskWorkspaceStage({
           </Suspense>
         </div>
 
-        {attention && stageTab === "terminal" && (
+        {attention && (stageTab === "terminal" || stageTab === "chat") && (
           <ActionBar
             attention={attention}
             agentName={task.agentName}

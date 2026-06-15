@@ -297,8 +297,10 @@ through the Agent Client Protocol instead of through a raw terminal TUI.
 
 Current behavior:
 
-- Chat is available from the task workspace stage alongside Terminal, Diff, and
-  Review.
+- For **ACP-capable agents** (Claude, Codex, OpenCode, Antigravity when a descriptor exists), **Chat is the default stage tab** and the primary way to work with the agent. Task creation and GitHub ship actions (`create` / `merge` / `mark-ready` / `close` PR) submit prompts through the ACP chat runtime (`acp_send_prompt`) rather than the embedded PTY.
+- The **Terminal** tab remains for **custom** agent profiles (no ACP descriptor) and as a fallback for Antigravity when chat is unavailable.
+- Live activity in Mission Control, the project sidebar, and task cards for ACP agents comes from **`session_chat`** text/tool parts (via `liveLines` and `chatWorkingTaskIds`), not from `session_activity` / JSONL / hook watchers — those legacy decoders are retired for ACP-capable kinds in `native/src/sessions/provider.rs`.
+- Chat is available from the task workspace stage alongside Terminal (when shown), Diff, and Review.
 - On the first prompt, Nectus starts an ACP session for the task's agent profile
   in the task worktree (or project path for direct-edit tasks). It streams the
   normalized ACP updates into the transcript and persists settled user/agent
@@ -355,7 +357,8 @@ The chat surface is served by `list_acp_providers`, `get_task_chat`, `acp_start_
 `acp_stop_chat`, `list_chat_permission_policies`, `clear_chat_permission_policies`,
 `list_chat_checkpoints`, and `restore_chat_checkpoint`; live updates arrive on
 `session_chat` and `session_chat_usage`. Settings → Diagnostics lists saved
-permission policies. File ownership: see [AGENTS.md](../AGENTS.md).
+permission policies. When an ACP connection ends, `chat_session_exited` clears
+ephemeral chat runtime state in the shell. File ownership: see [AGENTS.md](../AGENTS.md).
 
 ## Task Diff
 

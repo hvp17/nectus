@@ -70,7 +70,7 @@ export function ChatTranscript({ messages, onRespondPermission, onOpenFile }: Ch
   );
 
   return (
-    <Conversation className="min-h-0 flex-1" data-testid="chat-transcript">
+    <Conversation className="min-h-0 flex-1" data-testid="chat-transcript" aria-live="polite" aria-relevant="additions">
       <ConversationContent>
         <ChatTranscriptAutoScroll messages={messages} />
         {messages.map((message) => (

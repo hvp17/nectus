@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use super::{prompt_preview, watch_event_log, RunningSession, SessionSignal};
 use crate::db::Database;
 use parking_lot::Mutex;
