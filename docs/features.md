@@ -304,7 +304,7 @@ Current behavior:
   normalized ACP updates into the transcript and persists settled user/agent
   turns in SQLite.
 - ACP launch is driven by the Rust provider descriptor in `native/src/sessions/acp.rs`
-  for Claude Code, OpenCode, and Codex. The runtime resolves the descriptor's
+  for Claude Code, OpenCode, Codex, and Antigravity (preview). The runtime resolves the descriptor's
   command, seeds the login-shell environment, adds the augmented PATH, applies any
   provider-specific executable override, then applies the selected profile's env
   last so per-profile keys and PATH override the defaults.
@@ -322,9 +322,18 @@ Current behavior:
   composer is disabled with an inline callout that points the user back to the
   Terminal tab.
 - The transcript renders structured parts: text, reasoning, tool cards, file-edit
-  chips, permission requests, and plan entries. File chips switch the workspace
-  to the Diff tab and select the matching changed file so its patch loads
-  immediately.
+  chips, permission requests, and plan entries. Permission cards support allow/reject
+  once or always; "always" choices persist in `chat_permission_policies` and are
+  auto-applied on future matching tool titles. File chips switch the workspace to
+  the Diff tab and select the matching changed file so its patch loads immediately.
+- After each settled agent turn, Nectus snapshots `git rev-parse HEAD` into
+  `chat_checkpoints`. The Chat tab exposes a Checkpoints menu to restore a prior
+  turn with `git reset --hard` in the task worktree.
+- The composer queues follow-up prompts on the live ACP connection (serial user/agent
+  turns). When the agent emits usage updates, the Chat tab shows context-window %.
+  Image attach is available when the provider descriptor advertises image support.
+- A **Resumable** badge appears when the persisted row has an `acp_session_id` and
+  the provider supports `session/load`.
 - If the app reloads with a persisted chat session whose ACP process is no longer
   live, sending a message starts the ACP process again. When the persisted row
   has an agent `acp_session_id` and the agent advertises ACP `loadSession`,
@@ -335,8 +344,11 @@ Current behavior:
   startup migration from `agent_kind = 'gemini'` to `antigravity`.
 
 The chat surface is served by `list_acp_providers`, `get_task_chat`, `acp_start_chat`,
-`acp_send_prompt`, `acp_respond_permission`, and `acp_stop_chat`; live updates
-arrive on `session_chat`. File ownership: see [AGENTS.md](../AGENTS.md).
+`acp_send_prompt` (optional image attachments), `acp_respond_permission`,
+`acp_stop_chat`, `list_chat_permission_policies`, `clear_chat_permission_policies`,
+`list_chat_checkpoints`, and `restore_chat_checkpoint`; live updates arrive on
+`session_chat` and `session_chat_usage`. Settings → Diagnostics lists saved
+permission policies. File ownership: see [AGENTS.md](../AGENTS.md).
 
 ## Task Diff
 

@@ -18,6 +18,8 @@ export const queryKeys = {
   acpProviders: () => ["acp-providers"] as const,
   settings: () => ["settings"] as const,
 
+  chatPermissionPolicies: () => ["chat-permission-policies"] as const,
+
   github: {
     status: () => ["github", "status"] as const,
     /** Best-effort branch PR detection for a worktree task with no linked PR.
@@ -40,6 +42,10 @@ export const queryKeys = {
     /** ACP chat transcript for a task; kept live by the `session_chat` event bridge. */
     chat: (taskId: number, agentProfileId?: number | null) =>
       ["task", "chat", taskId, agentProfileId ?? null] as const,
+    chatCheckpoints: (chatSessionId: string) =>
+      ["task", "chat-checkpoints", chatSessionId] as const,
+    chatUsage: (taskId: number, agentProfileId?: number | null) =>
+      ["task", "chat-usage", taskId, agentProfileId ?? null] as const,
   },
 
   prReviews: {

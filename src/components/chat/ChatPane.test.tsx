@@ -14,6 +14,7 @@ vi.mock("../../api", () => ({
     acpSendPrompt: vi.fn(),
     acpRespondPermission: vi.fn(),
     acpStopChat: vi.fn(),
+    listChatCheckpoints: vi.fn().mockResolvedValue([]),
   },
 }));
 
@@ -109,11 +110,13 @@ describe("ChatPane", () => {
       1,
       "stale-session",
       "What is 2+2?",
+      undefined,
     );
     expect(mockedApi.acpSendPrompt).toHaveBeenNthCalledWith(
       2,
       "fresh-session",
       "What is 2+2?",
+      undefined,
     );
   });
 
@@ -136,7 +139,7 @@ describe("ChatPane", () => {
     fireEvent.click(screen.getByTestId("chat-send"));
 
     await waitFor(() => expect(mockedApi.acpStartChat).toHaveBeenCalledWith(42, 4));
-    expect(mockedApi.acpSendPrompt).toHaveBeenCalledWith("opencode-session", "Use OpenCode");
+    expect(mockedApi.acpSendPrompt).toHaveBeenCalledWith("opencode-session", "Use OpenCode", undefined);
     expect(mockedApi.acpSendPrompt).not.toHaveBeenCalledWith("stale-session", "Use OpenCode");
   });
 

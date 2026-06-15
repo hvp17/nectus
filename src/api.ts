@@ -12,6 +12,9 @@ import type {
   AgentProfile,
   AppSettings,
   AppSettingsInput,
+  ChatImageAttachment,
+  ChatCheckpoint,
+  ChatPermissionPolicy,
   ChatSession,
   ChatTranscript,
   GithubStatus,
@@ -426,8 +429,12 @@ export const api = {
   async acpStartChat(taskId: number, agentProfileId: number | null): Promise<ChatSession> {
     return invoke("acp_start_chat", { taskId, agentProfileId });
   },
-  async acpSendPrompt(sessionId: string, text: string): Promise<void> {
-    return invoke("acp_send_prompt", { sessionId, text });
+  async acpSendPrompt(
+    sessionId: string,
+    text: string,
+    images?: ChatImageAttachment[],
+  ): Promise<void> {
+    return invoke("acp_send_prompt", { sessionId, text, images: images ?? null });
   },
   async acpRespondPermission(
     sessionId: string,
@@ -438,6 +445,21 @@ export const api = {
   },
   async acpStopChat(sessionId: string): Promise<void> {
     return invoke("acp_stop_chat", { sessionId });
+  },
+  async listChatPermissionPolicies(): Promise<ChatPermissionPolicy[]> {
+    if (!isTauriRuntime()) return [];
+    return invoke("list_chat_permission_policies");
+  },
+  async clearChatPermissionPolicies(): Promise<void> {
+    if (!isTauriRuntime()) return;
+    return invoke("clear_chat_permission_policies");
+  },
+  async listChatCheckpoints(chatSessionId: string): Promise<ChatCheckpoint[]> {
+    if (!isTauriRuntime()) return [];
+    return invoke("list_chat_checkpoints", { chatSessionId });
+  },
+  async restoreChatCheckpoint(checkpointId: string): Promise<void> {
+    return invoke("restore_chat_checkpoint", { checkpointId });
   },
   async listTaskReviewRuns(taskId: number): Promise<ReviewRun[]> {
     if (isBrowserPreview) return (await seeds()).seedReviewRuns(taskId);

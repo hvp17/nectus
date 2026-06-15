@@ -520,3 +520,34 @@ export interface ChatMessageEvent {
   message: ChatMessage;
   done: boolean;
 }
+
+export type ChatPermissionPolicyKind = "allow_always" | "reject_always";
+
+export interface ChatPermissionPolicy {
+  toolTitle: string;
+  kind: ChatPermissionPolicyKind;
+  createdAt: string;
+}
+
+export interface ChatCheckpoint {
+  id: string;
+  chatSessionId: string;
+  taskId: number;
+  messageId: string;
+  gitCommit: string;
+  label: string;
+  createdAt: string;
+}
+
+export interface ChatImageAttachment {
+  mimeType: string;
+  data: string;
+}
+
+export interface ChatUsageEvent {
+  sessionId: string;
+  taskId: number;
+  agentProfileId?: number | null;
+  used: number;
+  size: number;
+}
