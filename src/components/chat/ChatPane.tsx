@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ChatStatus, FileUIPart } from "ai";
-import { ImagePlus, SlidersHorizontal, Terminal } from "lucide-react";
+import { Cpu, ImagePlus, Shield, SlidersHorizontal, Terminal, X } from "lucide-react";
 import { useAcpProvidersQuery, useAgentProfilesQuery } from "@/queries/core";
 import { queryKeys } from "@/queries/keys";
 import { api } from "@/api";
@@ -19,7 +19,13 @@ import {
   PromptInputBody,
   PromptInputButton,
   PromptInputFooter,
+  PromptInputHeader,
   PromptInputProvider,
+  PromptInputSelect,
+  PromptInputSelectContent,
+  PromptInputSelectItem,
+  PromptInputSelectTrigger,
+  PromptInputSelectValue,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
@@ -28,7 +34,6 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -216,7 +221,6 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
       )}
       <PromptInputProvider>
       <div className="flex flex-wrap items-center gap-2 border-t px-2 py-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Chat agent</span>
         <Select
           disabled={agentProfiles.length === 0}
           value={selectedAgentProfileId?.toString()}
@@ -266,64 +270,16 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
             Agent working…
           </Badge>
         )}
-        {usageQuery.data && usageQuery.data.size > 0 && (
-          <Context maxTokens={usageQuery.data.size} usedTokens={usageQuery.data.used}>
-            <ContextTrigger className="h-7 px-2 text-xs" data-testid="chat-usage" />
-            <ContextContent>
-              <ContextContentHeader />
-            </ContextContent>
-          </Context>
-        )}
-        {activeSessionId && checkpoints.length > 0 && (
-          <Checkpoint>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <CheckpointTrigger className="h-7 gap-1 px-2 text-xs" tooltip="Restore a git checkpoint">
-                  <CheckpointIcon className="size-3.5" />
-                  Checkpoints
-                </CheckpointTrigger>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="max-h-64 w-72 overflow-auto">
-                {[...checkpoints].reverse().map((checkpoint) => (
-                  <DropdownMenuItem
-                    key={checkpoint.id}
-                    onClick={() => {
-                      void api
-                        .restoreChatCheckpoint(checkpoint.id)
-                        .then(() => useAppStore.getState().setMessage(`Restored: ${checkpoint.label}`))
-                        .catch((error) => useAppStore.getState().setMessage(String(error)));
-                    }}
-                  >
-                    <span className="truncate">{checkpoint.label}</span>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </Checkpoint>
-        )}
-        <ChatCommandMenu commands={availableCommands} disabled={composerDisabled || !activeSessionId} />
-        <ChatModeSelect
-          activeSessionId={activeSessionId}
-          currentModeId={runtime?.currentModeId ?? null}
-          disabled={composerDisabled}
-          modes={modes}
-          onSetMode={onSetMode}
-        />
-        <ChatConfigControls
-          activeSessionId={activeSessionId}
-          configOptions={configOptions}
-          disabled={composerDisabled}
-          onSetConfigOption={onSetConfigOption}
-        />
       </div>
       <PromptInput
         accept={supportsImages ? "image/*" : undefined}
-        className="border-t p-2"
+        className="rounded-none border-0 border-t"
         multiple
         onSubmit={(message) => {
           void send(message.text, filePartsToImages(message.files));
         }}
       >
+        <ChatComposerAttachments />
         <PromptInputBody>
           <PromptInputTextarea
             data-testid="chat-composer-input"
@@ -341,17 +297,68 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
         <PromptInputFooter>
           <PromptInputTools>
             {supportsImages && !composerDisabled && <ChatAttachImageButton />}
+            <ChatCommandMenu commands={availableCommands} disabled={composerDisabled || !activeSessionId} />
+            <ChatPermissionModeSelect
+              activeSessionId={activeSessionId}
+              currentModeId={runtime?.currentModeId ?? null}
+              disabled={composerDisabled}
+              modes={modes}
+              onSetMode={onSetMode}
+            />
+            <ChatConfigSelects
+              activeSessionId={activeSessionId}
+              configOptions={configOptions}
+              disabled={composerDisabled}
+              onSetConfigOption={onSetConfigOption}
+            />
           </PromptInputTools>
-          <PromptInputSubmit
-            data-testid="chat-send"
-            disabled={composerDisabled || busy}
-            onStop={
-              activeSessionId
-                ? () => void api.acpCancelPrompt(activeSessionId).catch(() => undefined)
-                : undefined
-            }
-            status={promptStatus}
-          />
+          <div className="flex items-center gap-1">
+            {usageQuery.data && usageQuery.data.size > 0 && (
+              <Context maxTokens={usageQuery.data.size} usedTokens={usageQuery.data.used}>
+                <ContextTrigger className="h-7 px-2 text-xs" data-testid="chat-usage" />
+                <ContextContent>
+                  <ContextContentHeader />
+                </ContextContent>
+              </Context>
+            )}
+            {activeSessionId && checkpoints.length > 0 && (
+              <Checkpoint>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <CheckpointTrigger className="h-7 gap-1 px-2 text-xs" tooltip="Restore a git checkpoint">
+                      <CheckpointIcon className="size-3.5" />
+                      Checkpoints
+                    </CheckpointTrigger>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="max-h-64 w-72 overflow-auto">
+                    {[...checkpoints].reverse().map((checkpoint) => (
+                      <DropdownMenuItem
+                        key={checkpoint.id}
+                        onClick={() => {
+                          void api
+                            .restoreChatCheckpoint(checkpoint.id)
+                            .then(() => useAppStore.getState().setMessage(`Restored: ${checkpoint.label}`))
+                            .catch((error) => useAppStore.getState().setMessage(String(error)));
+                        }}
+                      >
+                        <span className="truncate">{checkpoint.label}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </Checkpoint>
+            )}
+            <PromptInputSubmit
+              data-testid="chat-send"
+              disabled={composerDisabled || busy}
+              onStop={
+                activeSessionId
+                  ? () => void api.acpCancelPrompt(activeSessionId).catch(() => undefined)
+                  : undefined
+              }
+              status={promptStatus}
+            />
+          </div>
         </PromptInputFooter>
       </PromptInput>
       </PromptInputProvider>
@@ -371,18 +378,17 @@ function ChatCommandMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
+        <PromptInputButton
           className="h-7 gap-1.5 px-2 text-xs"
           data-testid="chat-command-menu"
           disabled={disabled}
-          size="sm"
-          variant="outline"
+          variant="ghost"
         >
           <Terminal className="size-3.5" aria-hidden="true" />
           Commands
-        </Button>
+        </PromptInputButton>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72">
+      <DropdownMenuContent align="start" className="w-72">
         {commands.map((command) => (
           <DropdownMenuItem
             key={command.name}
@@ -404,7 +410,12 @@ function ChatCommandMenu({
   );
 }
 
-function ChatModeSelect({
+/**
+ * The permission/session-mode select (Claude's default / acceptEdits / plan /
+ * bypassPermissions, etc.). ACP exposes these as session modes; we surface them
+ * as the leftmost footer select with a shield glyph.
+ */
+function ChatPermissionModeSelect({
   activeSessionId,
   currentModeId,
   disabled,
@@ -419,22 +430,29 @@ function ChatModeSelect({
 }) {
   if (!activeSessionId || modes.length === 0) return null;
   return (
-    <Select disabled={disabled} value={currentModeId ?? undefined} onValueChange={onSetMode}>
-      <SelectTrigger aria-label="Session mode" className="h-7 w-[132px]">
-        <SelectValue placeholder="Mode" />
-      </SelectTrigger>
-      <SelectContent>
+    <PromptInputSelect disabled={disabled} value={currentModeId ?? undefined} onValueChange={onSetMode}>
+      <PromptInputSelectTrigger aria-label="Session mode" className="h-7 gap-1.5">
+        <Shield className="size-3.5" aria-hidden="true" />
+        <PromptInputSelectValue placeholder="Mode" />
+      </PromptInputSelectTrigger>
+      <PromptInputSelectContent>
         {modes.map((mode) => (
-          <SelectItem key={mode.id} value={mode.id}>
+          <PromptInputSelectItem key={mode.id} value={mode.id}>
             {mode.name}
-          </SelectItem>
+          </PromptInputSelectItem>
         ))}
-      </SelectContent>
-    </Select>
+      </PromptInputSelectContent>
+    </PromptInputSelect>
   );
 }
 
-function ChatConfigControls({
+/**
+ * Per-agent config selects. ACP v0.14 has no first-class model field, so an
+ * agent's model choice arrives here as a `Select` config option (e.g. id `model`)
+ * alongside any other config knobs — each rendered as a footer select, with a CPU
+ * glyph for the model option and a sliders glyph for the rest.
+ */
+function ChatConfigSelects({
   activeSessionId,
   configOptions,
   disabled,
@@ -447,31 +465,33 @@ function ChatConfigControls({
 }) {
   if (!activeSessionId || configOptions.length === 0) return null;
   return (
-    <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+    <>
       {configOptions.map((option) => {
         if (option.options.length === 0) return null;
+        const isModel = option.id.toLowerCase() === "model" || option.name.toLowerCase() === "model";
+        const Glyph = isModel ? Cpu : SlidersHorizontal;
         return (
-          <Select
+          <PromptInputSelect
             key={option.id}
             disabled={disabled}
             value={option.currentValue ?? undefined}
             onValueChange={(value) => onSetConfigOption(option.id, value)}
           >
-            <SelectTrigger aria-label={`Session config ${option.name}`} className="h-7 w-[132px]">
-              <SlidersHorizontal className="mr-1.5 size-3.5" aria-hidden="true" />
-              <SelectValue placeholder={option.name} />
-            </SelectTrigger>
-            <SelectContent>
+            <PromptInputSelectTrigger aria-label={`Session config ${option.name}`} className="h-7 gap-1.5">
+              <Glyph className="size-3.5" aria-hidden="true" />
+              <PromptInputSelectValue placeholder={option.name} />
+            </PromptInputSelectTrigger>
+            <PromptInputSelectContent>
               {option.options.map((choice) => (
-                <SelectItem key={choice.id} value={choice.id}>
+                <PromptInputSelectItem key={choice.id} value={choice.id}>
                   {choice.name}
-                </SelectItem>
+                </PromptInputSelectItem>
               ))}
-            </SelectContent>
-          </Select>
+            </PromptInputSelectContent>
+          </PromptInputSelect>
         );
       })}
-    </span>
+    </>
   );
 }
 
@@ -481,6 +501,41 @@ function ChatAttachImageButton() {
     <PromptInputButton aria-label="Attach image" onClick={() => attachments.openFileDialog()}>
       <ImagePlus className="size-4" aria-hidden="true" />
     </PromptInputButton>
+  );
+}
+
+/** Inline thumbnail strip for pending image attachments, shown above the textarea. */
+function ChatComposerAttachments() {
+  const attachments = usePromptInputAttachments();
+  if (attachments.files.length === 0) return null;
+  return (
+    <PromptInputHeader>
+      <div className="flex flex-wrap gap-2" data-testid="chat-attachments">
+        {attachments.files.map((file) => (
+          <div className="group relative" key={file.id}>
+            {file.url ? (
+              <img
+                alt={file.filename ?? "attachment"}
+                className="size-12 rounded-md border object-cover"
+                src={file.url}
+              />
+            ) : (
+              <span className="flex size-12 items-center justify-center rounded-md border bg-muted px-1 text-center text-[10px] text-muted-foreground">
+                {file.filename ?? "file"}
+              </span>
+            )}
+            <button
+              aria-label="Remove attachment"
+              className="absolute -right-1.5 -top-1.5 grid size-4 place-items-center rounded-full border bg-background text-muted-foreground hover:text-foreground"
+              onClick={() => attachments.remove(file.id)}
+              type="button"
+            >
+              <X className="size-3" aria-hidden="true" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </PromptInputHeader>
   );
 }
 
