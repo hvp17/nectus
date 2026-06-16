@@ -12,6 +12,8 @@ use serde::Deserialize;
 /// Marker a reviewer appends so its machine verdict can be read without parsing
 /// prose. The marker line is removed from the human-facing review by
 /// [`parse_and_strip`].
+// legacy marker API, removed in a follow-up task
+#[allow(dead_code)]
 pub(super) const VERDICT_MARKER: &str = "NECTUS_VERDICT:";
 
 /// A parsed verdict token, domain-agnostic. Each caller maps it to its own enum
@@ -27,6 +29,8 @@ pub(super) enum VerdictToken {
 /// Parse a single line into a verdict token when it carries the marker.
 /// Case-insensitive; ignores surrounding whitespace. Returns `None` for a
 /// non-marker line or a marker with an unrecognized value.
+// legacy marker API, removed in a follow-up task
+#[allow(dead_code)]
 pub(super) fn parse_verdict_line(line: &str) -> Option<VerdictToken> {
     let upper = line.trim().to_ascii_uppercase();
     let value = upper.strip_prefix(VERDICT_MARKER)?;
@@ -103,6 +107,8 @@ pub(super) fn parse_verdict_block(raw: &str) -> (Option<VerdictToken>, String) {
 /// marker line wins, so a trailing summary verdict overrides an earlier mention)
 /// and the human-facing text with every marker line removed and trimmed. Returns
 /// `(None, text)` when no recognized marker is present.
+// legacy marker API, removed in a follow-up task
+#[allow(dead_code)]
 pub(super) fn parse_and_strip(raw: &str) -> (Option<VerdictToken>, String) {
     let mut token = None;
     let mut kept = Vec::new();

@@ -5,6 +5,8 @@
 //! the task review loop (`review_loop.rs`), single external PR reviews
 //! (`pr_review.rs`), and multi-model consensus reviews (`pr_consensus.rs`); it
 //! has no task-review-loop state of its own.
+// Legacy headless-CLI reviewer; superseded by review_runtime.rs, deleted in a follow-up task.
+#![allow(dead_code)]
 
 use super::command::resolve_agent_command;
 use super::reviewer_output::{ReviewerOutputCollector, ReviewerWire};
@@ -18,9 +20,6 @@ use tauri::{AppHandle, Emitter};
 /// single PR reviews both forward the reviewer's stdout live, but key it
 /// differently (task id vs review id) and emit a different event.
 pub(super) enum ReviewOutputTarget {
-    // The task review loop migrated to the ACP review driver (`review_runtime.rs`),
-    // so this variant is unconstructed until the PR-review surfaces migrate too.
-    #[allow(dead_code)]
     Task(i64),
     PrReview(i64),
 }

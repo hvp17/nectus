@@ -1,3 +1,7 @@
+// Legacy headless-CLI reviewer binary resolution; backs reviewer.rs and is
+// superseded by review_runtime.rs / acp_manager.rs, deleted in a follow-up task.
+#![allow(dead_code)]
+
 use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};

@@ -6,6 +6,8 @@
 //! `run --format json`); this module extracts both so the launcher can treat
 //! every provider uniformly: a human-facing review string plus an optional
 //! resolved session id to persist and resume.
+// Legacy headless-CLI reviewer; superseded by review_runtime.rs, deleted in a follow-up task.
+#![allow(dead_code)]
 
 use crate::models::AgentKind;
 
