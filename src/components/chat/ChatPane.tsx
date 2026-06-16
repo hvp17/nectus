@@ -196,7 +196,7 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
       : undefined;
 
   return (
-    <div className="flex h-full min-h-0 flex-col" data-testid="chat-pane">
+    <div className="flex h-full min-h-0 flex-col bg-background" data-testid="chat-pane">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-1">
         <ChatTranscript
           messages={messages}

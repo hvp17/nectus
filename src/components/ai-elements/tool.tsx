@@ -25,7 +25,13 @@ export type ToolProps = ComponentProps<typeof Collapsible>;
 
 export const Tool = ({ className, ...props }: ToolProps) => (
   <Collapsible
-    className={cn("group not-prose mb-1 w-full rounded-md border", className)}
+    className={cn(
+      // Quiet at rest: transparent, no border. Gains a hairline border + faint card
+      // tint on hover and when open, per the Codex look.
+      "group not-prose mb-0.5 w-full rounded-md border border-transparent transition-colors",
+      "hover:bg-card/50 data-[state=open]:border-border data-[state=open]:bg-card/40",
+      className,
+    )}
     {...props}
   />
 );
@@ -106,28 +112,40 @@ export const ToolHeader = ({
   toolName,
   compact = false,
   expandable = true,
+  glyph,
+  trailing,
+  hideStatusBadge = false,
   ...props
-}: ToolHeaderProps & { compact?: boolean; expandable?: boolean }) => {
+}: ToolHeaderProps & {
+  compact?: boolean;
+  expandable?: boolean;
+  glyph?: ReactNode;
+  trailing?: ReactNode;
+  hideStatusBadge?: boolean;
+}) => {
   const derivedName =
     type === "dynamic-tool" ? toolName : type.split("-").slice(1).join("-");
 
   const row = (
     <>
-      <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        <WrenchIcon
-          className={cn("shrink-0 text-muted-foreground", compact ? "size-3" : "size-4")}
-        />
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        {glyph ?? (
+          <WrenchIcon
+            className={cn("shrink-0 text-muted-foreground", compact ? "size-3" : "size-4")}
+          />
+        )}
         <span
           className={cn(
             "truncate font-medium",
-            compact ? "text-xs" : "text-sm",
+            compact ? "text-xs text-foreground/80" : "text-sm",
           )}
           title={title ?? derivedName}
         >
           {title ?? derivedName}
         </span>
-        {getStatusBadge(state, compact)}
+        {!hideStatusBadge && getStatusBadge(state, compact)}
       </div>
+      {trailing}
       {expandable && (
         <ChevronDownIcon
           className={cn(
@@ -141,7 +159,7 @@ export const ToolHeader = ({
 
   const triggerClass = cn(
     "flex w-full items-center justify-between gap-2",
-    compact ? "px-2 py-1" : "gap-4 p-3",
+    compact ? "px-2 py-1.5" : "gap-4 p-3",
     className,
   );
 

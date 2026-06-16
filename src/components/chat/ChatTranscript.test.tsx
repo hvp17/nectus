@@ -58,7 +58,7 @@ describe("ChatTranscript", () => {
     expect(screen.getByText("All done")).toBeInTheDocument();
     expect(screen.getByText("Read file")).toBeInTheDocument();
     expect(screen.getByTestId("chat-tool-status")).toHaveTextContent("Completed");
-    expect(screen.getByTestId("chat-file-chip")).toHaveTextContent("src/main.rs");
+    expect(screen.getByTestId("chat-file-chip")).toHaveTextContent("main.rs");
     expect(screen.getByText("Run rm -rf /tmp/x?")).toBeInTheDocument();
     // one row per message
     expect(screen.getAllByTestId("chat-message")).toHaveLength(3);
