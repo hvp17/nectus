@@ -62,7 +62,6 @@ fn token_from_str(value: &str) -> Option<VerdictToken> {
 /// left intact and yields no verdict (fail-open). A line closes the block only when
 /// it is exactly ` ``` ` after trimming, so a non-bare close like ` ```text ` does not
 /// terminate it. CRLF input is normalized to `\n` (via `lines()`/`join`).
-#[allow(dead_code)] // callers migrate in the next task
 pub(super) fn parse_verdict_block(raw: &str) -> (Option<VerdictToken>, String) {
     let lines: Vec<&str> = raw.lines().collect();
     let mut token: Option<VerdictToken> = None;

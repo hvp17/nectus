@@ -18,6 +18,9 @@ use tauri::{AppHandle, Emitter};
 /// single PR reviews both forward the reviewer's stdout live, but key it
 /// differently (task id vs review id) and emit a different event.
 pub(super) enum ReviewOutputTarget {
+    // The task review loop migrated to the ACP review driver (`review_runtime.rs`),
+    // so this variant is unconstructed until the PR-review surfaces migrate too.
+    #[allow(dead_code)]
     Task(i64),
     PrReview(i64),
 }
