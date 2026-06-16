@@ -287,7 +287,16 @@ Current behavior:
   maps the persisted `ChatPart` v1 model to those presentational primitives — the
   ACP wire format, `session_chat` events, and TanStack Query cache are unchanged.
   Structured parts render as: markdown text (`Message`), reasoning blocks, tool
-  cards, file-edit chips, permission confirmations, and plan collapsibles. The
+  rows, file-edit rows, permission confirmations, and plan collapsibles. Tool
+  rows follow a Codex-style, low-contrast resting look (transparent until
+  hover/expand) on the canvas background: consecutive read/search/fetch calls
+  collapse into one summary row (`Read N files and searched code`, with a count
+  pill and a per-op list on expand — the grouping is a pure presentation-time
+  transform in `src/lib/chat/groupToolParts.ts`, no model/event change); command
+  (`execute`) rows show a terminal glyph, `Ran <cmd>`, a Success/Failed/Running
+  badge, and a shell block on expand; edit rows show `Edited <file>` with inline
+  `+N −M` stats and the new file text on expand (`file_edit.diff` is new text
+  only, so it is not a red/green diff — the title still opens the Diff tab). The
   conversation shell auto-scrolls; the composer uses `PromptInput` with optional
   image attach, context-window % (`Context`), slash-command insertion, session
   mode/config controls, session-title display, and a checkpoint restore menu.
