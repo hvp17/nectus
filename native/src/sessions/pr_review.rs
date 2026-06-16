@@ -185,7 +185,7 @@ You are in a fresh checkout of the current PR head. Re-inspect only what changed
 - git log --oneline origin/{base}..HEAD
 - git diff origin/{base}...HEAD
 
-You already remember your previous review — do not re-derive it from scratch. Update it: confirm which earlier findings are now resolved, keep the ones that still apply, and add any new issues the latest changes introduced.
+If you recall your previous review, do not re-derive it from scratch — update it: confirm which earlier findings are now resolved, keep the ones that still apply, and add any new issues the latest changes introduced. If you do not have that context, review the current state of the PR from scratch.
 
 Write the updated review in GitHub-flavored Markdown that the reviewer can paste directly into the pull request (summary, blocking issues with file paths, non-blocking suggestions, what's done well). Output only the Markdown review, with no preamble before it.
 

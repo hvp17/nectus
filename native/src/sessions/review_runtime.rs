@@ -5,10 +5,6 @@
 //! (`review_loop.rs`), single PR reviews (`pr_review.rs`), and consensus
 //! (`pr_consensus.rs`). The live turn is validated via `pnpm desktop:dev`; only
 //! the pure helpers below are unit-tested, mirroring `acp_manager.rs`.
-//!
-//! Everything here is wired up by later tasks (the review callers migrate to this
-//! driver next), so the public surface is `#[allow(dead_code)]` for now.
-#![allow(dead_code)]
 
 /// Append `chunk` to `full`, returning the newly-appended suffix to stream live
 /// (with its start offset), or `None` when the chunk added nothing. Handles an
