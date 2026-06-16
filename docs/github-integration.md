@@ -120,15 +120,21 @@ The PR Reviews section reviews a pull request opened by someone else (see
 
 ### Single vs consensus reviews
 
+Both single and consensus PR reviews run the reviewer as a **headless ACP session**
+in the ephemeral PR worktree — the same mechanism chat uses, driven by
+`native/src/sessions/review_runtime.rs`, not a spawned CLI. Only ACP providers
+(Claude, Codex, OpenCode, Antigravity) can review; a Custom reviewer fails fast.
+
 The reviewer toggles on the PR Reviews form choose how many models review:
 
-- **One reviewer → single review.** The original flow: one reviewer CLI runs once
-  in the ephemeral worktree (`native/src/sessions/pr_review.rs`) and returns the
-  Markdown review plus a `NECTUS_VERDICT: BLOCKERS|CLEAN` marker (the shared
-  verdict contract in `native/src/sessions/verdict.rs`).
+- **One reviewer → single review.** One reviewer runs once in the ephemeral
+  worktree (`native/src/sessions/pr_review.rs`) and returns the Markdown review plus
+  a trailing fenced ` ```json ` `{"verdict": "blockers|clean"}` block (the shared
+  verdict contract in `native/src/sessions/verdict.rs`, parsed by
+  `parse_verdict_block`).
 - **Two or more reviewers → consensus review.** All selected reviewers review the
-  same PR head in **one shared read-only worktree**, in parallel
-  (`native/src/sessions/pr_consensus.rs`). After each round every reviewer is shown
+  same PR head in **one shared read-only worktree**, fanned out concurrently via
+  async (`native/src/sessions/pr_consensus.rs`). After each round every reviewer is shown
   the others' reviews and asked to reconsider; rounds repeat until every reviewer
   reports the same non-inconclusive verdict, or the round cap is hit (default 3,
   max 5, chosen on the form). A final **synthesis pass** — run by the first selected

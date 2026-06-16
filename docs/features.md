@@ -423,7 +423,8 @@ ownership: see [AGENTS.md](../AGENTS.md).
 
 ## AI Review
 
-AI review is a single reviewer pass over the selected task worktree.
+AI review is a single reviewer pass over the selected task worktree, run as a
+**headless ACP agent session** — the same mechanism chat uses, not a spawned CLI.
 
 Current behavior:
 
@@ -431,17 +432,20 @@ Current behavior:
   reviewer pass.
 - The review action shows the reviewer profile icon and name inline. Use the
   adjacent dropdown to switch reviewer profiles before starting the pass.
-- The review action switches the selected task UI to `reviewing` while the reviewer
-  command runs, and the task workflow stepper shows the in-progress state.
-- The workspace stage has a read-only **Review** tab that streams the reviewer's
-  live stdout (`review_output` chunks emitted by `native/src/sessions/review_loop.rs`)
-  into an `xterm.js` pane, so you can watch the reviewer inspect the worktree in
-  real time. Starting a review auto-selects this tab; the facts-rail review card's
-  `Watch live` / `View output` button opens it too. The tab is read-only — there is
-  no input, session, or snapshot — and between runs it shows the last recorded
-  reviewer output. Reviewer stdout is streamed over a pipe (not a PTY), so a
-  reviewer that fully buffers its stdout may not appear until it flushes; `codex
-  exec` streams incrementally.
+- The review action switches the selected task UI to `reviewing` while the headless
+  ACP review turn runs, and the task workflow stepper shows the in-progress state.
+- **Only ACP providers can review.** A reviewer profile must be Claude, Codex,
+  OpenCode, or Antigravity; a **Custom** agent has no ACP descriptor and the review
+  fails fast with a clear error telling you to choose an ACP provider.
+- The workspace stage has a read-only **Review** tab that streams the agent's live
+  message (`review_output` chunks emitted by `native/src/sessions/review_loop.rs`
+  via the ACP review driver `review_runtime.rs`) into an `xterm.js` pane, so you can
+  watch the reviewer inspect the worktree in real time. Starting a review
+  auto-selects this tab; the facts-rail review card's `Watch live` / `View output`
+  button opens it too. The tab is read-only — there is no input, session, or
+  snapshot — and between runs it shows the last recorded reviewer output. The review
+  turn runs with no human present, so the driver auto-approves every ACP permission
+  request the agent raises.
 - The task workflow stepper enables `Create PR` for worktree tasks once the
   GitHub CLI is connected. Creating a PR, merging, marking ready, and closing are
   all agent-driven through ACP chat: the action submits a prompt, the agent
@@ -453,37 +457,33 @@ Current behavior:
   task complete.
 - PR URLs are stored on the task: captured automatically by the `gh`-driven flow,
   or written through task metadata when linked manually or by the agent.
-- Claude and Antigravity reviewers are run in headless prompt mode with `-p` and the
-  generated review prompt. Codex reviewers run non-interactively with `codex exec`,
-  and OpenCode reviewers run with `opencode run`; both receive the prompt as a
-  trailing positional argument. Bare `codex` is the interactive TUI and aborts
-  with `stdin is not a terminal` when spawned without a real terminal. Custom
-  reviewers receive the prompt on stdin.
-- **Session resume for reviewers.** Claude, Codex, and OpenCode reviewers resume
-  their prior conversation across rounds rather than re-reading the worktree cold:
-  - Claude: minted once with `--session-id <uuid>` and resumed with
-    `--resume <uuid>` on every subsequent pass.
-  - Codex: runs in JSON-event mode (`codex exec --json`); the session id is
-    captured from the stream on the first run and resumed with
-    `codex exec resume <id> --json`.
-  - OpenCode: runs with `--format json`; the id is captured from the stream and
-    resumed with `opencode run --session <id> --format json`.
-  - Antigravity and Custom reviewers have no resume; they review fresh each time.
+- The reviewer is launched the same way a chat agent is — one headless ACP turn
+  (initialize → `session/new` or `session/load` → one prompt → stream the agent's
+  message → stop), driven by `native/src/sessions/review_runtime.rs`. There are no
+  per-provider CLI flags or stdout parsing anymore; the agent speaks ACP.
+- **Session resume for reviewers (ACP-native).** Repeat rounds resume the prior
+  conversation rather than re-reading the worktree cold:
+  - The driver sends `session/load` only when the agent advertises the `loadSession`
+    capability; a reviewer that does not simply starts a fresh `session/new`.
+  - Stored reviewer session ids are now **ACP session ids**. Ids minted before this
+    upgrade are not ACP ids and won't resume, so the first post-upgrade review per
+    task/PR starts fresh.
   - Task-loop ids are stored in `review_loops.reviewer_session_id` (reset when
     the loop is restarted). PR-review ids are stored in
     `pr_reviews.reviewer_session_id` (preserved across reruns). Consensus
     keeps per-reviewer ids in memory for the duration of one run.
-  - Side effect: a Codex or OpenCode reviewer's live "Watch reviewer" output
-    arrives as one chunk at completion rather than token-by-token, because those
-    CLIs emit the full message in a single JSON event in non-interactive mode.
-- Reviewer output is parsed from the shared `NECTUS_VERDICT:` marker line (the same
-  contract the PR reviews use, in `native/src/sessions/verdict.rs`); the marker line
-  is stripped from what is stored:
-  - `pass` ← `NECTUS_VERDICT: CLEAN`
-  - `needs_changes` ← `NECTUS_VERDICT: BLOCKERS`
-  - `feedback` ← `NECTUS_VERDICT: FEEDBACK`
-  - `unknown` when no marker is present (there is no natural-language fallback — a
-    review that merely quotes a phrase like "blocking issue" is not classified).
+- The verdict is a validated trailing fenced ` ```json ` block carrying
+  `{"verdict": "clean|blockers|feedback"}`, parsed by `parse_verdict_block` in
+  `native/src/sessions/verdict.rs` (the same contract the PR reviews use); the block
+  is stripped from what is stored. If the first turn omits a parseable block, the
+  driver does ONE-SHOT self-repair (a second prompt in the same session asking for
+  just the block):
+  - `pass` ← `clean`
+  - `needs_changes` ← `blockers`
+  - `feedback` ← `feedback`
+  - `unknown` when no parseable block is present (there is no natural-language
+    fallback — a review that merely quotes a phrase like "blocking issue" is not
+    classified).
 - Passing review marks the loop `passed` and moves the task to `done`.
 - Task cards show the saved review status once a review exists, including
   completed `Review passed` state.
@@ -502,7 +502,7 @@ File ownership: see [AGENTS.md](../AGENTS.md).
 PR Review reviews an external GitHub pull request against a known local project and
 produces a Markdown review to copy back to the author. It is separate from the task
 board: reviews have their own rail section and lifecycle, and share the worktree,
-reviewer-launch, and notification machinery under the hood.
+ACP review driver (`review_runtime.rs`), and notification machinery under the hood.
 
 Current behavior:
 
@@ -515,11 +515,11 @@ Current behavior:
 - Nectus resolves the PR's `owner/repo` to a project already added to Nectus by
   matching its git remote (`origin`). If no project matches, the action reports that
   the repository must be added as a project first. No filesystem scanning is done.
-- The review runs on a background thread: it fetches PR metadata (`gh pr view`),
+- The review runs on a background task: it fetches PR metadata (`gh pr view`),
   checks out the PR head into an ephemeral worktree
-  (`git fetch origin pull/<n>/head` + `git worktree add`), runs the reviewer
-  headless in that worktree, stores the Markdown review, and always tears the
-  worktree down.
+  (`git fetch origin pull/<n>/head` + `git worktree add`), runs the reviewer as a
+  headless ACP session in that worktree, stores the Markdown review, and always
+  tears the worktree down.
 - Status flows `queued → reviewing → ready`, or `error` on failure. A macOS
   notification and in-app toast fire when a review becomes `ready` or `error`.
 - The list groups reviews into three lifecycle sections — **To review**
@@ -528,39 +528,35 @@ Current behavior:
 - A finished review also carries a `verdict` that the Done badge surfaces:
   **Passed** (no blockers), **Blocking issues**, or **Inconclusive** (the reviewer
   finished without a recognizable verdict). An `error` review shows **Error**
-  instead and has no verdict. The verdict comes from a machine-readable
-  `NECTUS_VERDICT: BLOCKERS|CLEAN` line the reviewer appends; the backend parses
-  it and strips that line before storing the review, so the copied Markdown stays
-  clean. The verdict is the only structured signal — the review body itself is
-  free-form GitHub-flavored Markdown. This is the same `NECTUS_VERDICT:` marker
-  contract the task [AI Review](#ai-review) loop uses (PR reviews map the token to
-  `passed`/`blockers`/`inconclusive`; the loop maps it to `pass`/`needs_changes`/
-  `feedback`).
+  instead and has no verdict. The verdict comes from a validated trailing fenced
+  ` ```json ` block carrying `{"verdict": "blockers|clean"}` that the reviewer
+  appends; the backend parses it and strips the block before storing the review, so
+  the copied Markdown stays clean. The verdict is the only structured signal — the
+  review body itself is free-form GitHub-flavored Markdown. This is the same JSON
+  verdict-block contract the task [AI Review](#ai-review) loop uses (PR reviews map
+  the token to `passed`/`blockers`/`inconclusive`; the loop maps it to
+  `pass`/`needs_changes`/`feedback`).
 - The detail view shows the PR metadata and verdict badge, the review text in a
   scrollable pane, a Copy button, a Re-run action (re-fetches the PR head to pick up
   new commits and clears the prior verdict), and Delete.
 - For a **single** review the detail also has a **Review / Terminal** toggle: the
   Terminal view is a read-only `xterm.js` pane (the same `ReviewTerminalPane` as the
-  task Review tab) that streams the reviewer's stdout live over the
+  task Review tab) that streams the agent's message live over the
   `pr_review_output` event, so you can watch it inspect the worktree. A running
   review opens on Terminal and a finished one on Review; the live buffer is
-  ephemeral (kept while the review stays selected, not persisted). Same caveat as
-  the task loop: Codex/OpenCode run in JSON-event mode, so their live output lands
-  as one chunk at completion rather than token-by-token, whereas Claude/Antigravity
-  stream incrementally. Consensus reviews keep their round matrix and have no
-  Terminal toggle.
+  ephemeral (kept while the review stays selected, not persisted). Consensus
+  reviews keep their round matrix and have no Terminal toggle.
 - Reviewer profiles are the same agent profiles used elsewhere; the default reviewer
   is the configured default agent profile when it is still available, otherwise the
-  first available profile. Claude and Antigravity reviewers run with `-p`; Codex reviewers
-  run with `codex exec`, OpenCode reviewers run with `opencode run`, and custom
-  reviewers receive the prompt on stdin.
-- **Session resume for PR reviewers.** Claude, Codex, and OpenCode reviewers resume
-  their prior session across reruns of the same PR review (the stored id is in
-  `pr_reviews.reviewer_session_id`), so repeat reviews build on earlier findings
-  rather than re-reading the PR from scratch. Antigravity and Custom reviewers always
-  review fresh. The live output for Codex/OpenCode PR reviewers arrives in one
-  chunk at completion (same JSON-event-mode caveat as the task review loop).
-  See the [AI Review](#ai-review) section for per-provider resume mechanics.
+  first available profile. As with task reviews, **only ACP providers (Claude,
+  Codex, OpenCode, Antigravity) can review** — a Custom reviewer fails fast.
+- **Session resume for PR reviewers (ACP-native).** When the agent advertises the
+  `loadSession` capability, a rerun of the same PR review resumes its prior ACP
+  session (the stored id is in `pr_reviews.reviewer_session_id`), so repeat reviews
+  build on earlier findings rather than re-reading the PR from scratch; an agent
+  without that capability reviews fresh. Stored ids are ACP session ids, so a
+  pre-upgrade id won't resume and the first post-upgrade rerun starts fresh.
+  See the [AI Review](#ai-review) section for the shared resume mechanics.
 
 **Consensus mode.** Selecting two or more reviewers (optionally setting a round
 count, 1–5, default 3) runs them as a consensus review:
@@ -570,9 +566,12 @@ count, 1–5, default 3) runs them as a consensus review:
   gives a fresh verdict, so they can converge.
 - Reviewing stops early the moment all reviewers agree on a recognizable verdict
   (`passed`/`blockers`); otherwise it runs the full round budget.
+- Reviewers fan out concurrently (async `futures::future::join_all`), so a round
+  runs them in parallel rather than one after another.
 - The **synthesizer** (the first-selected reviewer) folds every reviewer's latest
-  review into one consolidated Markdown review. The stored `verdict` is the
-  synthesizer's marker, falling back to the majority position (blockers wins ties).
+  review into one consolidated Markdown review. When the reviewers converged, that
+  shared verdict is authoritative; otherwise the stored `verdict` is the
+  synthesizer's own verdict block.
 - The detail view shows a convergence banner ("Converged in N rounds — …"), a
   **reviewers × rounds** matrix of verdict dots that fills in live as each round
   is persisted, and the synthesized review. The list card and detail header carry
@@ -585,11 +584,12 @@ count, 1–5, default 3) runs them as a consensus review:
   `list_pr_review_runs` by round. Re-run clears the runs but keeps the reviewer
   roster and round budget.
 
-The single-review and consensus runtimes share one ephemeral-worktree scaffold and
-the shared `NECTUS_VERDICT` marker contract (`native/src/sessions/verdict.rs`);
-remote `owner/repo` parsing, the PR-ref
-fetch, and worktree-at-ref live in `native/src/git_ops/mod.rs`. The runtime emits the
-`pr_review_updated` event. File ownership: see [AGENTS.md](../AGENTS.md).
+The single-review and consensus runtimes share one ephemeral-worktree scaffold, the
+headless ACP review driver (`native/src/sessions/review_runtime.rs`), and the shared
+JSON verdict-block contract (`native/src/sessions/verdict.rs`); remote `owner/repo`
+parsing, the PR-ref fetch, and worktree-at-ref live in `native/src/git_ops/mod.rs`.
+The runtime emits the `pr_review_updated` event. File ownership: see
+[AGENTS.md](../AGENTS.md).
 
 ## GitHub
 

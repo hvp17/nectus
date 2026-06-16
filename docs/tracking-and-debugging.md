@@ -199,12 +199,12 @@ Backend-to-frontend events:
 | Event | Payload | Source |
 | --- | --- | --- |
 | `review_loop_updated` | Review-loop state and optional review run. | `native/src/sessions/review_loop.rs` |
-| `review_output` | Task id, a chunk of the task reviewer's live stdout, and the chunk's byte offset (a `0` offset starts a new run). Streamed by the task review loop. | `native/src/sessions/review_loop.rs` |
+| `review_output` | Task id, a chunk of the task reviewer's live ACP message, and the chunk's byte offset (a `0` offset starts a new run). Streamed by the task review loop via the ACP review driver. | `native/src/sessions/review_loop.rs` |
 | `session_chat` | ACP chat update: task id, chat session id, optional agent profile id, normalized `ChatMessage`, and `done` flag. Streaming updates are cache-only in the frontend (rAF-batched in `useEventBridge`); settled user/agent turns are persisted to `chat_messages`. Also feeds `liveLines`, `chatWorkingTaskIds`, and permission attention for triage. | `native/src/sessions/acp_manager.rs` |
 | `session_chat_usage` | Context-window usage (`used` / `size` token counts) for the active chat session. | `native/src/sessions/acp_manager.rs` |
 | `session_chat_runtime` | Latest ACP session metadata: initialized capabilities, agent info/auth methods, slash commands, current mode, config options, title, and updated timestamp. Persisted to `chat_sessions.runtime_json` and routed into the chat transcript cache. | `native/src/sessions/acp_manager.rs` |
 | `chat_session_exited` | Chat session id, task id, optional agent profile id. Clears ephemeral chat runtime state (`liveLines`, `chatWorkingTaskIds`, permission attention) when the ACP connection ends. | `native/src/sessions/acp_manager.rs` |
-| `pr_review_output` | Review id, a chunk of a single PR reviewer's live stdout, and the chunk's byte offset (a `0` offset starts a new run). Streamed by single PR reviews so the Reviews-view Terminal toggle can watch the reviewer live; consensus reviews keep their round matrix and do not stream. | `native/src/sessions/pr_review.rs` |
+| `pr_review_output` | Review id, a chunk of a single PR reviewer's live ACP message, and the chunk's byte offset (a `0` offset starts a new run). Streamed by single PR reviews so the Reviews-view Terminal toggle can watch the reviewer live; consensus reviews keep their round matrix and do not stream. | `native/src/sessions/pr_review.rs` |
 | `pr_review_updated` | Updated external PR review (status, verdict, metadata, Markdown output), plus an optional `latest_run` carrying the consensus round output that triggered the update. | `native/src/sessions/pr_review.rs`, `native/src/sessions/pr_consensus.rs` |
 | `diagnostic_log` | One captured backend `tracing` line (the same text written to the console), streamed live to the Settings → Diagnostics panel. Emitted from the diagnostics ring buffer, which is independent of the DB lock so the stream keeps flowing during a hang. | `native/src/diagnostics.rs` |
 
@@ -220,8 +220,8 @@ Frontend event listeners:
   shared late-unlisten cleanup and subscription-error path.
 - The remaining per-component listeners are intentionally not in the bridge:
   `src/hooks/useTaskReviewLoop.ts` listens for `review_output`, and
-  `src/hooks/usePrReviews.ts` listens for `pr_review_output`. Both accumulate
-  read-only reviewer stdout for `src/components/ReviewTerminalPane.tsx`.
+  `src/hooks/usePrReviews.ts` listens for `pr_review_output`. Both accumulate the
+  reviewer's read-only live output for `src/components/ReviewTerminalPane.tsx`.
 
 ## Task Tracking Fields
 
@@ -269,23 +269,21 @@ and a customized pattern is left untouched.
 
 ## Reviewer Session Resume
 
-Claude, Codex, and OpenCode reviewers resume their prior conversation rather than
-starting from scratch on each pass. The rule everywhere is "capture once, keep":
-store the resolved id from the first successful run and pass it to the reviewer on
-every subsequent run. Antigravity and Custom reviewers always run fresh.
+Reviews run as a **headless ACP session** (`native/src/sessions/review_runtime.rs`),
+the same mechanism chat uses — not a per-provider CLI spawn, and no provider `--json`
+stdout parsing. Resume is ACP-native: the driver sends `session/load` only when the
+agent advertises the `loadSession` capability (no per-`AgentKind` table); an agent
+without it starts a fresh `session/new` each pass. The rule everywhere is "capture
+once, keep": store the resolved ACP session id from the first successful run and pass
+it to the reviewer on every subsequent run.
 
-**Per-provider mechanics** (`native/src/sessions/reviewer.rs`,
-`native/src/sessions/reviewer_output.rs`):
+> **Upgrade note:** stored reviewer session ids are now **ACP session ids**. Ids
+> written before this upgrade are not ACP ids and will not resume, so the **first
+> post-upgrade review per task/PR starts fresh** (a new `session/new`); the next run
+> resumes normally.
 
-- **Claude**: the first run mints an id with `--session-id <uuid>` (a UUID
-  generated by `new_reviewer_session_id()`); all subsequent runs pass
-  `--resume <uuid>`. Claude writes plain text stdout; `reviewer_output.rs`
-  extracts the text directly.
-- **Codex**: runs in JSON-event mode (`codex exec --json`); the session id is
-  emitted as a structured event and captured from the stream by `reviewer_output.rs`.
-  Subsequent runs use `codex exec resume <id> --json`.
-- **OpenCode**: runs with `--format json`; `reviewer_output.rs` extracts the session
-  id from the JSON event stream. Subsequent runs add `--session <id> --format json`.
+Only ACP providers (Claude, Codex, OpenCode, Antigravity) can review; a **Custom**
+reviewer has no ACP descriptor and the run fails fast with a clear error.
 
 **Where ids are persisted:**
 
@@ -301,20 +299,12 @@ every subsequent run. Antigravity and Custom reviewers always run fresh.
   consensus run. They are not persisted to SQLite (no new column on `pr_review_runs`
   or `pr_review_reviewers`).
 
-**Codex/OpenCode live-output caveat**: because these reviewers run in JSON-event
-mode rather than streaming plain text, the "Watch reviewer" live output arrives as
-one chunk when the command completes, not token-by-token. This affects the task
-Review tab and the PR review detail's live pane.
-
-**Reviewer failure diagnostics**: when a reviewer exits non-zero,
-`run_reviewer_command` reports the most specific detail it can find, in order:
-the child's `stderr`, then a parsed error event, then the raw stdout tail
-(capped). The JSON-event reviewers (Codex `error` events, OpenCode `type:"error"`
-events) report failures — bad/missing model, auth errors, sandbox denials — on
-**stdout** with an empty stderr, so without this fallback the review status would
-read only `Reviewer exited with exit status: 1`. `reviewer_output.rs` parses those
-error events; the raw-stdout tail is the catch-all when no structured event is
-recognized.
+**Reviewer failure diagnostics**: a review fails when the ACP turn errors (the agent
+process can't launch, the agent reports an error, or the turn never produces a
+parseable verdict block even after the one-shot self-repair). The driver surfaces the
+ACP error (`Reviewer ACP error: …`) or, for a verdict-less turn, the unclear-review
+error; the captured agent message is still stored so you can read what the reviewer
+said. A Custom reviewer is rejected up front before any process starts.
 
 Inspect stored ids:
 
@@ -468,15 +458,16 @@ Check:
 Symptom — `env: node: No such file or directory` with **exit status 127**: the
 agent binary was found, but a Finder/Dock-launched app has a minimal PATH so the
 node-based CLI (e.g. Codex or OpenCode) cannot exec `node`. The fix is already
-wired: ACP chat launch (`native/src/sessions/acp_manager.rs`) and reviewer
-launch (`native/src/sessions/reviewer.rs`) set the spawned command's `PATH` to
-`process_util::augmented_path()`. If `node` still lives somewhere unusual (e.g.
-nvm), add that dir to `process_util::third_party_bin_dirs` or set `PATH` on the
+wired: both ACP launch paths — chat (`native/src/sessions/acp_manager.rs`) and the
+headless ACP review driver (`native/src/sessions/review_runtime.rs`, which launches
+the agent via the shared `launch_argv_for_profile`) — set the spawned command's
+`PATH` to `process_util::augmented_path()`. If `node` still lives somewhere unusual
+(e.g. nvm), add that dir to `process_util::third_party_bin_dirs` or set `PATH` on the
 agent profile's env. See AGENTS.md → *Spawning External CLIs* for the full rule.
 
 Relevant code:
 
-- `native/src/sessions/command.rs` (binary resolution)
+- `native/src/sessions/acp.rs` (provider descriptors / launch argv)
 - `native/src/process_util.rs` (`augmented_path`, `third_party_bin_dirs`)
 - `src/components/SettingsPage.tsx`
 
@@ -531,20 +522,21 @@ Check:
   repo worktree path, or the primary repo path. It does not require a running task
   chat.
 - Manual review runs should emit `review_loop_updated` with status `reviewing`
-  before the reviewer command finishes.
-- The reviewer profile command resolves and exits successfully. An exit status
-  127 with `env: node: No such file or directory` is the minimal-PATH problem —
-  see *Agent Command Fails To Start* above; the reviewer launch sets
-  `process_util::augmented_path()` to fix it.
-- Claude and Antigravity reviewer profiles run headless with `-p`; Codex reviewers
-  run non-interactively with `codex exec`; OpenCode reviewers run with
-  `opencode run`; custom reviewers read the generated prompt from stdin.
-- Reviewer output carries one `NECTUS_VERDICT:` marker line: `CLEAN`, `BLOCKERS`,
-  or `FEEDBACK` (the loop maps these to `pass`/`needs_changes`/`feedback`). No
-  marker → `unknown`; there is no natural-language fallback.
-- External PR reviews share the same marker: a finished one shows **Inconclusive**
-  when the reviewer omitted the `NECTUS_VERDICT: BLOCKERS|CLEAN` line that
-  `parse_pr_review_output` looks for. Inspect PR-review verdicts with
+  before the headless ACP review turn finishes.
+- The reviewer profile is an ACP provider (Claude, Codex, OpenCode, Antigravity).
+  A **Custom** reviewer has no ACP descriptor and the run fails fast with a clear
+  error telling you to choose an ACP provider.
+- The reviewer agent launches and its ACP turn completes. An exit status 127 with
+  `env: node: No such file or directory` is the minimal-PATH problem — see *Agent
+  Command Fails To Start* above; the ACP launch sets `process_util::augmented_path()`
+  to fix it.
+- The reviewer ends its message with a fenced ` ```json ` block carrying
+  `{"verdict": "clean|blockers|feedback"}` (the loop maps these to
+  `pass`/`needs_changes`/`feedback`). No parseable block — even after the driver's
+  one-shot self-repair prompt — → `unknown`; there is no natural-language fallback.
+- External PR reviews share the same JSON verdict block: a finished one shows
+  **Inconclusive** when the reviewer omitted a parseable `{"verdict": …}` block.
+  Inspect PR-review verdicts with
   `select status, verdict from pr_reviews order by id desc limit 10;`.
 - Consensus PR reviews never converge while any reviewer stays **Inconclusive**,
   so they run to the round cap and the synthesizer decides the verdict. Inspect a
@@ -553,8 +545,9 @@ Check:
 
 Relevant code:
 
+- `native/src/sessions/review_runtime.rs` (headless ACP review driver)
 - `native/src/sessions/review_loop.rs`
-- `native/src/sessions/reviewer.rs`
+- `native/src/sessions/verdict.rs` (`parse_verdict_block`)
 - `src/hooks/useTaskReviewLoop.ts`
 
 ### macOS Notifications Do Not Appear
