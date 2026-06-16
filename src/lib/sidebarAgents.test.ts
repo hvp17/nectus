@@ -23,11 +23,11 @@ const workspaces: Workspace[] = [
 describe("buildSidebarAgents", () => {
   it("buckets only active agents by repo and unions them by workspace", () => {
     const tasks = [
-      task({ id: 1, repoId: 1, activeSessionId: "s1" }), // running
+      task({ id: 1, repoId: 1 }),                         // running chat
       task({ id: 2, repoId: 2, status: "review" }),       // review
-      task({ id: 3, repoId: 1, status: "done" }),         // terminal — excluded
+      task({ id: 3, repoId: 1, status: "done" }),         // done — excluded
     ];
-    const { byRepo, byWorkspace } = buildSidebarAgents(tasks, [], repos, workspaces, {}, 0);
+    const { byRepo, byWorkspace } = buildSidebarAgents(tasks, [], repos, workspaces, {}, 0, { 1: true });
 
     expect(byRepo.get(1)?.map((r) => r.task.id)).toEqual([1]);
     expect(byRepo.get(2)?.map((r) => r.task.id)).toEqual([2]);
@@ -35,8 +35,8 @@ describe("buildSidebarAgents", () => {
   });
 
   it("dominantState returns the most urgent active state present, else undefined", () => {
-    const tasks = [task({ id: 1, repoId: 1, status: "review" }), task({ id: 2, repoId: 1, activeSessionId: "s" })];
-    const { byRepo } = buildSidebarAgents(tasks, [], repos, workspaces, {}, 0);
+    const tasks = [task({ id: 1, repoId: 1, status: "review" }), task({ id: 2, repoId: 1 })];
+    const { byRepo } = buildSidebarAgents(tasks, [], repos, workspaces, {}, 0, { 2: true });
     expect(dominantState(byRepo.get(1) ?? [])).toBe("running"); // running outranks review
     expect(dominantState([])).toBeUndefined();
   });

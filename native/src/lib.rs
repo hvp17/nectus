@@ -11,25 +11,23 @@ mod sessions;
 
 use crate::db::Database;
 use crate::models::{
-    AcpProviderInfo, AgentKind, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings,
+    AcpProviderInfo, AgentProfile, AgentProfileInput, AppError, AppResult, AppSettings,
     AppSettingsInput, ChatCheckpoint, ChatImageAttachment, ChatPermissionPolicy, ChatSession,
     ChatTranscript, GithubStatus, JiraProject, JiraRestStatus, JiraSprintLane, JiraStatusDef,
     JiraTransition, JiraWorkItem, PrReview, PrReviewMode, PrReviewRun, PullRequestInfo, Repo,
-    ReviewLoop, ReviewRun, Session, SessionExitedEvent, SessionOutputSnapshot, TaskDiffSummary,
-    TaskStatus, TaskSummary, Workspace,
+    ReviewLoop, ReviewRun, TaskDiffSummary, TaskStatus, TaskSummary, Workspace,
 };
-use crate::sessions::{AcpManager, SessionManager};
+use crate::sessions::AcpManager;
 use parking_lot::Mutex;
 use std::path::Path;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Manager, State};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
 pub struct AppState {
     db: Arc<Mutex<Database>>,
-    sessions: SessionManager,
     acp: AcpManager,
 }
 
@@ -53,26 +51,25 @@ where
 }
 
 #[derive(Debug)]
-struct TaskSessionContext {
+struct TaskChatContext {
     task: TaskSummary,
     repo: Repo,
     agent: AgentProfile,
 }
 
-fn task_session_context(
+fn task_chat_context(
     db: &Database,
     task_id: i64,
     agent_profile_id: Option<i64>,
-) -> AppResult<TaskSessionContext> {
-    // DB-only load: a session launch never reads is_dirty, and this runs under
-    // the global DB lock (and, for start/resume, on the main thread) — so it must
-    // not shell out to `git status`.
+) -> AppResult<TaskChatContext> {
+    // DB-only load: ACP chat launch never reads is_dirty, and this runs under the
+    // global DB lock, so it must not shell out to `git status`.
     let task = db
         .task_by_id(task_id)?
         .ok_or_else(|| AppError::from("Task not found"))?;
     let agent_profile_id = agent_profile_id
         .or(task.agent_profile_id)
-        .ok_or_else(|| AppError::from("Task does not have an agent profile to resume"))?;
+        .ok_or_else(|| AppError::from("Task does not have an agent profile to start chat"))?;
     let repo = db
         .repo_by_id(task.repo_id)?
         .ok_or_else(|| AppError::from("Repository not found"))?;
@@ -80,7 +77,7 @@ fn task_session_context(
         .agent_profile_by_id(agent_profile_id)?
         .ok_or_else(|| AppError::from("Agent profile not found"))?;
 
-    Ok(TaskSessionContext { task, repo, agent })
+    Ok(TaskChatContext { task, repo, agent })
 }
 
 // Adding a repo validates it with `git rev-parse` (a subprocess), so run it on
@@ -991,13 +988,9 @@ async fn create_pr_review(
 fn start_pr_review(state: &AppState, app: tauri::AppHandle, mode: PrReviewMode, review_id: i64) {
     match mode {
         PrReviewMode::Consensus => {
-            state
-                .sessions
-                .run_consensus_pr_review(app, state.db.clone(), review_id)
+            sessions::spawn_consensus_pr_review(app, state.db.clone(), review_id)
         }
-        PrReviewMode::Single => state
-            .sessions
-            .run_pr_review(app, state.db.clone(), review_id),
+        PrReviewMode::Single => sessions::spawn_pr_review(app, state.db.clone(), review_id),
     }
 }
 
@@ -1119,10 +1112,30 @@ fn run_pair_review(
         )
         .into());
     }
-    state
-        .sessions
-        .run_pair_review(app, state.db.clone(), task_id)
-        .map_err(AppError::from)?;
+    let cwd = {
+        let task = state
+            .db
+            .lock()
+            .task_by_id(task_id)?
+            .ok_or_else(|| "Task not found".to_string())?;
+        task.worktree_path
+            .or_else(|| {
+                task.task_repos
+                    .first()
+                    .and_then(|repo| repo.worktree_path.clone())
+            })
+            .or_else(|| {
+                state
+                    .db
+                    .lock()
+                    .repo_by_id(task.repo_id)
+                    .ok()
+                    .flatten()
+                    .map(|repo| repo.path)
+            })
+            .ok_or_else(|| "Task has no repository path to review".to_string())?
+    };
+    sessions::spawn_task_review(app, state.db.clone(), task_id, cwd.into());
     Ok(review_loop)
 }
 
@@ -1141,152 +1154,6 @@ fn list_task_review_runs(task_id: i64, state: State<'_, AppState>) -> AppResult<
     app_result(state.db.lock().list_review_runs(task_id))
 }
 
-// Launching a session does blocking work — a DB lock wait, PTY open, process
-// spawn. Synchronous commands share the main UI thread with the Wry event loop
-// (see stop_session), so start/resume must run on the blocking pool: inline,
-// any stall here froze the entire app.
-#[tauri::command]
-async fn start_session(
-    task_id: i64,
-    agent_profile_id: i64,
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-) -> AppResult<Session> {
-    let sessions = state.sessions.clone();
-    let db = state.db.clone();
-    blocking("Failed to start session", move || {
-        let (context, persistent) = {
-            let db = db.lock();
-            let context = task_session_context(&db, task_id, Some(agent_profile_id))
-                .map_err(|error| error.to_string())?;
-            let persistent = db.get_app_settings()?.persistent_sessions;
-            (context, persistent)
-        };
-        sessions.start(
-            app,
-            db.clone(),
-            context.task,
-            context.repo,
-            context.agent,
-            false,
-            persistent,
-        )
-    })
-    .await
-}
-
-#[tauri::command]
-async fn resume_session(
-    task_id: i64,
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-) -> AppResult<Session> {
-    let sessions = state.sessions.clone();
-    let db = state.db.clone();
-    blocking("Failed to resume session", move || {
-        let (context, persistent) = {
-            let db = db.lock();
-            let context =
-                task_session_context(&db, task_id, None).map_err(|error| error.to_string())?;
-            if !matches!(
-                context.agent.agent_kind,
-                AgentKind::Codex | AgentKind::Claude | AgentKind::OpenCode
-            ) {
-                return Err("Agent profile does not support resume".into());
-            }
-            let persistent = db.get_app_settings()?.persistent_sessions;
-            (context, persistent)
-        };
-        sessions.start(
-            app,
-            db.clone(),
-            context.task,
-            context.repo,
-            context.agent,
-            true,
-            persistent,
-        )
-    })
-    .await
-}
-
-#[tauri::command]
-async fn stop_session(
-    session_id: String,
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-) -> AppResult<Session> {
-    // Run the blocking teardown (kill + reap the child, DB writes, and for OpenCode
-    // a server probe) on the blocking pool, NOT the main thread. Synchronous Tauri
-    // commands share the main UI thread with the Wry event loop, so doing this work
-    // — and then emitting `session_exited` — inline froze the whole app. Off-thread,
-    // the post-`.await` emit also runs off-main, the safe pattern the reader thread
-    // already uses for the same event.
-    let sessions = state.sessions.clone();
-    let db = state.db.clone();
-    let id = session_id.clone();
-    let session = tauri::async_runtime::spawn_blocking(move || sessions.stop(db, id))
-        .await
-        .map_err(|error| AppError::from(format!("Failed to stop session: {error}")))?
-        .map_err(AppError::from)?;
-    let _ = app
-        .emit(
-            "session_exited",
-            SessionExitedEvent {
-                session_id,
-                exit_code: None,
-            },
-        )
-        .inspect_err(|error| tracing::warn!(?error, "failed to emit session_exited"));
-    Ok(session)
-}
-
-#[tauri::command]
-fn resize_session(
-    session_id: String,
-    rows: u16,
-    cols: u16,
-    state: State<'_, AppState>,
-) -> AppResult<()> {
-    app_result(state.sessions.resize(&session_id, rows, cols))
-}
-
-// PTY writes block until the agent drains stdin (the tty input buffer is tiny),
-// so input commands must also run on the blocking pool, never the main thread.
-#[tauri::command]
-async fn send_session_input(
-    session_id: String,
-    data: String,
-    state: State<'_, AppState>,
-) -> AppResult<()> {
-    let sessions = state.sessions.clone();
-    blocking("Failed to write session input", move || {
-        sessions.write_input(&session_id, &data)
-    })
-    .await
-}
-
-#[tauri::command]
-async fn submit_session_input(
-    session_id: String,
-    data: String,
-    state: State<'_, AppState>,
-) -> AppResult<()> {
-    let sessions = state.sessions.clone();
-    blocking("Failed to submit session input", move || {
-        sessions.submit_input(&session_id, &data)
-    })
-    .await
-}
-
-#[tauri::command]
-fn session_output_snapshot(
-    session_id: String,
-    state: State<'_, AppState>,
-) -> AppResult<SessionOutputSnapshot> {
-    app_result(state.sessions.output_snapshot(&session_id))
-}
-
 // ---- ACP embedded chat -------------------------------------------------------
 
 #[tauri::command]
@@ -1298,7 +1165,7 @@ async fn acp_start_chat(
 ) -> AppResult<ChatSession> {
     let context = {
         let db = state.db.lock();
-        task_session_context(&db, task_id, agent_profile_id)?
+        task_chat_context(&db, task_id, agent_profile_id)?
     };
     let db = state.db.clone();
     let acp = state.acp.clone();
@@ -1420,44 +1287,16 @@ pub fn run() {
                 .map_err(|error| format!("Failed to find app data directory: {error}"))?;
             tracing::info!(path = %data_dir.display(), "opening app data directory");
             let db = Database::open(data_dir.join("nectus.sqlite3"))?;
-            let sessions = SessionManager::new();
-            // Persistent sessions: keep the active-session markers whose tmux
-            // sessions survived the last quit; everything else is stale.
-            let persistent = db
-                .get_app_settings()
-                .map(|settings| settings.persistent_sessions)
-                .unwrap_or(false);
-            let live = if persistent {
-                sessions.live_persistent_session_ids()
-            } else {
-                Vec::new()
-            };
-            db.clear_active_sessions_except(&live)?;
+            db.clear_legacy_active_sessions()?;
             app.manage(AppState {
                 db: Arc::new(Mutex::new(db)),
-                sessions,
                 acp: AcpManager::new(),
             });
-            if !live.is_empty() {
-                let state = app.state::<AppState>();
-                let sessions = state.sessions.clone();
-                let db = state.db.clone();
-                let handle = app.handle().clone();
-                // Off the setup path: each reattach spawns a PTY + tmux client.
-                std::thread::spawn(move || {
-                    sessions.reattach_persistent_sessions(handle, db);
-                });
-            }
             Ok(())
         })
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
                 if let Some(state) = window.try_state::<AppState>() {
-                    state
-                        .sessions
-                        .stop_all(window.app_handle(), state.db.clone());
-                    // Abort any live ACP chat sessions so agent children don't
-                    // outlive the app.
                     state.acp.stop_all_blocking();
                 }
             }
@@ -1516,13 +1355,6 @@ pub fn run() {
             stop_pair_loop,
             get_task_review_loop,
             list_task_review_runs,
-            start_session,
-            resume_session,
-            stop_session,
-            resize_session,
-            send_session_input,
-            submit_session_input,
-            session_output_snapshot,
             get_diagnostic_logs,
             acp_start_chat,
             acp_send_prompt,
@@ -1568,6 +1400,7 @@ fn get_diagnostic_logs() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::AgentKind;
     use tempfile::tempdir;
 
     fn add_temp_repo(db: &Database) -> Repo {
@@ -1582,7 +1415,7 @@ mod tests {
     }
 
     #[test]
-    fn task_session_context_loads_task_repo_and_explicit_agent() {
+    fn task_chat_context_loads_task_repo_and_explicit_agent() {
         let db = Database::open_in_memory().unwrap();
         let repo = add_temp_repo(&db);
         let profiles = db.list_agent_profiles().unwrap();
@@ -1594,7 +1427,7 @@ mod tests {
             .create_task_record(repo.id, "Run agent".to_string(), None, None, false, None)
             .unwrap();
 
-        let context = task_session_context(&db, task.id, Some(claude.id)).unwrap();
+        let context = task_chat_context(&db, task.id, Some(claude.id)).unwrap();
 
         assert_eq!(context.task.id, task.id);
         assert_eq!(context.repo.id, repo.id);
@@ -1602,7 +1435,7 @@ mod tests {
     }
 
     #[test]
-    fn task_session_context_uses_stored_agent_for_resume() {
+    fn task_chat_context_uses_stored_agent_for_start() {
         let db = Database::open_in_memory().unwrap();
         let repo = add_temp_repo(&db);
         let codex = db.list_agent_profiles().unwrap()[0].clone();
@@ -1617,24 +1450,24 @@ mod tests {
             )
             .unwrap();
 
-        let context = task_session_context(&db, task.id, None).unwrap();
+        let context = task_chat_context(&db, task.id, None).unwrap();
 
         assert_eq!(context.agent.id, codex.id);
     }
 
     #[test]
-    fn task_session_context_requires_an_agent_for_resume() {
+    fn task_chat_context_requires_an_agent_for_start() {
         let db = Database::open_in_memory().unwrap();
         let repo = add_temp_repo(&db);
         let task = db
             .create_task_record(repo.id, "Resume agent".to_string(), None, None, false, None)
             .unwrap();
 
-        let error = task_session_context(&db, task.id, None).unwrap_err();
+        let error = task_chat_context(&db, task.id, None).unwrap_err();
 
         assert_eq!(
             error.to_string(),
-            "Task does not have an agent profile to resume"
+            "Task does not have an agent profile to start chat"
         );
     }
 }

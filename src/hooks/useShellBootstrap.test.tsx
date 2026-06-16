@@ -71,7 +71,6 @@ const settings: AppSettings = {
   jiraFilterCurrentSprint: false,
   jiraRestEmail: null,
   jiraFilterStatuses: [],
-  persistentSessions: false,
   theme: "system",
   density: "comfortable",
   updatedAt: "2026-06-09T00:00:00.000Z",

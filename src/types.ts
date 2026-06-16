@@ -1,5 +1,4 @@
 export type TaskStatus = "planned" | "in_progress" | "review" | "done";
-export type SessionState = "running" | "stopped";
 export type AgentKind = "codex" | "claude" | "antigravity" | "opencode" | "custom";
 export type ThemeMode = "system" | "light" | "dark";
 export type DensityMode = "comfortable" | "compact";
@@ -72,9 +71,9 @@ export interface TaskSummary {
   reviewLoopStatus?: ReviewLoopStatus | null;
   /**
    * Backend-owned attention signal, persisted so it survives reload: `"needs_input"`
-   * when the agent is blocked on you, else `null`. Set/cleared by the session
-   * watcher (see `native/src/sessions`); the live in-session detail (prompt/reason)
-   * still rides the push-driven `taskAttention` store slice.
+   * when the agent is blocked on you, else `null`. ACP permission parts own new
+   * updates; the live detail (prompt/reason) still rides the push-driven
+   * `taskAttention` store slice.
    */
   attention?: "needs_input" | null;
   /** Archived tasks are hidden from boards/lists by default. */
@@ -351,9 +350,6 @@ export interface AppSettings {
   jiraFilterStatuses: string[];
   /** Board epic filter (an epic key); null/absent means no epic filter. */
   jiraFilterEpic?: string | null;
-  /** Opt-in tmux-backed sessions: keep agents running while the app is closed
-   * and reattach on the next launch. Requires tmux >= 3.2 on the machine. */
-  persistentSessions: boolean;
   theme: ThemeMode;
   density: DensityMode;
   updatedAt: string;
@@ -371,65 +367,8 @@ export interface AppSettingsInput {
   jiraFilterCurrentSprint: boolean;
   jiraFilterStatuses: string[];
   jiraFilterEpic?: string | null;
-  persistentSessions: boolean;
   theme: ThemeMode;
   density: DensityMode;
-}
-
-export interface Session {
-  id: string;
-  resumableSessionId?: string | null;
-  resumableSessionLabel?: string | null;
-  taskId: number;
-  agentProfileId: number;
-  state: SessionState;
-  pid?: number | null;
-  startedAt: string;
-  stoppedAt?: string | null;
-}
-
-export interface SessionOutputEvent {
-  sessionId: string;
-  data: string;
-  startOffset: number;
-}
-
-export interface SessionOutputSnapshot {
-  sessionId: string;
-  data: string;
-  truncated: boolean;
-  startOffset: number;
-  endOffset: number;
-  /** Terminal size the buffered output was generated at, so replay can match it. */
-  cols: number;
-  rows: number;
-}
-
-export interface SessionExitedEvent {
-  sessionId: string;
-  exitCode?: number | null;
-}
-
-export interface SessionIdleEvent {
-  sessionId: string;
-  taskId: number;
-  turnId?: string | null;
-  message?: string | null;
-}
-
-export interface SessionNeedsInputEvent {
-  sessionId: string;
-  taskId: number;
-  turnId?: string | null;
-  reason: string;
-  prompt?: string | null;
-}
-
-/** The agent's latest human-readable activity line for a running session. */
-export interface SessionActivityEvent {
-  sessionId: string;
-  taskId: number;
-  line: string;
 }
 
 // ---------------------------------------------------------------------------

@@ -59,8 +59,8 @@ export function useComposer() {
     const resolveBranchName = (branchName: string) =>
       resolveBranch(branchName, branchPrefix, store.newTaskBranchIdentifier);
 
-    // Shared post-create choreography: start the new task's session (tolerating a
-    // start failure), select it, refresh, and report. The composer stays open
+    // Shared post-create choreography: start the new task's ACP chat (tolerating
+    // a start failure), select it, refresh, and report. The composer stays open
     // showing live status until the agent is launched, then closes — so the user
     // sees what's happening (worktree fetch can take a few seconds per repo)
     // instead of a blank spinner. Both create paths differ only in which create
@@ -76,13 +76,15 @@ export function useComposer() {
       let startError: string | null = null;
       try {
         const profile = agentProfiles.find((item) => item.id === agentProfileId);
-        if (profile && isAcpCapableAgent(profile.agentKind, acpProviders)) {
-          const session = await api.acpStartChat(task.id, agentProfileId);
-          const text = initialPrompt?.trim();
-          if (text) await api.acpSendPrompt(session.id, text);
-        } else {
-          await api.startSession(task.id, agentProfileId);
+        if (!profile) {
+          throw new Error("Selected agent profile was not found.");
         }
+        if (!isAcpCapableAgent(profile.agentKind, acpProviders)) {
+          throw new Error(`${profile.name} does not support ACP chat.`);
+        }
+        const session = await api.acpStartChat(task.id, agentProfileId);
+        const text = initialPrompt?.trim();
+        if (text) await api.acpSendPrompt(session.id, text);
       } catch (error) {
         startError = String(error);
       }
@@ -92,7 +94,7 @@ export function useComposer() {
       await refresh();
       setMessage(
         startError
-          ? `Created ${task.title}, but failed to start session: ${startError}`
+          ? `Created ${task.title}, but failed to start ACP chat: ${startError}`
           : successMessage,
       );
     };

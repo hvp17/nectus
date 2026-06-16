@@ -113,13 +113,10 @@ describe("api", () => {
     });
   });
 
-  it("submits terminal input through the app-authored prompt command", async () => {
-    await api.submitSessionInput("session-21", "Create a pull request");
-
-    expect(mockedInvoke).toHaveBeenCalledWith("submit_session_input", {
-      sessionId: "session-21",
-      data: "Create a pull request",
-    });
+  it("does not expose legacy terminal session commands", () => {
+    expect("submitSessionInput" in api).toBe(false);
+    expect("startSession" in api).toBe(false);
+    expect("sessionOutputSnapshot" in api).toBe(false);
   });
 
   it("queues a PR review with default-null reviewers and rounds", async () => {

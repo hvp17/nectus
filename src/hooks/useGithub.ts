@@ -27,7 +27,7 @@ interface UseGithubInput {
  *
  * The PR **write** actions (create / merge / mark-ready / close) no longer live
  * here: they are agent-driven now and owned by `useGithubShipActions`, which
- * submits a prompt into the task's running session instead of calling `gh`.
+ * submits a prompt into the task's ACP chat instead of calling `gh`.
  */
 export function useGithub({ selectedTask, applyTask, repoId }: UseGithubInput) {
   const queryClient = useQueryClient();
@@ -44,7 +44,7 @@ export function useGithub({ selectedTask, applyTask, repoId }: UseGithubInput) {
   const pullRequestLoading = canReadPullRequest && pullRequestQuery.isLoading;
 
   // When a worktree task has no linked PR yet, ask gh whether one already exists for
-  // its branch (e.g. opened from the terminal by the agent) and backfill it.
+  // its branch (e.g. opened by the agent) and backfill it.
   // Backfilling the PR URL re-enables the PR-status query above, which then loads
   // its checks.
   const detectionQuery = useGithubPullRequestDetectionQuery(selectedTask, ghReady, repoId);

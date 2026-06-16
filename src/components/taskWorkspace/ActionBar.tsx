@@ -1,11 +1,10 @@
-import { AlertTriangle, CheckCircle2, GitPullRequest, MessageSquareReply } from "lucide-react";
+import { AlertTriangle, CheckCircle2, GitPullRequest } from "lucide-react";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 import { openExternal } from "../../lib/openExternal";
 import { formatAttentionReason, type TaskAttention } from "../../sessionAttention";
 
-/// The attention banner shown beneath the live terminal when a session finishes
-/// or needs input. Reply focuses the live terminal so the user can answer inline.
+/// The attention banner shown beneath chat when an agent finishes or needs input.
 export function ActionBar({
   attention,
   agentName,
@@ -24,11 +23,6 @@ export function ActionBar({
   onCreatePullRequest: () => void;
 }) {
   const needsInput = attention.kind === "needs_input";
-  // Reply focuses the live terminal so the user can type their answer inline.
-  const focusTerminal = () => {
-    if (typeof document === "undefined") return;
-    document.querySelector<HTMLTextAreaElement>("[data-task-workspace] .xterm-helper-textarea")?.focus();
-  };
   const showOpenPr = Boolean(prUrl || canCreatePullRequest);
   const openPr = () => {
     if (prUrl) openExternal(prUrl);
@@ -60,12 +54,6 @@ export function ActionBar({
         )}
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-2">
-        {needsInput && (
-          <Button type="button" variant="outline" size="sm" onClick={focusTerminal}>
-            <MessageSquareReply data-icon="inline-start" />
-            Reply
-          </Button>
-        )}
         {showOpenPr && (
           <Button type="button" size="sm" onClick={openPr}>
             <GitPullRequest data-icon="inline-start" />

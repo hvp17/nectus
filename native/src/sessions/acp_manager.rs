@@ -232,7 +232,7 @@ impl AcpManager {
         Ok(chat_session)
     }
 
-    /// Queue a prompt to a running session. The connection loop persists+emits
+    /// Queue a prompt to a running ACP chat. The connection loop persists+emits
     /// the user turn, sends it as `session/prompt`, and streams the response.
     pub async fn prompt(
         &self,

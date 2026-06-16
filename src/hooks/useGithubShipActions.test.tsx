@@ -11,7 +11,6 @@ import type { AcpProviderInfo, TaskSummary } from "../types";
 
 vi.mock("../api", () => ({
   api: {
-    submitSessionInput: vi.fn(),
     listAcpProviders: vi.fn(),
     acpStartChat: vi.fn(),
     acpSendPrompt: vi.fn(),
@@ -69,7 +68,6 @@ function renderShipHook() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockedApi.submitSessionInput.mockResolvedValue(undefined);
   mockedApi.listAcpProviders.mockResolvedValue(acpProviders);
   mockedApi.acpSendPrompt.mockResolvedValue(undefined);
 });
@@ -86,7 +84,6 @@ describe("useGithubShipActions", () => {
     });
 
     expect(mockedApi.acpSendPrompt).toHaveBeenCalledWith("chat-1", createPrPrompt({ draft: false }));
-    expect(mockedApi.submitSessionInput).not.toHaveBeenCalled();
     expect(setTaskAttention).toHaveBeenCalled();
   });
 
@@ -131,7 +128,7 @@ describe("useGithubShipActions", () => {
     expect(mockedApi.acpSendPrompt).toHaveBeenCalled();
   });
 
-  it("declines with guidance when a terminal-only agent has no session", async () => {
+  it("declines with guidance when an agent has no ACP provider even if a legacy session is active", async () => {
     mockedApi.listAcpProviders.mockResolvedValue([]);
     const setMessage = vi.fn();
     const { wrapper } = renderShipHook();
@@ -141,11 +138,10 @@ describe("useGithubShipActions", () => {
     );
 
     await act(async () => {
-      await result.current.closePullRequest({ ...task, activeSessionId: null });
+      await result.current.closePullRequest({ ...task, agentKind: "custom", activeSessionId: "legacy-session" });
     });
 
-    expect(mockedApi.submitSessionInput).not.toHaveBeenCalled();
     expect(mockedApi.acpSendPrompt).not.toHaveBeenCalled();
-    expect(setMessage).toHaveBeenCalledWith(expect.stringMatching(/start or resume the agent/i));
+    expect(setMessage).toHaveBeenCalledWith(expect.stringMatching(/ACP chat/i));
   });
 });

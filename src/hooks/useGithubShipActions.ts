@@ -13,7 +13,7 @@ import {
 } from "../lib/githubAgentPrompts";
 import type { ChatTranscript, MergeMethod, TaskSummary } from "../types";
 
-const NO_SESSION_MESSAGE = "Start or resume the agent for this task to ship from here.";
+const NO_ACP_MESSAGE = "This agent profile does not support ACP chat. Choose an ACP-capable profile to ship from here.";
 
 interface UseGithubShipActionsInput {
   setMessage: (message: string | null) => void;
@@ -24,8 +24,7 @@ interface UseGithubShipActionsInput {
 
 /**
  * The four GitHub ship actions. ACP-capable agents receive prompts through the
- * chat runtime (`acp_send_prompt`); custom/terminal-only agents still submit
- * into the embedded PTY via `submit_session_input`.
+ * chat runtime (`acp_send_prompt`). There is no embedded-terminal fallback.
  */
 export function useGithubShipActions({
   setMessage,
@@ -61,12 +60,7 @@ export function useGithubShipActions({
           setMessage(working);
           return;
         }
-        if (!task.activeSessionId) {
-          setMessage(NO_SESSION_MESSAGE);
-          return;
-        }
-        await api.submitSessionInput(task.activeSessionId, prompt);
-        setMessage(working);
+        setMessage(NO_ACP_MESSAGE);
       } catch (error) {
         setMessage(String(error));
       } finally {

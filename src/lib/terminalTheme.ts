@@ -2,8 +2,8 @@ import type { ITheme } from "@xterm/xterm";
 
 // xterm needs concrete color strings, so resolve the theme's CSS tokens to rgb()
 // via a hidden probe and let the terminal track the active light/dark palette.
-// Shared by the live agent terminal and the read-only reviewer terminal so both
-// follow the same theme tokens.
+// Shared by read-only reviewer terminal panes so they follow the same theme
+// tokens.
 export function readTerminalTheme(): ITheme {
   const probe = document.createElement("span");
   probe.style.position = "absolute";

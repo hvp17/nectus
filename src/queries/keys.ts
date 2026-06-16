@@ -33,7 +33,7 @@ export const queryKeys = {
   },
 
   task: {
-    /** Changed-file summary for a task's diff; refetched on the task's `session_idle`.
+    /** Changed-file summary for a task's diff; refreshed on task changes and explicit refresh.
      * `repoId` scopes a cross-repo task to one member repo (null → primary). */
     diffSummary: (taskId: number, repoId?: number) =>
       ["task", "diff-summary", taskId, repoId ?? null] as const,

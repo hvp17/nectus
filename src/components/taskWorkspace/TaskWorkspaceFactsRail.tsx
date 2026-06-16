@@ -1,4 +1,4 @@
-import { Archive, CheckCircle2, GitBranch, ScanEye, Square, XCircle } from "lucide-react";
+import { Archive, CheckCircle2, GitBranch, ScanEye, XCircle } from "lucide-react";
 import { AgentLogo } from "../AgentBrand";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -31,8 +31,7 @@ export interface TaskWorkspaceFactsRailProps {
   activeRepoId?: number;
   /** Cross-repo member switcher rendered in the GitHub panel header. */
   repoScopePicker?: React.ReactNode;
-  sessionId?: string | null;
-  sessionAgentLabel: string;
+  agentLabel: string;
   githubStatus?: GithubStatus;
   pullRequest?: PullRequestInfo | null;
   pullRequestLoading?: boolean;
@@ -46,7 +45,6 @@ export interface TaskWorkspaceFactsRailProps {
   jiraSite?: string | null;
   busy?: boolean;
   isDeleting?: boolean;
-  onStopSession: (sessionId: string) => void;
   onUpdateStatus: (task: TaskSummary, status: TaskStatus) => void;
   onCreatePullRequest: (task: TaskSummary, options?: { draft?: boolean }) => void;
   onRefreshPullRequest: (task: TaskSummary) => void;
@@ -71,8 +69,7 @@ export function TaskWorkspaceFactsRail({
   repoName,
   activeRepoId,
   repoScopePicker,
-  sessionId,
-  sessionAgentLabel,
+  agentLabel,
   githubStatus,
   pullRequest,
   pullRequestLoading = false,
@@ -85,7 +82,6 @@ export function TaskWorkspaceFactsRail({
   jiraSite,
   busy = false,
   isDeleting = false,
-  onStopSession,
   onUpdateStatus,
   onCreatePullRequest,
   onRefreshPullRequest,
@@ -110,24 +106,11 @@ export function TaskWorkspaceFactsRail({
           <AgentLogo agentKind={task.agentKind ?? "custom"} size="md" />
         </span>
         <span className="min-w-0">
-          <strong className="block truncate text-[13px] font-bold">{sessionAgentLabel}</strong>
+          <strong className="block truncate text-[13px] font-bold">{agentLabel}</strong>
           <small className="block truncate text-[11px] text-muted-foreground">
-            {[repoName, sessionId ? `session ${sessionId}` : "No active session"].filter(Boolean).join(" · ")}
+            {[repoName, "ACP chat"].filter(Boolean).join(" · ")}
           </small>
         </span>
-        {task.activeSessionId && (
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            className="ml-auto"
-            aria-label="Stop session"
-            onClick={() => onStopSession(task.activeSessionId!)}
-          >
-            <Square data-icon="inline-start" fill="currentColor" />
-            Stop
-          </Button>
-        )}
       </div>
 
       <div data-testid="task-detail-body" className="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -301,8 +284,7 @@ export function TaskWorkspaceFactsRail({
             variant="outline"
             size="sm"
             aria-label={`Archive ${task.title}`}
-            disabled={busy || Boolean(task.activeSessionId)}
-            title={task.activeSessionId ? "Stop the session before archiving" : undefined}
+            disabled={busy}
             onClick={() => onArchiveTask(task)}
           >
             <Archive data-icon="inline-start" />

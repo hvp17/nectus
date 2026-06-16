@@ -16,17 +16,17 @@ authentication, Nectus stores no tokens and runs no OAuth flow — it shells out
 ## Write actions are agent-driven
 
 The four pull-request **write** actions — create, merge, mark-ready, close — do not
-shell out to `gh` from Rust. Each submits a prompt into the task's **running agent
-session** (`submit_session_input`), and the agent runs `git`/`gh` itself in the
-worktree: it pushes, authors the PR body, rebases/resolves conflicts, and reports
-back in the terminal. The **read** side (detection, live status, checks) stays
-deterministic `gh`-shell-out and keeps driving the panel — see the sections below.
+shell out to `gh` from Rust. Each submits a prompt into the task's ACP chat
+session (`acp_send_prompt`), and the agent runs `git`/`gh` itself in the worktree:
+it pushes, authors the PR body, rebases/resolves conflicts, and reports back in
+chat. The **read** side (detection, live status, checks) stays deterministic
+`gh`-shell-out and keeps driving the panel — see the sections below.
 
 - The prompts live in `src/lib/githubAgentPrompts.ts` (the single place to tune
   shipping behavior); the dispatch hook is `src/hooks/useGithubShipActions.ts`.
-- A write action requires a **running session** (`task.activeSessionId`). With none,
-  it declines with guidance to start or resume the agent first — there is no
-  app-driven auto-start (which would risk typing before the agent's REPL is ready).
+- A write action requires an ACP-capable task profile. If the selected profile has
+  no ACP provider descriptor, it declines with guidance to choose an ACP-capable
+  profile.
 - The status panel is eventually-consistent: after the agent finishes (and on the
   existing open-PR auto-refresh), the read path picks up the new/updated PR. A
   worktree task's freshly opened PR is backfilled by the existing detection step.
@@ -78,9 +78,9 @@ deterministic `gh`-shell-out and keeps driving the panel — see the sections be
 
 ## Ship a pull request
 
-Once a task's PR is open, `gh` is connected, and the agent session is running, the
-GitHub panel can finish the PR by asking the agent (each action submits a prompt; the
-agent runs the `gh`/`git` work in the worktree):
+Once a task's PR is open, `gh` is connected, and the task profile is ACP-capable,
+the GitHub panel can finish the PR by asking the agent through chat (each action
+submits a prompt; the agent runs the `gh`/`git` work in the worktree):
 
 - **Merge** — a confirm dialog picks the strategy (squash default; `--squash` /
   `--merge` / `--rebase` is interpolated into the prompt) and surfaces the current
@@ -174,7 +174,7 @@ after a re-review) and is not persisted as "posted"; success surfaces a message.
 - Agent-driven write actions (create/merge/ready/close): `src/hooks/useGithubShipActions.ts`,
   with the prompts in `src/lib/githubAgentPrompts.ts`; wired in `src/components/TaskWorkspaceOverlay.tsx`
 - Post-review-to-PR action: `src/components/PrReviewDetail.tsx` + `src/hooks/usePrReviews.ts`
-- Frontend API: `src/api.ts` (`submit_session_input` carries the write prompts)
+- Frontend API: `src/api.ts` (`acp_send_prompt` carries the write prompts)
 - gh shell-out and output parsing — connection status, PR status/detection parsing
   (incl. the per-check CI drill-down), and `comment_on_pull_request`: `native/src/github.rs`.
   PR **writes** (create/merge/mark-ready/close) are agent-driven, not `gh`-shell-out

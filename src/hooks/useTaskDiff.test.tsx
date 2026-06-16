@@ -15,15 +15,6 @@ function makeWrapper(client = createQueryClient()) {
   );
 }
 
-const eventTestState = vi.hoisted(() => ({
-  handlers: new Map<string, (event: { payload: unknown }) => void>(),
-  listen: vi.fn(async (eventName: string, handler: (event: { payload: unknown }) => void) => {
-    eventTestState.handlers.set(eventName, handler);
-    return vi.fn();
-  }),
-}));
-
-vi.mock("@tauri-apps/api/event", () => ({ listen: eventTestState.listen }));
 vi.mock("../lib/tauriRuntime", () => ({ isTauriRuntime: () => true }));
 vi.mock("../api", () => ({
   api: {
@@ -45,8 +36,6 @@ const summary2: TaskDiffSummary = {
 };
 
 beforeEach(() => {
-  eventTestState.handlers.clear();
-  eventTestState.listen.mockClear();
   mockedApi.taskDiffSummary.mockReset();
   mockedApi.taskDiffFile.mockReset();
 });
@@ -100,30 +89,6 @@ describe("useTaskDiff", () => {
     });
     expect(mockedApi.taskDiffFile).toHaveBeenCalledWith(1, "src/a.ts", undefined);
     expect(result.current.files["src/a.ts"]).toMatchObject({ patch: "@@ -1 +1 @@\n+x", loading: false });
-  });
-
-  it("refreshes when the task's session goes idle, even before the diff is opened", async () => {
-    mockedApi.taskDiffSummary.mockResolvedValue(summary);
-    renderHook(() => useTaskDiff(7), { wrapper: makeWrapper() });
-    await waitFor(() => expect(mockedApi.taskDiffSummary).toHaveBeenCalledTimes(1));
-
-    const handler = eventTestState.handlers.get("session_idle");
-    expect(handler).toBeTruthy();
-    await act(async () => {
-      handler?.({ payload: { sessionId: "s", taskId: 7 } });
-    });
-    await waitFor(() => expect(mockedApi.taskDiffSummary).toHaveBeenCalledTimes(2));
-  });
-
-  it("ignores idle events for other tasks", async () => {
-    mockedApi.taskDiffSummary.mockResolvedValue(summary);
-    renderHook(() => useTaskDiff(7), { wrapper: makeWrapper() });
-    await waitFor(() => expect(mockedApi.taskDiffSummary).toHaveBeenCalledTimes(1));
-    const handler = eventTestState.handlers.get("session_idle");
-    await act(async () => {
-      handler?.({ payload: { sessionId: "s", taskId: 99 } });
-    });
-    expect(mockedApi.taskDiffSummary).toHaveBeenCalledTimes(1);
   });
 
   it("clears the stale summary and reloads when the task changes", async () => {

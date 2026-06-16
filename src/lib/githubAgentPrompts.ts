@@ -1,7 +1,7 @@
 import type { MergeMethod } from "../types";
 
 /**
- * Prompts the app submits into a task's running agent session to drive GitHub
+ * Prompts the app submits into a task's ACP chat to drive GitHub
  * pull-request actions. The agent runs `git`/`gh` itself in the task worktree, so
  * it can push, rebase, resolve conflicts, and report back. These strings are the
  * single iteration surface for shipping behavior — tune wording here, not in Rust.

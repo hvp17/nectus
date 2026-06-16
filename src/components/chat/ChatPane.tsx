@@ -180,7 +180,7 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
           <Alert>
             <AlertTitle>ACP chat unavailable</AlertTitle>
             <AlertDescription>
-              {selectedAgentProfile?.name} does not have an ACP provider descriptor yet. Use Terminal for this task.
+              {selectedAgentProfile?.name} does not have an ACP provider descriptor yet.
             </AlertDescription>
           </Alert>
         </div>
@@ -204,7 +204,7 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
                   <span className="flex min-w-0 items-center gap-2">
                     <AgentLogo agentKind={profile.agentKind} size="sm" />
                     <span className="truncate">{profile.name}</span>
-                    {unsupported && <span className="text-muted-foreground">Terminal only</span>}
+                    {unsupported && <span className="text-muted-foreground">No ACP</span>}
                   </span>
                 </SelectItem>
               );

@@ -348,16 +348,15 @@ impl Database {
         // dangling id (treated as "no workspace").
         self.add_column_if_missing("tasks", "workspace_id", "INTEGER")?;
         // Backend-owned attention: `needs_input` (the agent is blocked on the user)
-        // or NULL. Persisted so the signal survives reload; set when the watcher
-        // emits `session_needs_input`, cleared on session start/idle/exit. `idle` is
-        // not stored — it is the default state when no attention and no session.
+        // or NULL. ACP chat owns new attention updates; startup clears any legacy
+        // PTY-era value so stale rows cannot block ACP-only workflows.
         self.add_column_if_missing("tasks", "attention", "TEXT")?;
         // Archive flag: archived tasks are excluded from every board/list read by
         // default (and from their per-worktree `git status` cost); the rows, the
         // worktrees, and the branches all stay until the task is deleted.
         self.add_column_if_missing("tasks", "archived", "INTEGER NOT NULL DEFAULT 0")?;
-        // The original started_at of the last session, so a tmux reattach can
-        // re-spawn the Codex rollout watcher with the real session start.
+        // Legacy PTY-session resume metadata. Kept for existing databases but no
+        // longer written by the ACP-only runtime.
         self.add_column_if_missing("tasks", "last_session_started_at", "TEXT")?;
         self.ensure_chat_extension_tables()?;
         // Google retired the Gemini CLI in favor of the Antigravity CLI (`agy`);
@@ -369,7 +368,8 @@ impl Database {
                 [],
             )
             .map_err(|error| format!("Failed to migrate Gemini profiles: {error}"))?;
-        // Opt-in tmux-backed persistent sessions (survive app quit + reattach).
+        // Legacy tmux-backed persistent-session setting. Kept only so older
+        // databases migrate cleanly; the ACP-only app no longer reads it.
         self.add_column_if_missing(
             "app_settings",
             "persistent_sessions",

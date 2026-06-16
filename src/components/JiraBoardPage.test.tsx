@@ -132,12 +132,13 @@ describe("JiraBoardPage linked tasks", () => {
     expect(onOpenTask).toHaveBeenCalledWith(5);
   });
 
-  it("shows a running indicator for a task with a live session", () => {
+  it("shows task status instead of legacy active-session state", () => {
     renderBoard([
       task({ id: 6, title: "Live", jiraIssueKey: "SCRUM-2", activeSessionId: "sess-1" }),
     ]);
 
-    expect(screen.getByText("Running")).toBeInTheDocument();
+    expect(screen.getByText("In progress")).toBeInTheDocument();
+    expect(screen.queryByText("Running")).not.toBeInTheDocument();
   });
 
   it("renders the issue key and priority on the card like a JIRA card", () => {

@@ -28,7 +28,6 @@ export function appSettingsFixture(overrides: Partial<AppSettings> = {}): AppSet
     jiraFilterCurrentSprint: false,
     jiraRestEmail: null,
     jiraFilterStatuses: [],
-    persistentSessions: false,
     theme: "system",
     density: "comfortable",
     updatedAt: testTimestamp,

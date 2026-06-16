@@ -30,8 +30,6 @@ import type {
   Repo,
   ReviewLoop,
   ReviewRun,
-  Session,
-  SessionOutputSnapshot,
   TaskDiffSummary,
   TaskStatus,
   TaskSummary,
@@ -480,7 +478,6 @@ export const api = {
         jiraFilterUnresolved: true,
         jiraFilterCurrentSprint: false,
         jiraFilterStatuses: [],
-        persistentSessions: false,
         jiraFilterEpic: null,
         theme: "system",
         density: "comfortable",
@@ -492,33 +489,6 @@ export const api = {
   async updateAppSettings(settings: AppSettingsInput): Promise<AppSettings> {
     if (isBrowserPreview) return { ...settings, updatedAt: new Date().toISOString() };
     return invoke("update_app_settings", { settings });
-  },
-  async startSession(taskId: number, agentProfileId: number): Promise<Session> {
-    return invoke("start_session", { taskId, agentProfileId });
-  },
-  async resumeSession(taskId: number): Promise<Session> {
-    return invoke("resume_session", { taskId });
-  },
-  async stopSession(sessionId: string): Promise<Session> {
-    return invoke("stop_session", { sessionId });
-  },
-  async resizeSession(sessionId: string, rows: number, cols: number): Promise<void> {
-    if (isBrowserPreview) return;
-    return invoke("resize_session", { sessionId, rows, cols });
-  },
-  async sendSessionInput(sessionId: string, data: string): Promise<void> {
-    if (isBrowserPreview) return;
-    return invoke("send_session_input", { sessionId, data });
-  },
-  async submitSessionInput(sessionId: string, data: string): Promise<void> {
-    if (isBrowserPreview) return;
-    return invoke("submit_session_input", { sessionId, data });
-  },
-  async sessionOutputSnapshot(sessionId: string): Promise<SessionOutputSnapshot> {
-    if (isBrowserPreview) {
-      return { sessionId, data: "", truncated: false, startOffset: 0, endOffset: 0, cols: 80, rows: 24 };
-    }
-    return invoke("session_output_snapshot", { sessionId });
   },
   // Backfill the in-app Diagnostics panel with the buffered Rust log lines
   // (oldest first); live lines then arrive via the `diagnostic_log` event.

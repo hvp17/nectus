@@ -239,7 +239,8 @@ export function defineAppTaskCreationTests() {
       });
     });
     await waitFor(() => {
-      expect(mockedApi.startSession).toHaveBeenCalledWith(11, 2);
+      expect(mockedApi.acpStartChat).toHaveBeenCalledWith(11, 2);
+      expect(mockedApi.acpSendPrompt).toHaveBeenCalledWith("chat-11", "Review modal task flow");
     });
   });
 
@@ -286,7 +287,6 @@ export function defineAppTaskCreationTests() {
       jiraFilterUnresolved: true,
       jiraFilterCurrentSprint: false,
       jiraFilterStatuses: [],
-      persistentSessions: false,
       theme: "system",
       density: "comfortable",
       updatedAt: "2026-05-14T00:00:00.000Z",
@@ -333,7 +333,6 @@ export function defineAppTaskCreationTests() {
       jiraFilterUnresolved: true,
       jiraFilterCurrentSprint: false,
       jiraFilterStatuses: [],
-      persistentSessions: false,
       theme: "system",
       density: "comfortable",
       updatedAt: "2026-05-14T00:00:00.000Z",

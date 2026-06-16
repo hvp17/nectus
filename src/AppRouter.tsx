@@ -482,6 +482,7 @@ function MissionView() {
   const tasks = useTasksQuery().data ?? EMPTY_TASKS;
   const taskAttention = useAppStore((s) => s.taskAttention);
   const liveLines = useAppStore((s) => s.liveLines);
+  const chatWorkingTaskIds = useAppStore((s) => s.chatWorkingTaskIds);
   const loading = useBootstrapLoading();
   const refresh = useRefreshData();
   return (
@@ -491,6 +492,7 @@ function MissionView() {
         tasks={tasks}
         taskAttention={taskAttention}
         liveLines={liveLines}
+        chatWorkingTaskIds={chatWorkingTaskIds}
         loading={loading}
         onOpenTask={openTask}
         onOpenPr={openExternal}
@@ -508,6 +510,7 @@ function BoardView() {
   const selectedTaskId = useAppStore((s) => s.selectedTaskId);
   const taskAttention = useAppStore((s) => s.taskAttention);
   const liveLines = useAppStore((s) => s.liveLines);
+  const chatWorkingTaskIds = useAppStore((s) => s.chatWorkingTaskIds);
   const deletingTaskIds = useAppStore((s) => s.deletingTaskIds);
   const busy = useAppStore((s) => s.busy);
   const loading = useBootstrapLoading();
@@ -529,6 +532,7 @@ function BoardView() {
         selectedTaskId={selectedTaskId}
         taskAttention={taskAttention}
         liveLines={liveLines}
+        chatWorkingTaskIds={chatWorkingTaskIds}
         onSelectTask={openTask}
         onRefresh={refresh}
         onCreateTask={openCreateTaskModal}

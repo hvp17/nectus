@@ -165,7 +165,7 @@ describe("ChatPane", () => {
 
     expect(await screen.findByText("ACP chat unavailable")).toBeInTheDocument();
     expect(
-      screen.getByText("Custom shell does not have an ACP provider descriptor yet. Use Terminal for this task."),
+      screen.getByText("Custom shell does not have an ACP provider descriptor yet."),
     ).toBeInTheDocument();
     const input = screen.getByTestId("chat-composer-input");
     expect(input).toBeDisabled();

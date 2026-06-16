@@ -27,7 +27,7 @@ export interface ChatRuntimeStore {
 }
 
 /**
- * Mirror ACP chat streaming into the same ephemeral sinks PTY sessions use:
+ * Mirror ACP chat streaming into the shell's ephemeral runtime sinks:
  * `liveLines`, working-state for triage, and permission attention.
  */
 export function applyChatRuntimeUpdate(
@@ -68,18 +68,15 @@ export function applyChatRuntimeUpdate(
     const permission = chatPermissionAttention(message);
     if (task && permission) {
       store.setTaskAttention((current) =>
-        upsertTaskAttention(
-          current,
-          task,
-          {
-            sessionId: payload.sessionId,
-            taskId,
-            turnId: null,
-            reason: permission.title,
-            prompt: permission.prompt,
-          },
-          message.createdAt,
-        ),
+        upsertTaskAttention(current, {
+          taskId,
+          kind: "needs_input",
+          title: task.title,
+          agentName: task.agentName,
+          reason: permission.title,
+          prompt: permission.prompt,
+          updatedAt: message.createdAt,
+        }),
       );
     } else if (done && task) {
       store.setTaskAttention((current) => clearTaskAttention(current, taskId));

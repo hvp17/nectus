@@ -11,7 +11,6 @@ import { useGithub } from "../hooks/useGithub";
 import { useTaskReviewLoop } from "../hooks/useTaskReviewLoop";
 import { useTaskActions } from "../hooks/useTaskActions";
 import { useTaskDeletion } from "../hooks/useTaskDeletion";
-import { useSessionControls } from "../hooks/useSessionControls";
 import { useGithubShipActions } from "../hooks/useGithubShipActions";
 import { useGuardedAction } from "../hooks/useGuardedAction";
 import { isReviewLoopActive } from "../statusLabels";
@@ -30,7 +29,7 @@ interface TaskWorkspaceOverlayProps {
 
 /**
  * Self-sufficient wrapper for the open task's workspace: it assembles every
- * `TaskWorkspace` prop from per-task hooks (GitHub PR, review loop, task/session
+ * `TaskWorkspace` prop from per-task hooks (GitHub PR, review loop, task chat
  * actions) so `TaskWorkspace` itself stays a pure presentational component. This is
  * what lets the shell drop the open-task surface from `useApp`.
  */
@@ -60,7 +59,7 @@ export function TaskWorkspaceOverlay({ task, backLabel, repoName, onClose }: Tas
   const [activeRepoId, setActiveRepoId] = useState<number | undefined>(undefined);
   useEffect(() => setActiveRepoId(undefined), [task.id]);
   // Ship prompts must run inside the scoped repo's sibling worktree, not the
-  // session's primary cwd, when a non-primary repo is selected.
+  // the primary worktree, when a non-primary repo is selected.
   const repoScope = useMemo(() => {
     if (activeRepoId == null || activeRepoId === task.repoId) return null;
     const repoName = taskRepoName(task, activeRepoId);
@@ -73,7 +72,6 @@ export function TaskWorkspaceOverlay({ task, backLabel, repoName, onClose }: Tas
   const review = useTaskReviewLoop({ selectedTaskId: task.id, onMessage: setMessage });
   const { updateStatus, renameTask, setTaskJiraLink, setArchived } = useTaskActions();
   const requestDeleteTask = useTaskDeletion();
-  const session = useSessionControls();
 
   // Start (or resume) the review loop, then kick off an immediate review.
   const startReview = useCallback(
@@ -114,9 +112,6 @@ export function TaskWorkspaceOverlay({ task, backLabel, repoName, onClose }: Tas
       activeRepoId={activeRepoId}
       onSelectRepo={setActiveRepoId}
       onClose={onClose}
-      onStopSession={session.stopSession}
-      onResumeSession={session.resumeSession}
-      onStartSession={session.startSession}
       onStartReview={startReview}
       onCreatePullRequest={ship.createPullRequest}
       onRefreshPullRequest={github.refreshPullRequest}
@@ -133,8 +128,6 @@ export function TaskWorkspaceOverlay({ task, backLabel, repoName, onClose }: Tas
       onDeleteTask={requestDeleteTask}
       onSetJiraLink={setTaskJiraLink}
       jiraSite={jiraSite}
-      onSessionExit={session.onSessionExit}
-      onSessionInput={session.onSessionInput}
       busy={busy}
       isDeleting={isDeleting}
     />

@@ -7,7 +7,7 @@ import {
   upsertTaskAttention,
   type TaskAttention,
 } from "./sessionAttention";
-import type { SessionIdleEvent, SessionNeedsInputEvent, TaskSummary } from "./types";
+import type { TaskSummary } from "./types";
 
 const task: TaskSummary = {
   id: 21,
@@ -45,15 +45,17 @@ describe("sessionAttention", () => {
         updatedAt: "2026-05-14T00:00:00.000Z",
       },
     ];
-    const event: SessionNeedsInputEvent = {
-      sessionId: "session-21",
+    const event: TaskAttention = {
       taskId: task.id,
-      turnId: "turn-1",
+      kind: "needs_input",
+      title: task.title,
+      agentName: "Codex",
       reason: "approval_request",
       prompt: "Allow command?",
+      updatedAt: "2026-05-14T00:01:00.000Z",
     };
 
-    const next = upsertTaskAttention(current, task, event, "2026-05-14T00:01:00.000Z");
+    const next = upsertTaskAttention(current, event);
 
     expect(next).toEqual([
       {
@@ -69,13 +71,15 @@ describe("sessionAttention", () => {
   });
 
   it("counts attention by state and clears a task once work resumes", () => {
-    const idleEvent: SessionIdleEvent = {
-      sessionId: "session-21",
+    const idleEvent: TaskAttention = {
       taskId: task.id,
-      turnId: "turn-1",
+      kind: "idle",
+      title: task.title,
+      agentName: "Codex",
       message: "Ready for review",
+      updatedAt: "2026-05-14T00:01:00.000Z",
     };
-    const next = upsertTaskAttention([], task, idleEvent, "2026-05-14T00:01:00.000Z");
+    const next = upsertTaskAttention([], idleEvent);
 
     expect(getAttentionCounts(next)).toEqual({ needsInput: 0, finished: 1 });
     expect(clearTaskAttention(next, task.id)).toEqual([]);

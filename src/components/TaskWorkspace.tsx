@@ -17,7 +17,7 @@ import { isReviewLoopActive } from "../statusLabels";
 import { isCliConnected } from "../lib/connection";
 import { isCrossRepoTask } from "../lib/taskRepos";
 import { resolveReviewerProfileId } from "../lib/agentProfiles";
-import { usesTerminalPrimary } from "../lib/acpAgent";
+import { isAcpCapableAgent } from "../lib/acpAgent";
 import { useAcpProvidersQuery } from "../queries/core";
 import { useAppStore } from "../store/appStore";
 import { useTaskDiff } from "../hooks/useTaskDiff";
@@ -48,15 +48,12 @@ export interface TaskWorkspaceProps {
   pullRequestBusy?: boolean;
   /** Label for the back affordance, e.g. "Mission Control" or the project name. */
   backLabel?: string;
-  /** Project/repo name shown in the identity line ("{repo} · session {id}"). */
+  /** Project/repo name shown in the identity line. */
   repoName?: string;
   /** Cross-repo scope: the member repo the Diff tab + GitHub panel target. */
   activeRepoId?: number;
   onSelectRepo?: (repoId: number | undefined) => void;
   onClose: () => void;
-  onStopSession: (sessionId: string) => void;
-  onResumeSession: (task: TaskSummary) => void;
-  onStartSession: (task: TaskSummary) => void;
   onStartReview: (task: TaskSummary, reviewerProfileId: number) => void;
   onCreatePullRequest: (task: TaskSummary, options?: { draft?: boolean }) => void;
   onRefreshPullRequest: (task: TaskSummary) => void;
@@ -74,8 +71,6 @@ export interface TaskWorkspaceProps {
   ) => void;
   /** Connected JIRA site host, used to build the linked story's browse URL. */
   jiraSite?: string | null;
-  onSessionExit: (sessionId: string) => void;
-  onSessionInput: (sessionId: string) => void;
   busy?: boolean;
   isDeleting?: boolean;
 }
@@ -101,14 +96,14 @@ function currentWorkflowStep(args: {
 function pullRequestActionHint(args: {
   hasPullRequest: boolean;
   canCreateViaGithub: boolean;
-  hasActiveSession: boolean;
+  hasAcpAgent: boolean;
   githubReady: boolean;
 }): string {
   if (args.hasPullRequest) return "Pull request linked";
   if (args.canCreateViaGithub) return "Open a pull request with the GitHub CLI";
-  if (args.hasActiveSession) return "Ask the running agent to open a pull request";
+  if (args.hasAcpAgent) return "Ask the chat agent to open a pull request";
   if (args.githubReady) return "Add a worktree branch to open a pull request";
-  return "Start the agent or connect the GitHub CLI";
+  return "Choose an ACP-capable agent or connect the GitHub CLI";
 }
 
 export function TaskWorkspace({
@@ -128,9 +123,6 @@ export function TaskWorkspace({
   activeRepoId,
   onSelectRepo,
   onClose,
-  onStopSession,
-  onResumeSession,
-  onStartSession,
   onStartReview,
   onCreatePullRequest,
   onRefreshPullRequest,
@@ -143,8 +135,6 @@ export function TaskWorkspace({
   onDeleteTask,
   onSetJiraLink,
   jiraSite,
-  onSessionExit,
-  onSessionInput,
   busy = false,
   isDeleting = false,
 }: TaskWorkspaceProps) {
@@ -161,7 +151,7 @@ export function TaskWorkspace({
   const { refresh: refreshDiff } = diff;
   const acpProviders = useAcpProvidersQuery().data ?? [];
   const chatWorkingTaskIds = useAppStore((s) => s.chatWorkingTaskIds);
-  const [stageTab, setStageTab] = useState<"terminal" | "diff" | "review" | "chat">("chat");
+  const [stageTab, setStageTab] = useState<"diff" | "review" | "chat">("chat");
   const [diffSelectedFile, setDiffSelectedFile] = useState<string | null>(null);
   const refreshDiffForOpenTab = useEffectEvent(() => {
     void refreshDiff();
@@ -182,14 +172,8 @@ export function TaskWorkspace({
     wasReviewRunning.current = reviewIsRunning;
   }, [reviewIsRunning]);
 
-  const showTerminalTab = task ? usesTerminalPrimary(task.agentKind ?? "custom", acpProviders) : true;
   const chatWorking = task ? Boolean(chatWorkingTaskIds[task.id]) : false;
   const openedTaskIdRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!task) return;
-    if (!showTerminalTab && stageTab === "terminal") setStageTab("chat");
-  }, [task, showTerminalTab, stageTab]);
 
   useEffect(() => {
     if (!task) return;
@@ -197,9 +181,9 @@ export function TaskWorkspace({
     if (previousTaskId === task.id) return;
     openedTaskIdRef.current = task.id;
     if (previousTaskId !== null) {
-      setStageTab(showTerminalTab ? "terminal" : "chat");
+      setStageTab("chat");
     }
-  }, [task?.id, showTerminalTab]);
+  }, [task?.id]);
 
   if (!task) return null;
 
@@ -231,9 +215,7 @@ export function TaskWorkspace({
   const selectedReviewerProfile = agentProfiles.find((profile) => profile.id === reviewerProfileId);
   const reviewActive = Boolean(reviewLoop && isReviewLoopActive(reviewLoop.status));
   const reviewInProgress = reviewLoop?.status === "reviewing";
-  const canResumeSession = task.agentKind === "codex" || task.agentKind === "claude" || task.agentKind === "opencode";
-  const sessionAgentLabel = task.lastSessionAgent ?? task.agentName ?? "None";
-  const sessionId = task.activeSessionId ?? task.lastSessionId;
+  const agentLabel = task.agentName ?? "None";
   const {
     detail: attentionDetail,
     displayed: displayedAttentionDetail,
@@ -243,12 +225,12 @@ export function TaskWorkspace({
   const reviewReadyForNextStep = reviewLoop?.status === "passed";
   const githubReady = isCliConnected(githubStatus);
   const canCreateViaGithub = Boolean(githubReady && task.hasWorktree && !task.prUrl);
-  const canShipViaAgent = Boolean(task.activeSessionId || chatWorking || !showTerminalTab);
+  const canShipViaAgent = Boolean(isAcpCapableAgent(task.agentKind ?? "custom", acpProviders) || chatWorking);
   const canCreatePullRequest = Boolean(!task.prUrl && (canCreateViaGithub || canShipViaAgent));
   const createPullRequestDescription = pullRequestActionHint({
     hasPullRequest: Boolean(task.prUrl),
     canCreateViaGithub,
-    hasActiveSession: canShipViaAgent,
+    hasAcpAgent: canShipViaAgent,
     githubReady,
   });
   const workflowStep = currentWorkflowStep({
@@ -404,7 +386,6 @@ export function TaskWorkspace({
         onRenameTask={onRenameTask}
         stageTab={stageTab}
         onStageTabChange={setStageTab}
-        showTerminalTab={showTerminalTab}
         repoScopePicker={repoScopePicker}
         diffSelectedFile={diffSelectedFile}
         diff={diff}
@@ -418,11 +399,6 @@ export function TaskWorkspace({
         isAttentionDetailTruncated={isAttentionDetailTruncated}
         canCreatePullRequest={canCreatePullRequest}
         onCreatePullRequest={onCreatePullRequest}
-        onSessionExit={onSessionExit}
-        onSessionInput={onSessionInput}
-        canResumeSession={canResumeSession}
-        onResumeSession={onResumeSession}
-        onStartSession={onStartSession}
         onOpenChatFile={openChatFile}
       />
 
@@ -431,8 +407,7 @@ export function TaskWorkspace({
         repoName={repoName}
         activeRepoId={activeRepoId}
         repoScopePicker={repoScopePicker}
-        sessionId={sessionId}
-        sessionAgentLabel={sessionAgentLabel}
+        agentLabel={agentLabel}
         githubStatus={githubStatus}
         pullRequest={pullRequest}
         pullRequestLoading={pullRequestLoading}
@@ -445,7 +420,6 @@ export function TaskWorkspace({
         jiraSite={jiraSite}
         busy={busy}
         isDeleting={isDeleting}
-        onStopSession={onStopSession}
         onUpdateStatus={onUpdateStatus}
         onCreatePullRequest={onCreatePullRequest}
         onRefreshPullRequest={onRefreshPullRequest}

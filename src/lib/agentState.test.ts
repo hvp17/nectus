@@ -48,7 +48,7 @@ describe("deriveAgentState review-loop statuses", () => {
 
 describe("deriveAgentState persisted attention", () => {
   it("treats a persisted needs_input attention as needs_you (survives reload)", () => {
-    // No live push attention and no active session — only the backend-persisted
+    // No live push attention and no in-flight ACP turn — only the backend-persisted
     // column. This is the reload case: the signal must still surface.
     const t = task({ activeSessionId: null, attention: "needs_input" });
     expect(deriveAgentState(t)).toBe("needs_you");
@@ -57,8 +57,8 @@ describe("deriveAgentState persisted attention", () => {
 
 describe("buildAgentRows live line", () => {
   it("uses the live activity line for a running task", () => {
-    const running = task({ id: 1, activeSessionId: "s-1" });
-    const [row] = buildAgentRows([running], [], repoNames, { 1: "Editing TaskCard.tsx" });
+    const running = task({ id: 1 });
+    const [row] = buildAgentRows([running], [], repoNames, { 1: "Editing TaskCard.tsx" }, Date.now(), { 1: true });
 
     expect(row.state).toBe("running");
     expect(row.line).toBe("Editing TaskCard.tsx");
@@ -73,10 +73,10 @@ describe("buildAgentRows live line", () => {
   });
 
   it("falls back to the running label when there is no live line", () => {
-    const running = task({ id: 1, activeSessionId: "s-1" });
-    const [row] = buildAgentRows([running], [], repoNames, {});
+    const running = task({ id: 1 });
+    const [row] = buildAgentRows([running], [], repoNames, {}, Date.now(), { 1: true });
 
-    expect(row.line).toBe("Session running");
+    expect(row.line).toBe("Agent working");
   });
 
   it("ignores a live line for a task that is not running", () => {

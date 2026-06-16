@@ -14,7 +14,6 @@ const systemSettings: AppSettings = {
   jiraFilterUnresolved: true,
   jiraFilterCurrentSprint: false,
   jiraFilterStatuses: [],
-  persistentSessions: false,
   theme: "system",
   density: "comfortable",
   updatedAt: "2026-05-16T00:00:00.000Z",

@@ -79,7 +79,7 @@ pub(super) fn reviewer_supports_resume(kind: AgentKind) -> bool {
 }
 
 /// Mint a fresh reviewer session id for Claude's `--session-id` (requires a
-/// UUID), matching the v4 UUIDs used for live PTY sessions.
+/// UUID).
 pub(super) fn new_reviewer_session_id() -> String {
     uuid::Uuid::new_v4().to_string()
 }

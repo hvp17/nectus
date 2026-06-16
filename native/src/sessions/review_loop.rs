@@ -1,44 +1,31 @@
-//! Task review-loop orchestration: runs a reviewer pass when a worker session
-//! goes idle, records the verdict, and forwards actionable feedback back into
-//! the live worker PTY. The generic reviewer launcher lives in `reviewer.rs`
-//! and the PTY submission helper in `terminal_io.rs`.
+//! Task review-loop orchestration: runs a headless reviewer pass in the task
+//! worktree, records the verdict, and streams the reviewer's live output. The
+//! generic reviewer launcher lives in `reviewer.rs`.
 
 use super::reviewer::{
     reviewer_supports_resume, run_reviewer_command, ReviewOutputSink, ReviewOutputTarget,
 };
-use super::terminal_io::write_agent_submission;
 use super::verdict::{parse_and_strip, VerdictToken, VERDICT_MARKER};
-use super::RunningSession;
 use crate::db::Database;
 use crate::models::{
     ReviewLoopStatus, ReviewLoopUpdatedEvent, ReviewRunInput, ReviewVerdict, TaskSummary,
 };
 use parking_lot::Mutex;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
 const UNCLEAR_REVIEW_ERROR: &str = "Reviewer output did not include a clear verdict";
 
-pub(super) fn spawn_review_on_session_idle(
+pub(super) fn spawn_task_review(
     app: AppHandle,
     db: Arc<Mutex<Database>>,
-    sessions: Arc<Mutex<HashMap<String, RunningSession>>>,
     task_id: i64,
-    session_id: String,
     cwd: PathBuf,
 ) {
     std::thread::spawn(move || {
-        if let Err(error) = run_review_round(
-            app.clone(),
-            db.clone(),
-            sessions,
-            task_id,
-            &session_id,
-            &cwd,
-        ) {
-            tracing::warn!(?error, task_id, session_id = %session_id, "review failed");
+        if let Err(error) = run_review_round(app.clone(), db.clone(), task_id, &cwd) {
+            tracing::warn!(?error, task_id, "review failed");
             let _ = db
                 .lock()
                 .set_review_loop_state(task_id, ReviewLoopStatus::Error, Some(&error));
@@ -50,9 +37,7 @@ pub(super) fn spawn_review_on_session_idle(
 fn run_review_round(
     app: AppHandle,
     db: Arc<Mutex<Database>>,
-    sessions: Arc<Mutex<HashMap<String, RunningSession>>>,
     task_id: i64,
-    session_id: &str,
     cwd: &Path,
 ) -> Result<(), String> {
     let (task, reviewer) = {
@@ -137,14 +122,6 @@ fn run_review_round(
     tracing::info!(task_id, verdict = %verdict.as_str(), "recorded review");
     emit_review_loop_update(&app, &db, task_id, Some(run));
 
-    let Some(review_loop) = db.lock().review_loop_by_task_id(task_id)? else {
-        return Ok(());
-    };
-    if should_forward_review_feedback(verdict, review_loop.status) {
-        let feedback = format_worker_review_feedback(&reviewer_output);
-        send_worker_feedback(sessions, session_id, &feedback)?;
-    }
-
     Ok(())
 }
 
@@ -165,28 +142,6 @@ fn emit_review_loop_update(
             review_run,
         },
     );
-}
-
-fn send_worker_feedback(
-    sessions: Arc<Mutex<HashMap<String, RunningSession>>>,
-    session_id: &str,
-    feedback: &str,
-) -> Result<(), String> {
-    // Clone the shared writer handle and release the sessions map lock before
-    // writing: a PTY write blocks until the agent drains stdin, and holding the
-    // map across it would stall every reader thread and session command.
-    let writer = {
-        let sessions = sessions.lock();
-        sessions
-            .get(session_id)
-            .map(|running| running.writer.clone())
-            .ok_or_else(|| {
-                "Worker session stopped before review feedback could be sent".to_string()
-            })?
-    };
-    let mut writer = writer.lock();
-    write_agent_submission(writer.as_mut(), feedback)
-        .map_err(|error| format!("Failed to send review feedback to worker agent: {error}"))
 }
 
 /// Parse the reviewer's verdict from its `NECTUS_VERDICT:` marker (via the shared
@@ -265,33 +220,10 @@ After a FEEDBACK verdict, list concise non-blocking implementation or approach s
     )
 }
 
-pub(super) fn format_worker_review_feedback(reviewer_output: &str) -> String {
-    format!(
-        "\
-AI reviewer returned this review:
-
-{reviewer_output}
-
-Decide which findings are valid, make the necessary code or test changes, and explain any review feedback you intentionally do not apply.
-",
-        reviewer_output = reviewer_output.trim()
-    )
-}
-
-fn should_forward_review_feedback(verdict: ReviewVerdict, status: ReviewLoopStatus) -> bool {
-    matches!(
-        verdict,
-        ReviewVerdict::NeedsChanges | ReviewVerdict::Feedback
-    ) && matches!(
-        status,
-        ReviewLoopStatus::Running | ReviewLoopStatus::FeedbackSent
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{ReviewLoopStatus, ReviewVerdict, TaskStatus, TaskSummary};
+    use crate::models::{ReviewVerdict, TaskStatus, TaskSummary};
 
     fn task() -> TaskSummary {
         TaskSummary {
@@ -398,31 +330,5 @@ mod tests {
         assert!(prompt.contains("NECTUS_VERDICT: BLOCKERS"));
         assert!(prompt.contains("NECTUS_VERDICT: FEEDBACK"));
         assert!(!prompt.contains("diff --git"));
-    }
-
-    #[test]
-    fn formats_review_feedback_for_worker_agent() {
-        let feedback = format_worker_review_feedback("Blocking issue: missing test");
-
-        assert!(feedback.contains("AI reviewer returned this review"));
-        assert!(!feedback.contains("round"));
-        assert!(feedback.contains("Blocking issue: missing test"));
-        assert!(feedback.contains("Decide which findings are valid"));
-    }
-
-    #[test]
-    fn forwards_single_review_feedback_after_terminal_review() {
-        assert!(should_forward_review_feedback(
-            ReviewVerdict::Feedback,
-            ReviewLoopStatus::FeedbackSent
-        ));
-        assert!(should_forward_review_feedback(
-            ReviewVerdict::NeedsChanges,
-            ReviewLoopStatus::FeedbackSent
-        ));
-        assert!(!should_forward_review_feedback(
-            ReviewVerdict::Pass,
-            ReviewLoopStatus::Passed
-        ));
     }
 }

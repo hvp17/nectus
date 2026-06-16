@@ -437,14 +437,9 @@ impl Database {
 
     /// Archive (or restore) a task. Archived tasks vanish from the default
     /// board/list reads but keep their row, worktree, and branch until deleted.
-    /// Archiving with a running session is refused — it would hide a live agent.
     pub fn set_task_archived(&self, task_id: i64, archived: bool) -> Result<TaskSummary, String> {
-        let existing = self
-            .task_by_id(task_id)?
+        self.task_by_id(task_id)?
             .ok_or_else(|| "Task not found".to_string())?;
-        if archived && existing.active_session_id.is_some() {
-            return Err("Stop the running session before archiving this task".into());
-        }
         self.conn
             .execute(
                 "UPDATE tasks SET archived = ?1, updated_at = ?2 WHERE id = ?3",
@@ -510,7 +505,7 @@ impl Database {
     }
 
     /// Resolve what deleting a task entails — its per-repo worktrees — as a fast
-    /// DB read, after guarding against a missing task or a running session. Pairs
+    /// DB read after guarding against a missing task. Pairs
     /// with [`TaskDeletionPlan::remove_worktrees`] (off-lock git) and
     /// [`delete_task_row`]; splitting it this way keeps the `git worktree remove`
     /// subprocesses off the global DB lock (mirroring task creation). Uses the
@@ -519,9 +514,6 @@ impl Database {
         let existing = self
             .task_by_id(task_id)?
             .ok_or_else(|| "Task not found".to_string())?;
-        if existing.active_session_id.is_some() {
-            return Err("Stop the running session before deleting this task".into());
-        }
 
         let mut worktrees = Vec::new();
         for task_repo in &existing.task_repos {
@@ -537,6 +529,18 @@ impl Database {
             }
         }
         Ok(TaskDeletionPlan { worktrees })
+    }
+
+    /// Legacy PTY sessions are no longer reattached. Clear stale active markers
+    /// on boot so old rows cannot block ACP-only workflows.
+    pub fn clear_legacy_active_sessions(&self) -> Result<(), String> {
+        self.conn
+            .execute(
+                "UPDATE tasks SET active_session_id = NULL, attention = NULL, updated_at = ?1 WHERE active_session_id IS NOT NULL OR attention IS NOT NULL",
+                params![now()],
+            )
+            .map_err(|error| format!("Failed to clear legacy active sessions: {error}"))?;
+        Ok(())
     }
 
     /// Delete the task row. `task_repos` rows cascade-delete with it. Run after the

@@ -40,8 +40,8 @@ export function TaskDeleteDialog({
   tooltipSide = "top",
 }: TaskDeleteDialogProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const deleteDisabled = busy || isDeleting || Boolean(task.activeSessionId);
-  const deleteLabel = task.activeSessionId ? "Stop session first" : isDeleting ? "Deleting task" : "Delete task";
+  const deleteDisabled = busy || isDeleting;
+  const deleteLabel = isDeleting ? "Deleting task" : "Delete task";
   const worktreeDirty = Boolean(task.hasWorktree && task.isDirty);
   const deleteDescription = worktreeDirty
     ? `This worktree has uncommitted changes. Deleting "${task.title}" will permanently discard them along with the worktree.`

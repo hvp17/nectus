@@ -26,10 +26,10 @@ export const AGENT_STATE_META: Record<AgentState, AgentStateMeta> = {
 /** Triage priority — lower sorts first (most urgent on top). */
 export const AGENT_STATE_ORDER: AgentState[] = ["needs_you", "running", "review", "done", "idle"];
 
-// The "in flight" states — an agent has a live session, is blocked on you, or is
-// running a review (terminal done/idle excluded). Shared so the running-agents
-// flyout, Mission Control's summary pills, and any future "active" surface agree
-// on what counts as active, in AGENT_STATE_ORDER priority.
+// The "in flight" states — an agent has a live ACP turn, is blocked on you, or
+// is running a review. Shared so the running-agents flyout, Mission Control's
+// summary pills, and any future "active" surface agree on what counts as active,
+// in AGENT_STATE_ORDER priority.
 export const ACTIVE_AGENT_STATES: AgentState[] = ["needs_you", "running", "review"];
 
 // Every review-loop status counts as the "review" state, so the rail colour and
@@ -47,7 +47,7 @@ export function deriveAgentState(
   // `task.attention` is the backend-persisted copy that survives reload. Either
   // means the agent is blocked on the user.
   if (attention?.kind === "needs_input" || task.attention === "needs_input") return "needs_you";
-  if (task.activeSessionId || chatWorkingTaskIds[task.id]) return "running";
+  if (chatWorkingTaskIds[task.id]) return "running";
   if (task.reviewLoopStatus && REVIEW_STATUSES.has(task.reviewLoopStatus)) return "review";
   if (task.status === "review") return "review";
   if (task.status === "done") return "done";
@@ -67,10 +67,10 @@ export function deriveAgentLine(task: TaskSummary, state: AgentState, attention?
     return task.prUrl ? "Pull request opened" : "Marked done";
   }
   if (state === "idle") {
-    return attention?.message?.trim() || (task.lastSessionId ? "Last session saved" : "No active session");
+    return attention?.message?.trim() || "No active chat";
   }
   // running
-  return task.lastSessionLabel?.trim() || "Session running";
+  return "Agent working";
 }
 
 const TIME_UNITS: Array<[number, string]> = [
@@ -112,8 +112,8 @@ export function buildAgentRows(
     .map((task) => {
       const attention = getTaskAttention(taskAttention, task.id);
       const state = deriveAgentState(task, attention, chatWorkingTaskIds);
-      // A running session's live activity line, when we have one, beats the
-      // static "Session running" / label fallback.
+      // A live ACP activity line, when we have one, beats the static running
+      // label fallback.
       const liveLine = state === "running" ? liveLines[task.id]?.trim() : undefined;
       return {
         task,

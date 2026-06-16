@@ -4,12 +4,6 @@ import { queryKeys } from "../queries/keys";
 import { useTasksQuery } from "../queries/core";
 import { useAppStore } from "../store/appStore";
 import { notifySessionEvent } from "../sessionNotifications";
-import { clearTaskAttention, upsertTaskAttention } from "../sessionAttention";
-import {
-  sessionIdleContent,
-  sessionNeedsInputContent,
-  taskToastFromContent,
-} from "../taskNotification";
 import { upsertById, upsertNewestById } from "../lib/listState";
 import { applyChatRuntimeUpdate, clearChatRuntimeForTask } from "../lib/chat/applyChatRuntime";
 import { useTauriEvent } from "./useTauriEvent";
@@ -23,10 +17,6 @@ import type {
   PrReviewUpdatedEvent,
   ReviewLoopUpdatedEvent,
   ReviewRun,
-  SessionActivityEvent,
-  SessionExitedEvent,
-  SessionIdleEvent,
-  SessionNeedsInputEvent,
   TaskSummary,
 } from "../types";
 
@@ -48,7 +38,7 @@ function prReviewLabel(review: PrReview): string {
  * lands and is reconciled by the fetch.
  *
  * `review_output` is NOT here — it stays in `useTaskReviewLoop` as a per-component
- * live stream. `session_idle` for the diff stays in `useTaskDiff` (mounted once).
+ * live stream.
  */
 export function useEventBridge() {
   const queryClient = useQueryClient();
@@ -111,75 +101,6 @@ export function useEventBridge() {
   const handleSubscriptionError = useCallback((error: unknown) => {
     useAppStore.getState().setMessage(String(error));
   }, []);
-
-  useTauriEvent<SessionIdleEvent>(
-    "session_idle",
-    (payload) => {
-      const store = useAppStore.getState();
-      const task = tasksRef.current.find((item) => item.id === payload.taskId);
-      const content = sessionIdleContent(task, payload);
-      if (task) {
-        store.setTaskAttention((current) => upsertTaskAttention(current, task, payload));
-        store.setTaskToast(taskToastFromContent(task, content, "success"));
-      } else {
-        store.setMessage(`${content.title}: ${content.body}`);
-      }
-      void notifySessionEvent(content.title, content.body);
-    },
-    { onError: handleSubscriptionError },
-  );
-
-  useTauriEvent<SessionNeedsInputEvent>(
-    "session_needs_input",
-    (payload) => {
-      const store = useAppStore.getState();
-      const task = tasksRef.current.find((item) => item.id === payload.taskId);
-      const content = sessionNeedsInputContent(task, payload);
-      if (task) {
-        store.setTaskAttention((current) => upsertTaskAttention(current, task, payload));
-        store.setTaskToast(taskToastFromContent(task, content, "info"));
-      } else {
-        store.setMessage(`${content.title} for ${content.body}`);
-      }
-      void notifySessionEvent(content.title, content.body);
-    },
-    { onError: handleSubscriptionError },
-  );
-
-  useTauriEvent<SessionActivityEvent>(
-    "session_activity",
-    (payload) => {
-      const store = useAppStore.getState();
-      // Skip the write (and the re-render fan-out) when the line is unchanged —
-      // in-place spinner/status redraws repeat the same line at a high rate.
-      if (store.liveLines[payload.taskId] === payload.line) return;
-      store.setLiveLines((current) => ({ ...current, [payload.taskId]: payload.line }));
-    },
-    { onError: handleSubscriptionError },
-  );
-
-  useTauriEvent<SessionExitedEvent>(
-    "session_exited",
-    (payload) => {
-      const exited = tasksRef.current.find((task) => task.activeSessionId === payload.sessionId);
-      setTasks((current) =>
-        current.map((task) =>
-          task.activeSessionId === payload.sessionId ? { ...task, activeSessionId: null } : task,
-        ),
-      );
-      if (exited) {
-        const store = useAppStore.getState();
-        store.setLiveLines((current) => {
-          if (!(exited.id in current)) return current;
-          const next = { ...current };
-          delete next[exited.id];
-          return next;
-        });
-        store.setTaskAttention((current) => clearTaskAttention(current, exited.id));
-      }
-    },
-    { onError: handleSubscriptionError },
-  );
 
   useTauriEvent<ReviewLoopUpdatedEvent>(
     "review_loop_updated",

@@ -3,7 +3,7 @@
 This guide documents where Nectus Desktop tracks state, which events move that
 state, and where to look when behavior is wrong. It is the authoritative
 reference for the SQLite tables, the Tauri command and event catalog, the
-task/session fields, reviewer-session-resume, and the debugging flows.
+task/chat fields, reviewer-session-resume, and the debugging flows.
 
 For the connected layer model and the "where does X live?" table, see
 [architecture.md](architecture.md); for the per-file maps, see
@@ -31,8 +31,8 @@ Core tables:
 | `workspaces` | Durable, named groups of repos (VSCode-workspace style). `collapsed` is the sidebar fold state of the workspace's nested agent list (UI preference). |
 | `workspace_repos` | Workspace membership: `(workspace_id, repo_id, position)`. Many-to-many, so a repo can belong to several workspaces; cascade-deletes with either side. |
 | `agent_profiles` | CLI agent configuration, including command, model, args, and env. |
-| `app_settings` | Default agent, worktree pattern, branch prefix, theme, density, the opt-in `persistent_sessions` flag (tmux-backed sessions that survive app quit), and the JIRA board config (selected project + filter flags + `jira_filter_statuses` + `jira_filter_epic`; the JQL is built from these). Also the non-secret JIRA REST account email (`jira_rest_email`); the REST API token itself lives in the macOS Keychain, never here. |
-| `tasks` | Primary work item, status, prompt, optional worktree, active session, saved session (incl. `last_session_started_at`, used by persistent-session reattach), the persisted `attention` signal (`needs_input`/NULL), the `archived` flag (archived tasks are excluded from default list reads), optional JIRA story link, and optional `workspace_id` (the workspace a cross-repo task was created in). For a cross-repo task the `repo_id`/`branch_name`/`worktree_path`/`pr_url` columns describe the **primary** repo. |
+| `app_settings` | Default agent, worktree pattern, branch prefix, theme, density, and the JIRA board config (selected project + filter flags + `jira_filter_statuses` + `jira_filter_epic`; the JQL is built from these). Also the non-secret JIRA REST account email (`jira_rest_email`); the REST API token itself lives in the macOS Keychain, never here. |
+| `tasks` | Primary work item, status, prompt, optional worktree, legacy session columns (kept for older databases but cleared/ignored by the ACP-only runtime), the persisted `attention` signal (`needs_input`/NULL), the `archived` flag (archived tasks are excluded from default list reads), optional JIRA story link, and optional `workspace_id` (the workspace a cross-repo task was created in). For a cross-repo task the `repo_id`/`branch_name`/`worktree_path`/`pr_url` columns describe the **primary** repo. |
 | `task_repos` | Per-repo working state for a task (Increment B): `(task_id, repo_id, branch_name, worktree_path, pr_url, position)`. The complete repo set; a single-repo task has one row mirroring `tasks`. Unique on `worktree_path` and on `(repo_id, branch_name)`. Cascade-deletes with the task or repo. |
 | `review_loops` | Current review configuration and status per task. Includes `reviewer_session_id` (the active reviewer's session id for resume; reset to `NULL` when the loop is restarted via `start_pair_loop`). |
 | `review_runs` | Reviewer prompts, outputs, verdicts, and errors by review attempt. |
@@ -46,8 +46,7 @@ Row mapping and enum parsing: `native/src/db/rows.rs`
 
 Persistence APIs:
 
-- `native/src/db/mod.rs`: database setup plus project, settings, task, and
-  session-state records.
+- `native/src/db/mod.rs`: database setup plus project, settings, and task records.
 - `native/src/db/workspaces.rs`: workspace CRUD with transactional membership
   (`workspace_repos`) replacement.
 - `native/src/db/agent_profiles.rs`: agent profile queries and upserts.
@@ -72,7 +71,7 @@ Frontend state lives in three layers, not a single god-hook (the old
   draft (the `composer` slice — not a form hook), the push-driven `liveLines` /
   `taskAttention` maps, `deletingTaskIds`, and toasts/messages.
 - **Events — one mount-once bridge (`src/hooks/useEventBridge.ts`).** Mounted in
-  `AppLayout`, it owns every Rust session/review/PR subscription and routes each
+  `AppLayout`, it owns every Rust chat/review/PR subscription and routes each
   event to the Query cache or the Zustand store. Each channel uses
   `src/hooks/useTauriEvent.ts` for the Tauri `listen` lifecycle, so a failed
   subscription is surfaced without blocking the other event channels. Because
@@ -82,65 +81,18 @@ Frontend state lives in three layers, not a single god-hook (the old
 Review status is included in task summaries so the board can label cards before
 a task is opened; review is modeled as a single pass.
 
-### Codex JSONL
+### ACP Chat Runtime
 
-For Codex sessions, Nectus watches persisted rollout JSONL under:
+Task agents run through ACP chat, not an embedded PTY. The backend starts the
+provider descriptor in `native/src/sessions/acp.rs`, stores chat sessions and
+settled messages in SQLite, and streams normalized parts through `session_chat`.
+Permission requests are chat parts; answering them calls `acp_respond_permission`
+and optional allow/reject-always policies are stored in `chat_permission_policies`.
 
-```text
-~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl
-```
-
-The watcher:
-
-- Finds the latest file whose `session_meta.payload.cwd` matches the task cwd
-  and whose timestamp is after the Nectus session start.
-- Keeps looking for matching Codex metadata while the Nectus task session remains
-  active. It polls every 500 ms for the first 120 attempts, then backs off to
-  every 5 seconds for blank or idle Codex sessions that have not written JSONL
-  metadata yet.
-- Skips matching metadata when the rollout is a Codex subagent, auto-review, or
-  guardian session.
-- Reads appended lines every 500 ms.
-- Emits `session_idle` for `event_msg.payload.type == "task_complete"` or
-  `event_msg.payload.type == "turn_complete"`.
-- Attempts to emit `session_needs_input` for explicit approval, permission,
-  user-input, elicitation, patch-approval, confirmation, or needs-input event
-  names in `event_msg` entries.
-- Emits `session_needs_input` for persisted `response_item` function calls where
-  `payload.name == "request_user_input"`. The watcher extracts
-  `questions[].question` from the function-call `arguments` string when
-  available and sends it as the prompt preview.
-
-The JSONL protocol details and caveats are in
-[codex-session-jsonl.md](codex-session-jsonl.md).
-
-Important limitation: several approval and input request `event_msg` variants
-are defined by Codex but are not persisted by default in the checked rollout
-policy. Treat `session_idle` as high confidence. Treat input-needed detection as
-best effort across Codex versions and launch modes.
-
-### OpenCode Local Server
-
-For OpenCode sessions, Nectus reserves a localhost port and launches the CLI with
-`opencode --hostname 127.0.0.1 --port <port>`.
-
-The watcher:
-
-- Sends new task prompts with `--prompt <task prompt>` and skips the generic
-  post-spawn PTY prompt write, so OpenCode does not receive the prompt twice.
-- Discovers the matching top-level OpenCode session from `GET /session` (skipping
-  subagent sessions, which carry a `parentID`) and saves the id and label in
-  `tasks.last_session_id` / `tasks.last_session_label` when available.
-- Subscribes to the server's `GET /event` SSE stream and translates native
-  OpenCode events into Nectus signals: `session.idle` maps to `session_idle`;
-  `permission.asked`, `permission.v2.asked`, `question.asked`, and
-  `question.v2.asked` map to `session_needs_input`. Events for other sessions
-  (e.g. subagents) are ignored. The stream is re-established while the session is
-  alive and ends when the OpenCode process exits.
-
-OpenCode authentication stays owned by OpenCode (`opencode auth login` or TUI
-`/connect`). Nectus stores only the profile command, model, args, env, and saved
-session id.
+When a provider advertises `session/load`, the latest persisted `acp_session_id`
+can resume the provider conversation. If the app reloads and the process is gone,
+the next prompt starts a new ACP child and either calls `session/load` or creates a
+fresh ACP session, depending on the descriptor capability and persisted data.
 
 ## Tauri Commands
 
@@ -193,7 +145,7 @@ Current commands:
 | `list_agent_profiles` | Load agent profiles. |
 | `upsert_agent_profile` | Create or update an agent profile. |
 | `start_pair_loop` | Enable reviewer automation for a task. |
-| `run_pair_review` | Trigger an immediate reviewer pass for a task with a running worker session. |
+| `run_pair_review` | Trigger an immediate headless reviewer pass in the task worktree or project path. |
 | `stop_pair_loop` | Stop reviewer automation for a task. |
 | `get_task_review_loop` | Load a task's current review loop. |
 | `list_task_review_runs` | Load stored reviewer runs for a task. |
@@ -214,13 +166,6 @@ Current commands:
 | `post_pr_review_comment` | Post a finished PR review's stored output back to its pull request as a comment (errors if the review has no output yet). |
 | `rerun_pr_review` | Reset a PR review to queued and re-run it against the latest PR head (same single/consensus mode; clears prior rounds). |
 | `delete_pr_review` | Remove a PR review and any lingering ephemeral worktree. |
-| `start_session` | Start an agent in the task cwd. With the persistent-sessions setting on (and tmux ≥ 3.2 present), the agent runs inside the dedicated `tmux -L nectus` server and survives app quit; the next launch reattaches it. |
-| `resume_session` | Resume a Codex, Claude, or OpenCode saved session. |
-| `stop_session` | Stop a running PTY child process. |
-| `resize_session` | Resize the PTY. |
-| `send_session_input` | Write keyboard input or terminal-dropped file paths into the PTY without appending an Enter sequence. |
-| `submit_session_input` | Submit an app-authored prompt into the PTY, flush it, then send a separate terminal Enter sequence shared with review feedback. The task workflow `Create PR` action uses this command to ask the running agent to open a pull request; Nectus does not call GitHub or store GitHub credentials for that flow. |
-| `session_output_snapshot` | Load buffered terminal output for a running session. |
 | `get_diagnostic_logs` | Return the buffered backend `tracing` log lines (oldest first) to backfill the Settings → Diagnostics panel. Reads the dedicated diagnostics ring buffer, never the DB lock, so it stays responsive even while a DB-bound command is stuck. |
 
 ## Events
@@ -229,11 +174,6 @@ Backend-to-frontend events:
 
 | Event | Payload | Source |
 | --- | --- | --- |
-| `session_output` | PTY output chunk and stream offset. The backend decodes PTY bytes to UTF-8 before emitting: split multi-byte sequences are carried to the next read, genuinely invalid bytes become `U+FFFD`, and `start_offset` is computed after appending the decoded text to the bounded session buffer. | `native/src/sessions/mod.rs` (`decode_pty_chunk`, PTY reader loop) |
-| `session_activity` | Task id, session id, and the agent's latest human-readable activity line (throttled and de-duplicated). **PTY path:** ANSI-stripped tail scrape for Antigravity/custom agents (`latest_activity_line` in `mod.rs`). **ACP-capable agents** (Claude, Codex, OpenCode) use chat — left-rail / Mission Control activity comes from `session_chat` text/tool parts in `useEventBridge`. | `native/src/sessions/mod.rs` (PTY reader), `src/hooks/useEventBridge.ts` + `src/lib/chat/applyChatRuntime.ts` (ACP) |
-| `session_exited` | Session id and optional exit code. | `native/src/sessions/mod.rs`, `native/src/lib.rs` |
-| `session_idle` | Task id, session id, turn id, optional message. **Legacy PTY watcher path removed** — not emitted for ACP chat; task review loop still uses `spawn_review_on_session_idle` from explicit review actions. | `native/src/sessions/review_loop.rs` (review spawn); formerly `emit_session_signal` |
-| `session_needs_input` | Task id, session id, reason, optional prompt. **Legacy PTY watcher path removed** — ACP permission prompts use `session_chat` permission parts + `respond_chat_permission`. | `native/src/sessions/acp_manager.rs` (ACP permissions) |
 | `review_loop_updated` | Review-loop state and optional review run. | `native/src/sessions/review_loop.rs` |
 | `review_output` | Task id, a chunk of the task reviewer's live stdout, and the chunk's byte offset (a `0` offset starts a new run). Streamed by the task review loop. | `native/src/sessions/review_loop.rs` |
 | `session_chat` | ACP chat update: task id, chat session id, optional agent profile id, normalized `ChatMessage`, and `done` flag. Streaming updates are cache-only in the frontend (rAF-batched in `useEventBridge`); settled user/agent turns are persisted to `chat_messages`. Also feeds `liveLines`, `chatWorkingTaskIds`, and permission attention for triage. | `native/src/sessions/acp_manager.rs` |
@@ -246,30 +186,17 @@ Backend-to-frontend events:
 Frontend event listeners:
 
 - `src/hooks/useEventBridge.ts` is the single, mount-once bridge (mounted in
-  `AppLayout`). It owns every session/review/PR subscription
-  (`session_activity` / `session_idle` / `session_needs_input` /
-  `session_exited`, `session_chat` / `session_chat_usage` / `chat_session_exited`,
-  `review_loop_updated`, `pr_review_updated`) and routes each
-  event to the Query cache (tasks, review loop/runs, PR reviews) or the Zustand
-  store (`liveLines` / `taskAttention`, toasts/notifications). Each bridge
+  `AppLayout`). It owns chat/review/PR subscriptions (`session_chat`,
+  `session_chat_usage`, `chat_session_exited`, `review_loop_updated`,
+  `pr_review_updated`) and routes each event to the Query cache (tasks, chat,
+  review loop/runs, PR reviews) or the Zustand store (`liveLines`,
+  `chatWorkingTaskIds`, `taskAttention`, toasts/notifications). Each bridge
   channel is subscribed through `src/hooks/useTauriEvent.ts`, which owns the
-  shared late-unlisten cleanup and subscription-error path. The bridge records
-  `session_activity` into a per-task `liveLines` map (cleared on
-  `session_exited`) that drives the live "what it's doing" line on task cards and
-  Mission Control rows, and resolves `session_exited` to its task via the active
-  session id (the payload carries no task id).
-- The remaining per-component listeners are intentionally NOT in the bridge:
-  - `src/TerminalPane.tsx` listens for `session_output`, `session_exited`, and
-    Tauri v2 `getCurrentWebview().onDragDropEvent()` file-path drops for the
-    active terminal.
-  - `src/hooks/useTaskReviewLoop.ts` listens for the per-component live
-    `review_output` stream, accumulating the live reviewer stdout for the
-    selected task into the read-only Review pane
-    (`src/components/ReviewTerminalPane.tsx`).
-  - `src/hooks/useTaskDiff.ts` keeps its own (mounted-once) `session_idle`
-    listener to refresh the diff.
-- `native/tauri.conf.json` keeps `dragDropEnabled` enabled on the main window so
-  Tauri emits native file-drop events instead of relying on browser-only drops.
+  shared late-unlisten cleanup and subscription-error path.
+- The remaining per-component listeners are intentionally not in the bridge:
+  `src/hooks/useTaskReviewLoop.ts` listens for `review_output`, and
+  `src/hooks/usePrReviews.ts` listens for `pr_review_output`. Both accumulate
+  read-only reviewer stdout for `src/components/ReviewTerminalPane.tsx`.
 
 ## Task Tracking Fields
 
@@ -282,20 +209,15 @@ Important `tasks` columns:
 - `branch_name`: set only when `has_worktree = 1`; blank worktree creation
   generates a `task-...` branch name.
 - `worktree_path`: set only when `has_worktree = 1`.
-- `active_session_id`: running session lock. Cleared on app startup, session
-  stop, natural exit, and app close.
+- `active_session_id`: legacy PTY-session marker. The ACP-only runtime clears
+  stale values on app startup and ignores the column everywhere else.
 - `attention`: backend-owned attention signal — `needs_input` when the agent is
-  blocked on the user, else `NULL`. Set when the watcher emits
-  `session_needs_input`, cleared on session start / idle / exit (folded into the
-  same `UPDATE` as `active_session_id`). Persisted so the "needs you" signal
-  survives an app reload; the frontend reads it back off the task
-  (`deriveAgentState`), while the live in-session prompt/reason detail still rides
-  the push-driven `taskAttention` store slice.
-- `last_session_id`: saved session id used for resume when supported.
-- `last_session_agent`: command or agent kind used for the last session.
-- `last_session_cwd`: project path or worktree path used for the last session.
-- `last_session_label`: Codex or OpenCode label from the latest matching provider
-  metadata when available.
+  blocked on the user, else `NULL`. ACP permission parts set/clear the live
+  prompt/reason detail through the push-driven `taskAttention` store slice; stale
+  persisted values from the legacy PTY runtime are cleared on app startup.
+- `last_session_id` / `last_session_agent` / `last_session_cwd` /
+  `last_session_label`: legacy PTY resume metadata. Kept for older databases and
+  serde compatibility, but no current task-agent workflow writes or reads it.
 - `jira_issue_key` / `jira_issue_summary` / `jira_issue_url`: optional local-only
   link to a JIRA story, captured at attach time; null when the task is unlinked.
   Set/cleared via `set_task_jira_link`; never written back to JIRA.
@@ -416,7 +338,7 @@ it with:
 
 ```bash
 sqlite3 "/path/to/nectus.sqlite3" ".tables"
-sqlite3 "/path/to/nectus.sqlite3" "select id, title, status, has_worktree, branch_name, active_session_id, last_session_id from tasks order by updated_at desc;"
+sqlite3 "/path/to/nectus.sqlite3" "select id, title, status, has_worktree, branch_name, attention, archived from tasks order by updated_at desc;"
 sqlite3 "/path/to/nectus.sqlite3" "select task_id, status, last_error from review_loops;"
 sqlite3 "/path/to/nectus.sqlite3" "select task_id, verdict, error from review_runs order by id desc limit 20;"
 ```
@@ -522,7 +444,7 @@ Check:
 Symptom — `env: node: No such file or directory` with **exit status 127**: the
 agent binary was found, but a Finder/Dock-launched app has a minimal PATH so the
 node-based CLI (e.g. Codex or OpenCode) cannot exec `node`. The fix is already
-wired: both the PTY session (`native/src/sessions/mod.rs`) and the reviewer
+wired: ACP chat launch (`native/src/sessions/acp_manager.rs`) and reviewer
 launch (`native/src/sessions/reviewer.rs`) set the spawned command's `PATH` to
 `process_util::augmented_path()`. If `node` still lives somewhere unusual (e.g.
 nvm), add that dir to `process_util::third_party_bin_dirs` or set `PATH` on the
@@ -534,165 +456,82 @@ Relevant code:
 - `native/src/process_util.rs` (`augmented_path`, `third_party_bin_dirs`)
 - `src/components/SettingsPage.tsx`
 
-### Terminal Is Blank Or Input Does Not Work
+### ACP Chat Does Not Start Or Send
 
 Check:
 
-- The task has an `active_session_id`.
-- The session process started successfully in the backend logs.
-- `session_output` events are being emitted.
-- `send_session_input` is called from keyboard input and from file drops over
-  the terminal host.
-- App-authored prompts such as review feedback and `Create PR` use
-  `submit_session_input`; the backend writes and flushes the prompt before
-  sending terminal Enter so Codex sees submission as a separate key action.
-- The selected task is open in the focused terminal workspace and the terminal
-  host has nonzero height; `src/TerminalPane.tsx` observes that host resize and
-  sends `resize_session` with the fitted PTY rows and columns.
-- `session_output_snapshot` only works for running sessions.
+- The task has an agent profile id, and `list_acp_providers` reports a descriptor
+  for that profile's `agentKind`.
+- `acp_start_chat` resolved the task cwd (worktree path when present, otherwise
+  repo path) and launched the descriptor command from `native/src/sessions/acp.rs`.
+- The provider command and any descriptor executable env resolve through the
+  login-shell PATH / augmented PATH rules in `process_util.rs`.
+- Backend diagnostics show whether the ACP child exited, whether `session/new` or
+  `session/load` failed, or whether `acp_send_prompt` targeted a stale in-memory
+  chat id.
+- Frontend `useEventBridge` is subscribed to `session_chat`; settled messages
+  should also be visible through `get_task_chat`.
 
 Relevant code:
 
-- `src/TerminalPane.tsx`
-- `src/hooks/useSessionCommands.ts`
-- `native/src/sessions/mod.rs`
+- `native/src/sessions/acp.rs`
+- `native/src/sessions/acp_manager.rs`
+- `src/components/chat/ChatPane.tsx`
+- `src/hooks/useEventBridge.ts`
 
-### Terminal Shows Doubled / Ghosted Text Or Tofu Boxes
-
-Agents like Claude Code repaint a multi-line sticky UI (input box + status line)
-with rapid cursor-addressed redraws. Those redraws only land correctly when
-xterm's grid matches the PTY's grid; when they don't, the old lines aren't
-overwritten and you see **duplicate spinner/footer lines**. `src/TerminalPane.tsx`
-defends this on several fronts:
-
-- **Terminal height.** The pane height is driven by the layout (the `height:100%`
-  chain `html`→`#root`→app shell→task-workspace grid→the terminal host). A very short
-  pane (≈10 rows) leaves the agent no room and its redraws overlap — confirmed via
-  the `[term-diag]` logs as the real cause of "double rendering". If the terminal
-  looks cramped, the window/pane is too short, not a renderer bug.
-- **No redundant SIGWINCH.** `syncTerminalToPane` only calls `resizeSession` when
-  the fitted rows/cols actually changed (tracked in `CachedTerminal.ptyRows/Cols`).
-  A no-op resize would force the agent to repaint and re-ghost.
-- **Coalesced resizes.** The `ResizeObserver` debounces fits into one per animation
-  frame, so a window drag repaints the agent UI once, not on every pixel.
-- **Generation-size replay.** On first attach, history is replayed at the recorded
-  generation width before fitting to the pane (`loadSnapshotDelta`), so buffered
-  cursor-addressed redraws reproduce on the right rows.
-- **Unicode 11 widths.** `Unicode11Addon` + `terminal.unicode.activeVersion = "11"`
-  make emoji/CJK occupy the cell count the agent assumes; a width disagreement
-  desyncs cursor math.
-- **Backend UTF-8 chunking.** `native/src/sessions/mod.rs` decodes raw PTY bytes
-  before emitting `session_output`. A multi-byte glyph split across reads is held
-  in a tiny carry buffer until it completes, so box-drawing lines do not become
-  `�`; a truly invalid byte is replaced and the stream keeps moving. If `�`
-  appears in the terminal, check whether the producing process emitted invalid
-  bytes rather than assuming xterm created the replacement character.
-- **GPU renderer.** `loadWebglRenderer` loads `@xterm/addon-webgl` after
-  `terminal.open(...)`; the DOM renderer leaves stale cells and renders `■` tofu.
-  If the console logs `Terminal: WebGL2 renderer unavailable, using the DOM
-  renderer`, WebGL2 was missing and xterm fell back to DOM (artifacts can return);
-  a lost GPU context disposes the addon (`onContextLoss`) and also reverts to DOM.
-
-Hyperlinks: `WebLinksAddon` highlights URLs and opens clicks via
-`api.openExternalUrl` (Tauri opener → system browser), not inside the webview.
-
-Relevant code:
-
-- `src/TerminalPane.tsx` (`getOrCreateTerminal`, `syncTerminalToPane`,
-  `loadWebglRenderer`)
-
-### Session Resume Is Disabled
-
-Resume is only supported for task agent kinds `codex`, `claude`, and `opencode`.
+### ACP Attention Or Live Line Looks Wrong
 
 Check:
 
-- The task has `last_session_id`.
-- The task has an agent profile id.
-- The agent kind is Codex, Claude, or OpenCode.
-- For Codex, a matching JSONL `session_meta` file was found for the task cwd
-  after the Nectus session start.
-- For OpenCode, the local server `/session` response exposed the running session
-  id before the task session stopped or exited.
+- `session_chat` events are arriving for the task id/profile id you expect.
+- Permission parts in the normalized chat message include a pending request; those
+  set `taskAttention` until answered or until `chat_session_exited` clears it.
+- Text/tool parts are present in the stream; `applyChatRuntime` mirrors them into
+  `liveLines` and `chatWorkingTaskIds`.
+- Stale `tasks.attention` / `active_session_id` values from old PTY builds are
+  cleared on app startup by `clear_legacy_active_sessions`.
 
 Relevant code:
 
-- `src/components/TaskWorkspace.tsx`
-- `native/src/lib.rs`
-- `native/src/sessions/codex.rs`
-
-### Finished Or Needs-Input Count Looks Wrong
-
-Check:
-
-- `session_idle` or `session_needs_input` was emitted.
-- The event task id still exists in the frontend task list.
-- Starting, resuming, stopping, sending input, or marking done may have cleared
-  the attention marker.
-- Codex JSONL persisted the event you expect.
-- The Nectus session was still active when Codex first wrote matching
-  `session_meta` metadata; metadata discovery stops when the task session ends.
-- The matching `session_meta` was not a Codex subagent or auto-review session.
-- For OpenCode, the CLI was launched with the Nectus-owned localhost port and the
-  `/event` stream delivered a `session.idle` (idle) or a permission/question ask
-  (needs input) for the discovered session id.
-
-Relevant code:
-
+- `src/lib/chat/applyChatRuntime.ts`
 - `src/sessionAttention.ts`
-- `src/hooks/useEventBridge.ts` (the mount-once bridge that turns these events
-  into the Query-cache / Zustand-store attention markers)
-- `native/src/sessions/codex.rs`
-- `docs/codex-session-jsonl.md`
+- `src/hooks/useEventBridge.ts`
+- `native/src/db/tasks.rs`
 
-### App Freezes / Goes Unresponsive When Starting, Stopping, Or Feeding A Session
-
-Synchronous Tauri commands share the main UI thread with the Wry event loop, so
-any blocking work — or any `app.emit(...)` back into the webview — done inline in
-a `fn` command freezes the whole app until it returns. Session lifecycle work is
-blocking in several ways: stopping kills + reaps the PTY child (plus DB writes
-and an OpenCode server probe); starting waits on the DB lock, opens a PTY, and
-spawns a process; and **any PTY write can block indefinitely** — the tty input
-buffer is ~1 KB and drains only as fast as the agent reads stdin, and a freshly
-spawned CLI can take seconds to start reading (Claude in a never-seen worktree
-sits at its folder-trust prompt and may not drain at all). Writing a multi-KB
-initial task prompt inline on the main thread froze the entire app the moment a
-worktree task launched Claude.
+### Review Does Not Run
 
 Check:
 
-- `start_session`, `resume_session`, `stop_session`, `send_session_input`, and
-  `submit_session_input` are all `async` commands that run their work via
-  `tauri::async_runtime::spawn_blocking(...)`, so nothing on these paths can
-  block the main thread (`stop_session`'s post-`.await` `session_exited` emit
-  also happens off-main, the same background-emit pattern the reader thread uses
-  on natural exit).
-- The initial task prompt is delivered to the agent PTY by a dedicated
-  background thread (`SessionManager::start`), never inline on the launch path.
-  If the agent never drains stdin, the cost is a logged
-  `failed to deliver initial prompt` warning — the session stays alive and
-  usable.
-- PTY writers live behind their own per-session lock
-  (`RunningSession.writer: Arc<Mutex<…>>`), and every writer (`write_input`,
-  `submit_input`, review-loop feedback, the prompt thread) clones that handle and
-  **releases the sessions map lock before writing** — a blocked write must never
-  stall the reader threads and other session commands behind the map.
-- `SessionManager::stop` removes the session from the map under the lock and then
-  drops the `sessions` mutex before `child.kill()`/`child.wait()` and the metadata
-  /DB work — holding it would stall every other session command and live reader
-  thread behind the teardown.
-
-Rule: never do blocking work or `emit` inside a synchronous main-thread command.
-Offload to `spawn_blocking`, and never hold the global `sessions` mutex across a
-PTY write, `wait()`, network, or DB calls.
+- The review loop status is `running` or `reviewing`.
+- `run_pair_review` can resolve a review cwd from the task worktree path, a task
+  repo worktree path, or the primary repo path. It does not require a running
+  worker session.
+- Manual review runs should emit `review_loop_updated` with status `reviewing`
+  before the reviewer command finishes.
+- The reviewer profile command resolves and exits successfully. An exit status
+  127 with `env: node: No such file or directory` is the minimal-PATH problem —
+  see *Agent Command Fails To Start* above; the reviewer launch sets
+  `process_util::augmented_path()` to fix it.
+- Claude and Antigravity reviewer profiles run headless with `-p`; Codex reviewers
+  run non-interactively with `codex exec`; OpenCode reviewers run with
+  `opencode run`; custom reviewers read the generated prompt from stdin.
+- Reviewer output carries one `NECTUS_VERDICT:` marker line: `CLEAN`, `BLOCKERS`,
+  or `FEEDBACK` (the loop maps these to `pass`/`needs_changes`/`feedback`). No
+  marker → `unknown`; there is no natural-language fallback.
+- External PR reviews share the same marker: a finished one shows **Inconclusive**
+  when the reviewer omitted the `NECTUS_VERDICT: BLOCKERS|CLEAN` line that
+  `parse_pr_review_output` looks for. Inspect PR-review verdicts with
+  `select status, verdict from pr_reviews order by id desc limit 10;`.
+- Consensus PR reviews never converge while any reviewer stays **Inconclusive**,
+  so they run to the round cap and the synthesizer decides the verdict. Inspect a
+  run's rounds with
+  `select round, reviewer_profile_id, verdict from pr_review_runs where pr_review_id = <id> order by id;`.
 
 Relevant code:
 
-- `native/src/lib.rs` (`start_session`, `resume_session`, `stop_session`,
-  `send_session_input`, `submit_session_input`)
-- `native/src/sessions/mod.rs` (`SessionManager::start` prompt thread,
-  `writer_for`, `SessionManager::stop`, the reader thread's matching off-lock
-  `wait()`)
+- `native/src/sessions/review_loop.rs`
+- `native/src/sessions/reviewer.rs`
+- `src/hooks/useTaskReviewLoop.ts`
 
 ### macOS Notifications Do Not Appear
 
@@ -719,52 +558,6 @@ If macOS does not re-prompt after reset, use System Settings first. For local
 development only, a temporary bundle identifier change in
 `native/tauri.conf.json` can force a fresh prompt. Change it back before
 shipping.
-
-### Review Does Not Run
-
-Check:
-
-- The review loop status is `running` or `reviewing`.
-- Manual review runs have a running worker session for the task. Automatic review
-  after idle still requires a Codex, Claude, or OpenCode session that emits
-  `session_idle`.
-- Manual review runs should emit `review_loop_updated` with status
-  `reviewing` before the reviewer command finishes.
-- The reviewer profile command resolves and exits successfully. An exit status
-  127 with `env: node: No such file or directory` is the minimal-PATH problem —
-  see *Agent Command Fails To Start* above; the reviewer launch sets
-  `process_util::augmented_path()` to fix it.
-- Claude and Antigravity reviewer profiles run headless with `-p`; Codex reviewers run
-  non-interactively with `codex exec`; OpenCode reviewers run with `opencode run`;
-  custom reviewers read the generated prompt from stdin. An exit status 1 with
-  `Error: stdin is not a terminal` means a Codex reviewer was launched as the
-  interactive TUI instead of through `codex exec` — `build_reviewer_args` in
-  `native/src/sessions/reviewer.rs` adds the provider-specific headless subcommand.
-- Reviewer output carries one `NECTUS_VERDICT:` marker line: `CLEAN`, `BLOCKERS`,
-  or `FEEDBACK` (the loop maps these to `pass`/`needs_changes`/`feedback`). No
-  marker → `unknown`; there is no natural-language fallback. The marker line is
-  stripped before the review is stored or forwarded to the worker.
-- Worker feedback is written to the active worker PTY and submitted with carriage
-  return (`\r`), matching the terminal Enter key.
-- External PR reviews share the same marker: a finished one shows **Inconclusive**
-  when the reviewer omitted the `NECTUS_VERDICT: BLOCKERS|CLEAN` line that
-  `parse_pr_review_output` looks for. The shared marker, token enum, and
-  parse/strip helper live in `native/src/sessions/verdict.rs`; `pr_verdict.rs`
-  (single/consensus) and `review_loop.rs` (task loop) are thin adapters mapping the
-  token to their domain enums. The review text is still stored; only the verdict could not be
-  derived. Inspect it with
-  `select status, verdict from pr_reviews order by id desc limit 10;`.
-- Consensus PR reviews never "converge" while any reviewer stays **Inconclusive**
-  (a failed or marker-less round counts as inconclusive), so they run to the round
-  cap and the synthesizer decides the verdict. Inspect a run's rounds with
-  `select round, reviewer_profile_id, verdict from pr_review_runs where pr_review_id = <id> order by id;`
-  and the outcome with `select mode, rounds_completed, converged, verdict from pr_reviews where id = <id>;`.
-
-Relevant code:
-
-- `native/src/sessions/codex.rs`
-- `native/src/sessions/review_loop.rs`
-- `src/components/TaskWorkspace.tsx`
 
 ### Auto-Update Does Not Offer An Update
 

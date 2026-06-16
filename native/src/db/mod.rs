@@ -19,7 +19,6 @@ mod pr_reviews;
 mod review_loops;
 mod rows;
 mod schema;
-mod sessions;
 mod settings;
 mod tasks;
 mod workspaces;

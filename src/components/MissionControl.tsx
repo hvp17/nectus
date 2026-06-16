@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { CheckCheck, GitBranch, GitPullRequest, MessageSquareReply, RefreshCw, Radio, Terminal } from "lucide-react";
+import { CheckCheck, GitBranch, GitPullRequest, MessageSquareReply, Radio, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
 import { AgentLogo } from "./AgentBrand";
@@ -13,7 +13,6 @@ import {
   type AgentState,
 } from "../lib/agentState";
 import { cn } from "../lib/utils";
-import { useAppStore } from "../store/appStore";
 import type { TaskAttention } from "../sessionAttention";
 import type { AgentKind, Repo, TaskSummary } from "../types";
 
@@ -22,6 +21,7 @@ interface MissionControlProps {
   tasks: TaskSummary[];
   taskAttention: TaskAttention[];
   liveLines: Record<number, string>;
+  chatWorkingTaskIds: Record<number, true>;
   loading: boolean;
   onOpenTask: (taskId: number) => void;
   onOpenPr: (url: string) => void;
@@ -30,7 +30,7 @@ interface MissionControlProps {
 
 // Groups shown in the triage inbox, most-urgent first.
 const GROUPS: AgentState[] = AGENT_STATE_ORDER;
-// Summary pills mirror the in-flight states plus the terminal "done".
+// Summary pills mirror the in-flight states plus completed work.
 const SUMMARY: AgentState[] = [...ACTIVE_AGENT_STATES, "done"];
 
 export function MissionControl({
@@ -38,6 +38,7 @@ export function MissionControl({
   tasks,
   taskAttention,
   liveLines,
+  chatWorkingTaskIds,
   loading,
   onOpenTask,
   onOpenPr,
@@ -46,7 +47,6 @@ export function MissionControl({
   const now = useMinuteNow();
 
   const repoNames = useMemo(() => new Map(repos.map((repo) => [repo.id, repo.name])), [repos]);
-  const chatWorkingTaskIds = useAppStore((s) => s.chatWorkingTaskIds);
   const rows = useMemo(
     () => buildAgentRows(tasks, taskAttention, repoNames, liveLines, now, chatWorkingTaskIds),
     [tasks, taskAttention, repoNames, liveLines, now, chatWorkingTaskIds],
@@ -273,7 +273,7 @@ function RowActions({
   if (state === "running") {
     return (
       <Button size="sm" variant="outline" onClick={() => onOpenTask(task.id)}>
-        <Terminal data-icon="inline-start" />
+        <MessageSquareReply data-icon="inline-start" />
         Open
       </Button>
     );

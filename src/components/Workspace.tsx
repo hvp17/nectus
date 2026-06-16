@@ -72,6 +72,7 @@ interface WorkspaceProps {
   selectedTaskId?: number;
   taskAttention: TaskAttention[];
   liveLines: Record<number, string>;
+  chatWorkingTaskIds?: Record<number, true>;
   onSelectTask: (id: number) => void;
   onRefresh: () => void;
   onCreateTask: () => void;
@@ -102,6 +103,7 @@ export function Workspace({
   selectedTaskId,
   taskAttention,
   liveLines,
+  chatWorkingTaskIds = {},
   onSelectTask,
   onRefresh,
   onCreateTask,
@@ -274,6 +276,7 @@ export function Workspace({
                         task={task}
                         attention={getTaskAttention(taskAttention, task.id)}
                         liveLine={liveLines[task.id]}
+                        chatWorking={Boolean(chatWorkingTaskIds[task.id])}
                         repoName={workspaceName ? repoNameById.get(task.repoId) : undefined}
                         isSelected={selectedTaskId === task.id}
                         busy={busy}

@@ -34,12 +34,14 @@ function renderTaskCard(
   attention?: TaskAttention,
   taskOverride: Partial<TaskSummary> = {},
   liveLine?: string,
+  chatWorking = false,
 ) {
   return renderWithTooltipProvider(
     <TaskCard
       task={{ ...task, ...taskOverride }}
       attention={attention}
       liveLine={liveLine}
+      chatWorking={chatWorking}
       isSelected={false}
       busy={false}
       onSelect={vi.fn()}
@@ -78,7 +80,7 @@ describe("TaskCard", () => {
   });
 
   it("shows the live activity line for a running task", () => {
-    renderTaskCard(undefined, { status: "in_progress", activeSessionId: "s-9" }, "Editing TaskCard.tsx");
+    renderTaskCard(undefined, { status: "in_progress" }, "Editing TaskCard.tsx", true);
 
     const line = screen.getByText("Editing TaskCard.tsx");
     expect(line).toHaveAttribute("data-live", "true");
@@ -86,12 +88,12 @@ describe("TaskCard", () => {
   });
 
   it("falls back to a working placeholder before the first live line arrives", () => {
-    renderTaskCard(undefined, { status: "in_progress", activeSessionId: "s-9" });
+    renderTaskCard(undefined, { status: "in_progress" }, undefined, true);
 
     expect(screen.getByText("Working…")).toBeInTheDocument();
   });
 
-  it("does not show a live line for a task without a running session", () => {
+  it("does not show a live line for a task without an in-flight ACP turn", () => {
     renderTaskCard(undefined, { status: "in_progress" }, "Editing TaskCard.tsx");
 
     expect(screen.queryByText("Editing TaskCard.tsx")).not.toBeInTheDocument();

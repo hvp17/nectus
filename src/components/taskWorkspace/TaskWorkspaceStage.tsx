@@ -8,7 +8,6 @@ import {
   MessagesSquare,
   RotateCw,
   ScanEye,
-  TerminalSquare,
 } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -30,16 +29,14 @@ import type { TaskSummary } from "../../types";
 import { ActionBar } from "./ActionBar";
 import { EditableTaskTitle } from "./EditableTaskTitle";
 import { TaskStatusBadges } from "./TaskStatusBadges";
-import { TaskTerminalLauncher } from "./TaskTerminalLauncher";
 
-type StageTab = "terminal" | "diff" | "review" | "chat";
+type StageTab = "diff" | "review" | "chat";
 type TaskDiff = ReturnType<typeof useTaskDiff>;
 
 const TaskDiffView = lazy(() => import("../TaskDiffView").then((module) => ({ default: module.TaskDiffView })));
 const ReviewTerminalPane = lazy(() =>
   import("../ReviewTerminalPane").then((module) => ({ default: module.ReviewTerminalPane })),
 );
-const TerminalPane = lazy(() => import("../../TerminalPane").then((module) => ({ default: module.TerminalPane })));
 const ChatPane = lazy(() => import("../chat/ChatPane").then((module) => ({ default: module.ChatPane })));
 
 /// One step of the task workflow ribbon. `action` is the inline control rendered
@@ -62,8 +59,6 @@ export interface TaskWorkspaceStageProps {
   onRenameTask: (task: TaskSummary, title: string) => void;
   stageTab: StageTab;
   onStageTabChange: (tab: StageTab) => void;
-  /** False for ACP-capable agents — chat is the primary surface. */
-  showTerminalTab?: boolean;
   /** Cross-repo member switcher shown with the Diff controls (null for single-repo tasks). */
   repoScopePicker?: React.ReactNode;
   /** File path requested by another surface, such as a chat file chip. */
@@ -79,16 +74,11 @@ export interface TaskWorkspaceStageProps {
   isAttentionDetailTruncated: boolean;
   canCreatePullRequest: boolean;
   onCreatePullRequest: (task: TaskSummary, options?: { draft?: boolean }) => void;
-  onSessionExit: (sessionId: string) => void;
-  onSessionInput: (sessionId: string) => void;
-  canResumeSession: boolean;
-  onResumeSession: (task: TaskSummary) => void;
-  onStartSession: (task: TaskSummary) => void;
   onOpenChatFile?: (path: string) => void;
 }
 
 /// The working stage: header, the workflow ribbon, and the
-/// `Terminal | Diff | Review` toggle with its active surface and attention bar.
+/// `Chat | Diff | Review` toggle with its active surface and attention bar.
 export function TaskWorkspaceStage({
   task,
   backLabel,
@@ -98,7 +88,6 @@ export function TaskWorkspaceStage({
   onRenameTask,
   stageTab,
   onStageTabChange,
-  showTerminalTab = true,
   repoScopePicker,
   diffSelectedFile,
   diff,
@@ -112,11 +101,6 @@ export function TaskWorkspaceStage({
   isAttentionDetailTruncated,
   canCreatePullRequest,
   onCreatePullRequest,
-  onSessionExit,
-  onSessionInput,
-  canResumeSession,
-  onResumeSession,
-  onStartSession,
   onOpenChatFile,
 }: TaskWorkspaceStageProps) {
   // Stable so ChatPane's memoized parts aren't re-rendered on every chat snapshot.
@@ -212,12 +196,10 @@ export function TaskWorkspaceStage({
               onValueChange={(value) => value && onStageTabChange(value as StageTab)}
               variant="outline"
             >
-              {showTerminalTab && (
-                <ToggleGroupItem value="terminal" aria-label="Show terminal" className="h-7 gap-1.5 px-2.5 text-xs">
-                  <TerminalSquare className="size-3.5" aria-hidden="true" />
-                  Terminal
-                </ToggleGroupItem>
-              )}
+              <ToggleGroupItem value="chat" aria-label="Show chat" className="h-7 gap-1.5 px-2.5 text-xs">
+                <MessagesSquare className="size-3.5" aria-hidden="true" />
+                Chat
+              </ToggleGroupItem>
               <ToggleGroupItem value="diff" aria-label="Show diff" className="h-7 gap-1.5 px-2.5 text-xs">
                 <FileDiff className="size-3.5" aria-hidden="true" />
                 Diff
@@ -236,10 +218,6 @@ export function TaskWorkspaceStage({
                     aria-hidden="true"
                   />
                 )}
-              </ToggleGroupItem>
-              <ToggleGroupItem value="chat" aria-label="Show chat" className="h-7 gap-1.5 px-2.5 text-xs">
-                <MessagesSquare className="size-3.5" aria-hidden="true" />
-                Chat
               </ToggleGroupItem>
             </ToggleGroup>
 
@@ -288,24 +266,11 @@ export function TaskWorkspaceStage({
               />
             ) : stageTab === "review" ? (
               <ReviewTerminalPane output={reviewOutput} active={reviewInProgress} />
-            ) : task.activeSessionId ? (
-              <TerminalPane
-                sessionId={task.activeSessionId}
-                onSessionExit={onSessionExit}
-                onSessionInput={onSessionInput}
-              />
-            ) : (
-              <TaskTerminalLauncher
-                task={task}
-                canResumeSession={canResumeSession}
-                onResumeSession={onResumeSession}
-                onStartSession={onStartSession}
-              />
-            )}
+            ) : null}
           </Suspense>
         </div>
 
-        {attention && (stageTab === "terminal" || stageTab === "chat") && (
+        {attention && stageTab === "chat" && (
           <ActionBar
             attention={attention}
             agentName={task.agentName}

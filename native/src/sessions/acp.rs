@@ -31,9 +31,8 @@ use crate::models::{
 
 /// How to launch an agent CLI in ACP mode over stdio. The ACP axis of the
 /// provider registry — `command` + `args` is the literal argv. For npx-based
-/// adapters the macOS GUI-PATH rule applies at spawn time (resolve the binary and
-/// set the child `PATH` to `process_util::augmented_path()`), exactly as the PTY
-/// session path already does.
+/// adapters the macOS GUI-PATH rule applies at spawn time: resolve the binary and
+/// set the child `PATH` to `process_util::augmented_path()`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AcpLaunch {
     pub command: String,
@@ -48,9 +47,8 @@ pub(crate) struct AcpExecutableEnv {
     pub command: &'static str,
 }
 
-/// The ACP axis of the provider registry. This is intentionally narrower than
-/// the PTY lifecycle descriptor in `provider.rs`: it only records facts needed
-/// to start a provider through ACP.
+/// The ACP axis of the provider registry: it only records facts needed to start
+/// a provider through ACP.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AcpProviderDescriptor {
     pub display_name: &'static str,

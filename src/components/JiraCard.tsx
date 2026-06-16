@@ -86,8 +86,8 @@ export function JiraCard({
   );
 }
 
-/// The Nectus sessions attached to a story. Each chip opens its task in the
-/// dashboard; a live session shows a pulsing dot in place of its status label.
+/// The Nectus tasks attached to a story. Each chip opens its task in the
+/// dashboard.
 function LinkedTasks({
   tasks,
   onOpenTask,
@@ -116,19 +116,9 @@ function LinkedTasks({
           <span className="line-clamp-2 min-w-0 flex-1 text-[11.5px] font-medium leading-[1.3]">
             {task.title}
           </span>
-          {task.activeSessionId ? (
-            <span className="flex flex-none items-center gap-1 text-[9.5px] font-bold text-primary">
-              <span
-                className="size-2 shrink-0 rounded-full bg-primary animate-pulse"
-                aria-hidden="true"
-              />
-              Running
-            </span>
-          ) : (
-            <span className="flex-none text-[9.5px] text-muted-foreground">
-              {TASK_STATUS_LABELS[task.status]}
-            </span>
-          )}
+          <span className="flex-none text-[9.5px] text-muted-foreground">
+            {TASK_STATUS_LABELS[task.status]}
+          </span>
         </button>
       ))}
     </div>

@@ -1,14 +1,14 @@
 # Architecture — How Nectus Desktop Connects
 
 **Start here.** This is the one-page mental model of the whole app: the layers, how
-a user action becomes a database row or a terminal write, how backend events flow
+a user action becomes a database row or an ACP chat prompt, how backend events flow
 back to the UI, and where to go to change any given thing. Read this first, then
 follow the [doc index](#documentation-index) to the deep references.
 
 Nectus Desktop is a Mac-first **Tauri 2** app for running parallel Codex / Claude /
 Antigravity / OpenCode agents across local git projects and worktrees. It is
-**local-first**: the React frontend never shells out. Every OS, git, SQLite, PTY,
-and external-CLI (`gh`) operation happens in the Rust backend and is
+**local-first**: the React frontend never shells out. Every OS, git, SQLite,
+ACP-agent, reviewer-CLI, and external-CLI (`gh`) operation happens in the Rust backend and is
 reached through a typed Tauri command boundary.
 
 ## The five layers
@@ -28,8 +28,8 @@ reached through a typed Tauri command boundary.
                   ▼            ▼            ▼            ▼            ▼
   ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────────┐
   │   db/    │ │ git_ops/ │ │ sessions/│ │ github.rs│ │ jira.rs / jira_rest.rs│
-  │ rusqlite │ │ git CLI  │ │portable- │ │  gh CLI  │ │   JIRA REST (ureq)    │
-  │  SQLite  │ │ worktrees│ │ pty PTY  │ │   (PRs)  │ │ (board, transitions)  │
+  │ rusqlite │ │ git CLI  │ │ACP chat │ │  gh CLI  │ │   JIRA REST (ureq)    │
+  │  SQLite  │ │ worktrees│ │reviewers│ │   (PRs)  │ │ (board, transitions)  │
   └──────────┘ └──────────┘ └────┬─────┘ └──────────┘ └──────────────────────┘
                                  │ .emit("session_*", "review_*", "pr_review_*")
                                  ▼
@@ -40,18 +40,17 @@ reached through a typed Tauri command boundary.
 **Down (a request):** a component calls a hook → the hook calls a wrapper in
 `src/api.ts` → `invoke("command_name", …)` crosses into Rust → `lib.rs` runs the
 command body, which delegates to a domain module (`db/`, `git_ops/`, `sessions/`,
-`github.rs`, `jira*.rs`) that touches SQLite, the filesystem/git, a PTY, or an
-external CLI.
+`github.rs`, `jira*.rs`) that touches SQLite, the filesystem/git, ACP stdio
+children, headless reviewer CLIs, or an external CLI.
 
-**Up (live state):** long-running work (PTY sessions, review loops, PR reviews)
+**Up (live state):** long-running work (ACP chats, review loops, PR reviews)
 emits Tauri events from Rust. The single **mount-once** `useEventBridge` (in
 `AppLayout`) is the *only* place that subscribes; it routes each event into the
 TanStack Query cache or the Zustand store, and each bridge channel delegates the
 Tauri `listen` lifecycle to `useTauriEvent` so subscription cleanup and errors are
 handled consistently. Components re-render from cache/store state. No component
-subscribes to backend events directly (three deliberate exceptions:
-`TerminalPane` consumes `session_output`, `useTaskReviewLoop` consumes
-`review_output`, `useTaskDiff` consumes `session_idle`).
+subscribes to backend events directly, except for the live reviewer output streams
+owned by `useTaskReviewLoop` and `usePrReviews`.
 
 ### State ownership
 
@@ -63,7 +62,7 @@ subscribes to backend events directly (three deliberate exceptions:
   **`src/store/`** (Zustand, composed from concern-split slices).
 - There is **no `useApp` god-hook** — it was dissolved. Behavior lives in focused,
   self-sufficient hooks (`useComposer`, `useTaskActions`, `useWorkspaceActions`,
-  `useSessionControls`, `useShellBootstrap`, …) that read the queries/store
+  `useShellBootstrap`, …) that read the queries/store
   directly and can be called from any component.
 
 ### Loading boundaries
@@ -72,30 +71,30 @@ subscribes to backend events directly (three deliberate exceptions:
 boards eager, then lazy-loads secondary views (Settings, PR Reviews, JIRA),
 on-demand overlays (composer, workspace manager, task workspace), and the command
 palette behind `Suspense`. Inside the task workspace, `TaskWorkspaceStage` keeps
-the header/ribbon eager but lazy-loads the active `Terminal | Diff | Review` pane
-so xterm and diff rendering code load only when that surface is shown.
+the header/ribbon eager but lazy-loads the active `Chat | Diff | Review` pane so
+chat, xterm reviewer output, and diff rendering code load only when that surface
+is shown.
 
 ## One request, traced end to end
 
-Starting an agent session shows every layer in motion:
+Starting or sending to an ACP chat shows every layer in motion:
 
-1. **UI** — the user clicks Start in `TaskWorkspace`; a `useSessionControls`
-   handler runs.
-2. **api** — it calls `api.startSession(...)`, which is `invoke("start_session", …)`
-   (`src/api.ts`).
-3. **command** — `start_session` in `native/src/lib.rs` resolves the agent profile
-   and task, then calls into `native/src/sessions/`.
-4. **backend work** — `sessions/mod.rs` spawns the agent CLI on a `portable-pty`
-   PTY, with its `PATH` set to `process_util::augmented_path()` so node-based CLIs
-   can find `node` (missing this is the classic `env: node … exit 127` failure).
-5. **events up** — as the PTY produces output and the provider's session log shows
-   activity, Rust emits `session_output`, `session_activity`, and (on
-   idle/needs-input) `session_idle` / `session_needs_input`.
-6. **bridge** — `useEventBridge` routes those into the task's live-activity line
-   (Zustand) and the attention list; `TerminalPane` separately renders the raw
-   `session_output` stream into xterm.js.
-7. **persist** — the session id / agent / cwd are written back to the `tasks` row
-   (`db/tasks.rs`) so the session can later be resumed.
+1. **UI** — the user submits a prompt in the task workspace Chat tab.
+2. **api** — it calls `api.acpStartChat(...)` when needed, then
+   `api.acpSendPrompt(...)` (`src/api.ts`).
+3. **command** — `acp_start_chat` / `acp_send_prompt` in `native/src/lib.rs`
+   resolve the task/profile and delegate to `native/src/sessions/acp_manager.rs`.
+4. **backend work** — the ACP manager launches the provider descriptor from
+   `sessions/acp.rs` over stdio, using the login-shell env and augmented PATH so
+   GUI-launched agent CLIs can find provider keys and nested executables.
+5. **events up** — normalized ACP message parts stream through `session_chat`;
+   token-window usage streams through `session_chat_usage`; permission requests
+   are represented as chat parts and answered with `acp_respond_permission`.
+6. **bridge** — `useEventBridge` routes settled chat messages into the Query cache
+   and live activity / permission attention into the Zustand store.
+7. **persist** — chat sessions, settled messages, permission policies, and git
+   checkpoints are written to SQLite; legacy `tasks.active_session_id` markers are
+   only cleared at startup for older databases.
 
 The reverse contract — events the backend can emit — is the same for review loops
 (`review_loop_updated`, `review_output`) and PR reviews (`pr_review_updated`).
@@ -106,8 +105,8 @@ The reverse contract — events the backend can emit — is the same for review 
 |---|---|---|
 | Add / change a Tauri command | `lib.rs` (register in `generate_handler!`) + the domain module | `api.ts` + a hook in `queries/` |
 | Task / workspace persistence | `db/tasks.rs`, `db/workspaces.rs`, `db/schema.rs` | `queries/core.ts` |
-| Agent PTY / terminal behavior | `sessions/mod.rs`, `sessions/agents/` | `TerminalPane.tsx`, `useSessionControls.ts` |
-| Session / review / PR events | Rust `.emit(...)` in `sessions/` | `hooks/useEventBridge.ts` (route) |
+| ACP chat behavior | `sessions/acp.rs`, `sessions/acp_manager.rs` | `components/chat/ChatPane.tsx`, `hooks/useTaskChat.ts` |
+| Chat / review / PR events | Rust `.emit(...)` in `sessions/` | `hooks/useEventBridge.ts` (route) |
 | UI / runtime state (view, selection, composer) | — | `store/` slices |
 | Git repo / worktree / diff | `git_ops/mod.rs`, `git_ops/diff.rs` | `useTaskDiff.ts`, `TaskDiffView.tsx` |
 | GitHub (PRs, checks, ship actions) | `github.rs` | `useGithub.ts`, `components/github/` |
@@ -123,8 +122,8 @@ Backend:
 
 1. `native/src/lib.rs` — every Tauri command + app setup. The backend front door.
 2. `native/src/db/schema.rs` — the full SQLite data model (all tables in one place).
-3. `native/src/sessions/mod.rs` — PTY lifecycle + the shared event-log tail loop;
-   where live events originate.
+3. `native/src/sessions/` — ACP chat runtime plus task/PR reviewer runtimes;
+   where live chat and review events originate.
 4. `native/src/process_util.rs` — the external-CLI spawn rules every git / `gh` /
    agent call depends on.
 

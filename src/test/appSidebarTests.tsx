@@ -21,7 +21,7 @@ export function defineAppSidebarTests() {
     mockedApi.listRepos.mockResolvedValue([appRepo, secondRepo]);
     mockedApi.listWorkspaces.mockResolvedValue([workspace()]);
     mockedApi.listTasks.mockResolvedValue([
-      appTask({ id: 101, repoId: appRepo.id, title: "Running here", activeSessionId: "s-101" }),
+      appTask({ id: 101, repoId: appRepo.id, title: "Running here", status: "review" }),
     ]);
 
     render(<App />);
@@ -39,7 +39,7 @@ export function defineAppSidebarTests() {
     mockedApi.listRepos.mockResolvedValue([appRepo]);
     mockedApi.listWorkspaces.mockResolvedValue([]);
     mockedApi.listTasks.mockResolvedValue([
-      appTask({ id: 101, repoId: appRepo.id, title: "Running here", activeSessionId: "s-101" }),
+      appTask({ id: 101, repoId: appRepo.id, title: "Running here", status: "review" }),
     ]);
 
     render(<App />);

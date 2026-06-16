@@ -5,7 +5,7 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
-import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "./ui/item";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -15,7 +15,6 @@ import { ProfileEditor } from "./settings/ProfileEditor";
 import { GithubConnectionCard } from "./settings/GithubConnectionCard";
 import { JiraConnectionCard } from "./settings/JiraConnectionCard";
 import { SegmentedRadioGroup } from "./settings/SegmentedRadioGroup";
-import { Switch } from "./ui/switch";
 import { SettingsOverviewItem } from "./settings/SettingsOverviewItem";
 import { UpdateCard } from "./settings/UpdateCard";
 import { DiagnosticsCard } from "./settings/DiagnosticsCard";
@@ -319,22 +318,6 @@ export function SettingsPage({
                   }
                   placeholder="feat/"
                   className="font-mono"
-                />
-              </Field>
-              <Field orientation="horizontal" className="lg:col-span-2">
-                <FieldContent>
-                  <FieldLabel htmlFor="persistent-sessions">Persistent sessions</FieldLabel>
-                  <FieldDescription>
-                    Run agents inside a dedicated tmux server so they keep working while the app
-                    is closed and reattach on the next launch. Requires tmux 3.2+ on this Mac.
-                  </FieldDescription>
-                </FieldContent>
-                <Switch
-                  id="persistent-sessions"
-                  checked={settingsDraft.persistentSessions}
-                  onCheckedChange={(checked) =>
-                    setSettingsDraft((current) => ({ ...current, persistentSessions: checked }))
-                  }
                 />
               </Field>
             </FieldGroup>

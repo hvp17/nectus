@@ -71,10 +71,9 @@ pub struct ReviewLoopUpdatedEvent {
 }
 
 /// A chunk of a task reviewer's live stdout, streamed so the workspace can show
-/// the reviewer working in real time (read-only) the way a live agent session
-/// shows in `SessionOutputEvent`. `start_offset` is the byte offset of this chunk
-/// in the current run's output; a chunk at offset `0` marks the start of a new
-/// run, so the UI resets its buffer.
+/// the reviewer working in real time (read-only). `start_offset` is the byte
+/// offset of this chunk in the current run's output; a chunk at offset `0` marks
+/// the start of a new run, so the UI resets its buffer.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReviewOutputEvent {

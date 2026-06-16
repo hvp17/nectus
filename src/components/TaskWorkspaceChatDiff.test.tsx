@@ -104,9 +104,6 @@ function renderWorkspace() {
       reviewLoop={null}
       reviewRuns={[]}
       onClose={vi.fn()}
-      onStopSession={vi.fn()}
-      onResumeSession={vi.fn()}
-      onStartSession={vi.fn()}
       onStartReview={vi.fn()}
       onCreatePullRequest={vi.fn()}
       onRefreshPullRequest={vi.fn()}
@@ -118,8 +115,6 @@ function renderWorkspace() {
       onArchiveTask={vi.fn()}
       onDeleteTask={vi.fn()}
       onSetJiraLink={vi.fn()}
-      onSessionExit={vi.fn()}
-      onSessionInput={vi.fn()}
     />,
     { queryClient },
   );

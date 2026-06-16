@@ -22,9 +22,9 @@ const ENABLE_TERMINAL = import.meta.env.MODE !== "test";
 
 /**
  * Read-only terminal that mirrors a task reviewer's live stdout so the user can
- * watch the review progress without being able to type into it. Unlike
- * `TerminalPane` there is no session, input, or snapshot: output is handed in as
- * an ever-growing string and written to xterm in deltas.
+ * watch the review progress without being able to type into it. There is no
+ * input or snapshot: output is handed in as an ever-growing string and written
+ * to xterm in deltas.
  */
 export function ReviewTerminalPane({ output, active }: ReviewTerminalPaneProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);

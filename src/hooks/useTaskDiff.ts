@@ -3,8 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "../queries/keys";
 import { useOptionalQuery } from "../queries/optional";
-import { useTauriEvent } from "./useTauriEvent";
-import type { SessionIdleEvent, TaskDiffSummary } from "../types";
+import type { TaskDiffSummary } from "../types";
 
 /** Lazy-loaded patch state for a single file in the diff. */
 export interface FileDiffState {
@@ -27,10 +26,8 @@ export interface TaskDiff {
  * Owns the task diff data: the changed-file summary is a TanStack Query keyed on
  * the task id, so selecting a task loads it (populating the stage-header badge) and
  * switching tasks shows `null` immediately — the new key has no data yet — without
- * any manual reset. The summary refetches on the task's `session_idle` so the badge
- * stays current while the agent works, with no timer polling. Per-file patches are
- * still lazy-loaded on demand into a local map (cleared whenever the summary
- * (re)loads, since cached patches go stale with it).
+ * any manual reset. Per-file patches are lazy-loaded on demand into a local map
+ * (cleared whenever the task changes or the user refreshes the summary).
  */
 export function useTaskDiff(taskId: number | undefined, repoId?: number): TaskDiff {
   const queryClient = useQueryClient();
@@ -78,15 +75,6 @@ export function useTaskDiff(taskId: number | undefined, repoId?: number): TaskDi
     setFiles({}); // cached patches go stale once the summary is refetched
     await queryClient.invalidateQueries({ queryKey: queryKeys.task.diffSummary(taskId, repoId) });
   }, [queryClient, taskId, repoId]);
-
-  // A finished turn likely changed the diff; refresh to keep the badge current.
-  useTauriEvent<SessionIdleEvent>(
-    "session_idle",
-    (payload) => {
-      if (payload.taskId === taskId) void refresh();
-    },
-    { enabled: taskId != null },
-  );
 
   return { summary, loading, error, files, refresh, loadFile };
 }

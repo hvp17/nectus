@@ -157,24 +157,11 @@ in the `task_repos` child table. File ownership: see [AGENTS.md](../AGENTS.md).
 
 Task is the primary work item. A task can be direct-edit or worktree-backed.
 
-**Archive**: a done task can be archived (facts-rail button; refused while a
-session is running). Archived tasks vanish from every live surface — boards,
+**Archive**: a done task can be archived from the facts rail. Archived tasks vanish from every live surface — boards,
 Mission Control, the sidebar — and from the per-worktree dirty checks, but keep
 their row, worktree, and branch until deleted. Both boards have an **Archived**
 toggle showing the read-only archive view, where cards offer **Restore** and
 **Delete** (archived cards do not open the task workspace).
-
-**Persistent sessions** (Settings → Projects & Worktrees, default off): when
-enabled and `tmux` ≥ 3.2 is installed, agent sessions run inside a dedicated
-tmux server (`tmux -L nectus`, isolated from any tmux you run yourself). The
-app's embedded terminal is then a tmux client: quitting the app leaves agents
-running, and the next launch reattaches their terminals automatically (sessions
-whose task was deleted in between are killed). **Stop** still stops the agent
-for real. OpenCode reattaches without its event watcher (its per-launch local
-server port does not survive a restart), so idle/needs-input detection for
-OpenCode resumes on the next fresh start; Codex and Claude watchers reattach
-fully. Without tmux installed the setting falls back to normal sessions with a
-logged warning.
 
 Direct-edit tasks:
 
@@ -237,74 +224,36 @@ Profiles can also be customized with:
 - Extra args, one per line
 - Environment variables as `KEY=value`
 
-Command resolution checks PATH first, then common user binary locations.
-Provider modules own command arguments and app-specific fallback locations, such
+Command resolution checks PATH first, then common user binary locations. The ACP
+provider registry owns command arguments and app-specific fallback locations, such
 as Codex app bundle resource paths and OpenCode installs under
 `~/.opencode/bin/opencode` or `~/bin/opencode`.
 
 File ownership: see [AGENTS.md](../AGENTS.md).
 
-## Sessions And Terminal
+## ACP Agent Chat
 
-Sessions are app-owned child processes attached to an embedded PTY.
-
-Current behavior:
-
-- A task can have only one active session.
-- Direct-edit tasks launch in the project path.
-- Worktree-backed tasks launch in the worktree path.
-- Starting a session requires at least one agent profile; if none exists, the app
-  shows guidance to add one in Settings instead of silently ignoring the launch.
-- New task prompts are written to the PTY after launch. OpenCode is the exception:
-  its initial task prompt is passed through `opencode --prompt`, so Nectus skips the
-  post-spawn PTY write to avoid a duplicate prompt.
-- Dropping files on the terminal inserts their escaped paths into the active
-  session input, matching the local terminal workflow for Codex image/file paths.
-- Selecting a task replaces the current view with a focused terminal workspace.
-  Running sessions render the live terminal front and center; tasks without an
-  active session show launcher controls in the terminal stage. When the agent is
-  waiting, an inline action bar surfaces the pending decision under the terminal.
-- There is no task tree in the shell. Cross-project tasks are triaged in Mission
-  Control; per-project tasks live on the board. See
-  [Navigation And Mission Control](#navigation-and-mission-control).
-- Task metadata, status, deletion, prompt, workflow, review controls, and review
-  feedback live in the persistent right inspector rail.
-- Terminal output is streamed through the `session_output` Tauri event.
-- Recent terminal output is buffered in memory for snapshot restore.
-- A running task's card and Mission Control row show a live "what it's doing"
-  line between the title and branch, carried by the `session_activity` event
-  (throttled, de-duplicated). For Codex, Claude, and OpenCode it is parsed from
-  the provider's structured event stream (Codex reasoning/messages, Claude
-  `PreToolUse` tool-use hook, OpenCode message parts), so it reads as real
-  progress ("Editing App.tsx", "Running npm test") instead of statusline chrome
-  or echoed keystrokes; Antigravity and custom agents fall back to an ANSI-stripped
-  tail of the PTY output. It falls back to "Working…" before the first line and
-  clears when the session exits.
-- Closing the app stops owned sessions and clears active session ids.
-
-Sessions emit these Tauri events: `session_output` (terminal stream),
-`session_activity` (the live "what it's doing" line), `session_exited`,
-`session_idle`, and `session_needs_input`. (Review-loop events are listed under
-[AI Review](#ai-review).)
-
-File ownership and the authoritative command/event catalog: see
-[AGENTS.md](../AGENTS.md) and [tracking-and-debugging.md](tracking-and-debugging.md).
-
-## Embedded Agent Chat
-
-The task workspace also has a **Chat** tab that drives ACP-capable agent CLIs
-through the Agent Client Protocol instead of through a raw terminal TUI.
+The task workspace drives task agents through ACP chat. There is no embedded
+task PTY or Terminal tab; the stage is Chat, Diff, and Review.
 
 Current behavior:
 
-- For **ACP-capable agents** (Claude, Codex, OpenCode, Antigravity when a descriptor exists), **Chat is the default stage tab** and the primary way to work with the agent. Task creation and GitHub ship actions (`create` / `merge` / `mark-ready` / `close` PR) submit prompts through the ACP chat runtime (`acp_send_prompt`) rather than the embedded PTY.
-- The **Terminal** tab remains for **custom** agent profiles (no ACP descriptor) and as a fallback for Antigravity when chat is unavailable.
-- Live activity in Mission Control, the project sidebar, and task cards for ACP agents comes from **`session_chat`** text/tool parts (via `liveLines` and `chatWorkingTaskIds`), not from `session_activity` / JSONL / hook watchers — those legacy decoders are retired for ACP-capable kinds in `native/src/sessions/provider.rs`.
-- Chat is available from the task workspace stage alongside Terminal (when shown), Diff, and Review.
-- On the first prompt, Nectus starts an ACP session for the task's agent profile
-  in the task worktree (or project path for direct-edit tasks). It streams the
-  normalized ACP updates into the transcript and persists settled user/agent
-  turns in SQLite.
+- For ACP-capable agents (Claude Code, Codex, OpenCode, and Antigravity preview
+  when a descriptor exists), Chat is the default stage tab and the only task-agent
+  runtime. Task creation starts ACP chat and submits the initial prompt through
+  `acp_send_prompt`.
+- GitHub ship actions (`create` / `merge` / `mark-ready` / `close` PR) also
+  submit prompts through ACP chat. If the selected task profile has no ACP
+  provider, the action declines with guidance to choose an ACP-capable profile.
+- Direct-edit tasks launch ACP in the project path. Worktree-backed tasks launch
+  ACP in the worktree path.
+- Live activity in Mission Control, the project sidebar, and task cards comes from
+  `session_chat` text/tool parts via `liveLines` and `chatWorkingTaskIds`, not
+  from terminal output, Codex JSONL, Claude hooks, or OpenCode local-server
+  watchers.
+- On the first prompt, Nectus starts an ACP session for the task's agent profile.
+  It streams normalized ACP updates into the transcript and persists settled
+  user/agent turns in SQLite.
 - ACP launch is driven by the Rust provider descriptor in `native/src/sessions/acp.rs`
   for Claude Code, OpenCode, Codex, and Antigravity (preview). The runtime resolves the descriptor's
   command, seeds the login-shell environment, adds the augmented PATH, applies any
@@ -320,9 +269,7 @@ Current behavior:
   selected profile's latest session. Switching from one ACP-capable profile to
   another starts a new chat row for the selected profile rather than sending into
   a transcript owned by a different agent. If the selected profile has no ACP
-  provider descriptor yet (for example Antigravity or a custom profile), the
-  composer is disabled with an inline callout that points the user back to the
-  Terminal tab.
+  provider descriptor yet, the composer is disabled with an inline callout.
 - The transcript is rendered with **Vercel AI Elements** (installed under
   `src/components/ai-elements/`). A thin adapter in `src/lib/chat/renderChatParts.tsx`
   maps the persisted `ChatPart` v1 model to those presentational primitives — the
@@ -362,12 +309,12 @@ ephemeral chat runtime state in the shell. File ownership: see [AGENTS.md](../AG
 
 ## Task Diff
 
-The task workspace stage has a `Terminal | Diff | Review | Chat` segmented control,
-so you can see what an agent changed or talk to it without leaving the app. The stage header carries a
-changed-file count badge and `+a −d` line totals next to the toggle (visible on all
-tabs), the Diff tab adds a manual refresh control, and the Review tab is covered in
-[AI Review](#ai-review). The Chat tab is covered in
-[Embedded Agent Chat](#embedded-agent-chat).
+The task workspace stage has a `Chat | Diff | Review` segmented control, so you
+can talk to the task agent, inspect what changed, or watch a reviewer without
+leaving the app. The stage header carries a changed-file count badge and
+`+a −d` line totals next to the toggle (visible on all tabs), the Diff tab adds a
+manual refresh control, the Chat tab is covered in [ACP Agent Chat](#acp-agent-chat),
+and the Review tab is covered in [AI Review](#ai-review).
 
 Current behavior:
 
@@ -384,10 +331,8 @@ Current behavior:
   "Binary file" instead of a patch.
 - The summary loads as soon as a task is selected, so the count/line-total badge is
   populated without opening the Diff tab first. It also reloads on the Diff tab's
-  refresh control and automatically when the task's agent finishes a turn
-  (`session_idle`), so the badge stays current while the agent works. Refresh is
-  event-driven (selection + turn boundary), not timer-based polling; each refresh is
-  a cheap local `git diff` with no network/GitHub call.
+  refresh control. Each refresh is a cheap local `git diff` with no network/GitHub
+  call.
 - Rename detection is disabled (`--no-renames`), so a rename shows as a delete + add
   pair.
 
@@ -395,55 +340,34 @@ The diff is served by the `task_diff_summary` / `task_diff_file` commands; base
 resolution, numstat/name-status parsing, and untracked patches live in
 `native/src/git_ops/diff.rs`. File ownership: see [AGENTS.md](../AGENTS.md).
 
-## Session Resume
+## ACP Chat Resume
 
-Codex, Claude, and OpenCode profiles support resume from a saved session id.
+ACP chat rows may store the provider's `acp_session_id`. When the provider
+advertises `session/load`, the next prompt can restart the ACP process and call
+`session/load` to resume the prior conversation. If the provider cannot load the
+saved session, Nectus starts a fresh ACP session and sends the prompt instead of
+leaving the composer stuck.
 
-Codex:
-
-- New sessions launch normally; Nectus tracks the app-owned process with its own
-  session id.
-- Resume launches `codex resume <session-id>`.
-- The model flag is not passed on Codex resume.
-- The app finds the latest Codex JSONL session for the task cwd and saves its id
-  and label when possible.
-
-Claude:
-
-- New sessions launch with `--session-id <session-id>`.
-- Resume launches with `--resume <session-id>`.
-
-OpenCode:
-
-- New sessions launch with a reserved local server:
-  `opencode --hostname 127.0.0.1 --port <port> [--model provider/model] [args]
-  --prompt <task prompt>`.
-- Resume launches with the saved OpenCode id:
-  `opencode --hostname 127.0.0.1 --port <port> --session <session-id> [args]`.
-- Nectus discovers the OpenCode session from the local server's `/session` API and
-  saves the id and label when available.
-
-Resume is disabled for Antigravity and custom profiles unless their behavior is added
-explicitly.
+The old Codex JSONL, Claude PTY hook, and OpenCode local-server resume probes are
+not used for task agents anymore. Reviewer resume is separate and documented under
+[AI Review](#ai-review).
 
 ## Attention Tracking
 
 Attention tracking is UI state derived from backend events.
 
-- **ACP chat (Claude, Codex, OpenCode):** permission parts in `session_chat` set
-  `needs_input` attention; settled turns and `chat_session_exited` clear working
-  state. Live lines come from chat text/tool parts via `useEventBridge`.
-- **PTY (Antigravity, custom):** `session_activity` from the ANSI-stripped tail;
-  legacy `session_idle` / `session_needs_input` from per-provider JSONL/hook/SSE
-  watchers were removed — PTY custom agents do not drive those markers today.
-- Codex/OpenCode **resume metadata** after PTY exit still probes rollout
-  `session_meta` (`codex.rs`) and `GET /session` (`opencode.rs`).
-- Starting, resuming, stopping, marking done, or sending input clears the marker
+- ACP permission parts in `session_chat` set `needs_input` attention.
+- Chat text and tool parts update `liveLines` and `chatWorkingTaskIds`, which drive
+  Mission Control, sidebar rows, task cards, and the icon-rail badge.
+- Settled turns and `chat_session_exited` clear the working state.
+- Stale `tasks.active_session_id` and `tasks.attention` values from old PTY builds
+  are cleared on app startup so they do not block ACP-only workflows.
+- Marking done, deleting a task, or answering a permission prompt clears the marker
   for that task.
 - Counts are shown as Mission Control summary pills and the icon-rail needs-input
   badge.
-- macOS notifications are sent for idle and needs-input events when permission is
-  granted.
+- macOS notifications are sent for ACP attention and review/PR review updates when
+  permission is granted.
 - The matching in-app toast for a known task carries an **Open task** action that
   focuses that task's workspace (selecting its repo and switching to the board
   view when needed). The macOS notification itself cannot be made clickable on
@@ -458,14 +382,10 @@ Attention tracking is UI state derived from backend events.
   hard-cutting only a single very long token such as a bare URL. The same
   formatter cleans the macOS notification body.
 
-Session/review/PR events are subscribed once in the mount-once event bridge and
-routed to the query cache or the UI store. **ACP chat** drives Claude/Codex/OpenCode
-attention and live lines via `session_chat` / `chat_session_exited`. **PTY sessions**
-remain for custom agents (and optional terminal fallback); Antigravity/custom
-`session_activity` comes from the ANSI-stripped PTY tail in `mod.rs`. Resume metadata
-after PTY exit still probes Codex rollout `session_meta` (`codex.rs`) and OpenCode
-`GET /session` (`opencode.rs`); Claude PTY launch still embeds hook settings from
-`claude.rs`. File ownership: see [AGENTS.md](../AGENTS.md).
+Chat/review/PR events are subscribed once in the mount-once event bridge and
+routed to the query cache or the UI store. ACP chat drives task attention and live
+lines via `session_chat`, `session_chat_usage`, and `chat_session_exited`. File
+ownership: see [AGENTS.md](../AGENTS.md).
 
 ## AI Review
 
@@ -489,19 +409,16 @@ Current behavior:
   reviewer that fully buffers its stdout may not appear until it flushes; `codex
   exec` streams incrementally.
 - The task workflow stepper enables `Create PR` for worktree tasks once the
-  GitHub CLI is connected. Creating a PR — and merge / mark-ready / close — are all
-  **agent-driven**: the action submits a prompt into the task's running agent
-  session (the agent commits/pushes, authors the PR title and description itself,
-  opens the PR, and for merge rebases/resolves conflicts as needed). A write action
-  needs a running session; with none it declines with guidance to start or resume
-  the agent. PR detection and live status stay deterministic `gh` reads. See
-  [GitHub Integration](github-integration.md).
+  GitHub CLI is connected. Creating a PR, merging, marking ready, and closing are
+  all agent-driven through ACP chat: the action submits a prompt, the agent
+  commits/pushes, authors the PR title and description itself, opens the PR, and
+  rebases/resolves conflicts as needed. A write action needs an ACP-capable task
+  profile; with none it declines with guidance. PR detection and live status stay
+  deterministic `gh` reads. See [GitHub Integration](github-integration.md).
 - The task workflow stepper also shows a `Move to done` step that marks the
   task complete.
 - PR URLs are stored on the task: captured automatically by the `gh`-driven flow,
   or written through task metadata when linked manually or by the agent.
-- Manual review runs require a running worker session so blockers or
-  feedback can be written back into that session.
 - Claude and Antigravity reviewers are run in headless prompt mode with `-p` and the
   generated review prompt. Codex reviewers run non-interactively with `codex exec`,
   and OpenCode reviewers run with `opencode run`; both receive the prompt as a
@@ -527,7 +444,7 @@ Current behavior:
     CLIs emit the full message in a single JSON event in non-interactive mode.
 - Reviewer output is parsed from the shared `NECTUS_VERDICT:` marker line (the same
   contract the PR reviews use, in `native/src/sessions/verdict.rs`); the marker line
-  is stripped from what is stored and forwarded to the worker:
+  is stripped from what is stored:
   - `pass` ← `NECTUS_VERDICT: CLEAN`
   - `needs_changes` ← `NECTUS_VERDICT: BLOCKERS`
   - `feedback` ← `NECTUS_VERDICT: FEEDBACK`
@@ -536,9 +453,8 @@ Current behavior:
 - Passing review marks the loop `passed` and moves the task to `done`.
 - Task cards show the saved review status once a review exists, including
   completed `Review passed` state.
-- Blocking review or feedback is written back into the active worker PTY and submitted
-  with the same Enter sequence as terminal input. That status is persisted as
-  `feedback_sent` and shown as review feedback in the UI.
+- Blocking review or implementation feedback is stored as review output and shown
+  in the UI. It is no longer written into a worker PTY.
 - Unknown reviewer output marks the loop `error`.
 
 The review-loop runtime emits two Tauri events: `review_loop_updated` (loop/run
@@ -647,8 +563,8 @@ GitHub integration runs through the `gh` CLI, so Nectus stores no tokens. The ap
 reports connection status and shows live PR state and CI checks (deterministic `gh`
 reads). The four PR **write** actions are **agent-driven**: create, merge
 (squash/merge/rebase, behind a confirm), mark a draft ready, and close each submit a
-prompt into the task's running agent session, so the agent authors the PR body and
-resolves conflicts/rebases itself; a write action needs a running session.
+prompt into the task's ACP chat, so the agent authors the PR body and resolves
+conflicts/rebases itself; a write action needs an ACP-capable task profile.
 **GitHub Actions / CI checks expand to a per-workflow list** with links straight to
 each run, and PR status **auto-refreshes** while the PR is open (interval + window
 focus) so checks turn green on their own. A finished AI PR review can be **posted

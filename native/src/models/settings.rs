@@ -43,9 +43,6 @@ pub struct AppSettings {
     /// Board epic filter: when set, narrows the board to children of this epic
     /// (JQL `parent = "<key>"`). `None`/empty means no epic filter.
     pub jira_filter_epic: Option<String>,
-    /// Opt-in tmux-backed sessions that keep running while the app is closed
-    /// and reattach on the next launch. Requires `tmux` on the machine.
-    pub persistent_sessions: bool,
     pub theme: ThemeMode,
     pub density: DensityMode,
     pub updated_at: String,
@@ -73,8 +70,6 @@ pub struct AppSettingsInput {
     pub jira_filter_statuses: Vec<String>,
     #[serde(default)]
     pub jira_filter_epic: Option<String>,
-    #[serde(default)]
-    pub persistent_sessions: bool,
     pub theme: ThemeMode,
     pub density: DensityMode,
 }

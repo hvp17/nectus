@@ -28,13 +28,6 @@ export function useTaskDeletion() {
   return useCallback(
     (task: TaskSummary) => {
       setMessage(null);
-      if (task.activeSessionId) {
-        toast.error("Delete blocked", {
-          description: "Stop the running session before deleting this task.",
-          duration: 5000,
-        });
-        return;
-      }
       if (useAppStore.getState().deletingTaskIds.has(task.id)) {
         return;
       }

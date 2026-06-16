@@ -1,15 +1,16 @@
 # Codex Session JSONL Reference
 
-This maps the Codex session rollout files that Nectus reads from the Codex
-sessions directory, usually `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`.
+This is a historical map of Codex session rollout files under
+`~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`.
 
 For the broader app-level state, event, and troubleshooting guide, see
 [tracking-and-debugging.md](tracking-and-debugging.md).
 
-Checked against the Codex source on 2026-05-16. The types Nectus actually depends
-on are vendored from `codex-protocol` `rust-v0.136.0` in
-`native/src/sessions/codex.rs`; the broader event catalog below is an external
-snapshot, so treat it as point-in-time — Codex can add or rename event types.
+Checked against the Codex source on 2026-05-16. Nectus task agents now run through
+ACP chat, so the app no longer tails Codex rollout JSONL for task attention,
+activity, idle, or resume metadata. The broader event catalog below is an
+external snapshot, so treat it as point-in-time — Codex can add or rename event
+types.
 
 ## Source Files
 
@@ -186,58 +187,26 @@ for them in the checked Codex source.
 
 ## Current Nectus Usage
 
-Nectus currently watches Codex session JSONL in `native/src/sessions/codex.rs`.
+Nectus no longer reads Codex rollout JSONL for task-agent state. Codex task work
+uses the ACP provider descriptor in `native/src/sessions/acp.rs`; transcript,
+activity, permission requests, usage, and process exit flow through
+`session_chat`, `session_chat_usage`, and `chat_session_exited`.
 
 Current behavior:
 
-- Finds the latest Codex rollout whose `session_meta.payload.cwd` matches the
-  launched task cwd.
-- Ignores Codex subagent rollouts (detected via `thread_source == "subagent"`, the
-  `codex-auto-review` model, or a `source.subagent` key in `is_codex_subagent_session`),
-  so a subagent's approval checks do not become task-level `Finished` attention markers.
-- Keeps discovering the matching rollout while the Nectus task session is active.
-  Discovery polls every 500 ms for the first 120 attempts, then every 5 seconds
-  until Codex writes metadata or the task session stops. Each scan walks
-  `~/.codex/sessions` but only opens files whose mtime is at/after the session
-  start (minus 60s slack) — historical rollouts are pruned by a metadata check,
-  not re-read on every poll.
-- Reads newly appended, **newline-terminated** lines from that file. A trailing
-  fragment without a `\n` (a line caught mid-write) is not parsed or counted until
-  its terminator arrives, so the completing event is never skipped. This tailing
-  is shared with the Claude hook-sink watcher via `watch_event_log`
-  (`native/src/sessions/mod.rs`).
-- Parses the rollout envelope plus the `session_meta`, `event_msg`, and
-  selected `response_item` payloads with tolerant Rust types. Unknown rollout
-  entries and unknown event names are ignored.
-- Emits `session_idle` when it sees:
-
-```text
-type == "event_msg" and payload.type is "task_complete" or "turn_complete"
-```
-
-- Parses `task_started`, `turn_started`, and `turn_aborted`, but does not emit
-  app-level events for them yet.
-- Emits `session_activity` (the live "doing now" line on task cards) from the
-  `agent_reasoning` (reasoning summary) and `agent_message` (assistant text)
-  `event_msg` payloads — both persisted by default. The line is normalized,
-  throttled, and de-duplicated in `mod.rs` (`emit_activity_line`). This replaces
-  the raw-PTY tail scrape for Codex, which on a full-screen TUI only surfaced
-  statusline chrome and echoed keystrokes.
-- Tries to emit `session_needs_input` for explicit input-request event names:
-  `exec_approval_request`, `request_permissions`, `request_user_input`,
-  `elicitation_request`, `apply_patch_approval_request`, plus the fallback names
-  `approval_request`, `confirmation_request`, `needs_input`, and
-  `permission_request`.
-- Also emits `session_needs_input` when Codex persists a `response_item` whose
-  `payload.type == "function_call"` and `payload.name == "request_user_input"`.
-  The parser extracts `questions[].question` from the function-call
-  `arguments` string and uses it as the prompt preview.
+- No `session_idle`, `session_activity`, or `session_needs_input` events are emitted
+  from Codex rollout JSONL.
+- No Codex rollout `session_meta` scan is used to resume task chats. ACP resume is
+  based on the stored chat row's `acp_session_id` plus provider support for
+  `session/load`.
+- The reference below remains useful when comparing older databases, older docs,
+  or historical task-session behavior.
 
 Important caveat: the checked Codex rollout policy says approval/input request
 `event_msg` variants such as `exec_approval_request`, `request_permissions`,
 `request_user_input`, and `apply_patch_approval_request` are defined but not
-persisted by default. `response_item` function calls are persisted by default,
-and Nectus handles `request_user_input` there when present.
+persisted by default. `response_item` function calls are persisted by default in
+that historical protocol.
 
 ## Observed Sample Entries
 

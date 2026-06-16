@@ -83,7 +83,6 @@ export const seedTasks: TaskSummary[] = [
     id: 1, repoId: 1, title: "Fix OAuth redirect loop on sign-in", status: "in_progress",
     agentProfileId: 2, agentName: "Claude Sonnet", agentKind: "claude", branchName: "fix/oauth-redirect",
     worktreePath: "/Users/you/dev/web-app-worktrees/oauth-redirect", isDirty: true,
-    activeSessionId: "s-1", lastSessionId: "s-1", lastSessionAgent: "claude",
     jiraIssueKey: "WEB-412", jiraIssueSummary: "Fix OAuth redirect loop on sign-in",
     prompt: "Users with a stale session cookie bounce between /login and the callback URL. Reproduce and fix.",
     updatedAt: ago(4),
@@ -91,22 +90,22 @@ export const seedTasks: TaskSummary[] = [
   task({
     id: 2, repoId: 1, title: "Add JIRA board status filters", status: "review",
     agentProfileId: 1, agentName: "Codex", agentKind: "codex", branchName: "feat/jira-filters",
-    worktreePath: "/Users/you/dev/web-app-worktrees/jira-filters", activeSessionId: "s-2", lastSessionId: "s-2",
+    worktreePath: "/Users/you/dev/web-app-worktrees/jira-filters",
     jiraIssueKey: "WEB-409", jiraIssueSummary: "Add JIRA board status filters", updatedAt: ago(1),
   }),
   task({
     id: 3, repoId: 2, title: "Stream agent logs to a file sink", agentProfileId: 4, agentName: "OpenCode", agentKind: "opencode",
     branchName: "feat/log-sink", worktreePath: "/Users/you/dev/cli-tools-worktrees/log-sink", isDirty: true,
-    activeSessionId: "s-3", lastSessionId: "s-3", jiraIssueKey: "CLI-88", updatedAt: ago(12),
+    jiraIssueKey: "CLI-88", updatedAt: ago(12),
   }),
   task({
     id: 4, repoId: 1, title: "Worktree cleanup confirmation flow", branchName: "feat/worktree-cleanup",
-    worktreePath: "/Users/you/dev/web-app-worktrees/worktree-cleanup", isDirty: true, activeSessionId: "s-4", lastSessionId: "s-4", updatedAt: ago(6),
+    worktreePath: "/Users/you/dev/web-app-worktrees/worktree-cleanup", isDirty: true, updatedAt: ago(6),
   }),
   task({
     id: 5, repoId: 3, title: "Token contrast audit for dark theme", agentProfileId: 2, agentName: "Claude Sonnet", agentKind: "claude",
     branchName: "fix/dark-contrast", worktreePath: "/Users/you/dev/design-system-worktrees/dark-contrast",
-    activeSessionId: "s-5", lastSessionId: "s-5", updatedAt: ago(2),
+    updatedAt: ago(2),
   }),
   task({
     id: 6, repoId: 1, title: "Reduce SQLite write contention", status: "review", agentProfileId: 3, agentName: "Antigravity", agentKind: "antigravity",
@@ -116,16 +115,16 @@ export const seedTasks: TaskSummary[] = [
   task({
     id: 7, repoId: 2, title: "Add --json output to status command", status: "review", agentProfileId: 2, agentName: "Claude Sonnet", agentKind: "claude",
     branchName: "feat/json-status", worktreePath: "/Users/you/dev/cli-tools-worktrees/json-status", reviewLoopStatus: "reviewing",
-    activeSessionId: "s-7", lastSessionId: "s-7", jiraIssueKey: "CLI-90", updatedAt: ago(8),
+    jiraIssueKey: "CLI-90", updatedAt: ago(8),
   }),
   task({
     id: 8, repoId: 3, title: "Document elevation + shadow scale", status: "done", agentProfileId: 2, agentName: "Claude Sonnet", agentKind: "claude",
     branchName: "docs/elevation", worktreePath: "/Users/you/dev/design-system-worktrees/elevation",
-    prUrl: "https://github.com/hvp17/design-system/pull/214", jiraIssueKey: "DS-18", lastSessionId: "s-8", updatedAt: ago(70),
+    prUrl: "https://github.com/hvp17/design-system/pull/214", jiraIssueKey: "DS-18", updatedAt: ago(70),
   }),
   task({
-    id: 9, repoId: 1, title: "Persist terminal scrollback per session", status: "planned", agentProfileId: 2, agentName: "Claude Sonnet", agentKind: "claude",
-    hasWorktree: false, jiraIssueKey: "WEB-418", jiraIssueSummary: "Persist terminal scrollback per session", updatedAt: ago(140),
+    id: 9, repoId: 1, title: "Persist ACP chat checkpoints", status: "planned", agentProfileId: 2, agentName: "Claude Sonnet", agentKind: "claude",
+    hasWorktree: false, jiraIssueKey: "WEB-418", jiraIssueSummary: "Persist ACP chat checkpoints", updatedAt: ago(140),
   }),
   // A cross-repo task (Increment B): one agent across the Web platform workspace's
   // repos, each on its own sibling worktree under a shared parent.
@@ -134,7 +133,6 @@ export const seedTasks: TaskSummary[] = [
     workspaceId: 1, agentProfileId: 2, agentName: "Claude Sonnet", agentKind: "claude",
     branchName: "feat/button-tokens", isDirty: true,
     worktreePath: "/Users/you/dev/web-app-worktrees/workspaces/feat/button-tokens/web-app",
-    activeSessionId: "s-10", lastSessionId: "s-10",
     taskRepos: [
       { repoId: 1, repoName: "web-app", branchName: "feat/button-tokens", worktreePath: "/Users/you/dev/web-app-worktrees/workspaces/feat/button-tokens/web-app", prUrl: null, isDirty: true, position: 0 },
       { repoId: 3, repoName: "design-system", branchName: "feat/button-tokens", worktreePath: "/Users/you/dev/web-app-worktrees/workspaces/feat/button-tokens/design-system", prUrl: null, isDirty: false, position: 1 },
@@ -160,7 +158,6 @@ export const seedSettings: AppSettings = {
   jiraFilterUnresolved: true,
   jiraFilterCurrentSprint: false,
   jiraFilterStatuses: [],
-  persistentSessions: false,
   theme: "system",
   density: "comfortable",
   updatedAt: ago(5000),
@@ -180,26 +177,26 @@ export const seedJiraProjects: JiraProject[] = [
 ];
 
 export const seedJiraBoard: JiraWorkItem[] = [
-  { key: "WEB-418", summary: "Persist terminal scrollback per session so refresh keeps context", statusName: "To Do", statusCategory: "to_do", issueType: "Story", priority: "High", assignee: "You" },
+  { key: "WEB-418", summary: "Persist ACP chat checkpoints so refresh keeps context", statusName: "To Do", statusCategory: "to_do", issueType: "Story", priority: "High", assignee: "You" },
   { key: "WEB-421", summary: "Worktree cleanup leaves dangling lockfiles on force-quit", statusName: "To Do", statusCategory: "to_do", issueType: "Bug", priority: "Medium", assignee: "R. Okafor" },
   { key: "WEB-412", summary: "Fix OAuth redirect loop on sign-in", statusName: "In Progress", statusCategory: "in_progress", issueType: "Bug", priority: "Highest", assignee: "You", description: "Users with a stale session cookie are bounced between /login and the callback URL indefinitely." },
   { key: "WEB-409", summary: "Add JIRA board status filters", statusName: "In Progress", statusCategory: "in_progress", issueType: "Task", priority: "Medium", assignee: "You" },
   { key: "WEB-405", summary: "Reduce SQLite write contention under parallel agents", statusName: "In Review", statusCategory: "in_progress", issueType: "Task", priority: "High", assignee: "M. Reyes" },
-  { key: "WEB-398", summary: "Resume Codex sessions from saved session id", statusName: "Done", statusCategory: "done", issueType: "Story", priority: "Low", assignee: "K. Fowler" },
+  { key: "WEB-398", summary: "Resume ACP chat from saved checkpoints", statusName: "Done", statusCategory: "done", issueType: "Story", priority: "Low", assignee: "K. Fowler" },
 ];
 
 export const seedJiraEpics: JiraWorkItem[] = [
-  { key: "WEB-400", summary: "Session persistence & resume", statusName: "In Progress", statusCategory: "in_progress", issueType: "Epic", priority: "High", assignee: "You" },
+  { key: "WEB-400", summary: "ACP chat continuity", statusName: "In Progress", statusCategory: "in_progress", issueType: "Epic", priority: "High", assignee: "You" },
   { key: "WEB-380", summary: "Auth hardening", statusName: "To Do", statusCategory: "to_do", issueType: "Epic", priority: "Medium", assignee: "M. Reyes" },
 ];
 
 export const seedJiraSprintBoard: JiraSprintLane[] = [
   {
-    sprint: { id: 1, name: "WEB Sprint 24", state: "active", startDate: ago(7 * 24 * 60), endDate: ago(-7 * 24 * 60), goal: "Stabilize sessions & sign-in" },
+    sprint: { id: 1, name: "WEB Sprint 24", state: "active", startDate: ago(7 * 24 * 60), endDate: ago(-7 * 24 * 60), goal: "Stabilize ACP chat and sign-in" },
     items: [
       { key: "WEB-412", summary: "Fix OAuth redirect loop on sign-in", statusName: "In Progress", statusCategory: "in_progress", issueType: "Bug", priority: "Highest", assignee: "You", epicKey: "WEB-380", epicName: "Auth hardening" },
-      { key: "WEB-405", summary: "Reduce SQLite write contention under parallel agents", statusName: "In Review", statusCategory: "in_progress", issueType: "Task", priority: "High", assignee: "M. Reyes", epicKey: "WEB-400", epicName: "Session persistence & resume" },
-      { key: "WEB-418", summary: "Persist terminal scrollback per session so refresh keeps context", statusName: "To Do", statusCategory: "to_do", issueType: "Story", priority: "High", assignee: "You", epicKey: "WEB-400", epicName: "Session persistence & resume" },
+      { key: "WEB-405", summary: "Reduce SQLite write contention under parallel agents", statusName: "In Review", statusCategory: "in_progress", issueType: "Task", priority: "High", assignee: "M. Reyes", epicKey: "WEB-400", epicName: "ACP chat continuity" },
+      { key: "WEB-418", summary: "Persist ACP chat checkpoints so refresh keeps context", statusName: "To Do", statusCategory: "to_do", issueType: "Story", priority: "High", assignee: "You", epicKey: "WEB-400", epicName: "ACP chat continuity" },
     ],
   },
   {
@@ -211,7 +208,7 @@ export const seedJiraSprintBoard: JiraSprintLane[] = [
   {
     sprint: null,
     items: [
-      { key: "WEB-398", summary: "Resume Codex sessions from saved session id", statusName: "To Do", statusCategory: "to_do", issueType: "Story", priority: "Low", assignee: "K. Fowler", epicKey: "WEB-400", epicName: "Session persistence & resume" },
+      { key: "WEB-398", summary: "Resume ACP chat from saved checkpoints", statusName: "To Do", statusCategory: "to_do", issueType: "Story", priority: "Low", assignee: "K. Fowler", epicKey: "WEB-400", epicName: "ACP chat continuity" },
       { key: "WEB-377", summary: "Audit log for token connect/disconnect", statusName: "To Do", statusCategory: "to_do", issueType: "Task", priority: "Low", assignee: "M. Reyes", epicKey: "WEB-380", epicName: "Auth hardening" },
     ],
   },
@@ -244,7 +241,7 @@ export const seedPrReviews: PrReview[] = [
   },
   {
     id: 2, repoId: 1, repoName: "web-app", reviewerProfileId: 2, reviewerName: "Claude Sonnet",
-    prUrl: "https://github.com/hvp17/web-app/pull/408", prNumber: 408, prTitle: "Migrate session store to SQLite WAL",
+    prUrl: "https://github.com/hvp17/web-app/pull/408", prNumber: 408, prTitle: "Migrate task cache to SQLite WAL",
     prAuthor: "hvp17", baseBranch: "main", status: "ready", verdict: "blockers", reviewOutput: consensusOutput,
     lastError: null, worktreePath: null,
     mode: "consensus", maxRounds: 3, roundsCompleted: 2, converged: true,

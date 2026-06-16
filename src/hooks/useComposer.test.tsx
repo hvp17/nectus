@@ -15,12 +15,14 @@ vi.mock("../api", () => ({
     createTask: vi.fn(),
     createCrossRepoTask: vi.fn(),
     setTaskJiraLink: vi.fn(),
-    startSession: vi.fn(),
+    acpStartChat: vi.fn(),
+    acpSendPrompt: vi.fn(),
     jiraGetWorkItem: vi.fn(),
     jiraRestStatus: vi.fn(),
     listRepos: vi.fn(),
     listWorkspaces: vi.fn(),
     listAgentProfiles: vi.fn(),
+    listAcpProviders: vi.fn(),
     getAppSettings: vi.fn(),
     listTasks: vi.fn(),
   },
@@ -60,8 +62,31 @@ function setup() {
   const queryClient = createQueryClient();
   seedBootstrapQueries(queryClient, {
     repos: [repo],
+    agentProfiles: [
+      {
+        id: 2,
+        name: "Claude",
+        agentKind: "claude",
+        command: "claude",
+        model: null,
+        args: [],
+        env: {},
+        createdAt: testTimestamp,
+        updatedAt: testTimestamp,
+      },
+    ],
     settings: appSettingsFixture({ defaultAgentProfileId: 2 }),
   });
+  queryClient.setQueryData(queryKeys.acpProviders(), [
+    {
+      id: "claude",
+      agentKind: "claude",
+      displayName: "Claude Code",
+      launch: { command: "npx", args: ["-y", "@agentclientprotocol/claude-agent-acp"] },
+      capabilities: { sessionLoad: "expected", permissions: "expected", images: "unknown" },
+      maturity: "stable",
+    },
+  ]);
   queryClient.setQueryData(queryKeys.jira.restStatus(), jiraRestStatus);
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -98,7 +123,16 @@ describe("useComposer", () => {
   it("attaches the linked JIRA story to a cross-repo task created from a story", async () => {
     const created = { id: 500, title: story.summary, branchName: "feat/cross" } as TaskSummary;
     mockedApi.createCrossRepoTask.mockResolvedValue(created);
-    mockedApi.startSession.mockResolvedValue({} as never);
+    mockedApi.acpStartChat.mockResolvedValue({
+      id: "chat-500",
+      taskId: 500,
+      agentProfileId: 2,
+      acpSessionId: null,
+      cwd: "/tmp/work",
+      createdAt: testTimestamp,
+      updatedAt: testTimestamp,
+    });
+    mockedApi.acpSendPrompt.mockResolvedValue(undefined);
     const { result } = setup();
 
     // Seed the composer from the story (Project mode, pendingJiraLink set)...

@@ -3,10 +3,10 @@
 Nectus Desktop is a Mac-first Tauri 2 app for coordinating parallel AI coding
 work across local git projects and optional git worktrees.
 
-It is local-first. Projects, tasks, agent profiles, session state, review-loop
+It is local-first. Projects, tasks, agent profiles, chat state, review-loop
 history, and settings are stored in the local SQLite database created by the
 desktop app. The frontend does not call git or shell commands directly; OS,
-git, SQLite, and PTY work lives in the Rust backend.
+git, SQLite, ACP child processes, and reviewer CLI work live in the Rust backend.
 
 > **New to the codebase? Start with [docs/architecture.md](docs/architecture.md)** —
 > the one-page model of how the five layers connect, a traced request lifecycle, and
@@ -23,34 +23,32 @@ git, SQLite, and PTY work lives in the Rust backend.
   across sibling worktrees (one per repo, each on its own branch).
 - Create Tasks against a project in direct-edit mode or with a new git worktree;
   blank worktree branch names become generated `task-...` branches.
-- Launch Codex, Claude, Antigravity, OpenCode, or custom CLI agent profiles in an
-  embedded terminal, with ACP-capable profiles also available from the task Chat tab.
+- Launch Codex, Claude, Antigravity, or OpenCode agent profiles through ACP chat.
 - Triage every agent across all projects from Mission Control, the default home:
   rows grouped by who needs you (needs-input, running, review, done) carry the
   agent's latest line and an inline action; click a row to open the task.
 - Navigate with a slim icon rail (Mission Control, Board, JIRA, PR Reviews,
   Settings); a needs-input badge on the rail flags work waiting on you.
-- Open a selected task into a focused terminal workspace with task details in a
-  persistent right inspector, plus an inline action bar when the agent is waiting.
+- Open a selected task into a focused Chat / Diff / Review workspace with task
+  details in a persistent right inspector.
 - Delete tasks from board cards or the selected-task inspector with background
   progress toasts.
-- Send the task prompt into a new agent session automatically.
-- Resume Codex, Claude, and OpenCode sessions when a saved session id is
-  available.
+- Send the task prompt into a new ACP chat automatically.
+- Resume ACP chats when the provider supports `session/load` and a saved
+  `acp_session_id` is available.
 - Track task status across `Planned`, `In progress`, `Review`, and `Done`.
 - Drag tasks between board columns to update status.
 - Show saved review status on task cards.
 - Surface running, dirty, finished, review, and needs-input counts.
-- Watch Codex session JSONL, Claude hooks, and OpenCode local server status for
-  finished or input-needed events where each provider exposes them.
-- Send macOS notifications for session attention events.
-- Run a single AI review with another agent profile and feed blockers or
-  implementation feedback back to the worker session.
+- Track ACP chat activity and permission requests through `session_chat` events.
+- Send macOS notifications for ACP attention events.
+- Run a single AI review with another agent profile and show blockers or
+  implementation feedback in the review UI.
 - Review an external GitHub pull request from the PR Reviews view — paste a PR
   link, pick one reviewer, or two or more for a multi-model **consensus** that
   runs the reviewers over rounds, shows a convergence matrix, and synthesizes a
   single verdict. See [docs/features.md](docs/features.md#pr-review).
-- Submit a Create PR prompt to a running agent from the task workflow.
+- Submit Create PR / merge / mark-ready / close prompts to the task's ACP chat.
 - Manage a global JIRA board: pick a project from a dropdown and toggle filters —
   no JQL to write — then browse stories in status columns (legal-transition drag,
   empty columns, a status filter, and Sprint view included), assign and comment,
@@ -68,7 +66,7 @@ See [docs/features.md](docs/features.md) for the feature map and user flows.
 - Desktop shell: Tauri 2
 - Backend: Rust
 - Storage: SQLite through `rusqlite`
-- Terminal: `portable-pty` in Rust and `xterm.js` in React
+- Agent runtime: ACP over stdio; reviewer output uses a read-only `xterm.js` pane
 - Package manager: `pnpm`
 
 ## Development
@@ -95,8 +93,8 @@ http://127.0.0.1:1420/
 ```
 
 Browser-only mode is useful for layout and React behavior. Tauri commands are
-not available there, so repository, worktree, SQLite, notification, and PTY
-behavior must be validated in the desktop app.
+not available there, so repository, worktree, SQLite, notification, ACP, and
+reviewer behavior must be validated in the desktop app.
 
 Run the desktop app:
 
@@ -230,14 +228,14 @@ PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH cargo 
 The main tracking and debugging guide is
 [docs/tracking-and-debugging.md](docs/tracking-and-debugging.md). It covers:
 
-- SQLite tables and task/session fields.
+- SQLite tables and task/chat fields.
 - Tauri commands and emitted frontend events.
-- Codex JSONL tracking, OpenCode local server tracking, and current limitations.
+- ACP chat tracking, legacy task-session compatibility fields, and current limitations.
 - AI review tracking.
 - macOS notification troubleshooting.
 - Common debugging commands and failure modes.
 
-The Codex JSONL protocol snapshot lives in
+The historical Codex JSONL protocol snapshot lives in
 [docs/codex-session-jsonl.md](docs/codex-session-jsonl.md).
 
 ## Repository Layout
@@ -249,10 +247,8 @@ src/components/      Mission Control, board, task workspace, settings, GitHub/JI
                      panels, the icon rail, and the inline composer UI
 src/test/            Shared Vitest and Testing Library helpers
 native/src/          Rust Tauri backend: lib.rs (commands), db/ (SQLite),
-                     git_ops/ (git + worktrees), sessions/ (PTY + ACP runtimes),
+                     git_ops/ (git + worktrees), sessions/ (ACP chat + reviewers),
                      github.rs, jira*.rs, process_util.rs, models/
-native/src/sessions/agents/
-                     Provider-specific Codex, Claude, Antigravity, OpenCode launch behavior
 native/capabilities/ Tauri permission capability files
 docs/                Project documentation (see the index below)
 ```

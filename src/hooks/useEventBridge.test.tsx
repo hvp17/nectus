@@ -7,8 +7,7 @@ import { createQueryClient } from "../queries/queryClient";
 import { queryKeys } from "../queries/keys";
 import { useAppStore } from "../store/appStore";
 import { api } from "../api";
-import { upsertTaskAttention } from "../sessionAttention";
-import type { PrReview, ReviewLoop, ReviewRun, SessionNeedsInputEvent, TaskSummary } from "../types";
+import type { PrReview, ReviewLoop, ReviewRun, TaskSummary } from "../types";
 
 // Capture the handlers the bridge registers so tests can fire events without a
 // Tauri backend.
@@ -58,12 +57,11 @@ async function mountBridge(tasks: TaskSummary[]) {
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     ),
   });
-  await waitFor(() => expect(listeners.has("session_exited")).toBe(true));
+  await waitFor(() => expect(listeners.has("session_chat")).toBe(true));
   return queryClient;
 }
 
 const liveLines = () => useAppStore.getState().liveLines;
-const taskAttention = () => useAppStore.getState().taskAttention;
 
 describe("useEventBridge", () => {
   beforeEach(() => {
@@ -75,16 +73,6 @@ describe("useEventBridge", () => {
 
   afterEach(() => {
     delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
-  });
-
-  it("records the live activity line for a task", async () => {
-    await mountBridge([baseTask]);
-
-    act(() => {
-      listeners.get("session_activity")?.({ payload: { sessionId: "s-1", taskId: 7, line: "Running tests" } });
-    });
-
-    expect(liveLines()).toEqual({ 7: "Running tests" });
   });
 
   it("mirrors ACP chat streaming into liveLines and chatWorkingTaskIds", async () => {
@@ -145,35 +133,6 @@ describe("useEventBridge", () => {
 
     expect(liveLines()).toEqual({});
     expect(useAppStore.getState().chatWorkingTaskIds).toEqual({});
-  });
-
-  it("clears the live line and attention when its session exits", async () => {
-    useAppStore.setState({ taskAttention: upsertTaskAttention([], baseTask, idleNeedsInput) });
-    await mountBridge([baseTask]);
-
-    act(() => {
-      listeners.get("session_activity")?.({ payload: { sessionId: "s-1", taskId: 7, line: "Running tests" } });
-    });
-    expect(liveLines()).toEqual({ 7: "Running tests" });
-    expect(taskAttention()).toHaveLength(1);
-
-    act(() => {
-      listeners.get("session_exited")?.({ payload: { sessionId: "s-1" } });
-    });
-
-    expect(liveLines()).toEqual({});
-    expect(taskAttention()).toEqual([]);
-  });
-
-  it("records attention on session_idle for a known task", async () => {
-    await mountBridge([baseTask]);
-
-    act(() => {
-      listeners.get("session_idle")?.({ payload: { sessionId: "s-1", taskId: 7, turnId: null, message: "Done" } });
-    });
-
-    expect(taskAttention()).toHaveLength(1);
-    expect(taskAttention()[0].taskId).toBe(7);
   });
 
   it("marks a task done when its review loop passes", async () => {
@@ -239,7 +198,7 @@ describe("useEventBridge", () => {
   });
 
   it("keeps registering later event channels when one subscription fails", async () => {
-    const error = new Error("session_idle failed");
+    const error = new Error("review_loop_updated failed");
     listenMock.mockRejectedValueOnce(error);
     const queryClient = createQueryClient();
     queryClient.setQueryData(queryKeys.tasks(), [baseTask]);
@@ -252,14 +211,6 @@ describe("useEventBridge", () => {
     });
 
     await waitFor(() => expect(useAppStore.getState().message).toBe(String(error)));
-    await waitFor(() => expect(listeners.has("session_activity")).toBe(true));
+    await waitFor(() => expect(listeners.has("session_chat")).toBe(true));
   });
 });
-
-const idleNeedsInput: SessionNeedsInputEvent = {
-  sessionId: "s-1",
-  taskId: 7,
-  turnId: null,
-  reason: "permission",
-  prompt: "Approve?",
-};

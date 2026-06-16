@@ -14,8 +14,10 @@ import type { AgentKind, TaskSummary } from "../types";
 interface TaskCardProps {
   task: TaskSummary;
   attention?: TaskAttention;
-  /** Latest live activity line for a running session, shown under the title. */
+  /** Latest live activity line for an in-flight ACP chat turn, shown under the title. */
   liveLine?: string;
+  /** True while the ACP chat runtime has an in-flight agent turn for this task. */
+  chatWorking?: boolean;
   /** Repo label shown only on the workspace board to tell cards apart. */
   repoName?: string;
   isSelected: boolean;
@@ -42,6 +44,7 @@ export const TaskCard = memo(function TaskCard({
   task,
   attention,
   liveLine,
+  chatWorking = false,
   repoName,
   isSelected,
   busy,
@@ -63,7 +66,7 @@ export const TaskCard = memo(function TaskCard({
     onPointerDragEnd,
     onDragEnd,
   });
-  const state = deriveAgentState(task, attention);
+  const state = deriveAgentState(task, attention, chatWorking ? { [task.id]: true } : {});
   const agentKind: AgentKind = task.agentKind ?? "custom";
   const {
     detail: attentionDetail,
@@ -120,7 +123,7 @@ export const TaskCard = memo(function TaskCard({
               Done
             </Badge>
           )}
-          {task.activeSessionId && attention?.kind !== "needs_input" && (
+          {chatWorking && attention?.kind !== "needs_input" && (
             <Badge variant="default" className="h-5 px-1.5 text-[10px]">
               <span className="size-[7px] flex-none animate-pulse rounded-full bg-current" />
               Live

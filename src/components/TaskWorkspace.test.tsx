@@ -96,9 +96,6 @@ function renderTaskWorkspace(input?: {
   liveReviewOutput?: string;
   githubStatus?: GithubStatus;
   pullRequest?: PullRequestInfo | null;
-  onStopSession?: (sessionId: string) => void;
-  onResumeSession?: (task: TaskSummary) => void;
-  onStartSession?: (task: TaskSummary) => void;
   onStartReview?: (task: TaskSummary, reviewerProfileId: number) => void;
   onCreatePullRequest?: (task: TaskSummary, options?: { draft?: boolean }) => void;
   onRefreshPullRequest?: (task: TaskSummary) => void;
@@ -107,7 +104,40 @@ function renderTaskWorkspace(input?: {
   onDeleteTask?: (task: TaskSummary) => void;
 }) {
   const queryClient = createQueryClient();
-  queryClient.setQueryData(queryKeys.acpProviders(), []);
+  queryClient.setQueryData(queryKeys.acpProviders(), [
+    {
+      id: "codex",
+      agentKind: "codex",
+      displayName: "Codex",
+      launch: { command: "codex-acp", args: [] },
+      capabilities: { sessionLoad: "unknown", permissions: "unknown", images: "unknown" },
+      maturity: "preview",
+    },
+    {
+      id: "claude",
+      agentKind: "claude",
+      displayName: "Claude Code",
+      launch: { command: "npx", args: ["-y", "@agentclientprotocol/claude-agent-acp"] },
+      capabilities: { sessionLoad: "expected", permissions: "expected", images: "unknown" },
+      maturity: "stable",
+    },
+    {
+      id: "opencode",
+      agentKind: "opencode",
+      displayName: "OpenCode",
+      launch: { command: "opencode", args: ["acp"] },
+      capabilities: { sessionLoad: "unknown", permissions: "unknown", images: "unknown" },
+      maturity: "preview",
+    },
+    {
+      id: "antigravity",
+      agentKind: "antigravity",
+      displayName: "Antigravity",
+      launch: { command: "agy-acp", args: [] },
+      capabilities: { sessionLoad: "unsupported", permissions: "unsupported", images: "unsupported" },
+      maturity: "preview",
+    },
+  ]);
   return renderWithProviders(
     <TaskWorkspace
       task={input?.task ?? task}
@@ -119,9 +149,6 @@ function renderTaskWorkspace(input?: {
       githubStatus={input?.githubStatus}
       pullRequest={input?.pullRequest}
       onClose={vi.fn()}
-      onStopSession={input?.onStopSession ?? vi.fn()}
-      onResumeSession={input?.onResumeSession ?? vi.fn()}
-      onStartSession={input?.onStartSession ?? vi.fn()}
       onStartReview={input?.onStartReview ?? vi.fn()}
       onCreatePullRequest={input?.onCreatePullRequest ?? vi.fn()}
       onRefreshPullRequest={input?.onRefreshPullRequest ?? vi.fn()}
@@ -133,16 +160,13 @@ function renderTaskWorkspace(input?: {
       onArchiveTask={vi.fn()}
       onDeleteTask={input?.onDeleteTask ?? vi.fn()}
       onSetJiraLink={vi.fn()}
-      onSessionExit={vi.fn()}
-      onSessionInput={vi.fn()}
     />,
     { queryClient },
   );
 }
 
 describe("TaskWorkspace", () => {
-  it("shows running controls and task metadata in the inspector rail", () => {
-    const onStopSession = vi.fn();
+  it("shows task metadata in the inspector rail without legacy session controls", () => {
     const runningTask: TaskSummary = {
       ...task,
       status: "planned",
@@ -150,42 +174,33 @@ describe("TaskWorkspace", () => {
       lastSessionAgent: "codex",
     };
 
-    renderTaskWorkspace({ task: runningTask, onStopSession });
+    renderTaskWorkspace({ task: runningTask });
 
-    screen.getByRole("button", { name: /^stop session$/i }).click();
-
-    expect(onStopSession).toHaveBeenCalledWith("session-123");
+    expect(screen.queryByRole("button", { name: /^stop session$/i })).not.toBeInTheDocument();
     expect(screen.getByLabelText(/task inspector/i)).toBeInTheDocument();
     expect(screen.getByRole("region", { name: /agent workspace stage/i })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: /task status/i })).toBeInTheDocument();
     expect(screen.getByText("Worktree", { selector: '[data-slot="badge"]' })).toBeInTheDocument();
     expect(screen.getByText("feat/card-ellipsis")).toBeInTheDocument();
-    // The agent now identifies the session at the top of the facts rail.
-    expect(screen.getByText("codex")).toBeInTheDocument();
+    // The agent now identifies the ACP chat profile at the top of the facts rail.
+    expect(screen.getByText("Codex")).toBeInTheDocument();
   });
 
-  it("shows launcher controls for saved sessions when no session is active", () => {
-    const onResumeSession = vi.fn();
-    const onStartSession = vi.fn();
+  it("does not expose the legacy terminal launcher for saved sessions", () => {
     const resumableTask: TaskSummary = {
       ...task,
       activeSessionId: null,
       lastSessionId: "saved-session-123",
     };
 
-    renderTaskWorkspace({ task: resumableTask, onResumeSession, onStartSession });
+    renderTaskWorkspace({ task: resumableTask });
 
-    fireEvent.click(screen.getByLabelText("Show terminal"));
-    expect(screen.getByRole("region", { name: /agent workspace stage/i })).toHaveTextContent("No active session");
-    screen.getByRole("button", { name: /resume session/i }).click();
-    screen.getByRole("button", { name: /restart agent/i }).click();
-
-    expect(onResumeSession).toHaveBeenCalledWith(resumableTask);
-    expect(onStartSession).toHaveBeenCalledWith(resumableTask);
+    expect(screen.queryByLabelText("Show terminal")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /resume session/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /restart agent/i })).not.toBeInTheDocument();
   });
 
-  it("shows launcher controls for saved OpenCode sessions", () => {
-    const onResumeSession = vi.fn();
+  it("does not expose terminal resume for saved OpenCode sessions", () => {
     const resumableTask: TaskSummary = {
       ...task,
       agentProfileId: 4,
@@ -196,11 +211,10 @@ describe("TaskWorkspace", () => {
       lastSessionAgent: "opencode",
     };
 
-    renderTaskWorkspace({ task: resumableTask, onResumeSession });
+    renderTaskWorkspace({ task: resumableTask });
 
-    fireEvent.click(screen.getByLabelText("Show terminal"));
-    screen.getByRole("button", { name: /resume session/i }).click();
-    expect(onResumeSession).toHaveBeenCalledWith(resumableTask);
+    expect(screen.queryByLabelText("Show terminal")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /resume session/i })).not.toBeInTheDocument();
   });
 
   it("updates status from the compact metadata strip", async () => {
@@ -278,7 +292,7 @@ describe("TaskWorkspace", () => {
     screen.getByRole("button", { name: /review with claude review/i }).click();
     expect(onStartReview).toHaveBeenCalledWith(inReviewTask, 2);
 
-    expect(screen.getByRole("tab", { name: /create pr/i })).toBeDisabled();
+    expect(screen.getByRole("tab", { name: /create pr/i })).toBeEnabled();
   });
 
   it("opens the read-only reviewer terminal from the stage toggle", async () => {
@@ -354,16 +368,16 @@ describe("TaskWorkspace", () => {
     expect(onUpdateStatus).toHaveBeenCalledWith(readyTask, "done");
   });
 
-  it("triggers PR creation from the workflow step when an agent session is active", () => {
+  it("triggers PR creation from the workflow step when the task agent supports ACP", () => {
     const onCreatePullRequest = vi.fn();
-    const runningTask: TaskSummary = {
+    const acpTask: TaskSummary = {
       ...task,
       status: "review",
-      activeSessionId: "session-123",
+      activeSessionId: null,
     };
 
     renderTaskWorkspace({
-      task: runningTask,
+      task: acpTask,
       onCreatePullRequest,
       // A passed review makes "Create PR" the current step, surfacing its action.
       reviewLoop: {
@@ -376,13 +390,13 @@ describe("TaskWorkspace", () => {
       },
     });
 
-    expect(screen.getByText(/ask the running agent to open a pull request/i)).toBeInTheDocument();
+    expect(screen.getByText(/ask the chat agent to open a pull request/i)).toBeInTheDocument();
 
     const createPrButton = screen.getByRole("button", { name: /create pull request/i });
     expect(createPrButton).not.toBeDisabled();
     createPrButton.click();
 
-    expect(onCreatePullRequest).toHaveBeenCalledWith(runningTask);
+    expect(onCreatePullRequest).toHaveBeenCalledWith(acpTask);
   });
 
   it("creates a pull request from the GitHub panel when connected", () => {
@@ -496,12 +510,11 @@ describe("TaskWorkspace", () => {
     expect(screen.getByText("Feedback")).toBeInTheDocument();
   });
 
-  it("uses the live terminal stage for an active session", () => {
+  it("keeps legacy active sessions out of the task workspace stage", () => {
     renderTaskWorkspace({ task: { ...task, activeSessionId: "session-123" } });
 
-    const terminalPanel = screen.getByRole("region", { name: /agent workspace stage/i });
-
-    expect(terminalPanel).not.toHaveTextContent("No active session");
+    expect(screen.queryByLabelText("Show terminal")).not.toBeInTheDocument();
+    expect(screen.queryByText("No active session")).not.toBeInTheDocument();
     expect(screen.queryByRole("separator", { name: /resize terminal/i })).not.toBeInTheDocument();
   });
 

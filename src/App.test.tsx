@@ -23,12 +23,6 @@ vi.mock("./api", () => ({
     createWorkspace: vi.fn(),
     updateWorkspace: vi.fn(),
     deleteWorkspace: vi.fn(),
-    startSession: vi.fn(),
-    resumeSession: vi.fn(),
-    stopSession: vi.fn(),
-    resizeSession: vi.fn(),
-    sendSessionInput: vi.fn(),
-    sessionOutputSnapshot: vi.fn(),
     sendSystemNotification: vi.fn(),
     getAppSettings: vi.fn(),
     updateAppSettings: vi.fn(),
@@ -40,6 +34,13 @@ vi.mock("./api", () => ({
     listTaskReviewRuns: vi.fn(),
     listPrReviews: vi.fn().mockResolvedValue([]),
     listPrReviewRuns: vi.fn().mockResolvedValue([]),
+    listAcpProviders: vi.fn().mockResolvedValue([]),
+    getTaskChat: vi.fn().mockResolvedValue({ session: null, messages: [] }),
+    acpStartChat: vi.fn(),
+    acpSendPrompt: vi.fn(),
+    acpRespondPermission: vi.fn(),
+    acpStopChat: vi.fn(),
+    listChatCheckpoints: vi.fn().mockResolvedValue([]),
     githubStatus: vi.fn().mockResolvedValue({ installed: false, authenticated: false, account: null }),
     githubPullRequestStatus: vi.fn(),
     jiraListProjects: vi.fn().mockResolvedValue([]),
@@ -104,6 +105,44 @@ describe("App", () => {
         updatedAt: "2026-05-14T00:00:00.000Z",
       },
     ]);
+    mockedApi.listAcpProviders.mockResolvedValue([
+      {
+        id: "codex",
+        agentKind: "codex",
+        displayName: "Codex",
+        launch: { command: "codex-acp", args: [] },
+        capabilities: { sessionLoad: "unknown", permissions: "unknown", images: "unknown" },
+        maturity: "preview",
+      },
+      {
+        id: "claude",
+        agentKind: "claude",
+        displayName: "Claude Code",
+        launch: { command: "npx", args: ["-y", "@agentclientprotocol/claude-agent-acp"] },
+        capabilities: { sessionLoad: "expected", permissions: "expected", images: "unknown" },
+        maturity: "stable",
+      },
+      {
+        id: "opencode",
+        agentKind: "opencode",
+        displayName: "OpenCode",
+        launch: { command: "opencode", args: ["acp"] },
+        capabilities: { sessionLoad: "unknown", permissions: "unknown", images: "unknown" },
+        maturity: "preview",
+      },
+    ]);
+    mockedApi.acpStartChat.mockResolvedValue({
+      id: "chat-11",
+      taskId: 11,
+      agentProfileId: 2,
+      acpSessionId: null,
+      cwd: "/tmp/wt",
+      createdAt: "2026-05-14T00:00:00.000Z",
+      updatedAt: "2026-05-14T00:00:00.000Z",
+    });
+    mockedApi.acpSendPrompt.mockResolvedValue(undefined);
+    mockedApi.getTaskChat.mockResolvedValue({ session: null, messages: [] });
+    mockedApi.listChatCheckpoints.mockResolvedValue([]);
     mockedApi.listTasks.mockResolvedValue([]);
     mockedApi.listWorkspaces.mockResolvedValue([]);
     mockedApi.getAppSettings.mockResolvedValue({
@@ -117,7 +156,6 @@ describe("App", () => {
       jiraFilterUnresolved: true,
       jiraFilterCurrentSprint: false,
       jiraFilterStatuses: [],
-      persistentSessions: false,
       theme: "system",
       density: "comfortable",
       updatedAt: "2026-05-14T00:00:00.000Z",

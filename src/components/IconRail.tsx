@@ -9,7 +9,7 @@ interface IconRailProps {
   active: RailView;
   needsCount: number;
   onNavigate: (view: RailView) => void;
-  /** Open the New Task composer from anywhere — including an open task's terminal. */
+  /** Open the New Task composer from anywhere, including an open task workspace. */
   onCreateTask: () => void;
   /** A task needs a project; disable the create action until one is added. */
   canCreateTask: boolean;

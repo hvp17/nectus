@@ -1,5 +1,3 @@
-import type { SessionIdleEvent, SessionNeedsInputEvent, TaskSummary } from "./types";
-
 export type TaskAttentionKind = "idle" | "needs_input";
 
 export interface TaskAttention {
@@ -15,31 +13,9 @@ export interface TaskAttention {
 
 export function upsertTaskAttention(
   current: TaskAttention[],
-  task: TaskSummary,
-  event: SessionIdleEvent | SessionNeedsInputEvent,
-  updatedAt = new Date().toISOString(),
+  attention: TaskAttention,
 ): TaskAttention[] {
-  const next: TaskAttention =
-    "reason" in event
-      ? {
-          taskId: task.id,
-          kind: "needs_input",
-          title: task.title,
-          agentName: task.agentName,
-          reason: event.reason,
-          prompt: event.prompt,
-          updatedAt,
-        }
-      : {
-          taskId: task.id,
-          kind: "idle",
-          title: task.title,
-          agentName: task.agentName,
-          message: event.message,
-          updatedAt,
-        };
-
-  return [...current.filter((attention) => attention.taskId !== task.id), next];
+  return [...current.filter((item) => item.taskId !== attention.taskId), attention];
 }
 
 export function clearTaskAttention(current: TaskAttention[], taskId: number): TaskAttention[] {

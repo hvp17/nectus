@@ -1,5 +1,4 @@
-import { formatNotificationBody } from "./notificationText";
-import type { AgentKind, SessionIdleEvent, SessionNeedsInputEvent, TaskSummary } from "./types";
+import type { AgentKind } from "./types";
 
 // An attention notification tied to a specific task. Rendered as a sonner toast
 // whose action navigates to the task workspace (see useTaskNotificationToast).
@@ -10,54 +9,4 @@ export interface TaskToast {
   body: string;
   kind: "success" | "info";
   agentKind: AgentKind;
-}
-
-export interface SessionNotificationContent {
-  title: string;
-  body: string;
-}
-
-function agentName(task: TaskSummary | undefined) {
-  return task?.agentName ?? "Codex";
-}
-
-function agentKind(task: TaskSummary): AgentKind {
-  return task.agentKind ?? "custom";
-}
-
-/**
- * The title + body for a session attention event. The single source of truth for
- * this wording, shared by the in-app toast, the OS notification, and the no-task
- * fallback message (see useEventBridge) so the three renderings never drift.
- * `task` may be undefined when the event arrives before its task is cached.
- */
-export function sessionIdleContent(task: TaskSummary | undefined, payload: SessionIdleEvent): SessionNotificationContent {
-  const detail = payload.message ? ` ${payload.message}` : "";
-  return { title: `${agentName(task)} finished`, body: `${task?.title ?? "task is waiting"}${detail}` };
-}
-
-export function sessionNeedsInputContent(
-  task: TaskSummary | undefined,
-  payload: SessionNeedsInputEvent,
-): SessionNotificationContent {
-  const reason = payload.reason ? ` (${payload.reason})` : "";
-  const prompt = payload.prompt ? `: ${payload.prompt}` : "";
-  return { title: `${agentName(task)} needs input`, body: `${task?.title ?? "a task"}${reason}${prompt}` };
-}
-
-export function taskToastFromContent(
-  task: TaskSummary,
-  content: SessionNotificationContent,
-  kind: TaskToast["kind"],
-): TaskToast {
-  const { title, body } = content;
-  return { taskId: task.id, title, body: formatNotificationBody(body), kind, agentKind: agentKind(task) };
-}
-
-export function taskFinishedToast(task: TaskSummary, payload: SessionIdleEvent): TaskToast {
-  return taskToastFromContent(task, sessionIdleContent(task, payload), "success");
-}
-
-export function taskNeedsInputToast(task: TaskSummary, payload: SessionNeedsInputEvent): TaskToast {
-  return taskToastFromContent(task, sessionNeedsInputContent(task, payload), "info");
 }

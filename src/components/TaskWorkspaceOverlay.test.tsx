@@ -5,7 +5,7 @@ import { api } from "../api";
 import { TaskWorkspaceOverlay } from "./TaskWorkspaceOverlay";
 import type { AgentProfile, ReviewLoop, TaskSummary } from "../types";
 
-// The overlay's hooks (useGithub, useTaskReviewLoop, useSessionControls, …) read
+// The overlay's hooks (useGithub, useTaskReviewLoop, ACP chat, …) read
 // through `api`; mock the whole surface so the component mounts headlessly.
 vi.mock("../api", () => ({
   api: {
@@ -18,7 +18,13 @@ vi.mock("../api", () => ({
     jiraRestStatus: vi.fn(),
     startPairLoop: vi.fn(),
     runPairReview: vi.fn(),
-    submitSessionInput: vi.fn(),
+    listAcpProviders: vi.fn(),
+    getTaskChat: vi.fn(),
+    acpStartChat: vi.fn(),
+    acpSendPrompt: vi.fn(),
+    acpRespondPermission: vi.fn(),
+    acpStopChat: vi.fn(),
+    listChatCheckpoints: vi.fn(),
   },
 }));
 vi.mock("../lib/openExternal", () => ({ openExternal: vi.fn() }));
@@ -77,7 +83,9 @@ beforeEach(() => {
   mockedApi.jiraRestStatus.mockResolvedValue({ connected: false, site: null, email: null, error: null });
   mockedApi.startPairLoop.mockResolvedValue(runningLoop);
   mockedApi.runPairReview.mockResolvedValue(runningLoop);
-  mockedApi.submitSessionInput.mockResolvedValue(undefined);
+  mockedApi.listAcpProviders.mockResolvedValue([]);
+  mockedApi.getTaskChat.mockResolvedValue({ session: null, messages: [] });
+  mockedApi.listChatCheckpoints.mockResolvedValue([]);
 });
 
 describe("TaskWorkspaceOverlay review action", () => {

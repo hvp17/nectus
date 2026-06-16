@@ -196,7 +196,6 @@ fn seeds_and_updates_global_app_settings() {
             jira_filter_current_sprint: false,
             jira_filter_statuses: vec![],
             jira_filter_epic: None,
-            persistent_sessions: false,
             theme: ThemeMode::Dark,
             density: DensityMode::Compact,
         })
@@ -269,7 +268,6 @@ fn persists_jira_link_and_board_settings() {
             jira_filter_current_sprint: true,
             jira_filter_statuses: vec![],
             jira_filter_epic: None,
-            persistent_sessions: false,
             theme: base.theme,
             density: base.density,
         })
@@ -306,7 +304,6 @@ fn persists_jira_filter_statuses_and_rest_account() {
         jira_filter_current_sprint: false,
         jira_filter_statuses: vec!["To Do".into(), "Done".into()],
         jira_filter_epic: Some("ENG-1".into()),
-        persistent_sessions: false,
         theme: base.theme,
         density: base.density,
     })
@@ -359,7 +356,6 @@ fn updated_worktree_root_pattern_applies_to_existing_and_new_repos() {
         jira_filter_current_sprint: false,
         jira_filter_statuses: vec![],
         jira_filter_epic: None,
-        persistent_sessions: false,
         theme: ThemeMode::System,
         density: DensityMode::Comfortable,
     })
@@ -875,7 +871,7 @@ fn list_tasks_rejects_unknown_status() {
 }
 
 #[test]
-fn starting_and_stopping_session_preserves_last_session_snapshot() {
+fn clears_legacy_active_session_markers_on_boot() {
     let db = Database::open_in_memory().unwrap();
     let repo_dir = tempdir().unwrap();
     std::process::Command::new("git")
@@ -897,37 +893,17 @@ fn starting_and_stopping_session_preserves_last_session_snapshot() {
         )
         .unwrap();
 
-    db.start_session_record(
-        task.id,
-        "session-123",
-        "codex",
-        "/tmp/worktree",
-        None,
-        "2026-06-11T00:00:00+00:00",
-    )
-    .unwrap();
-    let running = db.task_by_id(task.id).unwrap().unwrap();
-    assert_eq!(running.active_session_id.as_deref(), Some("session-123"));
-    assert_eq!(running.last_session_id.as_deref(), Some("session-123"));
-    assert_eq!(running.last_session_agent.as_deref(), Some("codex"));
-    assert_eq!(running.last_session_cwd.as_deref(), Some("/tmp/worktree"));
-    assert_eq!(running.last_session_label, None);
-
-    db.set_active_session(task.id, None).unwrap();
-    let stopped = db.task_by_id(task.id).unwrap().unwrap();
-    assert_eq!(stopped.active_session_id, None);
-    assert_eq!(stopped.last_session_id.as_deref(), Some("session-123"));
-    assert_eq!(stopped.last_session_agent.as_deref(), Some("codex"));
-    assert_eq!(stopped.last_session_cwd.as_deref(), Some("/tmp/worktree"));
-
-    db.set_last_session(task.id, "session-456", Some("Implement resume"))
+    db.conn
+        .execute(
+            "UPDATE tasks SET active_session_id = 'session-123', attention = 'needs_input' WHERE id = ?1",
+            params![task.id],
+        )
         .unwrap();
-    let refreshed = db.task_by_id(task.id).unwrap().unwrap();
-    assert_eq!(refreshed.last_session_id.as_deref(), Some("session-456"));
-    assert_eq!(
-        refreshed.last_session_label.as_deref(),
-        Some("Implement resume")
-    );
+    db.clear_legacy_active_sessions().unwrap();
+
+    let cleared = db.task_by_id(task.id).unwrap().unwrap();
+    assert_eq!(cleared.active_session_id, None);
+    assert_eq!(cleared.attention, None);
 }
 
 #[test]
@@ -959,7 +935,7 @@ fn deletes_task_without_active_session() {
 }
 
 #[test]
-fn delete_task_rejects_active_session() {
+fn delete_task_ignores_stale_legacy_active_session() {
     let db = Database::open_in_memory().unwrap();
     let repo_dir = tempdir().unwrap();
     std::process::Command::new("git")
@@ -973,20 +949,15 @@ fn delete_task_rejects_active_session() {
     let task = db
         .create_task_record(repo.id, "Running task".to_string(), None, None, false, None)
         .unwrap();
-    db.start_session_record(
-        task.id,
-        "session-123",
-        "codex",
-        repo_dir.path().to_str().unwrap(),
-        None,
-        "2026-06-11T00:00:00+00:00",
-    )
-    .unwrap();
+    db.conn
+        .execute(
+            "UPDATE tasks SET active_session_id = 'session-123' WHERE id = ?1",
+            params![task.id],
+        )
+        .unwrap();
 
-    let error = db.delete_task(task.id, false).unwrap_err();
-
-    assert!(error.contains("Stop the running session"), "{error}");
-    assert!(db.task_by_id(task.id).unwrap().is_some());
+    db.delete_task(task.id, false).unwrap();
+    assert!(db.task_by_id(task.id).unwrap().is_none());
 }
 
 /// Add a project whose `origin` remote is a GitHub URL (not fetched — only its
@@ -1647,7 +1618,7 @@ fn rejects_a_duplicate_workspace_name() {
 }
 
 #[test]
-fn task_attention_persists_and_clears() {
+fn clear_legacy_active_sessions_clears_attention() {
     let db = Database::open_in_memory().unwrap();
     let (_repo_dir, repo) = add_repo_with_remote(&db);
     let task = db
@@ -1655,14 +1626,19 @@ fn task_attention_persists_and_clears() {
         .unwrap();
     assert_eq!(task.attention, None);
 
-    // The watcher persists "needs you" so it survives a reload.
-    db.set_task_attention(task.id, Some("needs_input")).unwrap();
+    db.conn
+        .execute(
+            "UPDATE tasks SET active_session_id = 'legacy-session', attention = 'needs_input' WHERE id = ?1",
+            params![task.id],
+        )
+        .unwrap();
     let loaded = db.task_by_id(task.id).unwrap().unwrap();
+    assert_eq!(loaded.active_session_id.as_deref(), Some("legacy-session"));
     assert_eq!(loaded.attention.as_deref(), Some("needs_input"));
 
-    // A session ending (set_active_session(None)) clears attention in one write.
-    db.set_active_session(task.id, None).unwrap();
+    db.clear_legacy_active_sessions().unwrap();
     let cleared = db.task_by_id(task.id).unwrap().unwrap();
+    assert_eq!(cleared.active_session_id, None);
     assert_eq!(cleared.attention, None);
 }
 
@@ -1772,16 +1748,21 @@ fn archives_and_restores_a_task() {
 }
 
 #[test]
-fn refuses_to_archive_a_task_with_a_running_session() {
+fn archives_a_task_with_a_stale_legacy_active_session() {
     let db = Database::open_in_memory().unwrap();
     let (_dir, repo) = add_repo_with_remote(&db);
     let task = db
         .create_task_record(repo.id, "Live".to_string(), None, None, false, None)
         .unwrap();
-    db.set_active_session(task.id, Some("sess-1")).unwrap();
+    db.conn
+        .execute(
+            "UPDATE tasks SET active_session_id = 'sess-1' WHERE id = ?1",
+            params![task.id],
+        )
+        .unwrap();
 
-    let error = db.set_task_archived(task.id, true).unwrap_err();
-    assert!(error.contains("running session"), "{error}");
+    let archived = db.set_task_archived(task.id, true).unwrap();
+    assert!(archived.archived);
 }
 
 #[test]

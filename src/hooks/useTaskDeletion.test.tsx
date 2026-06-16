@@ -64,13 +64,13 @@ describe("useTaskDeletion", () => {
     vi.clearAllMocks();
   });
 
-  it("refuses to delete a task with a running session", () => {
+  it("does not block deletion for stale legacy session ids", () => {
     const result = renderRequestDelete();
 
     result.current({ ...baseTask, id: 11, activeSessionId: "session-11" });
 
-    expect(mockedToast.error).toHaveBeenCalledWith("Delete blocked", expect.anything());
-    expect(mockedApi.deleteTask).not.toHaveBeenCalled();
+    expect(mockedToast.error).not.toHaveBeenCalledWith("Delete blocked", expect.anything());
+    expect(mockedApi.deleteTask).toHaveBeenCalledWith(11, false);
   });
 
   it("force-discards a dirty worktree-backed task", () => {

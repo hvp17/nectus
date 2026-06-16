@@ -1,4 +1,3 @@
-use super::agents::fallback_agent_candidates;
 use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -77,6 +76,43 @@ fn is_executable_file(path: &Path) -> bool {
 #[cfg(not(unix))]
 fn is_executable_file(path: &Path) -> bool {
     path.is_file()
+}
+
+fn fallback_agent_candidates(command: &str, home: Option<&Path>) -> Vec<PathBuf> {
+    let mut candidates = crate::process_util::third_party_bin_dirs(home)
+        .into_iter()
+        .map(|dir| dir.join(command))
+        .collect::<Vec<_>>();
+    match command {
+        "codex" => {
+            candidates.push(PathBuf::from(
+                "/Applications/Codex.app/Contents/Resources/codex",
+            ));
+            if let Some(home) = home {
+                candidates.push(
+                    home.join("Applications")
+                        .join("Codex.app")
+                        .join("Contents")
+                        .join("Resources")
+                        .join("codex"),
+                );
+            }
+        }
+        "agy" => {
+            if let Some(home) = home {
+                candidates.push(home.join(".antigravity").join("bin").join("agy"));
+            }
+        }
+        "opencode" => {
+            if let Some(home) = home {
+                candidates.push(home.join(".opencode").join("bin").join("opencode"));
+                candidates.push(home.join("bin").join("opencode"));
+            }
+        }
+        "claude" => {}
+        _ => {}
+    }
+    candidates
 }
 
 #[cfg(test)]
