@@ -153,6 +153,108 @@ pub struct ChatMessage {
     pub completed_at: Option<String>,
 }
 
+/// Runtime prompt capabilities advertised by the initialized ACP agent.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatPromptCapabilities {
+    pub image: bool,
+    pub audio: bool,
+    pub embedded_context: bool,
+}
+
+/// Runtime MCP transport capabilities advertised by the initialized ACP agent.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatMcpCapabilities {
+    pub http: bool,
+    pub sse: bool,
+}
+
+/// Runtime capabilities from the ACP `initialize` response. These are the
+/// capability source of truth after a process starts; provider descriptors remain
+/// only a pre-launch hint.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatRuntimeCapabilities {
+    pub load_session: bool,
+    pub prompt: ChatPromptCapabilities,
+    pub mcp: ChatMcpCapabilities,
+}
+
+/// Implementation metadata from ACP initialize.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatImplementation {
+    pub name: String,
+    pub title: Option<String>,
+    pub version: String,
+}
+
+/// Authentication methods advertised by the agent. Nectus does not implement an
+/// auth UX yet, but recording them makes diagnostics and future UI work concrete.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatAuthMethod {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+}
+
+/// One slash command advertised by ACP session metadata.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatAvailableCommand {
+    pub name: String,
+    pub description: String,
+    pub input_hint: Option<String>,
+}
+
+/// One mode the ACP session can operate in.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatSessionMode {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+}
+
+/// One selectable value for an ACP session config option.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatConfigSelectOption {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+}
+
+/// One ACP session config option. v0.14's stable surface is select-only; future
+/// unstable option kinds can extend this shape without changing session state.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatConfigOption {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub current_value: Option<String>,
+    pub options: Vec<ChatConfigSelectOption>,
+}
+
+/// Session-level ACP metadata gathered from initialize, session/new|load, and
+/// later `session/update` metadata notifications.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatSessionRuntime {
+    pub capabilities: ChatRuntimeCapabilities,
+    pub agent_info: Option<ChatImplementation>,
+    pub auth_methods: Vec<ChatAuthMethod>,
+    pub available_commands: Vec<ChatAvailableCommand>,
+    pub modes: Vec<ChatSessionMode>,
+    pub current_mode_id: Option<String>,
+    pub config_options: Vec<ChatConfigOption>,
+    pub title: Option<String>,
+    pub updated_at: Option<String>,
+}
+
 /// A persisted chat session for a task. `acp_session_id` is the agent's own
 /// session id, kept for `session/load` resume where the agent supports it.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -163,6 +265,7 @@ pub struct ChatSession {
     pub agent_profile_id: Option<i64>,
     pub acp_session_id: Option<String>,
     pub cwd: String,
+    pub runtime: Option<ChatSessionRuntime>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -188,6 +291,16 @@ pub struct ChatMessageEvent {
     pub agent_profile_id: Option<i64>,
     pub message: ChatMessage,
     pub done: bool,
+}
+
+/// Pushed whenever session-level ACP metadata changes.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatSessionRuntimeEvent {
+    pub session_id: String,
+    pub task_id: i64,
+    pub agent_profile_id: Option<i64>,
+    pub runtime: ChatSessionRuntime,
 }
 
 /// Persisted allow-once/always decision for a permission prompt title.

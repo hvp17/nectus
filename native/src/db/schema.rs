@@ -203,6 +203,7 @@ impl Database {
                   agent_profile_id INTEGER REFERENCES agent_profiles(id),
                   acp_session_id TEXT,
                   cwd TEXT NOT NULL,
+                  runtime_json TEXT,
                   created_at TEXT NOT NULL,
                   updated_at TEXT NOT NULL
                 );
@@ -355,6 +356,9 @@ impl Database {
         // default (and from their per-worktree `git status` cost); the rows, the
         // worktrees, and the branches all stay until the task is deleted.
         self.add_column_if_missing("tasks", "archived", "INTEGER NOT NULL DEFAULT 0")?;
+        // ACP initialize/session metadata. Stored as JSON because the protocol
+        // metadata shape can grow independently of query needs.
+        self.add_column_if_missing("chat_sessions", "runtime_json", "TEXT")?;
         // Legacy PTY-session resume metadata. Kept for existing databases but no
         // longer written by the ACP-only runtime.
         self.add_column_if_missing("tasks", "last_session_started_at", "TEXT")?;

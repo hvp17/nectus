@@ -36,11 +36,16 @@ git, SQLite, ACP child processes, and reviewer CLI work live in the Rust backend
 - Send the task prompt into a new ACP chat automatically.
 - Resume ACP chats when the provider supports `session/load` and a saved
   `acp_session_id` is available.
+- Gate Chat image/resume controls from initialized ACP runtime capabilities, and
+  expose provider slash commands plus mode/config controls when advertised.
+- Send ACP prompt context as protocol-native resource links / embedded task
+  context when the initialized agent supports those blocks.
 - Track task status across `Planned`, `In progress`, `Review`, and `Done`.
 - Drag tasks between board columns to update status.
 - Show saved review status on task cards.
 - Surface running, dirty, finished, review, and needs-input counts.
-- Track ACP chat activity and permission requests through `session_chat` events.
+- Track ACP chat activity, permission requests, usage, and session metadata
+  through ACP chat events.
 - Send macOS notifications for ACP attention events.
 - Run a single AI review with another agent profile and show blockers or
   implementation feedback in the review UI.
@@ -230,7 +235,8 @@ The main tracking and debugging guide is
 
 - SQLite tables and task/chat fields.
 - Tauri commands and emitted frontend events.
-- ACP chat tracking, legacy task-session compatibility fields, and current limitations.
+- ACP chat tracking, runtime metadata, legacy task-session compatibility fields,
+  and current limitations.
 - AI review tracking.
 - macOS notification troubleshooting.
 - Common debugging commands and failure modes.

@@ -10,9 +10,9 @@
 use super::{now, Database};
 use crate::models::{
     ChatCheckpoint, ChatMessage, ChatPart, ChatPermissionPolicy, ChatPermissionPolicyKind,
-    ChatRole, ChatSession, ChatTranscript, CHAT_PART_SCHEMA_VERSION,
+    ChatRole, ChatSession, ChatSessionRuntime, ChatTranscript, CHAT_PART_SCHEMA_VERSION,
 };
-use rusqlite::{params, OptionalExtension};
+use rusqlite::{params, types::Type, OptionalExtension};
 use uuid::Uuid;
 
 impl Database {
@@ -29,8 +29,8 @@ impl Database {
         self.conn
             .execute(
                 "INSERT INTO chat_sessions
-                   (id, task_id, agent_profile_id, acp_session_id, cwd, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?5)",
+                   (id, task_id, agent_profile_id, acp_session_id, cwd, runtime_json, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, NULL, ?4, NULL, ?5, ?5)",
                 params![id, task_id, agent_profile_id, cwd, timestamp],
             )
             .map_err(|error| format!("Failed to create chat session: {error}"))?;
@@ -40,6 +40,7 @@ impl Database {
             agent_profile_id,
             acp_session_id: None,
             cwd: cwd.to_string(),
+            runtime: None,
             created_at: timestamp.clone(),
             updated_at: timestamp,
         })
@@ -56,11 +57,29 @@ impl Database {
         Ok(())
     }
 
+    /// Persist the latest ACP initialize/session metadata for replay and UI
+    /// capability gating.
+    pub fn set_chat_session_runtime(
+        &self,
+        id: &str,
+        runtime: &ChatSessionRuntime,
+    ) -> Result<(), String> {
+        let runtime_json = serde_json::to_string(runtime)
+            .map_err(|error| format!("Failed to encode chat runtime: {error}"))?;
+        self.conn
+            .execute(
+                "UPDATE chat_sessions SET runtime_json = ?1, updated_at = ?2 WHERE id = ?3",
+                params![runtime_json, now(), id],
+            )
+            .map_err(|error| format!("Failed to update chat session runtime: {error}"))?;
+        Ok(())
+    }
+
     /// The most recent chat session for a task (the resume candidate).
     pub fn latest_chat_session(&self, task_id: i64) -> Result<Option<ChatSession>, String> {
         self.conn
             .query_row(
-                "SELECT id, task_id, agent_profile_id, acp_session_id, cwd, created_at, updated_at
+                "SELECT id, task_id, agent_profile_id, acp_session_id, cwd, runtime_json, created_at, updated_at
                  FROM chat_sessions WHERE task_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 1",
                 params![task_id],
                 chat_session_from_row,
@@ -77,7 +96,7 @@ impl Database {
     ) -> Result<Option<ChatSession>, String> {
         self.conn
             .query_row(
-                "SELECT id, task_id, agent_profile_id, acp_session_id, cwd, created_at, updated_at
+                "SELECT id, task_id, agent_profile_id, acp_session_id, cwd, runtime_json, created_at, updated_at
                  FROM chat_sessions
                  WHERE task_id = ?1 AND agent_profile_id = ?2
                  ORDER BY created_at DESC, id DESC LIMIT 1",
@@ -348,14 +367,23 @@ impl Database {
 }
 
 fn chat_session_from_row(row: &rusqlite::Row) -> rusqlite::Result<ChatSession> {
+    let runtime_json: Option<String> = row.get(5)?;
+    let runtime = runtime_json
+        .as_deref()
+        .map(serde_json::from_str::<ChatSessionRuntime>)
+        .transpose()
+        .map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(5, Type::Text, Box::new(error))
+        })?;
     Ok(ChatSession {
         id: row.get(0)?,
         task_id: row.get(1)?,
         agent_profile_id: row.get(2)?,
         acp_session_id: row.get(3)?,
         cwd: row.get(4)?,
-        created_at: row.get(5)?,
-        updated_at: row.get(6)?,
+        runtime,
+        created_at: row.get(6)?,
+        updated_at: row.get(7)?,
     })
 }
 
@@ -521,6 +549,23 @@ mod tests {
                 .acp_session_id
                 .as_deref(),
             Some("acp-xyz")
+        );
+    }
+
+    #[test]
+    fn chat_session_runtime_round_trips() {
+        let (db, _dir, task_id) = db_with_task();
+        let session = db.create_chat_session(task_id, None, "/work").unwrap();
+        let runtime = ChatSessionRuntime {
+            title: Some("Planning".into()),
+            ..ChatSessionRuntime::default()
+        };
+
+        db.set_chat_session_runtime(&session.id, &runtime).unwrap();
+
+        assert_eq!(
+            db.latest_chat_session(task_id).unwrap().unwrap().runtime,
+            Some(runtime)
         );
     }
 

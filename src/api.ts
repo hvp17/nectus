@@ -441,6 +441,15 @@ export const api = {
   ): Promise<void> {
     return invoke("acp_respond_permission", { sessionId, requestId, optionId });
   },
+  async acpCancelPrompt(sessionId: string): Promise<void> {
+    return invoke("acp_cancel_prompt", { sessionId });
+  },
+  async acpSetSessionMode(sessionId: string, modeId: string): Promise<void> {
+    return invoke("acp_set_session_mode", { sessionId, modeId });
+  },
+  async acpSetConfigOption(sessionId: string, configId: string, valueId: string): Promise<void> {
+    return invoke("acp_set_config_option", { sessionId, configId, valueId });
+  },
   async acpStopChat(sessionId: string): Promise<void> {
     return invoke("acp_stop_chat", { sessionId });
   },

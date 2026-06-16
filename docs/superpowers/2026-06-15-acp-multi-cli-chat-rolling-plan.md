@@ -2,15 +2,15 @@
 
 > **Status:** **Shipped on `main` (2026-06-15).** Phases 0–6 of the rolling plan
 > are in the app. Chat is the default stage for ACP-capable agents (Claude, Codex,
-> OpenCode); the PTY terminal remains for custom agents and as an optional
-> "Show terminal" fallback. Per-provider JSONL/hook/SSE **watchers are fully
-> removed** — `provider.rs` no longer spawns them and the watcher source in
-> `codex.rs` / `claude.rs` / `opencode.rs` is trimmed to resume-metadata probes
-> (Codex/OpenCode) and Claude PTY hook settings only. Left-rail / Mission Control
-> live state for ACP agents comes from `session_chat` + `chat_session_exited`.
-> Capability-gated `session/load` resume, per-profile transcripts, permission
-> policies, git checkpoints, usage %, image attach, rAF-batched `session_chat`
-> streaming, a11y (`aria-live`), and part-coverage telemetry are shipped.
+> OpenCode, Antigravity preview). There is no embedded task PTY / Terminal tab in
+> the shipped task workspace; reviewer output is the only read-only terminal
+> surface. Per-provider JSONL/hook/SSE **watchers are fully removed**. Left-rail /
+> Mission Control live state for ACP agents comes from `session_chat`,
+> `session_chat_runtime`, and `chat_session_exited`. Runtime-capability-gated
+> `session/load` resume, per-profile transcripts, permission policies, git
+> checkpoints, usage %, image attach, slash commands, mode/config controls,
+> graceful `session/cancel`, rAF-batched `session_chat` streaming, a11y
+> (`aria-live`), and part-coverage telemetry are shipped.
 > **Still open:** transcript virtualization, boot-time ACP reattach, multi-session
 > management UI, explicit feature flag (chat is default-on for ACP agents).
 > **Date:** 2026-06-15
@@ -71,7 +71,9 @@ ACP gives a uniform event stream regardless of which agent produced it, so the r
 1. **The normalized part model is the contract.** Everything upstream (ACP dialects) and downstream (renderers) is replaceable; the part schema is not. Version it from day one.
 2. **One agent end-to-end before fan-out.** Prove the whole pipe with Claude Code before generalizing.
 3. **Capability-gate, never assume parity.** Agents differ in what they emit and support; the UI degrades gracefully.
-4. **Additive.** The PTY terminal stays as a fallback tab throughout — no migration cliff.
+4. **Additive (historical planning constraint).** The shipped app no longer has
+   an embedded task PTY / Terminal tab; live task-agent UI is ACP Chat plus Diff
+   and Review.
 5. **Ship each phase behind a flag.** No long-lived branch.
 
 ### Phase 0 — Spike & de-risk *(the most important phase)*
@@ -85,7 +87,7 @@ ACP gives a uniform event stream regardless of which agent produced it, so the r
 ### Phase 1 — Vertical slice: one agent, real UI
 
 - **Goal:** a genuinely usable single-agent chat in the real app, flag-gated.
-- **Work:** ACP client as a proper Rust session type (sibling to PTY sessions, not a replacement). ACP `session/update` → normalized parts → one new Tauri event channel. Frontend: a `ChatPane` mounted as a new stage tab (`Chat | Terminal | Diff | …`), rendering MessageRow / ToolCard / ReasoningBlock on shadcn + Streamdown. Parts persisted to SQLite (JSON per turn) → transcript replay. Throttled streaming (rAF flush).
+- **Work:** ACP client as a proper Rust session type. ACP `session/update` → normalized parts → Tauri event channels. Frontend: a `ChatPane` mounted in the task workspace (`Chat | Diff | Review`), rendering MessageRow / ToolCard / ReasoningBlock on shadcn + Streamdown. Parts persisted to SQLite (JSON per turn) → transcript replay. Throttled streaming (rAF flush).
 - **Exit / demo:** open a task, pick Claude Code, chat, watch tool cards stream, reload and see the transcript replay.
 - **Re-plan trigger:** real streaming perf and the persistence shape are now known — adjust the wire format (deltas vs snapshots) if needed.
 - **Defer:** other agents, diff integration, checkpoints, approvals UI polish.
@@ -120,7 +122,7 @@ ACP gives a uniform event stream regardless of which agent produced it, so the r
 ### Phase 6 — Polish, parity, decommission
 
 - **Goal:** production readiness and removing what ACP replaced.
-- **Work:** keep terminal as a fallback tab; settings (per-agent config, permission policies); perf pass (virtualized transcript if needed); a11y; telemetry on per-agent event coverage. **Decision:** deprecate the old per-provider JSONL/hook/event watchers once ACP covers their agents — the payoff (N decoders → 1) lands here.
+- **Work:** settings (per-agent config, permission policies); perf pass (virtualized transcript if needed); a11y; telemetry on per-agent event coverage. **Decision:** deprecate the old per-provider JSONL/hook/event watchers once ACP covers their agents — the payoff (N decoders → 1) lands here.
 - **Exit:** flag default-on; old decoders retired or scoped to non-ACP agents only.
 
 ---

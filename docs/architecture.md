@@ -86,15 +86,24 @@ Starting or sending to an ACP chat shows every layer in motion:
    resolve the task/profile and delegate to `native/src/sessions/acp_manager.rs`.
 4. **backend work** — the ACP manager launches the provider descriptor from
    `sessions/acp.rs` over stdio, using the login-shell env and augmented PATH so
-   GUI-launched agent CLIs can find provider keys and nested executables.
+   GUI-launched agent CLIs can find provider keys and nested executables. It
+   sends ACP v1 `initialize` with Nectus client info, then `session/new` or
+   runtime-capability-gated `session/load`; cross-repo sibling worktrees ride as
+   `additionalDirectories`. Prompt sends include text, capability-gated images,
+   file resource links for the active worktree roots, and capability-gated
+   embedded task context.
 5. **events up** — normalized ACP message parts stream through `session_chat`;
-   token-window usage streams through `session_chat_usage`; permission requests
-   are represented as chat parts and answered with `acp_respond_permission`.
+   token-window usage streams through `session_chat_usage`; initialized/session
+   metadata streams through `session_chat_runtime`; permission requests are
+   represented as chat parts and answered with `acp_respond_permission`.
 6. **bridge** — `useEventBridge` routes settled chat messages into the Query cache
-   and live activity / permission attention into the Zustand store.
-7. **persist** — chat sessions, settled messages, permission policies, and git
-   checkpoints are written to SQLite; legacy `tasks.active_session_id` markers are
-   only cleared at startup for older databases.
+   and live activity / permission attention into the Zustand store. ChatPane's
+   Stop button sends `acp_cancel_prompt` (`session/cancel`) while `acp_stop_chat`
+   remains the hard stop.
+7. **persist** — chat sessions, runtime metadata, settled messages, permission
+   policies, and git checkpoints are written to SQLite; legacy
+   `tasks.active_session_id` markers are only cleared at startup for older
+   databases.
 
 The reverse contract — events the backend can emit — is the same for review loops
 (`review_loop_updated`, `review_output`) and PR reviews (`pr_review_updated`).

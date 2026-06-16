@@ -246,7 +246,8 @@ Current behavior:
   submit prompts through ACP chat. If the selected task profile has no ACP
   provider, the action declines with guidance to choose an ACP-capable profile.
 - Direct-edit tasks launch ACP in the project path. Worktree-backed tasks launch
-  ACP in the worktree path.
+  ACP in the worktree path. Cross-repo tasks launch in the primary worktree and
+  send sibling worktree paths to ACP as `additionalDirectories`.
 - Live activity in Mission Control, the project sidebar, and task cards comes from
   `session_chat` text/tool parts via `liveLines` and `chatWorkingTaskIds`, not
   from terminal output, Codex JSONL, Claude hooks, or OpenCode local-server
@@ -261,8 +262,19 @@ Current behavior:
   last so per-profile keys and PATH override the defaults.
 - The same descriptor is exported through `list_acp_providers`, including stable
   provider ids, launch argv, and coarse capability states (`expected`, `unknown`,
-  or `unsupported`) for resume, permission, and image support. Runtime ACP
-  `initialize` remains authoritative for `session/load`.
+  or `unsupported`) for resume, permission, and image support. Once a process
+  starts, ACP `initialize` is authoritative: the returned runtime capabilities are
+  persisted on the chat session and gate image attach and the Resumable badge.
+- ACP `initialize` includes Nectus client info and advertises no client
+  filesystem/terminal capabilities. Optional MCP servers can be provided per
+  agent profile through the `NECTUS_ACP_MCP_SERVERS_JSON` env value, a JSON array
+  matching ACP `McpServer[]`; those servers are passed to `session/new` and
+  `session/load`. Unsupported filesystem/terminal client requests are left to the
+  ACP connection's unsupported-method diagnostics instead of granting host access.
+- Prompt turns include text, image blocks only when runtime capabilities allow
+  them, baseline ACP resource links for the primary worktree and sibling
+  worktree directories, and an embedded Markdown task-context resource when the
+  agent advertises `embeddedContext`.
 - The Chat tab uses that descriptor export to gate launch and offers a compact
   chat-agent selector populated from the task's agent profiles. Transcript reads
   (`get_task_chat`) and live `session_chat` cache updates are scoped to the
@@ -277,7 +289,8 @@ Current behavior:
   Structured parts render as: markdown text (`Message`), reasoning blocks, tool
   cards, file-edit chips, permission confirmations, and plan collapsibles. The
   conversation shell auto-scrolls; the composer uses `PromptInput` with optional
-  image attach, context-window % (`Context`), and a checkpoint restore menu.
+  image attach, context-window % (`Context`), slash-command insertion, session
+  mode/config controls, session-title display, and a checkpoint restore menu.
 - Permission confirmations support allow/reject once or always; "always" choices
   persist in `chat_permission_policies` and are auto-applied on future matching tool
   titles. File chips switch the workspace to the Diff tab and select the matching
@@ -286,10 +299,13 @@ Current behavior:
   `chat_checkpoints`. The Chat tab exposes a Checkpoints menu to restore a prior
   turn with `git reset --hard` in the task worktree.
 - The composer queues follow-up prompts on the live ACP connection (serial user/agent
-  turns). Image attach is available when the provider descriptor advertises image
-  support.
+  turns). The Stop button sends ACP `session/cancel` for the active turn and keeps
+  the process alive; `acp_stop_chat` remains the hard-stop backend command.
+- Image attach is available when the initialized agent advertises image prompt
+  support. Before a process has initialized, the static provider descriptor is
+  used only as a pre-launch hint.
 - A **Resumable** badge appears when the persisted row has an `acp_session_id` and
-  the provider supports `session/load`.
+  the initialized agent advertises `loadSession`.
 - If the app reloads with a persisted chat session whose ACP process is no longer
   live, sending a message starts the ACP process again. When the persisted row
   has an agent `acp_session_id` and the agent advertises ACP `loadSession`,
@@ -301,11 +317,13 @@ Current behavior:
 
 The chat surface is served by `list_acp_providers`, `get_task_chat`, `acp_start_chat`,
 `acp_send_prompt` (optional image attachments), `acp_respond_permission`,
+`acp_cancel_prompt`, `acp_set_session_mode`, `acp_set_config_option`,
 `acp_stop_chat`, `list_chat_permission_policies`, `clear_chat_permission_policies`,
 `list_chat_checkpoints`, and `restore_chat_checkpoint`; live updates arrive on
-`session_chat` and `session_chat_usage`. Settings → Diagnostics lists saved
-permission policies. When an ACP connection ends, `chat_session_exited` clears
-ephemeral chat runtime state in the shell. File ownership: see [AGENTS.md](../AGENTS.md).
+`session_chat`, `session_chat_usage`, and `session_chat_runtime`. Settings →
+Diagnostics lists saved permission policies. When an ACP connection ends,
+`chat_session_exited` clears ephemeral chat runtime state in the shell. File
+ownership: see [AGENTS.md](../AGENTS.md).
 
 ## Task Diff
 

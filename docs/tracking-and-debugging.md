@@ -39,6 +39,10 @@ Core tables:
 | `pr_reviews` | External pull-request reviews: PR metadata, status, `verdict` (`passed`/`blockers`/`inconclusive`, set when a review reaches `ready`), Markdown output, ephemeral worktree path, and the consensus columns `mode` (`single`/`consensus`), `max_rounds`, `rounds_completed`, `converged`. Includes `reviewer_session_id` (preserved across reruns of the same PR review; cleared only when a new review is created). For consensus, `reviewer_profile_id` is the synthesizer. |
 | `pr_review_reviewers` | Consensus participants: the reviewer profiles taking part in a consensus PR review, in selection order. Cascade-deletes with the review. |
 | `pr_review_runs` | Consensus per-reviewer, per-round outputs: `round`, `verdict`, Markdown `output`, and `error`. One row per reviewer per round. Cascade-deletes with the review. |
+| `chat_sessions` | ACP chat sessions by task/profile. Stores Nectus' session row id, the provider's `acp_session_id` for `session/load`, the cwd, and `runtime_json` (latest initialize/session metadata: agent capabilities, commands, modes, config options, title). |
+| `chat_messages` | Settled ACP user/agent turns. `parts_json` stores normalized `ChatPart[]`; live streaming turns are cache-only until settled. |
+| `chat_permission_policies` | Saved allow-always / reject-always choices keyed by ACP permission tool title. |
+| `chat_checkpoints` | Git shadow commits captured after settled agent turns for Chat tab restore points. |
 
 Schema owner: `native/src/db/schema.rs`
 
@@ -89,10 +93,27 @@ settled messages in SQLite, and streams normalized parts through `session_chat`.
 Permission requests are chat parts; answering them calls `acp_respond_permission`
 and optional allow/reject-always policies are stored in `chat_permission_policies`.
 
-When a provider advertises `session/load`, the latest persisted `acp_session_id`
-can resume the provider conversation. If the app reloads and the process is gone,
-the next prompt starts a new ACP child and either calls `session/load` or creates a
-fresh ACP session, depending on the descriptor capability and persisted data.
+At startup the runtime sends ACP v1 `initialize` with Nectus client info and no
+filesystem/terminal client capabilities. The returned `agentCapabilities` are
+stored in `chat_sessions.runtime_json` and become authoritative for Chat UI
+image/resume affordances. Static descriptors from `list_acp_providers` are only a
+pre-launch hint. Since filesystem and terminal client APIs are not advertised,
+unexpected provider requests for those methods fail through the ACP connection's
+unsupported-method path and show up in backend diagnostics/tracing rather than
+opening host filesystem or terminal access.
+
+When a provider advertises `session/load` at runtime, the latest persisted
+`acp_session_id` can resume the provider conversation. If the app reloads and the
+process is gone, the next prompt starts a new ACP child and either calls
+`session/load` or creates a fresh ACP session, depending on runtime capability and
+persisted data. `session/new` and `session/load` include cross-repo sibling
+worktrees as ACP `additionalDirectories`. Agent profiles can provide optional
+ACP MCP servers via `NECTUS_ACP_MCP_SERVERS_JSON` in the profile env; the value is
+a JSON array matching ACP `McpServer[]` and is passed to both session setup paths.
+Each prompt sends the user text, image blocks only when the initialized agent
+advertised image support, file-resource links for the primary cwd and sibling
+worktree directories, and an embedded Markdown task-context resource when the
+agent advertises `embeddedContext`.
 
 ## Tauri Commands
 
@@ -149,12 +170,15 @@ Current commands:
 | `stop_pair_loop` | Stop reviewer automation for a task. |
 | `get_task_review_loop` | Load a task's current review loop. |
 | `list_task_review_runs` | Load stored reviewer runs for a task. |
-| `list_acp_providers` | Load the static ACP provider descriptor export for Claude Code, OpenCode, and Codex: stable provider id, agent kind, display name, launch argv, and coarse resume/permission/image capability states used by the frontend for gating. |
+| `list_acp_providers` | Load the static ACP provider descriptor export for Claude Code, OpenCode, Codex, and Antigravity: stable provider id, agent kind, display name, launch argv, and coarse resume/permission/image capability states. These are pre-launch hints; initialized runtime capabilities are authoritative after a session starts. |
 | `get_task_chat` | Load the persisted ACP chat session and settled transcript for a task. Optional `agent_profile_id` scopes the read to that profile's latest session; omit it to load the latest session across all profiles. |
-| `acp_start_chat` | Start an ACP chat process for a task/profile in the task cwd. Launch uses the ACP provider descriptor (`native/src/sessions/acp.rs`), the login-shell env, augmented PATH, provider-specific executable env, then profile env as the final override layer. Reuses an already-live session; if the latest persisted row for the same profile has `acp_session_id` and the agent advertises `loadSession`, the runtime calls ACP `session/load`. Otherwise it creates a new `chat_sessions` row and calls `session/new`. |
+| `acp_start_chat` | Start an ACP chat process for a task/profile in the task cwd. Launch uses the ACP provider descriptor (`native/src/sessions/acp.rs`), the login-shell env, augmented PATH, provider-specific executable env, then profile env as the final override layer. Sends ACP v1 `initialize` with `clientInfo`, persists returned runtime metadata, then calls `session/load` only when the agent advertises `loadSession`; otherwise it calls `session/new`. Cross-repo sibling worktrees are sent as `additionalDirectories`; profile `NECTUS_ACP_MCP_SERVERS_JSON` is sent as `mcpServers`. |
 | `acp_send_prompt` | Queue a prompt into a live ACP chat session (optional base64 image attachments). The runtime persists and emits the user turn, streams the agent turn, stores the settled reply, and snapshots a git checkpoint after each settled agent turn. |
 | `acp_respond_permission` | Resolve a pending ACP permission request from the Chat tab. Allow/reject-always choices persist in `chat_permission_policies`. |
-| `acp_stop_chat` | Abort a live ACP chat process and drop its in-memory session handle. |
+| `acp_cancel_prompt` | Gracefully cancel the active ACP prompt by sending `session/cancel`. The child process and chat session handle stay alive so the session remains resumable/promptable. |
+| `acp_set_session_mode` | Send ACP `session/set_mode` for the live chat session. The agent reports the resulting mode through `session_chat_runtime`. |
+| `acp_set_config_option` | Send ACP `session/set_config_option` for a select-style live chat config option. The agent reports current config options through `session_chat_runtime`. |
+| `acp_stop_chat` | Hard stop: abort a live ACP chat process and drop its in-memory session handle. Kept as the escape hatch when graceful cancel is insufficient. |
 | `list_chat_permission_policies` | List persisted allow-always / reject-always tool permission policies. |
 | `clear_chat_permission_policies` | Delete all saved chat permission policies. |
 | `list_chat_checkpoints` | List git shadow checkpoints for a chat session (newest first in the DB; the UI reverses for display). |
@@ -178,6 +202,7 @@ Backend-to-frontend events:
 | `review_output` | Task id, a chunk of the task reviewer's live stdout, and the chunk's byte offset (a `0` offset starts a new run). Streamed by the task review loop. | `native/src/sessions/review_loop.rs` |
 | `session_chat` | ACP chat update: task id, chat session id, optional agent profile id, normalized `ChatMessage`, and `done` flag. Streaming updates are cache-only in the frontend (rAF-batched in `useEventBridge`); settled user/agent turns are persisted to `chat_messages`. Also feeds `liveLines`, `chatWorkingTaskIds`, and permission attention for triage. | `native/src/sessions/acp_manager.rs` |
 | `session_chat_usage` | Context-window usage (`used` / `size` token counts) for the active chat session. | `native/src/sessions/acp_manager.rs` |
+| `session_chat_runtime` | Latest ACP session metadata: initialized capabilities, agent info/auth methods, slash commands, current mode, config options, title, and updated timestamp. Persisted to `chat_sessions.runtime_json` and routed into the chat transcript cache. | `native/src/sessions/acp_manager.rs` |
 | `chat_session_exited` | Chat session id, task id, optional agent profile id. Clears ephemeral chat runtime state (`liveLines`, `chatWorkingTaskIds`, permission attention) when the ACP connection ends. | `native/src/sessions/acp_manager.rs` |
 | `pr_review_output` | Review id, a chunk of a single PR reviewer's live stdout, and the chunk's byte offset (a `0` offset starts a new run). Streamed by single PR reviews so the Reviews-view Terminal toggle can watch the reviewer live; consensus reviews keep their round matrix and do not stream. | `native/src/sessions/pr_review.rs` |
 | `pr_review_updated` | Updated external PR review (status, verdict, metadata, Markdown output), plus an optional `latest_run` carrying the consensus round output that triggered the update. | `native/src/sessions/pr_review.rs`, `native/src/sessions/pr_consensus.rs` |
@@ -187,9 +212,9 @@ Frontend event listeners:
 
 - `src/hooks/useEventBridge.ts` is the single, mount-once bridge (mounted in
   `AppLayout`). It owns chat/review/PR subscriptions (`session_chat`,
-  `session_chat_usage`, `chat_session_exited`, `review_loop_updated`,
-  `pr_review_updated`) and routes each event to the Query cache (tasks, chat,
-  review loop/runs, PR reviews) or the Zustand store (`liveLines`,
+  `session_chat_usage`, `session_chat_runtime`, `chat_session_exited`,
+  `review_loop_updated`, `pr_review_updated`) and routes each event to the Query
+  cache (tasks, chat, review loop/runs, PR reviews) or the Zustand store (`liveLines`,
   `chatWorkingTaskIds`, `taskAttention`, toasts/notifications). Each bridge
   channel is subscribed through `src/hooks/useTauriEvent.ts`, which owns the
   shared late-unlisten cleanup and subscription-error path.

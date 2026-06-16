@@ -430,6 +430,73 @@ export interface ChatMessage {
   completedAt?: string | null;
 }
 
+export interface ChatPromptCapabilities {
+  image: boolean;
+  audio: boolean;
+  embeddedContext: boolean;
+}
+
+export interface ChatMcpCapabilities {
+  http: boolean;
+  sse: boolean;
+}
+
+export interface ChatRuntimeCapabilities {
+  loadSession: boolean;
+  prompt: ChatPromptCapabilities;
+  mcp: ChatMcpCapabilities;
+}
+
+export interface ChatImplementation {
+  name: string;
+  title?: string | null;
+  version: string;
+}
+
+export interface ChatAuthMethod {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
+export interface ChatAvailableCommand {
+  name: string;
+  description: string;
+  inputHint?: string | null;
+}
+
+export interface ChatSessionMode {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
+export interface ChatConfigSelectOption {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
+export interface ChatConfigOption {
+  id: string;
+  name: string;
+  description?: string | null;
+  currentValue?: string | null;
+  options: ChatConfigSelectOption[];
+}
+
+export interface ChatSessionRuntime {
+  capabilities: ChatRuntimeCapabilities;
+  agentInfo?: ChatImplementation | null;
+  authMethods: ChatAuthMethod[];
+  availableCommands: ChatAvailableCommand[];
+  modes: ChatSessionMode[];
+  currentModeId?: string | null;
+  configOptions: ChatConfigOption[];
+  title?: string | null;
+  updatedAt?: string | null;
+}
+
 /** A persisted chat session for a task; `acpSessionId` powers `session/load` resume. */
 export interface ChatSession {
   id: string;
@@ -437,6 +504,7 @@ export interface ChatSession {
   agentProfileId?: number | null;
   acpSessionId?: string | null;
   cwd: string;
+  runtime?: ChatSessionRuntime | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -458,6 +526,13 @@ export interface ChatMessageEvent {
   agentProfileId?: number | null;
   message: ChatMessage;
   done: boolean;
+}
+
+export interface ChatSessionRuntimeEvent {
+  sessionId: string;
+  taskId: number;
+  agentProfileId?: number | null;
+  runtime: ChatSessionRuntime;
 }
 
 export type ChatPermissionPolicyKind = "allow_always" | "reject_always";
