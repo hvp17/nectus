@@ -190,7 +190,8 @@ for them in the checked Codex source.
 Nectus no longer reads Codex rollout JSONL for task-agent state. Codex task work
 uses the ACP provider descriptor in `native/src/sessions/acp.rs`; transcript,
 activity, permission requests, usage, and process exit flow through
-`session_chat`, `session_chat_usage`, and `chat_session_exited`.
+`session_chat`, `session_chat_usage`, `session_chat_runtime`, and
+`chat_session_exited`.
 
 Current behavior:
 

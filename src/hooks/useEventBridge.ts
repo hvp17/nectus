@@ -10,6 +10,7 @@ import { useTauriEvent } from "./useTauriEvent";
 import type {
   ChatMessageEvent,
   ChatSessionExitedEvent,
+  ChatSessionRuntimeEvent,
   ChatTranscript,
   ChatUsageEvent,
   PrReview,
@@ -186,6 +187,33 @@ export function useEventBridge() {
         used: payload.used,
         size: payload.size,
       });
+    },
+    { onError: handleSubscriptionError },
+  );
+
+  useTauriEvent<ChatSessionRuntimeEvent>(
+    "session_chat_runtime",
+    (payload) => {
+      queryClient.setQueryData<ChatTranscript>(
+        queryKeys.task.chat(payload.taskId, payload.agentProfileId ?? null),
+        (current) => {
+          const base: ChatTranscript = current ?? { session: null, messages: [] };
+          const session =
+            base.session?.id === payload.sessionId
+              ? { ...base.session, runtime: payload.runtime }
+              : base.session ?? {
+                  id: payload.sessionId,
+                  taskId: payload.taskId,
+                  agentProfileId: payload.agentProfileId ?? null,
+                  acpSessionId: null,
+                  cwd: "",
+                  runtime: payload.runtime,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                };
+          return { ...base, session };
+        },
+      );
     },
     { onError: handleSubscriptionError },
   );

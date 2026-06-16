@@ -13,6 +13,9 @@ vi.mock("../../api", () => ({
     acpStartChat: vi.fn(),
     acpSendPrompt: vi.fn(),
     acpRespondPermission: vi.fn(),
+    acpCancelPrompt: vi.fn(),
+    acpSetSessionMode: vi.fn(),
+    acpSetConfigOption: vi.fn(),
     acpStopChat: vi.fn(),
     listChatCheckpoints: vi.fn().mockResolvedValue([]),
   },
@@ -41,6 +44,41 @@ const opencodeSession: ChatSession = {
   id: "opencode-session",
   agentProfileId: 4,
   updatedAt: "2026-06-15T00:02:00.000Z",
+};
+
+const runtimeSession: ChatSession = {
+  ...staleSession,
+  acpSessionId: "acp-123",
+  runtime: {
+    capabilities: {
+      loadSession: true,
+      prompt: { image: true, audio: false, embeddedContext: true },
+      mcp: { http: false, sse: false },
+    },
+    agentInfo: { name: "claude", title: "Claude Code", version: "1.0.0" },
+    authMethods: [],
+    availableCommands: [
+      { name: "plan", description: "Create a plan", inputHint: "Describe the goal" },
+    ],
+    modes: [
+      { id: "plan", name: "Plan" },
+      { id: "code", name: "Code" },
+    ],
+    currentModeId: "plan",
+    configOptions: [
+      {
+        id: "model",
+        name: "Model",
+        currentValue: "sonnet",
+        options: [
+          { id: "sonnet", name: "Sonnet" },
+          { id: "opus", name: "Opus" },
+        ],
+      },
+    ],
+    title: "Implement ACP polish",
+    updatedAt: "2026-06-15T00:03:00.000Z",
+  },
 };
 
 describe("ChatPane", () => {
@@ -175,5 +213,83 @@ describe("ChatPane", () => {
     fireEvent.click(screen.getByTestId("chat-send"));
 
     expect(mockedApi.acpStartChat).not.toHaveBeenCalled();
+  });
+
+  it("uses runtime capabilities for image attach and resume affordances", async () => {
+    mockedApi.getTaskChat.mockResolvedValue({
+      session: {
+        ...runtimeSession,
+        runtime: {
+          ...runtimeSession.runtime!,
+          capabilities: {
+            ...runtimeSession.runtime!.capabilities,
+            loadSession: false,
+            prompt: {
+              ...runtimeSession.runtime!.capabilities.prompt,
+              image: false,
+            },
+          },
+        },
+      },
+      messages: [],
+    });
+
+    renderWithProviders(<ChatPane taskId={42} agentProfileId={2} />);
+
+    expect(await screen.findByText("Implement ACP polish")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Attach image")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("chat-resume-badge")).not.toBeInTheDocument();
+  });
+
+  it("exposes slash commands by inserting the selected command into the composer", async () => {
+    mockedApi.getTaskChat.mockResolvedValue({ session: runtimeSession, messages: [] });
+
+    renderWithProviders(<ChatPane taskId={42} agentProfileId={2} />);
+
+    const menu = await screen.findByTestId("chat-command-menu");
+    menu.focus();
+    fireEvent.keyDown(menu, { key: "Enter" });
+    fireEvent.click(await screen.findByText("/plan"));
+
+    expect(screen.getByTestId("chat-composer-input")).toHaveValue("/plan ");
+  });
+
+  it("sends mode and config changes to the live ACP session", async () => {
+    mockedApi.getTaskChat.mockResolvedValue({ session: runtimeSession, messages: [] });
+    mockedApi.acpSetSessionMode.mockResolvedValue(undefined);
+    mockedApi.acpSetConfigOption.mockResolvedValue(undefined);
+
+    renderWithProviders(<ChatPane taskId={42} agentProfileId={2} />);
+
+    fireEvent.click(await screen.findByRole("combobox", { name: "Session mode" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Code" }));
+    expect(mockedApi.acpSetSessionMode).toHaveBeenCalledWith("stale-session", "code");
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Session config Model" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Opus" }));
+    expect(mockedApi.acpSetConfigOption).toHaveBeenCalledWith("stale-session", "model", "opus");
+  });
+
+  it("uses graceful ACP cancel for the stop button", async () => {
+    mockedApi.getTaskChat.mockResolvedValue({
+      session: runtimeSession,
+      messages: [
+        {
+          id: "agent-live",
+          role: "agent",
+          parts: [{ type: "text", text: "Working" }],
+          createdAt: "2026-06-15T00:04:00.000Z",
+          completedAt: null,
+        },
+      ],
+    });
+    mockedApi.acpCancelPrompt.mockResolvedValue(undefined);
+
+    renderWithProviders(<ChatPane taskId={42} agentProfileId={2} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Stop" }));
+
+    expect(mockedApi.acpCancelPrompt).toHaveBeenCalledWith("stale-session");
+    expect(mockedApi.acpStopChat).not.toHaveBeenCalled();
   });
 });

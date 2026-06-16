@@ -1206,6 +1206,36 @@ async fn acp_respond_permission(
 }
 
 #[tauri::command]
+async fn acp_cancel_prompt(session_id: String, state: State<'_, AppState>) -> AppResult<()> {
+    let acp = state.acp.clone();
+    app_result(acp.cancel_prompt(&session_id).await)
+}
+
+#[tauri::command]
+async fn acp_set_session_mode(
+    session_id: String,
+    mode_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    let acp = state.acp.clone();
+    app_result(acp.set_mode(&session_id, mode_id).await)
+}
+
+#[tauri::command]
+async fn acp_set_config_option(
+    session_id: String,
+    config_id: String,
+    value_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    let acp = state.acp.clone();
+    app_result(
+        acp.set_config_option(&session_id, config_id, value_id)
+            .await,
+    )
+}
+
+#[tauri::command]
 async fn acp_stop_chat(session_id: String, state: State<'_, AppState>) -> AppResult<()> {
     let acp = state.acp.clone();
     app_result(acp.stop(&session_id).await)
@@ -1359,6 +1389,9 @@ pub fn run() {
             acp_start_chat,
             acp_send_prompt,
             acp_respond_permission,
+            acp_cancel_prompt,
+            acp_set_session_mode,
+            acp_set_config_option,
             acp_stop_chat,
             get_task_chat,
             list_chat_permission_policies,

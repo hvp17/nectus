@@ -135,6 +135,42 @@ describe("useEventBridge", () => {
     expect(useAppStore.getState().chatWorkingTaskIds).toEqual({});
   });
 
+  it("routes ACP session runtime metadata into the chat transcript cache", async () => {
+    const queryClient = await mountBridge([baseTask]);
+    await waitFor(() => expect(listeners.has("session_chat_runtime")).toBe(true));
+
+    act(() => {
+      listeners.get("session_chat_runtime")?.({
+        payload: {
+          sessionId: "chat-1",
+          taskId: 7,
+          agentProfileId: 1,
+          runtime: {
+            capabilities: {
+              loadSession: true,
+              prompt: { image: false, audio: false, embeddedContext: true },
+              mcp: { http: false, sse: false },
+            },
+            agentInfo: { name: "codex", title: "Codex", version: "1.0.0" },
+            authMethods: [],
+            availableCommands: [{ name: "plan", description: "Create a plan", inputHint: null }],
+            modes: [{ id: "code", name: "Code", description: null }],
+            currentModeId: "code",
+            configOptions: [],
+            title: "Implement ACP polish",
+            updatedAt: "2026-06-15T00:00:00.000Z",
+          },
+        },
+      });
+    });
+
+    const transcript = queryClient.getQueryData<import("../types").ChatTranscript>(
+      queryKeys.task.chat(7, 1),
+    );
+    expect(transcript?.session?.runtime?.title).toBe("Implement ACP polish");
+    expect(transcript?.session?.runtime?.capabilities.prompt.image).toBe(false);
+  });
+
   it("marks a task done when its review loop passes", async () => {
     const queryClient = await mountBridge([baseTask]);
     const reviewLoop: ReviewLoop = {

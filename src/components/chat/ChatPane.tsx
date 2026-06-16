@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ChatStatus, FileUIPart } from "ai";
-import { ImagePlus } from "lucide-react";
+import { ImagePlus, SlidersHorizontal, Terminal } from "lucide-react";
 import { useAcpProvidersQuery, useAgentProfilesQuery } from "@/queries/core";
 import { queryKeys } from "@/queries/keys";
 import { api } from "@/api";
@@ -19,13 +19,16 @@ import {
   PromptInputBody,
   PromptInputButton,
   PromptInputFooter,
+  PromptInputProvider,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
+  usePromptInputController,
   usePromptInputAttachments,
 } from "@/components/ai-elements/prompt-input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,7 +37,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChatTranscript } from "./ChatTranscript";
-import type { ChatImageAttachment } from "@/types";
+import type { ChatAvailableCommand, ChatConfigOption, ChatImageAttachment, ChatSessionMode } from "@/types";
 
 export interface ChatPaneProps {
   taskId: number;
@@ -68,14 +71,20 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
   const selectedAcpProvider = acpProviders.find((provider) => provider.agentKind === selectedAgentProfile?.agentKind);
   const selectedProfileIdForStart = selectedAgentProfile?.id ?? selectedAgentProfileId;
   const activeSessionId = chatSession?.id ?? null;
+  const runtime = chatSession?.runtime ?? null;
   const unsupportedAgent = Boolean(selectedAgentProfile && acpProvidersQuery.isSuccess && !selectedAcpProvider);
   const missingAgent = Boolean(agentProfilesQuery.isSuccess && !selectedAgentProfile);
-  const supportsImages =
-    selectedAcpProvider?.capabilities.images === "expected" ||
-    selectedAcpProvider?.capabilities.images === "unknown";
+  const supportsImages = runtime
+    ? runtime.capabilities.prompt.image
+    : selectedAcpProvider?.capabilities.images === "expected" ||
+      selectedAcpProvider?.capabilities.images === "unknown";
   const supportsResume =
     Boolean(chatSession?.acpSessionId) &&
-    selectedAcpProvider?.capabilities.sessionLoad !== "unsupported";
+    (runtime ? runtime.capabilities.loadSession : selectedAcpProvider?.capabilities.sessionLoad !== "unsupported");
+  const availableCommands = runtime?.availableCommands ?? [];
+  const modes = runtime?.modes ?? [];
+  const configOptions = runtime?.configOptions ?? [];
+  const sessionTitle = runtime?.title?.trim();
   const agentWorking = messages.some(
     (message) => message.role === "agent" && message.completedAt == null && !message.id.startsWith("perm-"),
   );
@@ -108,6 +117,26 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
       if (!activeSessionId) return;
       void api
         .acpRespondPermission(activeSessionId, requestId, optionId)
+        .catch((error) => useAppStore.getState().setMessage(String(error)));
+    },
+    [activeSessionId],
+  );
+
+  const onSetMode = useCallback(
+    (modeId: string) => {
+      if (!activeSessionId) return;
+      void api
+        .acpSetSessionMode(activeSessionId, modeId)
+        .catch((error) => useAppStore.getState().setMessage(String(error)));
+    },
+    [activeSessionId],
+  );
+
+  const onSetConfigOption = useCallback(
+    (configId: string, valueId: string) => {
+      if (!activeSessionId) return;
+      void api
+        .acpSetConfigOption(activeSessionId, configId, valueId)
         .catch((error) => useAppStore.getState().setMessage(String(error)));
     },
     [activeSessionId],
@@ -185,6 +214,7 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
           </Alert>
         </div>
       )}
+      <PromptInputProvider>
       <div className="flex flex-wrap items-center gap-2 border-t px-2 py-1.5">
         <span className="text-xs font-medium text-muted-foreground">Chat agent</span>
         <Select
@@ -220,6 +250,11 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
               </Badge>
             )}
           </span>
+        )}
+        {sessionTitle && (
+          <Badge className="h-5 max-w-[220px] truncate px-1.5 text-[10px]" data-testid="chat-session-title" variant="outline">
+            {sessionTitle}
+          </Badge>
         )}
         {supportsResume && (
           <Badge className="h-5 px-1.5 text-[10px]" data-testid="chat-resume-badge" variant="secondary">
@@ -266,6 +301,20 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
             </DropdownMenu>
           </Checkpoint>
         )}
+        <ChatCommandMenu commands={availableCommands} disabled={composerDisabled || !activeSessionId} />
+        <ChatModeSelect
+          activeSessionId={activeSessionId}
+          currentModeId={runtime?.currentModeId ?? null}
+          disabled={composerDisabled}
+          modes={modes}
+          onSetMode={onSetMode}
+        />
+        <ChatConfigControls
+          activeSessionId={activeSessionId}
+          configOptions={configOptions}
+          disabled={composerDisabled}
+          onSetConfigOption={onSetConfigOption}
+        />
       </div>
       <PromptInput
         accept={supportsImages ? "image/*" : undefined}
@@ -298,14 +347,131 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
             disabled={composerDisabled || busy}
             onStop={
               activeSessionId
-                ? () => void api.acpStopChat(activeSessionId).catch(() => undefined)
+                ? () => void api.acpCancelPrompt(activeSessionId).catch(() => undefined)
                 : undefined
             }
             status={promptStatus}
           />
         </PromptInputFooter>
       </PromptInput>
+      </PromptInputProvider>
     </div>
+  );
+}
+
+function ChatCommandMenu({
+  commands,
+  disabled,
+}: {
+  commands: ChatAvailableCommand[];
+  disabled: boolean;
+}) {
+  const { textInput } = usePromptInputController();
+  if (commands.length === 0) return null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          className="h-7 gap-1.5 px-2 text-xs"
+          data-testid="chat-command-menu"
+          disabled={disabled}
+          size="sm"
+          variant="outline"
+        >
+          <Terminal className="size-3.5" aria-hidden="true" />
+          Commands
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-72">
+        {commands.map((command) => (
+          <DropdownMenuItem
+            key={command.name}
+            onSelect={(event) => {
+              event.preventDefault();
+              textInput.setInput(`/${command.name}${command.inputHint ? " " : ""}`);
+            }}
+          >
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate font-mono text-xs">/{command.name}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {command.inputHint ?? command.description}
+              </span>
+            </span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ChatModeSelect({
+  activeSessionId,
+  currentModeId,
+  disabled,
+  modes,
+  onSetMode,
+}: {
+  activeSessionId: string | null;
+  currentModeId: string | null;
+  disabled: boolean;
+  modes: ChatSessionMode[];
+  onSetMode: (modeId: string) => void;
+}) {
+  if (!activeSessionId || modes.length === 0) return null;
+  return (
+    <Select disabled={disabled} value={currentModeId ?? undefined} onValueChange={onSetMode}>
+      <SelectTrigger aria-label="Session mode" className="h-7 w-[132px]">
+        <SelectValue placeholder="Mode" />
+      </SelectTrigger>
+      <SelectContent>
+        {modes.map((mode) => (
+          <SelectItem key={mode.id} value={mode.id}>
+            {mode.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function ChatConfigControls({
+  activeSessionId,
+  configOptions,
+  disabled,
+  onSetConfigOption,
+}: {
+  activeSessionId: string | null;
+  configOptions: ChatConfigOption[];
+  disabled: boolean;
+  onSetConfigOption: (configId: string, valueId: string) => void;
+}) {
+  if (!activeSessionId || configOptions.length === 0) return null;
+  return (
+    <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+      {configOptions.map((option) => {
+        if (option.options.length === 0) return null;
+        return (
+          <Select
+            key={option.id}
+            disabled={disabled}
+            value={option.currentValue ?? undefined}
+            onValueChange={(value) => onSetConfigOption(option.id, value)}
+          >
+            <SelectTrigger aria-label={`Session config ${option.name}`} className="h-7 w-[132px]">
+              <SlidersHorizontal className="mr-1.5 size-3.5" aria-hidden="true" />
+              <SelectValue placeholder={option.name} />
+            </SelectTrigger>
+            <SelectContent>
+              {option.options.map((choice) => (
+                <SelectItem key={choice.id} value={choice.id}>
+                  {choice.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+      })}
+    </span>
   );
 }
 
