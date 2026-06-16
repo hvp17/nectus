@@ -34,9 +34,11 @@ export function toolGlyph(kind: string | null | undefined, status: ChatToolStatu
     case "execute":
       return <TerminalSquare className={tint} />;
     case "search":
-    case "fetch":
       return <Search className={tint} />;
+    // `fetch` is bucketed with reads in the group summary/verb, so keep its glyph
+    // consistent with that ("Read"), not the search icon.
     case "read":
+    case "fetch":
       return <FileText className={tint} />;
     case "edit":
       return <Pencil className={tint} />;
@@ -72,14 +74,20 @@ const BADGE_LABEL: Record<ChatToolStatus, string> = {
 };
 
 /** A labelled status badge with a coloured dot, for command rows. */
-export function CommandStatusBadge({ status }: { status: ChatToolStatus }) {
+export function CommandStatusBadge({
+  status,
+  testId = "command-status-badge",
+}: {
+  status: ChatToolStatus;
+  testId?: string;
+}) {
   return (
     <span
       className={cn(
         "inline-flex shrink-0 items-center gap-1.5 text-xs",
         statusTint(status),
       )}
-      data-testid="command-status-badge"
+      data-testid={testId}
     >
       <span className="size-1.5 rounded-full bg-current" />
       {BADGE_LABEL[status]}

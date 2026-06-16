@@ -156,7 +156,7 @@ export function renderChatPart({
                 <div className="overflow-hidden rounded-md border bg-card">
                   <div className="flex items-center justify-between border-b px-3 py-1.5 text-xs text-muted-foreground">
                     <span>Shell</span>
-                    <CommandStatusBadge status={part.status} />
+                    <CommandStatusBadge status={part.status} testId="command-status-badge-expanded" />
                   </div>
                   <div className="px-3 py-2 font-mono text-xs">
                     <div className="text-foreground">
