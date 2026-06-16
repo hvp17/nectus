@@ -239,8 +239,15 @@ impl TurnAccumulator {
                 Segment::Reasoning(text) => parts.push(ChatPart::Reasoning { text: text.clone() }),
                 Segment::Tool(id) => {
                     if let Some(tool_call) = self.tools.get(id) {
-                        parts.push(tool_to_part(tool_call));
-                        parts.extend(file_edits_from(tool_call));
+                        // A tool that carried a diff renders as its file-edit row(s)
+                        // alone — the generic tool row would just duplicate it
+                        // ("Edit foo.rs" above "Edited foo.rs +N -M"). Tools without
+                        // a diff (reads, commands, …) still render the tool row.
+                        let edits = file_edits_from(tool_call);
+                        if edits.is_empty() {
+                            parts.push(tool_to_part(tool_call));
+                        }
+                        parts.extend(edits);
                     }
                 }
             }
@@ -281,7 +288,7 @@ impl TurnAccumulator {
             return;
         }
         match self.segments.last_mut() {
-            Some(Segment::Text(existing)) => existing.push_str(&text),
+            Some(Segment::Text(existing)) => merge_stream_chunk(existing, text),
             _ => self.segments.push(Segment::Text(text)),
         }
     }
@@ -291,9 +298,27 @@ impl TurnAccumulator {
             return;
         }
         match self.segments.last_mut() {
-            Some(Segment::Reasoning(existing)) => existing.push_str(&text),
+            Some(Segment::Reasoning(existing)) => merge_stream_chunk(existing, text),
             _ => self.segments.push(Segment::Reasoning(text)),
         }
+    }
+}
+
+/// Fold an incoming text/reasoning chunk into the segment accumulated so far.
+///
+/// Most ACP agents stream pure deltas (each chunk is the next suffix), which we
+/// append. Some agents instead re-broadcast the whole message after streaming, or
+/// send cumulative snapshots (each chunk carries the full text so far) — both make
+/// the incoming chunk start with everything we already have, and appending would
+/// duplicate it ("I'll read those files.I'll read those files."). When the chunk is
+/// a superset (or exact copy) of the existing text, replace rather than append. A
+/// real delta never starts with the entire prior accumulation, so delta agents are
+/// unaffected.
+fn merge_stream_chunk(existing: &mut String, chunk: String) {
+    if chunk.starts_with(existing.as_str()) {
+        *existing = chunk;
+    } else {
+        existing.push_str(&chunk);
     }
 }
 
@@ -706,9 +731,10 @@ mod tests {
                 )]),
         ));
         let message = acc.snapshot(Some("t1".to_string()));
-        // a Tool part followed by a FileEdit part derived from the diff
-        assert_eq!(message.parts.len(), 2);
-        match &message.parts[1] {
+        // A diff-bearing tool renders as the FileEdit row alone — the generic tool
+        // row is suppressed so it isn't "Edit foo" above "Edited foo +N -M".
+        assert_eq!(message.parts.len(), 1);
+        match &message.parts[0] {
             ChatPart::FileEdit {
                 path,
                 additions,
@@ -722,6 +748,46 @@ mod tests {
             }
             other => panic!("expected file_edit part, got {other:?}"),
         }
+    }
+
+    fn text_of(message: &ChatMessage) -> Vec<&str> {
+        message
+            .parts
+            .iter()
+            .filter_map(|p| match p {
+                ChatPart::Text { text } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn delta_text_chunks_are_appended() {
+        let mut acc = TurnAccumulator::new("m1", "t0");
+        acc.apply(&text_update("Hello "));
+        acc.apply(&text_update("world"));
+        let message = acc.snapshot(None);
+        assert_eq!(text_of(&message), vec!["Hello world"]);
+    }
+
+    #[test]
+    fn a_full_rebroadcast_chunk_does_not_duplicate_text() {
+        let mut acc = TurnAccumulator::new("m1", "t0");
+        acc.apply(&text_update("I'll read those files."));
+        // Agent re-sends the assembled message after streaming it.
+        acc.apply(&text_update("I'll read those files."));
+        let message = acc.snapshot(None);
+        assert_eq!(text_of(&message), vec!["I'll read those files."]);
+    }
+
+    #[test]
+    fn cumulative_snapshot_chunks_replace_rather_than_append() {
+        let mut acc = TurnAccumulator::new("m1", "t0");
+        acc.apply(&text_update("The "));
+        acc.apply(&text_update("The cat "));
+        acc.apply(&text_update("The cat sat."));
+        let message = acc.snapshot(None);
+        assert_eq!(text_of(&message), vec!["The cat sat."]);
     }
 
     #[test]
