@@ -6,6 +6,7 @@ mod pr_review;
 mod pr_verdict;
 mod pr_worktree;
 mod review_loop;
+mod review_runtime;
 mod reviewer;
 mod reviewer_output;
 mod verdict;
