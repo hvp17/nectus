@@ -411,6 +411,63 @@ function ChatCommandMenu({
 }
 
 /**
+ * A footer select whose authoritative value lives server-side (an ACP session
+ * mode or config option) but which the agent only echoes back asynchronously —
+ * and sometimes not at all. We hold an optimistic local value so the user's pick
+ * shows instantly, then drop it the moment a fresh server value arrives so the
+ * server stays authoritative. Binding straight to the server value instead left
+ * Radix desynced (the trigger cleared on click) and made stale fields appear to
+ * change when another select was touched.
+ */
+function RuntimeSelect({
+  ariaLabel,
+  disabled,
+  glyph: Glyph,
+  onChange,
+  options,
+  placeholder,
+  serverValue,
+}: {
+  ariaLabel: string;
+  disabled: boolean;
+  glyph: typeof Shield;
+  onChange: (value: string) => void;
+  options: { id: string; name: string }[];
+  placeholder: string;
+  serverValue: string | null;
+}) {
+  const [optimistic, setOptimistic] = useState<string | null>(null);
+  // When the server's value changes (the echo landed, or it changed underneath
+  // us), drop the optimistic override and defer to the server again.
+  useEffect(() => {
+    setOptimistic(null);
+  }, [serverValue]);
+  const value = optimistic ?? serverValue ?? undefined;
+  return (
+    <PromptInputSelect
+      disabled={disabled}
+      value={value}
+      onValueChange={(next) => {
+        setOptimistic(next);
+        onChange(next);
+      }}
+    >
+      <PromptInputSelectTrigger aria-label={ariaLabel} className="h-7 gap-1.5">
+        <Glyph className="size-3.5" aria-hidden="true" />
+        <PromptInputSelectValue placeholder={placeholder} />
+      </PromptInputSelectTrigger>
+      <PromptInputSelectContent>
+        {options.map((option) => (
+          <PromptInputSelectItem key={option.id} value={option.id}>
+            {option.name}
+          </PromptInputSelectItem>
+        ))}
+      </PromptInputSelectContent>
+    </PromptInputSelect>
+  );
+}
+
+/**
  * The permission/session-mode select (Claude's default / acceptEdits / plan /
  * bypassPermissions, etc.). ACP exposes these as session modes; we surface them
  * as the leftmost footer select with a shield glyph.
@@ -430,19 +487,15 @@ function ChatPermissionModeSelect({
 }) {
   if (!activeSessionId || modes.length === 0) return null;
   return (
-    <PromptInputSelect disabled={disabled} value={currentModeId ?? undefined} onValueChange={onSetMode}>
-      <PromptInputSelectTrigger aria-label="Session mode" className="h-7 gap-1.5">
-        <Shield className="size-3.5" aria-hidden="true" />
-        <PromptInputSelectValue placeholder="Mode" />
-      </PromptInputSelectTrigger>
-      <PromptInputSelectContent>
-        {modes.map((mode) => (
-          <PromptInputSelectItem key={mode.id} value={mode.id}>
-            {mode.name}
-          </PromptInputSelectItem>
-        ))}
-      </PromptInputSelectContent>
-    </PromptInputSelect>
+    <RuntimeSelect
+      ariaLabel="Session mode"
+      disabled={disabled}
+      glyph={Shield}
+      onChange={onSetMode}
+      options={modes}
+      placeholder="Mode"
+      serverValue={currentModeId}
+    />
   );
 }
 
@@ -469,26 +522,17 @@ function ChatConfigSelects({
       {configOptions.map((option) => {
         if (option.options.length === 0) return null;
         const isModel = option.id.toLowerCase() === "model" || option.name.toLowerCase() === "model";
-        const Glyph = isModel ? Cpu : SlidersHorizontal;
         return (
-          <PromptInputSelect
-            key={option.id}
+          <RuntimeSelect
+            ariaLabel={`Session config ${option.name}`}
             disabled={disabled}
-            value={option.currentValue ?? undefined}
-            onValueChange={(value) => onSetConfigOption(option.id, value)}
-          >
-            <PromptInputSelectTrigger aria-label={`Session config ${option.name}`} className="h-7 gap-1.5">
-              <Glyph className="size-3.5" aria-hidden="true" />
-              <PromptInputSelectValue placeholder={option.name} />
-            </PromptInputSelectTrigger>
-            <PromptInputSelectContent>
-              {option.options.map((choice) => (
-                <PromptInputSelectItem key={choice.id} value={choice.id}>
-                  {choice.name}
-                </PromptInputSelectItem>
-              ))}
-            </PromptInputSelectContent>
-          </PromptInputSelect>
+            glyph={isModel ? Cpu : SlidersHorizontal}
+            key={option.id}
+            onChange={(value) => onSetConfigOption(option.id, value)}
+            options={option.options}
+            placeholder={option.name}
+            serverValue={option.currentValue ?? null}
+          />
         );
       })}
     </>
