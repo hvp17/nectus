@@ -58,6 +58,41 @@ describe("renderChatPart", () => {
     fireEvent.click(screen.getByTestId("chat-file-chip"));
     expect(onOpenFile).toHaveBeenCalledWith("src/lib.rs");
   });
+
+  it("renders a command row with a success badge and the command", () => {
+    const part: ChatPart = {
+      type: "tool",
+      toolCallId: "c1",
+      title: "Ran command",
+      kind: "execute",
+      status: "completed",
+      locations: [],
+      rawInput: { command: "cargo test acp_cancel" },
+      output: "test result: ok. 2 passed",
+    };
+    renderWithProviders(<>{renderChatPart({ part, partKey: "0" })}</>);
+    expect(screen.getByTestId("command-status-badge")).toHaveTextContent("Success");
+    fireEvent.click(screen.getByTestId("chat-tool"));
+    expect(screen.getByText(/cargo test acp_cancel/)).toBeInTheDocument();
+  });
+
+  it("renders an edit row with inline +/- stats and opens the diff on title click", () => {
+    const part: ChatPart = {
+      type: "file_edit",
+      path: "src/lib.rs",
+      additions: 4,
+      deletions: 6,
+      diff: "let x = 1;",
+    };
+    const onOpenFile = vi.fn();
+    renderWithProviders(
+      <>{renderChatPart({ part, partKey: "0", handlers: { onOpenFile } })}</>,
+    );
+    expect(screen.getByText("+4")).toBeInTheDocument();
+    expect(screen.getByText("-6")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("chat-file-chip"));
+    expect(onOpenFile).toHaveBeenCalledWith("src/lib.rs");
+  });
 });
 
 describe("ChatMessageRow", () => {
@@ -82,5 +117,25 @@ describe("ChatMessageRow", () => {
     renderWithProviders(<ChatMessageRow message={message} />);
     expect(screen.getByTestId("chat-message")).toHaveAttribute("data-role", "agent");
     expect(screen.getByText("Grep")).toBeInTheDocument();
+  });
+});
+
+describe("ChatMessageRow grouping", () => {
+  it("collapses a run of reads into one summary row", () => {
+    const message: ChatMessage = {
+      id: "m1",
+      role: "agent",
+      parts: [
+        { type: "tool", toolCallId: "a", title: "Read", kind: "read", status: "completed", locations: [{ path: "a.rs" }], output: null },
+        { type: "tool", toolCallId: "b", title: "Read", kind: "read", status: "completed", locations: [{ path: "b.rs" }], output: null },
+        { type: "tool", toolCallId: "c", title: "Search", kind: "search", status: "completed", locations: [], output: null },
+      ],
+      createdAt: "t0",
+      completedAt: "t1",
+    };
+    renderWithProviders(<ChatMessageRow message={message} />);
+    expect(screen.getByTestId("chat-tool-group")).toBeInTheDocument();
+    expect(screen.getByText("Read 2 files and searched code")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument(); // count pill
   });
 });

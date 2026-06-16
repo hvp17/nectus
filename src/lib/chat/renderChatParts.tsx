@@ -1,5 +1,8 @@
 import type { DynamicToolUIPart } from "ai";
+import { ChevronDownIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { CollapsibleTrigger } from "@/components/ui/collapsible";
+import { CodeBlock } from "@/components/ai-elements/code-block";
 import {
   Confirmation,
   ConfirmationAction,
@@ -34,6 +37,19 @@ import {
 } from "@/components/ai-elements/tool";
 import { cn } from "@/lib/utils";
 import { formatToolDisplayName } from "@/lib/chat/toolDisplayName";
+import {
+  groupToolParts,
+  groupToolSummary,
+  groupToolStatus,
+  type RenderItem,
+  type ToolPart as GroupToolPart,
+} from "@/lib/chat/groupToolParts";
+import {
+  CommandStatusBadge,
+  commandText,
+  groupGlyph,
+  toolGlyph,
+} from "@/lib/chat/toolGlyph";
 import type {
   ChatMessage,
   ChatPart,
@@ -110,17 +126,25 @@ export function renderChatPart({
       );
     case "tool": {
       const state = mapToolState(part.status);
+      const glyph = toolGlyph(part.kind, part.status);
+      const cmd = part.kind === "execute" ? commandText(part.rawInput) : null;
       const hasBody =
         part.locations.length > 0 || Boolean(part.output) || part.rawInput != null;
-      const displayName = formatToolDisplayName(part.title, part.kind);
+      const displayName =
+        part.kind === "execute"
+          ? `Ran ${cmd ?? formatToolDisplayName(part.title, part.kind)}`
+          : formatToolDisplayName(part.title, part.kind);
       return (
         <Tool key={partKey} data-status={part.status} data-testid="chat-tool" defaultOpen={false}>
           <ToolHeader
             compact
             expandable={hasBody}
+            glyph={glyph}
+            hideStatusBadge
             state={state}
             title={displayName}
             toolName={part.kind ?? "tool"}
+            trailing={part.kind === "execute" ? <CommandStatusBadge status={part.status} /> : null}
             type="dynamic-tool"
           />
           <span className="sr-only" data-testid="chat-tool-status">
@@ -128,7 +152,21 @@ export function renderChatPart({
           </span>
           {hasBody && (
             <ToolContent>
-              {part.rawInput != null && <ToolInput input={part.rawInput} />}
+              {cmd != null && (
+                <div className="overflow-hidden rounded-md border bg-card">
+                  <div className="flex items-center justify-between border-b px-3 py-1.5 text-xs text-muted-foreground">
+                    <span>Shell</span>
+                    <CommandStatusBadge status={part.status} />
+                  </div>
+                  <div className="px-3 py-2 font-mono text-xs">
+                    <div className="text-foreground">
+                      <span className="mr-2 text-muted-foreground">$</span>
+                      {cmd}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {cmd == null && part.rawInput != null && <ToolInput input={part.rawInput} />}
               {part.locations.length > 0 && (
                 <ul className="space-y-1 font-mono text-xs">
                   {part.locations.map((location, index) => (
@@ -150,24 +188,56 @@ export function renderChatPart({
         </Tool>
       );
     }
-    case "file_edit":
-      return (
+    case "file_edit": {
+      const fileName = part.path.split("/").pop() ?? part.path;
+      const stats = (
+        <span className="shrink-0 font-mono text-xs tabular-nums" data-testid="edit-stats">
+          <span className="text-status-success">+{part.additions}</span>{" "}
+          <span className="text-destructive">-{part.deletions}</span>
+        </span>
+      );
+      const editGlyph = toolGlyph("edit", "completed");
+      // Title click jumps to the full Diff tab; chevron toggles the inline new-text preview.
+      const titleButton = (
         <button
-          key={partKey}
-          className={cn(
-            "mb-2 flex w-full items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2 text-left transition-colors hover:bg-muted/70",
-          )}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
           data-testid="chat-file-chip"
           type="button"
           onClick={() => handlers?.onOpenFile?.(part.path)}
         >
-          <span className="truncate font-mono text-xs">{part.path}</span>
-          <span className="shrink-0 font-mono text-xs tabular-nums">
-            <span className="text-status-success">+{part.additions}</span>{" "}
-            <span className="text-destructive">-{part.deletions}</span>
+          {editGlyph}
+          <span className="truncate text-xs">
+            Edited <span className="font-mono">{fileName}</span>
           </span>
         </button>
       );
+      if (!part.diff) {
+        return (
+          <div
+            key={partKey}
+            className="mb-0.5 flex w-full items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-card/50"
+            data-testid="chat-tool"
+          >
+            {titleButton}
+            {stats}
+          </div>
+        );
+      }
+      return (
+        <Tool key={partKey} data-testid="chat-tool" defaultOpen={false}>
+          <div className="flex w-full items-center gap-2 px-2 py-1.5">
+            {titleButton}
+            {stats}
+            <CollapsibleTrigger className="shrink-0" data-testid="edit-expand">
+              <ChevronDownIcon className="size-3 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+            </CollapsibleTrigger>
+          </div>
+          <ToolContent>
+            <CodeBlock code={part.diff} language="diff" />
+          </ToolContent>
+        </Tool>
+      );
+    }
     case "permission":
       return (
         <Confirmation
@@ -225,6 +295,68 @@ export function renderChatPart({
   }
 }
 
+function renderToolGroup({
+  parts,
+  handlers,
+  groupKey,
+}: {
+  parts: GroupToolPart[];
+  handlers?: ChatPartHandlers;
+  groupKey: string;
+}) {
+  const { title, count } = groupToolSummary(parts);
+  const status = groupToolStatus(parts);
+  const anySearch = parts.some((p) => p.kind === "search");
+  const pill = (
+    <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground tabular-nums">
+      {count}
+    </span>
+  );
+  return (
+    <Tool key={groupKey} data-testid="chat-tool-group" defaultOpen={false}>
+      <ToolHeader
+        compact
+        glyph={groupGlyph(anySearch, status)}
+        hideStatusBadge
+        state={mapToolState(status)}
+        title={title}
+        toolName="tool-group"
+        trailing={pill}
+        type="dynamic-tool"
+      />
+      <ToolContent>
+        <ul className="space-y-1.5">
+          {parts.map((p, index) => {
+            const verb = p.kind === "search" ? "Searched" : "Read";
+            const target =
+              p.locations[0]?.path ?? formatToolDisplayName(p.title, p.kind);
+            const openable = p.locations[0]?.path;
+            return (
+              <li
+                key={`${p.toolCallId}-${index}`}
+                className="flex items-baseline gap-2 text-xs"
+              >
+                <span className="w-16 shrink-0 text-muted-foreground">{verb}</span>
+                {openable ? (
+                  <button
+                    className={cn("truncate text-left font-mono text-foreground/70 hover:text-foreground")}
+                    type="button"
+                    onClick={() => handlers?.onOpenFile?.(openable)}
+                  >
+                    {target}
+                  </button>
+                ) : (
+                  <span className="truncate font-mono text-foreground/70">{target}</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </ToolContent>
+    </Tool>
+  );
+}
+
 export function chatMessageRole(message: ChatMessage): "user" | "assistant" {
   return message.role === "user" ? "user" : "assistant";
 }
@@ -240,13 +372,19 @@ export function ChatMessageRow({
   return (
     <Message data-role={message.role} data-testid="chat-message" from={chatMessageRole(message)}>
       <MessageContent>
-        {message.parts.map((part, index) =>
-          renderChatPart({
-            part,
-            handlers,
-            isStreaming: isStreaming && part.type === "text",
-            partKey: `${message.id}-${index}`,
-          }),
+        {groupToolParts(message.parts).map((item: RenderItem) =>
+          item.kind === "tool-group"
+            ? renderToolGroup({
+                parts: item.parts,
+                handlers,
+                groupKey: `${message.id}-${item.key}`,
+              })
+            : renderChatPart({
+                part: item.part,
+                handlers,
+                isStreaming: isStreaming && item.part.type === "text",
+                partKey: `${message.id}-${item.key}`,
+              }),
         )}
       </MessageContent>
     </Message>
