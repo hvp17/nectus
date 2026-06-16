@@ -59,7 +59,10 @@ pub(super) fn parse_verdict_block(raw: &str) -> (Option<VerdictToken>, String) {
     while i < lines.len() {
         let fence = lines[i].trim();
         let is_json_open = fence.starts_with("```")
-            && fence.trim_start_matches('`').trim().eq_ignore_ascii_case("json");
+            && fence
+                .trim_start_matches('`')
+                .trim()
+                .eq_ignore_ascii_case("json");
         if is_json_open {
             let mut j = i + 1;
             while j < lines.len() && lines[j].trim() != "```" {
@@ -119,7 +122,10 @@ mod tests {
     #[test]
     fn malformed_or_missing_block_yields_none_and_keeps_text() {
         assert_eq!(parse_verdict_block("Just prose.").0, None);
-        assert_eq!(parse_verdict_block("```json\n{\"verdict\": \"maybe\"}\n```").0, None);
+        assert_eq!(
+            parse_verdict_block("```json\n{\"verdict\": \"maybe\"}\n```").0,
+            None
+        );
         assert_eq!(parse_verdict_block("```json\nnot json\n```").0, None);
         let (token, text) = parse_verdict_block("```json\n{\"other\": 1}\n```");
         assert_eq!(token, None);
