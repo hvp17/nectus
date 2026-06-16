@@ -325,7 +325,7 @@ fn merge_stream_chunk(existing: &mut String, chunk: String) {
 /// Extract display text from a content block. Non-text blocks (image/audio/
 /// resource) carry no inline text for the chat stream — the spike renders text;
 /// richer block rendering is a later addition. `ContentBlock` is non-exhaustive.
-fn content_block_text(content: &ContentBlock) -> String {
+pub(super) fn content_block_text(content: &ContentBlock) -> String {
     match content {
         ContentBlock::Text(text) => text.text.clone(),
         _ => String::new(),
