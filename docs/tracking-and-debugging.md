@@ -115,7 +115,7 @@ Current commands:
 | `create_cross_repo_task` | Create a task spanning ≥2 repos (Increment B): one worktree per repo as siblings under a shared parent, a single agent rooted in the primary repo's worktree, and a `task_repos` row per repo. Accepts the same optional `jira_issue_key`/`jira_issue_summary`/`jira_issue_url` link as `create_task`. Rolls back created worktrees on failure. |
 | `list_tasks` | Load task summaries (each with its `taskRepos`) and per-repo dirty-state checks. `archived: true` lists the archive view instead of the live boards. |
 | `update_task_metadata` | Update title, status, or PR URL. |
-| `set_task_archived` | Archive (or restore) a task: hidden from boards/lists, kept on disk until deleted. Refused while a session is running. |
+| `set_task_archived` | Archive (or restore) a task: hidden from boards/lists, kept on disk until deleted. Stale legacy session markers do not block archive/restore. |
 | `delete_task` | Delete a task and remove its worktree(s) when applicable. Takes a `force` flag: without it a worktree with uncommitted changes is preserved and an error is returned; with it (after the delete dialog's warning) the worktree is force-removed. The `git worktree remove` runs **off the DB lock** (plan under a brief lock → remove worktrees off-lock → delete the row under a brief lock). Each removal also runs `git worktree prune` (clears stale `.git/worktrees/<name>` admin entries, incl. when the dir was deleted out-of-band) and deletes the orphaned **local** `task-*` branch (`git branch -D`; the remote branch/PR is never touched). |
 | `list_workspaces` | Load workspaces, each with its ordered member `repoIds`. |
 | `create_workspace` | Create a named workspace from `name` + `repoIds` (membership written transactionally; duplicate ids dropped). |
@@ -203,7 +203,7 @@ Frontend event listeners:
 Important `tasks` columns:
 
 - `status`: `planned`, `in_progress`, `review`, or `done`.
-- `prompt`: optional task instructions sent to a new session.
+- `prompt`: optional task instructions sent to a new ACP chat.
 - `agent_profile_id`: preferred agent profile for the task.
 - `has_worktree`: whether the task owns a git worktree.
 - `branch_name`: set only when `has_worktree = 1`; blank worktree creation
@@ -322,13 +322,13 @@ command).
 Useful backend log messages include:
 
 - Opening the app data directory.
-- Starting an agent session with task id, session id, agent, cwd, and resume
-  flag.
+- Starting ACP chat with task id, chat session id, agent, cwd, and whether
+  `session/load` was used.
 - Task creation creating the worktree off-lock and then inserting the row under a
   brief lock, plus each timed `create_worktree` network step (so a slow/stuck
   worktree creation is visible in the log without freezing the rest of the app).
-- Watching a Codex session log.
-- Failure to emit session or review events.
+- ACP `session/new` / `session/load` failures and chat process exits.
+- Failure to emit chat or review events.
 - Review start, recorded verdict, reviewer output, and review-loop errors.
 
 ## Database Inspection
@@ -393,9 +393,8 @@ before each network step (`… ls-remote`, `… fetching`, `… worktree add`), 
 "starting" line with no following "done" line pinpoints the stuck command.
 
 If the log instead shows `create_task: worktree ready; inserting row (brief lock)`
-and then goes silent (no `started agent session`), the create finished and the
-hang was in the **session launch** — see
-[App Freezes / Goes Unresponsive When Starting, Stopping, Or Feeding A Session](#app-freezes--goes-unresponsive-when-starting-stopping-or-feeding-a-session).
+and then goes silent, the create finished and the hang was in ACP chat launch —
+see [ACP Chat Does Not Start Or Send](#acp-chat-does-not-start-or-send).
 
 Relevant code:
 
@@ -504,8 +503,8 @@ Check:
 
 - The review loop status is `running` or `reviewing`.
 - `run_pair_review` can resolve a review cwd from the task worktree path, a task
-  repo worktree path, or the primary repo path. It does not require a running
-  worker session.
+  repo worktree path, or the primary repo path. It does not require a running task
+  chat.
 - Manual review runs should emit `review_loop_updated` with status `reviewing`
   before the reviewer command finishes.
 - The reviewer profile command resolves and exits successfully. An exit status

@@ -124,8 +124,8 @@ so a cross-repo task can be started from any entry point — not only a workspac
   folders are disambiguated by id when two repos share a directory name). The
   per-repo worktrees are created **concurrently**, so a cross-repo task costs about
   one repo's setup time, not the sum.
-- A **single agent session** runs in the primary repo's worktree; the other repos
-  are reachable as siblings at `../<repoName>`. The task prompt is prefixed with this
+- A **single ACP chat** runs in the primary repo's worktree; the other repos are
+  reachable as siblings at `../<repoName>`. The task prompt is prefixed with this
   layout so the agent has cross-repo context. Each repo keeps its own branch.
 - The task inspector lists every repo (branch + dirty indicator, primary marked).
   Deleting the task removes **all** its worktrees; with uncommitted work in any of

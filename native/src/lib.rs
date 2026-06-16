@@ -197,8 +197,8 @@ async fn create_task(
 }
 
 /// Create a task that spans several repos (Increment B): one worktree per repo as
-/// siblings under a shared parent, driven by a single agent session. `repo_ids[0]`
-/// is the primary repo (the session's working directory). Accepts the same
+/// siblings under a shared parent, driven by a single ACP chat from the primary
+/// repo. `repo_ids[0]` is the primary repo. Accepts the same
 /// optional JIRA story link as `create_task`, so a story-seeded task keeps its
 /// link regardless of scope.
 #[allow(clippy::too_many_arguments)]
