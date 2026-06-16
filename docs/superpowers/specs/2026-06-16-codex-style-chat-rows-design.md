@@ -25,7 +25,10 @@ Four presentation/assembly changes, in priority order:
    `✗ Failed` / `Running…` badge, expanding to a card-elevated block showing
    `$ command`, stdout/stderr, and exit code.
 3. **Edit rows** — pencil glyph, `Edited <file>` title, inline `+N −M` stats in the
-   header, expanding to a tinted unified diff.
+   header, expanding to the new file text (`file_edit.diff`, the only diff data the
+   model carries — there is no `old_text`, so a true red/green unified diff is not
+   possible client-side; the new text renders as an added/neutral code block). The
+   title stays a button that opens the full Diff tab via `onOpenFile`.
 4. **Resting style** — rows are near-transparent at rest, gaining a hairline border +
    faint card tint only on hover or when expanded.
 
