@@ -297,9 +297,16 @@ Current behavior:
   badge, and a shell block on expand; edit rows show `Edited <file>` with inline
   `+N −M` stats and the new file text on expand (`file_edit.diff` is new text
   only, so it is not a red/green diff — the title still opens the Diff tab). The
-  conversation shell auto-scrolls; the composer uses `PromptInput` with optional
-  image attach, context-window % (`Context`), slash-command insertion, session
-  mode/config controls, session-title display, and a checkpoint restore menu.
+  conversation shell auto-scrolls; the composer is the AI-Elements `PromptInput`
+  with all controls consolidated into its footer toolbar: image attach (with an
+  inline thumbnail-preview header), a slash-command menu, the **permission-mode**
+  select (ACP session modes — Claude's default/acceptEdits/plan/bypass — with a
+  shield glyph) and the **model / config** selects (ACP v0.14 has no first-class
+  model field, so an agent's model is a `Select` config option, id `model`, shown
+  with a CPU glyph; other config knobs use a sliders glyph). The right side of the
+  footer holds context-window % (`Context`), the checkpoint restore menu, and the
+  submit/stop button; the agent picker plus session-title/Resumable/working badges
+  sit in a slim strip above the input.
 - Permission confirmations support allow/reject once or always; "always" choices
   persist in `chat_permission_policies` and are auto-applied on future matching tool
   titles. File chips switch the workspace to the Diff tab and select the matching

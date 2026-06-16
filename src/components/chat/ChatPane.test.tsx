@@ -270,6 +270,37 @@ describe("ChatPane", () => {
     expect(mockedApi.acpSetConfigOption).toHaveBeenCalledWith("stale-session", "model", "opus");
   });
 
+  it("reflects the selected model in the trigger immediately (no server echo)", async () => {
+    mockedApi.getTaskChat.mockResolvedValue({ session: runtimeSession, messages: [] });
+    mockedApi.acpSetConfigOption.mockResolvedValue(undefined);
+
+    renderWithProviders(<ChatPane taskId={42} agentProfileId={2} />);
+
+    const trigger = await screen.findByRole("combobox", { name: "Session config Model" });
+    expect(trigger).toHaveTextContent("Sonnet");
+
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole("option", { name: "Opus" }));
+
+    expect(trigger).toHaveTextContent("Opus");
+  });
+
+  it("does not change the model field when the mode changes", async () => {
+    mockedApi.getTaskChat.mockResolvedValue({ session: runtimeSession, messages: [] });
+    mockedApi.acpSetSessionMode.mockResolvedValue(undefined);
+
+    renderWithProviders(<ChatPane taskId={42} agentProfileId={2} />);
+
+    const modeTrigger = await screen.findByRole("combobox", { name: "Session mode" });
+    const modelTrigger = screen.getByRole("combobox", { name: "Session config Model" });
+    expect(modelTrigger).toHaveTextContent("Sonnet");
+
+    fireEvent.click(modeTrigger);
+    fireEvent.click(await screen.findByRole("option", { name: "Code" }));
+
+    expect(modelTrigger).toHaveTextContent("Sonnet");
+  });
+
   it("uses graceful ACP cancel for the stop button", async () => {
     mockedApi.getTaskChat.mockResolvedValue({
       session: runtimeSession,
