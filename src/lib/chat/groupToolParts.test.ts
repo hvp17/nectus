@@ -83,3 +83,14 @@ describe("groupToolParts", () => {
     );
   });
 });
+
+describe("groupToolParts + subagent", () => {
+  it("passes a subagent part through as a single render item", () => {
+    const sub: ChatPart = {
+      type: "subagent", name: "Reviewer", agentKind: "claude", parts: [], status: "running",
+    };
+    const items = groupToolParts([sub]);
+    expect(items).toHaveLength(1);
+    expect(items[0].kind).toBe("single");
+  });
+});
