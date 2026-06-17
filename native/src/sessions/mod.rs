@@ -55,6 +55,11 @@ pub(crate) fn spawn_consensus_pr_review(app: AppHandle, db: Arc<Mutex<Database>>
 /// an optional `focus` appended), run the headless ACP review that streams a
 /// `Subagent` message into the task chat, then record the run and persist the
 /// resolved reviewer session id (capture once, keep).
+///
+/// `emit_agent_profile_id` is the **chat session's** profile id — the cache key the
+/// frontend routes `session_chat` events to — so the live Subagent block lands in
+/// the open chat. The run record uses the **reviewer's** profile id
+/// (`reviewer_profile_id`) instead.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn spawn_inline_review(
     app: AppHandle,
@@ -65,6 +70,7 @@ pub(crate) fn spawn_inline_review(
     cwd: PathBuf,
     resume: Option<String>,
     focus: Option<String>,
+    emit_agent_profile_id: Option<i64>,
 ) {
     let resuming = resume.is_some();
     let mut prompt = if resuming {
@@ -77,7 +83,6 @@ pub(crate) fn spawn_inline_review(
     }
     let task_id = task.id;
     let reviewer_profile_id = reviewer.id;
-    let agent_profile_id = Some(reviewer.id);
     let message_id = format!("review-{}", uuid::Uuid::new_v4());
     let emit_app = app.clone();
     tauri::async_runtime::spawn(async move {
@@ -86,7 +91,7 @@ pub(crate) fn spawn_inline_review(
             db.clone(),
             chat_session_id,
             task_id,
-            agent_profile_id,
+            emit_agent_profile_id,
             reviewer,
             cwd,
             prompt.clone(),

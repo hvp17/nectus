@@ -1158,7 +1158,7 @@ async fn acp_start_review(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> AppResult<()> {
-    let (reviewer, task, cwd, resume) = {
+    let (reviewer, task, cwd, resume, emit_profile_id) = {
         let db = state.db.lock();
         let review_loop = db.review_loop_by_task_id(task_id)?.ok_or_else(|| {
             "Configure a reviewer for this task before running /review".to_string()
@@ -1180,7 +1180,10 @@ async fn acp_start_review(
             .or_else(|| db.repo_by_id(task.repo_id).ok().flatten().map(|r| r.path))
             .ok_or_else(|| "Task has no repository path to review".to_string())?;
         let resume = db.review_loop_session_id(task_id)?;
-        (reviewer, task, cwd, resume)
+        // The `session_chat` block must land in the open chat's cache key, which is
+        // the chat session's own agent profile id — not the reviewer's profile.
+        let emit_profile_id = db.chat_session_agent_profile_id(&chat_session_id)?;
+        (reviewer, task, cwd, resume, emit_profile_id)
     };
     sessions::spawn_inline_review(
         app,
@@ -1191,6 +1194,7 @@ async fn acp_start_review(
         cwd.into(),
         resume,
         focus,
+        emit_profile_id,
     );
     Ok(())
 }

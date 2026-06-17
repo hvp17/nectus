@@ -107,6 +107,24 @@ impl Database {
             .map_err(|error| format!("Failed to load chat session: {error}"))
     }
 
+    /// The agent profile id a chat session was created under (the cache key its
+    /// `session_chat` events route to on the frontend). `None` if the session row
+    /// is missing or has no profile.
+    pub fn chat_session_agent_profile_id(
+        &self,
+        chat_session_id: &str,
+    ) -> Result<Option<i64>, String> {
+        self.conn
+            .query_row(
+                "SELECT agent_profile_id FROM chat_sessions WHERE id = ?1",
+                params![chat_session_id],
+                |row| row.get::<_, Option<i64>>(0),
+            )
+            .optional()
+            .map_err(|error| format!("Failed to load chat session profile: {error}"))
+            .map(Option::flatten)
+    }
+
     /// Append a settled message, or update it in place if a row with the same id
     /// already exists (re-settling a turn). Position is assigned monotonically
     /// within the session.
@@ -508,6 +526,21 @@ mod tests {
         let opencode_transcript = db.chat_transcript(task_id, Some(2)).unwrap();
         assert_eq!(opencode_transcript.session.unwrap().id, opencode.id);
         assert_eq!(opencode_transcript.messages, vec![opencode_message]);
+    }
+
+    #[test]
+    fn chat_session_agent_profile_id_returns_creating_profile() {
+        let (db, _dir, task_id) = db_with_task();
+        // Profile id 2 is one of the seeded agent profiles, so the FK resolves.
+        let session = db.create_chat_session(task_id, Some(2), "/work").unwrap();
+        assert_eq!(
+            db.chat_session_agent_profile_id(&session.id).unwrap(),
+            Some(2)
+        );
+        assert_eq!(
+            db.chat_session_agent_profile_id("does-not-exist").unwrap(),
+            None
+        );
     }
 
     #[test]
