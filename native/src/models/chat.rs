@@ -8,11 +8,16 @@
 //! Versioned deliberately: this is the load-bearing schema. Bump
 //! [`CHAT_PART_SCHEMA_VERSION`] and note the change when the shape changes.
 
+use crate::models::AgentKind;
 use serde::{Deserialize, Serialize};
 
 /// The normalized-part schema version. Persisted alongside transcripts so a
 /// future shape change can migrate older rows rather than misread them.
-pub const CHAT_PART_SCHEMA_VERSION: u32 = 1;
+///
+/// History:
+/// - v1: initial parts (`text`, `reasoning`, `tool`, `file_edit`, `permission`, `plan`).
+/// - v2: added the `subagent` part (nested reviewer runs).
+pub const CHAT_PART_SCHEMA_VERSION: u32 = 2;
 
 /// Who produced a message turn.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -98,10 +103,29 @@ pub struct ChatPlanEntry {
     pub priority: Option<String>,
 }
 
+/// Lifecycle of a nested subagent block.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SubagentStatus {
+    Running,
+    Completed,
+    Failed,
+}
+
+/// The wire form of a review verdict for the subagent chip (the serializable
+/// projection of `sessions::verdict::VerdictToken`).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewVerdictLabel {
+    Clean,
+    Blockers,
+    Feedback,
+}
+
 /// One normalized, renderable part of a turn. Serializes as a discriminated
 /// union (`{ "type": "...", ... }`) matching the TS `ChatPart` type. Tag values
 /// are snake_case (`text`, `reasoning`, `tool`, `file_edit`, `permission`,
-/// `plan`); all fields are camelCase.
+/// `plan`, `subagent`); all fields are camelCase.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(
     tag = "type",
@@ -139,6 +163,16 @@ pub enum ChatPart {
     },
     /// The agent's current plan / todo list.
     Plan { entries: Vec<ChatPlanEntry> },
+    /// A nested subagent run (e.g. a `/review` reviewer) rendered as a collapsible
+    /// block in the host transcript. `parts` is the subagent's own normalized
+    /// transcript (reused by the same renderer). `verdict` is set once resolved.
+    Subagent {
+        name: String,
+        agent_kind: AgentKind,
+        parts: Vec<ChatPart>,
+        status: SubagentStatus,
+        verdict: Option<ReviewVerdictLabel>,
+    },
 }
 
 /// One message turn: an ordered list of parts plus lifecycle timestamps.
@@ -416,5 +450,25 @@ mod tests {
     fn role_db_round_trips() {
         assert_eq!(ChatRole::from_db(ChatRole::User.as_str()), ChatRole::User);
         assert_eq!(ChatRole::from_db(ChatRole::Agent.as_str()), ChatRole::Agent);
+    }
+
+    #[test]
+    fn subagent_part_round_trips_with_nested_parts_and_verdict() {
+        let part = ChatPart::Subagent {
+            name: "Reviewer".to_string(),
+            agent_kind: AgentKind::Claude,
+            parts: vec![ChatPart::Text {
+                text: "Looks good".to_string(),
+            }],
+            status: SubagentStatus::Completed,
+            verdict: Some(ReviewVerdictLabel::Clean),
+        };
+        let json = serde_json::to_string(&part).unwrap();
+        assert!(json.contains("\"type\":\"subagent\""));
+        assert!(json.contains("\"agentKind\":\"claude\""));
+        assert!(json.contains("\"status\":\"completed\""));
+        assert!(json.contains("\"verdict\":\"clean\""));
+        let back: ChatPart = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, part);
     }
 }

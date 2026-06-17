@@ -1414,6 +1414,7 @@ fn log_turn_part_coverage(message: &ChatMessage) {
             ChatPart::FileEdit { .. } => "file_edit",
             ChatPart::Permission { .. } => "permission",
             ChatPart::Plan { .. } => "plan",
+            ChatPart::Subagent { .. } => "subagent",
         };
         *counts.entry(key).or_insert(0) += 1;
     }
