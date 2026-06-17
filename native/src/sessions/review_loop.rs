@@ -13,7 +13,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
-const UNCLEAR_REVIEW_ERROR: &str = "Reviewer output did not include a clear verdict";
+pub(super) const UNCLEAR_REVIEW_ERROR: &str =
+    "Reviewer output did not include a clear verdict";
 
 pub(super) fn spawn_task_review(
     app: AppHandle,
@@ -149,7 +150,7 @@ fn emit_review_loop_update(
 
 /// Map the shared verdict token to the task-review domain enum. A missing verdict
 /// (`None`) is `Unknown`, surfaced to the user as an unclear-review error.
-fn verdict_from_token(token: Option<VerdictToken>) -> ReviewVerdict {
+pub(super) fn verdict_from_token(token: Option<VerdictToken>) -> ReviewVerdict {
     match token {
         Some(VerdictToken::Clean) => ReviewVerdict::Pass,
         Some(VerdictToken::Blockers) => ReviewVerdict::NeedsChanges,

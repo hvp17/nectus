@@ -434,6 +434,9 @@ export const api = {
   ): Promise<void> {
     return invoke("acp_send_prompt", { sessionId, text, images: images ?? null });
   },
+  async acpStartReview(taskId: number, chatSessionId: string, focus?: string): Promise<void> {
+    return invoke("acp_start_review", { taskId, chatSessionId, focus: focus ?? null });
+  },
   async acpRespondPermission(
     sessionId: string,
     requestId: string,

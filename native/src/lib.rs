@@ -1191,6 +1191,55 @@ async fn acp_send_prompt(
     )
 }
 
+/// Run an on-demand inline review (`/review`): resolve the task's reviewer +
+/// worktree cwd + resumable reviewer session, then spawn the headless ACP review
+/// that streams a `Subagent` message into the task chat. Additive to the Review
+/// pane path (`run_pair_review`), which stays for now.
+#[tauri::command]
+async fn acp_start_review(
+    task_id: i64,
+    chat_session_id: String,
+    focus: Option<String>,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    let (reviewer, task, cwd, resume) = {
+        let db = state.db.lock();
+        let review_loop = db.review_loop_by_task_id(task_id)?.ok_or_else(|| {
+            "Configure a reviewer for this task before running /review".to_string()
+        })?;
+        let reviewer = db
+            .agent_profile_by_id(review_loop.reviewer_profile_id)?
+            .ok_or_else(|| "Reviewer profile not found".to_string())?;
+        let task = db
+            .task_by_id(task_id)?
+            .ok_or_else(|| "Task not found".to_string())?;
+        let cwd = task
+            .worktree_path
+            .clone()
+            .or_else(|| {
+                task.task_repos
+                    .first()
+                    .and_then(|r| r.worktree_path.clone())
+            })
+            .or_else(|| db.repo_by_id(task.repo_id).ok().flatten().map(|r| r.path))
+            .ok_or_else(|| "Task has no repository path to review".to_string())?;
+        let resume = db.review_loop_session_id(task_id)?;
+        (reviewer, task, cwd, resume)
+    };
+    sessions::spawn_inline_review(
+        app,
+        state.db.clone(),
+        chat_session_id,
+        task,
+        reviewer,
+        cwd.into(),
+        resume,
+        focus,
+    );
+    Ok(())
+}
+
 #[tauri::command]
 async fn acp_respond_permission(
     session_id: String,
@@ -1388,6 +1437,7 @@ pub fn run() {
             get_diagnostic_logs,
             acp_start_chat,
             acp_send_prompt,
+            acp_start_review,
             acp_respond_permission,
             acp_cancel_prompt,
             acp_set_session_mode,

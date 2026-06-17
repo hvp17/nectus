@@ -529,7 +529,6 @@ impl ReviewObserver for InlineObserver {
 /// launch/ACP error a `Failed` subagent message is persisted/emitted and the error
 /// is returned.
 #[allow(clippy::too_many_arguments)]
-#[allow(dead_code)] // wired by acp_start_review in the next task
 pub(super) async fn run_inline_review(
     app: AppHandle,
     db: Arc<DbMutex<Database>>,
