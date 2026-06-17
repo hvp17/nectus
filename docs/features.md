@@ -234,7 +234,8 @@ File ownership: see [AGENTS.md](../AGENTS.md).
 ## ACP Agent Chat
 
 The task workspace drives task agents through ACP chat. There is no embedded
-task PTY or Terminal tab; the stage is Chat, Diff, and Review.
+task PTY or Terminal tab; the stage is Chat and Diff (reviews run inline in chat
+via `/review` — see [AI Review](#ai-review)).
 
 Current behavior:
 
