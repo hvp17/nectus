@@ -8,8 +8,8 @@ follow the [doc index](#documentation-index) to the deep references.
 Nectus Desktop is a Mac-first **Tauri 2** app for running parallel Codex / Claude /
 Antigravity / OpenCode agents across local git projects and worktrees. It is
 **local-first**: the React frontend never shells out. Every OS, git, SQLite,
-ACP-agent, reviewer-CLI, and external-CLI (`gh`) operation happens in the Rust backend and is
-reached through a typed Tauri command boundary.
+ACP-agent (chat **and** reviews), and external-CLI (`gh`) operation happens in the
+Rust backend and is reached through a typed Tauri command boundary.
 
 ## The five layers
 
@@ -41,7 +41,7 @@ reached through a typed Tauri command boundary.
 `src/api.ts` → `invoke("command_name", …)` crosses into Rust → `lib.rs` runs the
 command body, which delegates to a domain module (`db/`, `git_ops/`, `sessions/`,
 `github.rs`, `jira*.rs`) that touches SQLite, the filesystem/git, ACP stdio
-children, headless reviewer CLIs, or an external CLI.
+children (both chat and headless reviews), or an external CLI.
 
 **Up (live state):** long-running work (ACP chats, review loops, PR reviews)
 emits Tauri events from Rust. The single **mount-once** `useEventBridge` (in
@@ -120,7 +120,7 @@ The reverse contract — events the backend can emit — is the same for review 
 | Git repo / worktree / diff | `git_ops/mod.rs`, `git_ops/diff.rs` | `useTaskDiff.ts`, `TaskDiffView.tsx` |
 | GitHub (PRs, checks, ship actions) | `github.rs` | `useGithub.ts`, `components/github/` |
 | JIRA (board, work items, transitions) | `jira.rs`, `jira_rest.rs`, `jira_secret.rs` | `useJira.ts`, `components/Jira*` |
-| AI review loop / PR consensus review | `sessions/review_loop.rs`, `pr_review.rs`, `pr_consensus.rs`, `reviewer.rs` | `useTaskReviewLoop.ts`, `usePrReviews.ts` |
+| AI review loop / PR consensus review | `sessions/review_runtime.rs` (headless ACP review driver), `review_loop.rs`, `pr_review.rs`, `pr_consensus.rs` | `useTaskReviewLoop.ts`, `usePrReviews.ts` |
 | Spawning any external CLI (PATH rules) | `process_util.rs` | — |
 | Shared data contracts (serde ↔ TS) | `models/` | `types.ts` |
 | App shell / routing / lazy boundaries | `lib.rs` (Tauri setup) | `AppRouter.tsx`, `App.tsx` (providers only), `TaskWorkspaceStage.tsx` |
@@ -131,8 +131,9 @@ Backend:
 
 1. `native/src/lib.rs` — every Tauri command + app setup. The backend front door.
 2. `native/src/db/schema.rs` — the full SQLite data model (all tables in one place).
-3. `native/src/sessions/` — ACP chat runtime plus task/PR reviewer runtimes;
-   where live chat and review events originate.
+3. `native/src/sessions/` — ACP is the single agent-driving mechanism: the chat
+   runtime plus the headless ACP review driver (`review_runtime.rs`) shared by the
+   task/PR review runtimes; where live chat and review events originate.
 4. `native/src/process_util.rs` — the external-CLI spawn rules every git / `gh` /
    agent call depends on.
 

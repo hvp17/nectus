@@ -1,8 +1,6 @@
-use super::pr_verdict::{parse_pr_review_output, VERDICT_MARKER};
+use super::pr_verdict::pr_verdict_from_token;
 use super::pr_worktree::with_pr_worktree;
-use super::reviewer::{
-    reviewer_supports_resume, run_reviewer_command, ReviewOutputSink, ReviewOutputTarget,
-};
+use super::review_runtime::{run_review, ReviewSink, ReviewTarget};
 use crate::db::Database;
 use crate::github::{self, PrMeta};
 use crate::models::{PrReviewStatus, PrReviewUpdatedEvent};
@@ -11,12 +9,20 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
-/// Run a queued PR review on a background thread: fetch metadata, check out the
-/// PR head into an ephemeral worktree, run the reviewer headless, store the
+/// The verdict-block instruction appended to every PR review prompt (single +
+/// consensus). PR reviews use only `blockers`/`clean`.
+pub(super) const PR_VERDICT_INSTRUCTION: &str = "After the review, end your message with a \
+fenced code block containing only the machine verdict, exactly:\n\
+```json\n{\"verdict\": \"blockers\"}\n```\n\
+Use \"blockers\" if the review contains any blocking issue, or \"clean\" if it does not. \
+This block is stripped from the review before it is shown.";
+
+/// Run a queued PR review on a background task: fetch metadata, check out the
+/// PR head into an ephemeral worktree, run the reviewer over ACP, store the
 /// Markdown review, and always tear the worktree down.
 pub(super) fn spawn_pr_review(app: AppHandle, db: Arc<Mutex<Database>>, review_id: i64) {
-    std::thread::spawn(move || {
-        if let Err(error) = run_pr_review(&app, &db, review_id) {
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = run_pr_review(&app, &db, review_id).await {
             tracing::warn!(?error, review_id, "pr review failed");
             let _ = db
                 .lock()
@@ -26,7 +32,11 @@ pub(super) fn spawn_pr_review(app: AppHandle, db: Arc<Mutex<Database>>, review_i
     });
 }
 
-fn run_pr_review(app: &AppHandle, db: &Arc<Mutex<Database>>, review_id: i64) -> Result<(), String> {
+async fn run_pr_review(
+    app: &AppHandle,
+    db: &Arc<Mutex<Database>>,
+    review_id: i64,
+) -> Result<(), String> {
     let (pr_number, repo_path, default_worktree_root, reviewer) = {
         let database = db.lock();
         let review = database
@@ -61,21 +71,17 @@ fn run_pr_review(app: &AppHandle, db: &Arc<Mutex<Database>>, review_id: i64) -> 
     emit_pr_review_update(app, db, review_id);
 
     // Resume a prior review session on rerun so the reviewer continues its
-    // earlier review of the (now updated) PR instead of starting cold. Only
-    // resume-capable reviewers (Claude/Codex/OpenCode) carry a session.
-    let supports_resume = reviewer_supports_resume(reviewer.agent_kind);
-    let resume_id = if supports_resume {
-        db.lock().pr_review_session_id(review_id)?
-    } else {
-        None
-    };
+    // earlier review of the (now updated) PR instead of starting cold. The ACP
+    // driver only sends `session/load` when the agent advertises it, so a
+    // non-resume-capable reviewer simply starts a fresh session.
+    let resume_id = db.lock().pr_review_session_id(review_id)?;
     let resuming = resume_id.is_some();
 
-    // Stream the reviewer's stdout to the Reviews view so the user can watch the
+    // Stream the reviewer's message to the Reviews view so the user can watch the
     // review progress live (read-only); the full review is still captured below.
-    let sink = ReviewOutputSink {
+    let sink = ReviewSink {
         app: app.clone(),
-        target: ReviewOutputTarget::PrReview(review_id),
+        target: ReviewTarget::PrReview(review_id),
     };
 
     // The shared scaffold owns the ephemeral worktree lifecycle (unique naming,
@@ -86,33 +92,37 @@ fn run_pr_review(app: &AppHandle, db: &Arc<Mutex<Database>>, review_id: i64) -> 
         &repo_path,
         &default_worktree_root,
         pr_number,
-        |worktree_path| {
+        |worktree_path| async move {
             let prompt = if resuming {
                 build_pr_review_continuation_prompt(pr_number, &meta)
             } else {
                 build_pr_review_prompt(pr_number, &meta)
             };
-            run_reviewer_command(
+            run_review(
+                app.clone(),
+                db.clone(),
                 &reviewer,
-                worktree_path,
+                &worktree_path,
                 &prompt,
                 resume_id.as_deref(),
-                Some(&sink),
+                Some(sink),
             )
+            .await
         },
-    )?;
+    )
+    .await?;
 
     // Capture once, keep: persist the resolved id only on the first run.
-    if supports_resume && !resuming {
+    if !resuming {
         if let Some(session_id) = run_output.session_id.as_deref() {
             db.lock()
                 .set_pr_review_session_id(review_id, Some(session_id))?;
         }
     }
 
-    let (verdict, review_output) = parse_pr_review_output(&run_output.text);
+    let verdict = pr_verdict_from_token(run_output.verdict);
     db.lock()
-        .set_pr_review_result(review_id, &review_output, verdict)?;
+        .set_pr_review_result(review_id, &run_output.text, verdict)?;
     emit_pr_review_update(app, db, review_id);
     Ok(())
 }
@@ -153,12 +163,12 @@ Write a clear, specific code review in GitHub-flavored Markdown that the reviewe
 
 Reference real files and lines. Do not invent issues; if the PR looks solid, say so plainly. Output only the Markdown review, with no preamble before it.
 
-After the review, on the final line by itself, output a machine-readable verdict: exactly `{marker} BLOCKERS` if you listed any blocking issues, or `{marker} CLEAN` if there were none. This line is stripped from the review before it is shown.",
+{instruction}",
         pr_number = pr_number,
         title = meta.title,
         author = author,
         base = base,
-        marker = VERDICT_MARKER,
+        instruction = PR_VERDICT_INSTRUCTION,
     )
 }
 
@@ -175,15 +185,15 @@ You are in a fresh checkout of the current PR head. Re-inspect only what changed
 - git log --oneline origin/{base}..HEAD
 - git diff origin/{base}...HEAD
 
-You already remember your previous review — do not re-derive it from scratch. Update it: confirm which earlier findings are now resolved, keep the ones that still apply, and add any new issues the latest changes introduced.
+If you recall your previous review, do not re-derive it from scratch — update it: confirm which earlier findings are now resolved, keep the ones that still apply, and add any new issues the latest changes introduced. If you do not have that context, review the current state of the PR from scratch.
 
 Write the updated review in GitHub-flavored Markdown that the reviewer can paste directly into the pull request (summary, blocking issues with file paths, non-blocking suggestions, what's done well). Output only the Markdown review, with no preamble before it.
 
-On the final line by itself, output the verdict: exactly `{marker} BLOCKERS` if the updated review contains any blocking issue, or `{marker} CLEAN` if it does not. This line is stripped from the review before it is shown.",
+{instruction}",
         pr_number = pr_number,
         title = meta.title,
         base = base,
-        marker = VERDICT_MARKER,
+        instruction = PR_VERDICT_INSTRUCTION,
     )
 }
 
@@ -192,7 +202,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pr_review_prompt_includes_details_and_requests_verdict_marker() {
+    fn pr_review_prompt_includes_details_and_requests_verdict_block() {
         let meta = PrMeta {
             title: "Add request caching".to_string(),
             author: Some("octocat".to_string()),
@@ -206,10 +216,11 @@ mod tests {
         assert!(prompt.contains("octocat"));
         assert!(prompt.contains("origin/main...HEAD"));
         assert!(prompt.to_lowercase().contains("markdown"));
-        // The reviewer is asked to append a machine-readable verdict marker so
+        // The reviewer is asked to append a machine-readable verdict block so
         // the Done state can distinguish passed from blocking.
-        assert!(prompt.contains("NECTUS_VERDICT: BLOCKERS"));
-        assert!(prompt.contains("NECTUS_VERDICT: CLEAN"));
+        assert!(prompt.contains("\"verdict\""));
+        assert!(prompt.contains("blockers"));
+        assert!(prompt.contains("clean"));
     }
 
     #[test]
@@ -241,7 +252,8 @@ mod tests {
         assert!(prompt.contains("Add request caching"));
         assert!(prompt.to_lowercase().contains("already reviewed"));
         assert!(prompt.contains("origin/main...HEAD"));
-        assert!(prompt.contains("NECTUS_VERDICT: BLOCKERS"));
-        assert!(prompt.contains("NECTUS_VERDICT: CLEAN"));
+        assert!(prompt.contains("\"verdict\""));
+        assert!(prompt.contains("blockers"));
+        assert!(prompt.contains("clean"));
     }
 }

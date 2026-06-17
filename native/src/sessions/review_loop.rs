@@ -1,11 +1,9 @@
 //! Task review-loop orchestration: runs a headless reviewer pass in the task
 //! worktree, records the verdict, and streams the reviewer's live output. The
-//! generic reviewer launcher lives in `reviewer.rs`.
+//! headless ACP review driver lives in `review_runtime.rs`.
 
-use super::reviewer::{
-    reviewer_supports_resume, run_reviewer_command, ReviewOutputSink, ReviewOutputTarget,
-};
-use super::verdict::{parse_and_strip, VerdictToken, VERDICT_MARKER};
+use super::review_runtime::{run_review, ReviewSink, ReviewTarget};
+use super::verdict::VerdictToken;
 use crate::db::Database;
 use crate::models::{
     ReviewLoopStatus, ReviewLoopUpdatedEvent, ReviewRunInput, ReviewVerdict, TaskSummary,
@@ -23,8 +21,8 @@ pub(super) fn spawn_task_review(
     task_id: i64,
     cwd: PathBuf,
 ) {
-    std::thread::spawn(move || {
-        if let Err(error) = run_review_round(app.clone(), db.clone(), task_id, &cwd) {
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = run_review_round(app.clone(), db.clone(), task_id, &cwd).await {
             tracing::warn!(?error, task_id, "review failed");
             let _ = db
                 .lock()
@@ -34,7 +32,7 @@ pub(super) fn spawn_task_review(
     });
 }
 
-fn run_review_round(
+async fn run_review_round(
     app: AppHandle,
     db: Arc<Mutex<Database>>,
     task_id: i64,
@@ -61,13 +59,9 @@ fn run_review_round(
 
     // Reuse a resolved reviewer session so repeat rounds resume the same
     // conversation instead of booting cold and re-deriving the whole review.
-    // Only resume-capable reviewers (Claude/Codex/OpenCode) carry a session.
-    let supports_resume = reviewer_supports_resume(reviewer.agent_kind);
-    let resume_id = if supports_resume {
-        db.lock().review_loop_session_id(task_id)?
-    } else {
-        None
-    };
+    // The driver only sends `session/load` when the agent advertises it, so a
+    // non-resume-capable reviewer simply starts a fresh session.
+    let resume_id = db.lock().review_loop_session_id(task_id)?;
     let resuming = resume_id.is_some();
     let prompt = if resuming {
         build_review_continuation_prompt(&task)
@@ -75,48 +69,57 @@ fn run_review_round(
         build_review_prompt(&task)
     };
     tracing::info!(task_id, reviewer = %reviewer.name, resuming, "starting review");
-    // Stream the reviewer's stdout to the workspace so the user can watch the
+    // Stream the reviewer's message to the workspace so the user can watch the
     // review progress live (read-only); the full output is still captured below.
-    let sink = ReviewOutputSink {
+    let sink = ReviewSink {
         app: app.clone(),
-        target: ReviewOutputTarget::Task(task_id),
+        target: ReviewTarget::Task(task_id),
     };
-    let run_output =
-        match run_reviewer_command(&reviewer, cwd, &prompt, resume_id.as_deref(), Some(&sink)) {
-            Ok(output) => output,
-            Err(error) => {
-                let run = db.lock().record_review_run(ReviewRunInput {
-                    task_id,
-                    reviewer_profile_id: reviewer.id,
-                    verdict: ReviewVerdict::Unknown,
-                    prompt,
-                    output: String::new(),
-                    error: Some(error.clone()),
-                })?;
-                emit_review_loop_update(&app, &db, task_id, Some(run));
-                return Err(error);
-            }
-        };
+    let run_output = match run_review(
+        app.clone(),
+        db.clone(),
+        &reviewer,
+        cwd,
+        &prompt,
+        resume_id.as_deref(),
+        Some(sink),
+    )
+    .await
+    {
+        Ok(output) => output,
+        Err(error) => {
+            let run = db.lock().record_review_run(ReviewRunInput {
+                task_id,
+                reviewer_profile_id: reviewer.id,
+                verdict: ReviewVerdict::Unknown,
+                prompt,
+                output: String::new(),
+                error: Some(error.clone()),
+            })?;
+            emit_review_loop_update(&app, &db, task_id, Some(run));
+            return Err(error);
+        }
+    };
 
     // Capture once, keep: persist the resolved id only when we did not already
     // have one, so the canonical thread (esp. for Codex/OpenCode) is the one we
     // keep resuming.
-    if supports_resume && !resuming {
+    if !resuming {
         if let Some(session_id) = run_output.session_id.as_deref() {
             db.lock()
                 .set_review_loop_session_id(task_id, Some(session_id))?;
         }
     }
-    // The marker line is stripped here, so the verdict noise never reaches the DB
-    // record or the worker-agent feedback prompt.
-    let (verdict, reviewer_output) = parse_review_verdict(&run_output.text);
+    // The driver already parsed the verdict and stripped its block from the text,
+    // so the verdict noise never reaches the DB record or the worker-agent prompt.
+    let verdict = verdict_from_token(run_output.verdict);
     let error = (verdict == ReviewVerdict::Unknown).then(|| UNCLEAR_REVIEW_ERROR.to_string());
     let run = db.lock().record_review_run(ReviewRunInput {
         task_id,
         reviewer_profile_id: reviewer.id,
         verdict,
         prompt,
-        output: reviewer_output.clone(),
+        output: run_output.text,
         error,
     })?;
     tracing::info!(task_id, verdict = %verdict.as_str(), "recorded review");
@@ -144,20 +147,15 @@ fn emit_review_loop_update(
     );
 }
 
-/// Parse the reviewer's verdict from its `NECTUS_VERDICT:` marker (via the shared
-/// [`super::verdict`] contract) and return it alongside the review with the marker
-/// line stripped. A missing marker yields `Unknown` — there is no natural-language
-/// fallback (it mis-classified reviews that merely quoted phrases like "blocking
-/// issue").
-pub(super) fn parse_review_verdict(output: &str) -> (ReviewVerdict, String) {
-    let (token, text) = parse_and_strip(output);
-    let verdict = match token {
+/// Map the shared verdict token to the task-review domain enum. A missing verdict
+/// (`None`) is `Unknown`, surfaced to the user as an unclear-review error.
+fn verdict_from_token(token: Option<VerdictToken>) -> ReviewVerdict {
+    match token {
         Some(VerdictToken::Clean) => ReviewVerdict::Pass,
         Some(VerdictToken::Blockers) => ReviewVerdict::NeedsChanges,
         Some(VerdictToken::Feedback) => ReviewVerdict::Feedback,
         None => ReviewVerdict::Unknown,
-    };
-    (verdict, text)
+    }
 }
 
 pub(super) fn build_review_prompt(task: &TaskSummary) -> String {
@@ -177,46 +175,45 @@ Start from:
 - git diff --no-ext-diff HEAD --
 
 Review only for blocking correctness issues, regressions, missing tests, unsafe behavior, or clear requirement misses.
-On the first line by itself, output one verdict token:
-- {marker} BLOCKERS when there are blockers that must be fixed before this task can be accepted.
-- {marker} FEEDBACK when there are no blockers, but there is meaningful implementation or approach feedback worth considering.
-- {marker} CLEAN when there are no blockers and no material feedback.
-This verdict line is stripped before the review is shown.
-
-After a BLOCKERS verdict, list only concise blockers with file paths when possible.
-After a FEEDBACK verdict, list concise non-blocking implementation or approach suggestions.
+List concise blockers with file paths when possible, then any concise non-blocking implementation or approach suggestions.
 Do not mark style nits or minor preference differences as blockers.
+
+After the review, end your message with a fenced code block containing only the machine verdict, exactly:
+```json
+{{\"verdict\": \"blockers\"}}
+```
+Use \"blockers\" when there are blockers that must be fixed, \"feedback\" when there are no blockers but there is meaningful implementation feedback, or \"clean\" when there are no blockers and no material feedback. This block is stripped before the review is shown.
 ",
         title = task.title,
         brief = task.prompt.as_deref().unwrap_or("No task brief provided."),
-        marker = VERDICT_MARKER,
     )
 }
 
 pub(super) fn build_review_continuation_prompt(task: &TaskSummary) -> String {
     format!(
         "\
-You have already reviewed this task earlier in this same conversation, and the author has responded to your feedback.
+You reviewed this task earlier and the author has since responded to your feedback. Review it again.
 
 Task title:
 {title}
 
-Re-inspect only what changed since your last review:
+Task brief (for reference):
+{brief}
+
+Re-inspect what changed since your last review:
 - git status --short
 - git diff --no-ext-diff HEAD --
 
-You already remember your prior findings — do not re-derive the whole review. Confirm whether your earlier blockers were addressed and whether the latest changes introduced new ones.
-On the first line by itself, output one verdict token:
-- {marker} BLOCKERS when blockers remain or new ones appeared.
-- {marker} FEEDBACK when there are no blockers, but there is meaningful implementation or approach feedback worth considering.
-- {marker} CLEAN when there are no blockers and no material feedback.
-This verdict line is stripped before the review is shown.
+If you recall your prior findings, do not re-derive the whole review — confirm whether your earlier blockers were addressed and whether the latest changes introduced new ones. If you do not have that context, review the current state against the brief. Report the outstanding blockers with file paths when possible, then any concise non-blocking suggestions.
 
-After a BLOCKERS verdict, list only the concise outstanding blockers with file paths when possible.
-After a FEEDBACK verdict, list concise non-blocking implementation or approach suggestions.
+After the review, end your message with a fenced code block containing only the machine verdict, exactly:
+```json
+{{\"verdict\": \"blockers\"}}
+```
+Use \"blockers\" when blockers remain or new ones appeared, \"feedback\" when there are no blockers but there is meaningful implementation feedback, or \"clean\" when there are no blockers and no material feedback. This block is stripped before the review is shown.
 ",
         title = task.title,
-        marker = VERDICT_MARKER,
+        brief = task.prompt.as_deref().unwrap_or("No task brief provided."),
     )
 }
 
@@ -259,51 +256,20 @@ mod tests {
     }
 
     #[test]
-    fn maps_clean_token_to_pass() {
+    fn maps_tokens_to_review_verdicts() {
         assert_eq!(
-            parse_review_verdict("NECTUS_VERDICT: CLEAN\nNo blockers found.").0,
+            verdict_from_token(Some(VerdictToken::Clean)),
             ReviewVerdict::Pass
         );
-    }
-
-    #[test]
-    fn maps_blockers_token_to_needs_changes() {
         assert_eq!(
-            parse_review_verdict(
-                "NECTUS_VERDICT: BLOCKERS\n- native/src/lib.rs misses the command registration."
-            )
-            .0,
+            verdict_from_token(Some(VerdictToken::Blockers)),
             ReviewVerdict::NeedsChanges
         );
-    }
-
-    #[test]
-    fn maps_feedback_token_to_feedback() {
         assert_eq!(
-            parse_review_verdict("NECTUS_VERDICT: FEEDBACK\nConsider a smaller helper.").0,
+            verdict_from_token(Some(VerdictToken::Feedback)),
             ReviewVerdict::Feedback
         );
-    }
-
-    #[test]
-    fn strips_marker_from_forwarded_review_text() {
-        let (_, text) = parse_review_verdict("NECTUS_VERDICT: BLOCKERS\n- missing test");
-        assert_eq!(text, "- missing test");
-        assert!(!text.contains("NECTUS_VERDICT"));
-    }
-
-    #[test]
-    fn leaves_unmarked_reviewer_output_unknown() {
-        // No marker and no natural-language fallback: "blocking issue" in prose
-        // must NOT be classified — only the explicit token decides.
-        assert_eq!(
-            parse_review_verdict("Blocking issue: but this is just me explaining one.").0,
-            ReviewVerdict::Unknown
-        );
-        assert_eq!(
-            parse_review_verdict("Looks reasonable overall.").0,
-            ReviewVerdict::Unknown
-        );
+        assert_eq!(verdict_from_token(None), ReviewVerdict::Unknown);
     }
 
     #[test]
@@ -314,9 +280,10 @@ mod tests {
         assert!(prompt.contains("Add project settings with tests"));
         assert!(prompt.contains("git diff --no-ext-diff HEAD --"));
         assert!(!prompt.contains("diff --git a/src/App.tsx b/src/App.tsx"));
-        assert!(prompt.contains("NECTUS_VERDICT: CLEAN"));
-        assert!(prompt.contains("NECTUS_VERDICT: BLOCKERS"));
-        assert!(prompt.contains("NECTUS_VERDICT: FEEDBACK"));
+        assert!(prompt.contains("\"verdict\""));
+        assert!(prompt.contains("blockers"));
+        assert!(prompt.contains("clean"));
+        assert!(prompt.contains("feedback"));
     }
 
     #[test]
@@ -324,11 +291,15 @@ mod tests {
         let prompt = build_review_continuation_prompt(&task());
 
         assert!(prompt.contains("Implement settings panel"));
-        assert!(prompt.to_lowercase().contains("already reviewed"));
+        // The brief is included so a cold-resumed session (an agent without
+        // `session/load`) still has the task context, not just the title.
+        assert!(prompt.contains("Add project settings with tests"));
+        assert!(prompt.to_lowercase().contains("reviewed this task earlier"));
         assert!(prompt.contains("git diff --no-ext-diff HEAD --"));
-        assert!(prompt.contains("NECTUS_VERDICT: CLEAN"));
-        assert!(prompt.contains("NECTUS_VERDICT: BLOCKERS"));
-        assert!(prompt.contains("NECTUS_VERDICT: FEEDBACK"));
+        assert!(prompt.contains("\"verdict\""));
+        assert!(prompt.contains("blockers"));
+        assert!(prompt.contains("clean"));
+        assert!(prompt.contains("feedback"));
         assert!(!prompt.contains("diff --git"));
     }
 }

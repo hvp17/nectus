@@ -111,6 +111,38 @@ fn build_acp_argv(
     argv
 }
 
+/// Resolve a provider's ACP launch into the `AcpAgent::from_args` token list:
+/// login-shell env assignments, the augmented PATH, provider executable-path env,
+/// the resolved binary, then its launch args. Shared by chat (`AcpManager::start`)
+/// and headless reviews (`review_runtime`). See CLAUDE.md → Spawning External CLIs.
+pub(super) fn launch_argv_for_profile(
+    provider: &super::acp::AcpProviderDescriptor,
+    profile_env: &BTreeMap<String, String>,
+) -> Vec<String> {
+    let path_env = crate::process_util::augmented_path()
+        .to_string_lossy()
+        .into_owned();
+    let resolved = crate::process_util::resolve_executable(&provider.launch.command)
+        .to_string_lossy()
+        .into_owned();
+    let provider_env = provider.executable_env.into_iter().map(|executable| {
+        (
+            executable.var.to_string(),
+            crate::process_util::resolve_executable(executable.command)
+                .to_string_lossy()
+                .into_owned(),
+        )
+    });
+    build_acp_argv(
+        &provider.launch,
+        path_env,
+        resolved,
+        crate::process_util::login_shell_environment(),
+        provider_env,
+        profile_env,
+    )
+}
+
 /// A pending permission map: our request id → the channel that delivers the
 /// user's chosen option id (or `None` to cancel).
 type PendingPermissions = Arc<Mutex<HashMap<String, oneshot::Sender<Option<String>>>>>;
@@ -199,28 +231,7 @@ impl AcpManager {
         // (ANTHROPIC_API_KEY/OPENAI_API_KEY, HOME, …) reach the agent from a
         // Finder-launched .app (else "API key is missing"). The selected profile's
         // env is appended last so profile-specific keys/PATH still win.
-        let path_env = crate::process_util::augmented_path()
-            .to_string_lossy()
-            .into_owned();
-        let resolved = crate::process_util::resolve_executable(&provider.launch.command)
-            .to_string_lossy()
-            .into_owned();
-        let provider_env = provider.executable_env.into_iter().map(|executable| {
-            (
-                executable.var.to_string(),
-                crate::process_util::resolve_executable(executable.command)
-                    .to_string_lossy()
-                    .into_owned(),
-            )
-        });
-        let argv = build_acp_argv(
-            &provider.launch,
-            path_env,
-            resolved,
-            crate::process_util::login_shell_environment(),
-            provider_env,
-            &agent.env,
-        );
+        let argv = launch_argv_for_profile(&provider, &agent.env);
 
         let abort = tauri::async_runtime::spawn(run_connection(Connection {
             app,
@@ -1064,7 +1075,7 @@ fn path_file_uri(path: &Path) -> String {
     uri
 }
 
-fn build_initialize_request() -> InitializeRequest {
+pub(super) fn build_initialize_request() -> InitializeRequest {
     InitializeRequest::new(ProtocolVersion::V1).client_info(
         Implementation::new("nectus-desktop", env!("CARGO_PKG_VERSION")).title("Nectus Desktop"),
     )

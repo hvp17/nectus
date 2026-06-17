@@ -12,21 +12,26 @@ use parking_lot::Mutex;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-/// Prepare an ephemeral worktree of PR `pr_number`'s head, run `run` inside it,
-/// and always tear it (and its branch) down afterwards.
+/// Prepare an ephemeral worktree of PR `pr_number`'s head, run the async `run`
+/// inside it, and always tear it (and its branch) down afterwards. The closure
+/// receives an owned `PathBuf` so it can be held across `.await`.
 ///
 /// The branch/worktree are named `nectus-pr-review-<pr>-<review_id>` so concurrent
 /// reviews of the same PR (a single + a consensus review, or two reviews of one
 /// PR) never collide on the path or share a branch. The branch is deleted on
 /// teardown so reviewed PRs don't leave a trail of `nectus-pr-review-*` branches.
-pub(super) fn with_pr_worktree<T>(
+pub(super) async fn with_pr_worktree<T, F, Fut>(
     db: &Arc<Mutex<Database>>,
     review_id: i64,
     repo_path: &Path,
     default_worktree_root: &str,
     pr_number: i64,
-    run: impl FnOnce(&Path) -> Result<T, String>,
-) -> Result<T, String> {
+    run: F,
+) -> Result<T, String>
+where
+    F: FnOnce(PathBuf) -> Fut,
+    Fut: std::future::Future<Output = Result<T, String>>,
+{
     let branch_name = format!("nectus-pr-review-{pr_number}-{review_id}");
     let worktree_path = PathBuf::from(default_worktree_root).join(&branch_name);
 
@@ -34,13 +39,14 @@ pub(super) fn with_pr_worktree<T>(
     let _ = git_ops::remove_worktree(repo_path, &worktree_path, true);
     let _ = git_ops::delete_branch(repo_path, &branch_name);
 
-    let result = (|| {
+    let result = async {
         git_ops::fetch_pull_request_ref(repo_path, pr_number, &branch_name)?;
         git_ops::create_worktree_at_ref(repo_path, &worktree_path, &branch_name)?;
         db.lock()
             .set_pr_review_worktree(review_id, Some(&worktree_path.to_string_lossy()))?;
-        run(&worktree_path)
-    })();
+        run(worktree_path.clone()).await
+    }
+    .await;
 
     // Always tear down — worktree, ephemeral branch, and the persisted path —
     // whether or not the review succeeded.

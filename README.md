@@ -6,7 +6,8 @@ work across local git projects and optional git worktrees.
 It is local-first. Projects, tasks, agent profiles, chat state, review-loop
 history, and settings are stored in the local SQLite database created by the
 desktop app. The frontend does not call git or shell commands directly; OS,
-git, SQLite, ACP child processes, and reviewer CLI work live in the Rust backend.
+git, SQLite, and ACP child processes (both chat and headless reviews) live in the
+Rust backend.
 
 > **New to the codebase? Start with [docs/architecture.md](docs/architecture.md)** —
 > the one-page model of how the five layers connect, a traced request lifecycle, and

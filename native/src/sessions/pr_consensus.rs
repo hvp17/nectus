@@ -1,7 +1,7 @@
-use super::pr_review::build_pr_review_prompt;
-use super::pr_verdict::{parse_pr_review_output, VERDICT_MARKER};
+use super::pr_review::{build_pr_review_prompt, PR_VERDICT_INSTRUCTION};
+use super::pr_verdict::pr_verdict_from_token;
 use super::pr_worktree::with_pr_worktree;
-use super::reviewer::{reviewer_supports_resume, run_reviewer_command, ReviewerRunOutput};
+use super::review_runtime::{run_review, ReviewRun};
 use crate::db::Database;
 use crate::github::{self, PrMeta};
 use crate::models::{
@@ -15,8 +15,8 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
 /// A reviewer's outcome for one round, used to feed the next round and the final
-/// synthesis. `review` is the human-facing Markdown with the verdict marker
-/// already stripped; `error` is set instead when that reviewer failed to run.
+/// synthesis. `review` is the human-facing Markdown with the verdict block already
+/// stripped by the ACP driver; `error` is set instead when that reviewer failed to run.
 struct ReviewerOutcome {
     reviewer_profile_id: i64,
     name: String,
@@ -32,8 +32,8 @@ const MAX_PEER_REVIEW_CHARS: usize = 6000;
 /// Run a queued consensus review on a background thread, mirroring
 /// [`super::pr_review::spawn_pr_review`] but fanning out to several reviewers.
 pub(super) fn spawn_consensus_pr_review(app: AppHandle, db: Arc<Mutex<Database>>, review_id: i64) {
-    std::thread::spawn(move || {
-        if let Err(error) = run_consensus_pr_review(&app, &db, review_id) {
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = run_consensus_pr_review(&app, &db, review_id).await {
             tracing::warn!(?error, review_id, "consensus pr review failed");
             let _ = db
                 .lock()
@@ -43,7 +43,7 @@ pub(super) fn spawn_consensus_pr_review(app: AppHandle, db: Arc<Mutex<Database>>
     });
 }
 
-fn run_consensus_pr_review(
+async fn run_consensus_pr_review(
     app: &AppHandle,
     db: &Arc<Mutex<Database>>,
     review_id: i64,
@@ -98,20 +98,22 @@ fn run_consensus_pr_review(
         &repo_path,
         &default_worktree_root,
         pr_number,
-        |worktree_path| {
+        |worktree_path| async move {
             run_rounds_and_synthesize(
                 app,
                 db,
                 review_id,
-                worktree_path,
+                &worktree_path,
                 pr_number,
                 &reviewers,
                 &synthesizer,
                 max_rounds,
                 &meta,
             )
+            .await
         },
-    );
+    )
+    .await;
 
     let (converged, verdict, review_output) = outcome?;
     db.lock()
@@ -121,7 +123,7 @@ fn run_consensus_pr_review(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn run_rounds_and_synthesize(
+async fn run_rounds_and_synthesize(
     app: &AppHandle,
     db: &Arc<Mutex<Database>>,
     review_id: i64,
@@ -152,16 +154,15 @@ fn run_rounds_and_synthesize(
                 } else {
                     build_debate_prompt(pr_number, meta, round, reviewer.id, &last_round)
                 };
-                let resume_id = if reviewer_supports_resume(reviewer.agent_kind) {
-                    sessions.get(&reviewer.id).cloned()
-                } else {
-                    None
-                };
+                // Every reviewer carries a session now; the ACP driver only sends
+                // `session/load` when the agent advertises it, so a non-resume
+                // reviewer just starts fresh.
+                let resume_id = sessions.get(&reviewer.id).cloned();
                 (reviewer, prompt, resume_id)
             })
             .collect();
 
-        let outputs = run_round_parallel(&plans, worktree_path);
+        let outputs = run_round_parallel(app, db, &plans, worktree_path).await;
 
         let mut round_outcomes = Vec::with_capacity(plans.len());
         for ((reviewer, _prompt, _resume), output) in plans.iter().zip(outputs) {
@@ -171,8 +172,7 @@ fn run_rounds_and_synthesize(
                     if let Some(session_id) = run.session_id {
                         sessions.entry(reviewer.id).or_insert(session_id);
                     }
-                    let (verdict, review) = parse_pr_review_output(&run.text);
-                    (verdict, review, None)
+                    (pr_verdict_from_token(run.verdict), run.text, None)
                 }
                 Err(error) => (PrReviewVerdict::Inconclusive, String::new(), Some(error)),
             };
@@ -208,9 +208,18 @@ fn run_rounds_and_synthesize(
 
     // Merge the final round into one consensus review the human can paste.
     let synth_prompt = build_synthesis_prompt(pr_number, meta, converged, &last_round);
-    let synth_raw =
-        run_reviewer_command(synthesizer, worktree_path, &synth_prompt, None, None)?.text;
-    let (synth_verdict, synth_review) = parse_pr_review_output(&synth_raw);
+    let synth_run = run_review(
+        app.clone(),
+        db.clone(),
+        synthesizer,
+        worktree_path,
+        &synth_prompt,
+        None,
+        None,
+    )
+    .await?;
+    let synth_verdict = pr_verdict_from_token(synth_run.verdict);
+    let synth_review = synth_run.text;
     // When the reviewers agreed, that shared verdict is authoritative; otherwise
     // trust the synthesizer's read of the merged review.
     let final_verdict = if converged {
@@ -221,31 +230,25 @@ fn run_rounds_and_synthesize(
     Ok((converged, final_verdict, synth_review))
 }
 
-/// Run every reviewer for one round concurrently on scoped threads, preserving
-/// input order. `run_reviewer_command` blocks on a child process, so a thread
-/// per reviewer is the right fit; a panicked thread becomes an error result.
-fn run_round_parallel(
+/// Run every reviewer for one round concurrently, preserving input order.
+async fn run_round_parallel(
+    app: &AppHandle,
+    db: &Arc<Mutex<Database>>,
     plans: &[(&AgentProfile, String, Option<String>)],
     worktree_path: &Path,
-) -> Vec<Result<ReviewerRunOutput, String>> {
-    std::thread::scope(|scope| {
-        let handles: Vec<_> = plans
-            .iter()
-            .map(|(reviewer, prompt, resume)| {
-                scope.spawn(move || {
-                    run_reviewer_command(reviewer, worktree_path, prompt, resume.as_deref(), None)
-                })
-            })
-            .collect();
-        handles
-            .into_iter()
-            .map(|handle| {
-                handle
-                    .join()
-                    .unwrap_or_else(|_| Err("Reviewer thread panicked".to_string()))
-            })
-            .collect()
-    })
+) -> Vec<Result<ReviewRun, String>> {
+    let futures = plans.iter().map(|(reviewer, prompt, resume)| {
+        run_review(
+            app.clone(),
+            db.clone(),
+            reviewer,
+            worktree_path,
+            prompt,
+            resume.as_deref(),
+            None,
+        )
+    });
+    futures::future::join_all(futures).await
 }
 
 fn emit_consensus_update(
@@ -268,7 +271,7 @@ fn emit_consensus_update(
 
 /// The agreed verdict when every reviewer reported the same non-`Inconclusive`
 /// verdict, otherwise `None`. An empty slice or any `Inconclusive` (which a
-/// failed or marker-less review yields) never counts as consensus.
+/// failed or verdict-less review yields) never counts as consensus.
 fn verdicts_converged(verdicts: &[PrReviewVerdict]) -> Option<PrReviewVerdict> {
     let first = *verdicts.first()?;
     if first == PrReviewVerdict::Inconclusive {
@@ -303,7 +306,7 @@ fn clip(text: &str) -> String {
 
 /// Build a later-round prompt for `current_reviewer_id`: the PR context plus the
 /// other reviewers' previous-round reviews, asking them to reconsider and
-/// re-emit a verdict marker.
+/// re-emit a verdict block.
 fn build_debate_prompt(
     pr_number: i64,
     meta: &PrMeta,
@@ -340,10 +343,12 @@ Here are the other reviewers' reviews from the previous round:
 {peers}
 Reconsider your own review in light of theirs. Adopt points they got right that you missed, drop any of your own findings that they correctly refuted, and hold a position only when the actual code justifies it — explain briefly where you still disagree and why. The goal is to converge on a shared, correct conclusion without conceding real blocking issues.
 
-Output your updated review in GitHub-flavored Markdown (summary, blocking issues with file paths, non-blocking suggestions, what's done well), then on the final line by itself the verdict: exactly `{marker} BLOCKERS` if any blocking issue remains, or `{marker} CLEAN` if there are none.",
+Output your updated review in GitHub-flavored Markdown (summary, blocking issues with file paths, non-blocking suggestions, what's done well).
+
+{instruction}",
         base = meta.base_branch.as_deref().unwrap_or("main"),
         context = pr_context(pr_number, meta),
-        marker = VERDICT_MARKER,
+        instruction = PR_VERDICT_INSTRUCTION,
     )
 }
 
@@ -390,10 +395,12 @@ Produce ONE consolidated review in GitHub-flavored Markdown that a human can pas
 - Non-blocking suggestions worth keeping.
 - Where the reviewers disagreed, a brief \"Points of disagreement\" section noting the split.
 
-Do not invent issues beyond what the reviewers raised. On the final line by itself, output the verdict: exactly `{marker} BLOCKERS` if the consolidated review contains any blocking issue, or `{marker} CLEAN` if it does not.",
+Do not invent issues beyond what the reviewers raised.
+
+{instruction}",
         count = reviews.len(),
         context = pr_context(pr_number, meta),
-        marker = VERDICT_MARKER,
+        instruction = PR_VERDICT_INSTRUCTION,
     )
 }
 
@@ -433,7 +440,7 @@ mod tests {
             verdicts_converged(&[PrReviewVerdict::Passed, PrReviewVerdict::Blockers]),
             None
         );
-        // Inconclusive (a failed or marker-less review) is never agreement.
+        // Inconclusive (a failed or verdict-less review) is never agreement.
         assert_eq!(
             verdicts_converged(&[PrReviewVerdict::Inconclusive, PrReviewVerdict::Inconclusive]),
             None
@@ -465,8 +472,7 @@ mod tests {
         assert!(prompt.contains("Claude"));
         assert!(prompt.contains("Claude says it looks fine."));
         assert!(!prompt.contains("Codex found a null deref."));
-        assert!(prompt.contains("NECTUS_VERDICT: BLOCKERS"));
-        assert!(prompt.contains("NECTUS_VERDICT: CLEAN"));
+        assert!(prompt.contains("\"verdict\""));
     }
 
     #[test]
@@ -485,7 +491,7 @@ mod tests {
         assert!(converged.contains("reached the same verdict"));
         assert!(converged.contains("Blocking: missing test."));
         assert!(converged.contains("No blockers found."));
-        assert!(converged.contains("NECTUS_VERDICT: BLOCKERS"));
+        assert!(converged.contains("\"verdict\""));
 
         let split = build_synthesis_prompt(7, &meta(), false, &reviews);
         assert!(split.contains("did NOT reach the same verdict"));

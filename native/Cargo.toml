@@ -20,6 +20,7 @@ tauri-build = { version = "2", features = [] }
 agent-client-protocol = "0.14"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
+futures = "0.3"
 # `apple-native` is required: keyring 3 makes platform keystores opt-in and
 # silently falls back to an in-memory mock store without it — tokens would
 # "save" but vanish on app relaunch.

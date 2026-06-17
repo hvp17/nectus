@@ -1,13 +1,11 @@
 mod acp;
 mod acp_manager;
-mod command;
 mod pr_consensus;
 mod pr_review;
 mod pr_verdict;
 mod pr_worktree;
 mod review_loop;
-mod reviewer;
-mod reviewer_output;
+mod review_runtime;
 mod verdict;
 
 use crate::db::Database;

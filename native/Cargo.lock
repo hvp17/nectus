@@ -2349,6 +2349,7 @@ dependencies = [
  "agent-client-protocol",
  "base64 0.22.1",
  "chrono",
+ "futures",
  "keyring",
  "parking_lot",
  "rusqlite",
