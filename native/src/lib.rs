@@ -1095,51 +1095,6 @@ fn start_pair_loop(
 }
 
 #[tauri::command]
-fn run_pair_review(
-    task_id: i64,
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-) -> AppResult<ReviewLoop> {
-    let review_loop = state
-        .db
-        .lock()
-        .review_loop_by_task_id(task_id)?
-        .ok_or_else(|| "Start a review before running the reviewer".to_string())?;
-    if review_loop.status != crate::models::ReviewLoopStatus::Running {
-        return Err(format!(
-            "Review loop is not ready to run: {}",
-            review_loop.status.as_str()
-        )
-        .into());
-    }
-    let cwd = {
-        let task = state
-            .db
-            .lock()
-            .task_by_id(task_id)?
-            .ok_or_else(|| "Task not found".to_string())?;
-        task.worktree_path
-            .or_else(|| {
-                task.task_repos
-                    .first()
-                    .and_then(|repo| repo.worktree_path.clone())
-            })
-            .or_else(|| {
-                state
-                    .db
-                    .lock()
-                    .repo_by_id(task.repo_id)
-                    .ok()
-                    .flatten()
-                    .map(|repo| repo.path)
-            })
-            .ok_or_else(|| "Task has no repository path to review".to_string())?
-    };
-    sessions::spawn_task_review(app, state.db.clone(), task_id, cwd.into());
-    Ok(review_loop)
-}
-
-#[tauri::command]
 fn stop_pair_loop(task_id: i64, state: State<'_, AppState>) -> AppResult<ReviewLoop> {
     app_result(state.db.lock().stop_review_loop(task_id))
 }
@@ -1193,8 +1148,8 @@ async fn acp_send_prompt(
 
 /// Run an on-demand inline review (`/review`): resolve the task's reviewer +
 /// worktree cwd + resumable reviewer session, then spawn the headless ACP review
-/// that streams a `Subagent` message into the task chat. Additive to the Review
-/// pane path (`run_pair_review`), which stays for now.
+/// that streams a `Subagent` message into the task chat. The reviewer is the one
+/// configured for the task via `start_pair_loop`.
 #[tauri::command]
 async fn acp_start_review(
     task_id: i64,
@@ -1430,7 +1385,6 @@ pub fn run() {
             list_agent_profiles,
             upsert_agent_profile,
             start_pair_loop,
-            run_pair_review,
             stop_pair_loop,
             get_task_review_loop,
             list_task_review_runs,

@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { Check, ChevronDown, GitPullRequest, LoaderCircle } from "lucide-react";
+import { Check, ChevronDown, GitPullRequest, LoaderCircle, MessagesSquare } from "lucide-react";
 import { AgentLogo } from "./AgentBrand";
 import { Button } from "./ui/button";
 import {
@@ -39,8 +39,6 @@ export interface TaskWorkspaceProps {
   agentProfiles: AgentProfile[];
   reviewLoop?: ReviewLoop | null;
   reviewRuns: ReviewRun[];
-  /** Live stdout of the task's reviewer, streamed for the read-only Review pane. */
-  liveReviewOutput?: string;
   githubStatus?: GithubStatus;
   pullRequest?: PullRequestInfo | null;
   pullRequestLoading?: boolean;
@@ -54,7 +52,8 @@ export interface TaskWorkspaceProps {
   activeRepoId?: number;
   onSelectRepo?: (repoId: number | undefined) => void;
   onClose: () => void;
-  onStartReview: (task: TaskSummary, reviewerProfileId: number) => void;
+  /** Persist the task's reviewer choice (`start_pair_loop`); reviews run via `/review`. */
+  onConfigureReviewer: (task: TaskSummary, reviewerProfileId: number) => void;
   onCreatePullRequest: (task: TaskSummary, options?: { draft?: boolean }) => void;
   onRefreshPullRequest: (task: TaskSummary) => void;
   onMergePullRequest: (task: TaskSummary, method: MergeMethod) => void;
@@ -112,7 +111,6 @@ export function TaskWorkspace({
   agentProfiles,
   reviewLoop,
   reviewRuns,
-  liveReviewOutput = "",
   githubStatus,
   pullRequest,
   pullRequestLoading = false,
@@ -123,7 +121,7 @@ export function TaskWorkspace({
   activeRepoId,
   onSelectRepo,
   onClose,
-  onStartReview,
+  onConfigureReviewer,
   onCreatePullRequest,
   onRefreshPullRequest,
   onMergePullRequest,
@@ -151,7 +149,7 @@ export function TaskWorkspace({
   const { refresh: refreshDiff } = diff;
   const acpProviders = useAcpProvidersQuery().data ?? [];
   const chatWorkingTaskIds = useAppStore((s) => s.chatWorkingTaskIds);
-  const [stageTab, setStageTab] = useState<"diff" | "review" | "chat">("chat");
+  const [stageTab, setStageTab] = useState<"diff" | "chat">("chat");
   const [diffSelectedFile, setDiffSelectedFile] = useState<string | null>(null);
   const refreshDiffForOpenTab = useEffectEvent(() => {
     void refreshDiff();
@@ -162,15 +160,6 @@ export function TaskWorkspace({
   useEffect(() => {
     if (stageTab === "diff") refreshDiffForOpenTab();
   }, [stageTab]);
-
-  // Surface the live reviewer the moment a review starts, so "checking progress"
-  // is one rising-edge switch away; the user can toggle back at any time.
-  const reviewIsRunning = reviewLoop?.status === "reviewing";
-  const wasReviewRunning = useRef(false);
-  useEffect(() => {
-    if (reviewIsRunning && !wasReviewRunning.current) setStageTab("review");
-    wasReviewRunning.current = reviewIsRunning;
-  }, [reviewIsRunning]);
 
   const chatWorking = task ? Boolean(chatWorkingTaskIds[task.id]) : false;
   const openedTaskIdRef = useRef<number | null>(null);
@@ -196,11 +185,6 @@ export function TaskWorkspace({
     ) : undefined;
 
   const latestReviewRun = reviewRuns.at(-1);
-  // The Review pane shows the live stream while reviewing; once a run finishes it
-  // keeps that text (the live buffer equals the final output) and falls back to
-  // the last recorded run when there is no live buffer (e.g. a reopened task).
-  const reviewOutput =
-    liveReviewOutput || (reviewLoop?.status === "reviewing" ? "" : latestReviewRun?.error ?? latestReviewRun?.output ?? "");
   const diffFileCount = diff.summary?.files.length ?? 0;
   // Aggregate line-change totals so the stage header can summarize the diff size
   // next to the Diff toggle (binary files contribute 0 and are simply skipped).
@@ -214,6 +198,9 @@ export function TaskWorkspace({
   );
   const selectedReviewerProfile = agentProfiles.find((profile) => profile.id === reviewerProfileId);
   const reviewActive = Boolean(reviewLoop && isReviewLoopActive(reviewLoop.status));
+  // Inline `/review` reviews never set the loop to "reviewing" (that was the old
+  // pane runner), so this stays false on the inline path; the workflow ribbon's
+  // "Reviewing…" affordance is kept only for the task-status concept.
   const reviewInProgress = reviewLoop?.status === "reviewing";
   const agentLabel = task.agentName ?? "None";
   const {
@@ -221,7 +208,6 @@ export function TaskWorkspace({
     displayed: displayedAttentionDetail,
     truncated: isAttentionDetailTruncated,
   } = deriveAttentionPreview(attention);
-  const startReviewDisabled = !selectedReviewerProfile || agentProfiles.length === 0 || reviewInProgress;
   const reviewReadyForNextStep = reviewLoop?.status === "passed";
   const githubReady = isCliConnected(githubStatus);
   const canCreateViaGithub = Boolean(githubReady && task.hasWorktree && !task.prUrl);
@@ -239,32 +225,24 @@ export function TaskWorkspace({
     reviewInProgress,
     reviewPassed: reviewReadyForNextStep,
   });
-  const reviewActionLabel = selectedReviewerProfile
-    ? `${reviewInProgress ? "Reviewing with" : "Review with"} ${selectedReviewerProfile.name}`
-    : "Review with reviewer";
-  const startReview = () => {
-    if (!reviewerProfileId || startReviewDisabled) return;
-    onStartReview(task, reviewerProfileId);
+  // Persist the reviewer choice the moment it changes (config only). The review
+  // itself runs inline via `/review` in chat, not from this ribbon.
+  const configureReviewer = (profileId: number) => {
+    setReviewerProfileId(profileId);
+    onConfigureReviewer(task, profileId);
   };
   const openChatFile = (path: string) => {
     setDiffSelectedFile(path);
   };
   // Each step carries the inline action shown when it is the CURRENT step. The
-  // prototype attaches the action to the active step (Review controls, then the
-  // Create PR button, then Move to done), not to a fixed index.
+  // Review step now only configures the reviewer (the run moved to `/review` in
+  // chat); a short hint points the user there.
   const reviewAction = (
     <>
-      <Button
-        type="button"
-        size="sm"
-        className="h-8"
-        aria-label={reviewActionLabel}
-        disabled={startReviewDisabled}
-        onClick={startReview}
-      >
-        {reviewInProgress && <LoaderCircle data-icon="inline-start" className="animate-spin" />}
-        <span>{reviewInProgress ? "Reviewing" : "Review"}</span>
-      </Button>
+      <span className="hidden items-center gap-1 text-[11px] text-muted-foreground sm:flex">
+        <MessagesSquare className="size-3" aria-hidden="true" />
+        Run <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10.5px]">/review</code> in chat
+      </span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -293,7 +271,7 @@ export function TaskWorkspace({
             {agentProfiles.map((profile) => (
               <DropdownMenuItem
                 key={profile.id}
-                onSelect={() => setReviewerProfileId(profile.id)}
+                onSelect={() => configureReviewer(profile.id)}
                 className="justify-between"
               >
                 <span className="inline-flex min-w-0 items-center gap-2">
@@ -346,7 +324,7 @@ export function TaskWorkspace({
       description: reviewInProgress
         ? "Reviewer is checking the task"
         : selectedReviewerProfile
-          ? `${selectedReviewerProfile.name} will inspect this worktree`
+          ? `${selectedReviewerProfile.name} reviews via /review in chat`
           : "Choose a reviewer profile",
       completed: reviewReadyForNextStep || task.status === "done",
       loading: reviewInProgress,
@@ -391,8 +369,6 @@ export function TaskWorkspace({
         diff={diff}
         diffFileCount={diffFileCount}
         diffTotals={diffTotals}
-        reviewOutput={reviewOutput}
-        reviewInProgress={reviewInProgress}
         attention={attention}
         displayedAttentionDetail={displayedAttentionDetail}
         attentionDetail={attentionDetail}
@@ -415,8 +391,6 @@ export function TaskWorkspace({
         pullRequestBusy={pullRequestBusy}
         reviewLoop={reviewLoop}
         latestReviewRun={latestReviewRun}
-        reviewInProgress={reviewInProgress}
-        reviewOutput={reviewOutput}
         jiraSite={jiraSite}
         busy={busy}
         isDeleting={isDeleting}
@@ -429,7 +403,6 @@ export function TaskWorkspace({
         onSetJiraLink={onSetJiraLink}
         onArchiveTask={onArchiveTask}
         onDeleteTask={onDeleteTask}
-        onWatchReview={() => setStageTab("review")}
       />
     </section>
   );

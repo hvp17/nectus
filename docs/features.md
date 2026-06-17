@@ -343,12 +343,12 @@ ownership: see [AGENTS.md](../AGENTS.md).
 
 ## Task Diff
 
-The task workspace stage has a `Chat | Diff | Review` segmented control, so you
-can talk to the task agent, inspect what changed, or watch a reviewer without
-leaving the app. The stage header carries a changed-file count badge and
-`+a −d` line totals next to the toggle (visible on all tabs), the Diff tab adds a
-manual refresh control, the Chat tab is covered in [ACP Agent Chat](#acp-agent-chat),
-and the Review tab is covered in [AI Review](#ai-review).
+The task workspace stage has a `Chat | Diff` segmented control, so you can talk to
+the task agent or inspect what changed without leaving the app. The stage header
+carries a changed-file count badge and `+a −d` line totals next to the toggle
+(visible on both tabs), the Diff tab adds a manual refresh control, and the Chat
+tab is covered in [ACP Agent Chat](#acp-agent-chat). Reviews run inline in chat —
+see [AI Review](#ai-review).
 
 Current behavior:
 
@@ -425,27 +425,24 @@ ownership: see [AGENTS.md](../AGENTS.md).
 
 AI review is a single reviewer pass over the selected task worktree, run as a
 **headless ACP agent session** — the same mechanism chat uses, not a spawned CLI.
+It runs **inline in the task's chat**: type `/review` to launch it as a collapsible
+`Subagent` block in the transcript.
 
 Current behavior:
 
-- Use the task workflow stepper's `Review with <reviewer>` action to run one
-  reviewer pass.
-- The review action shows the reviewer profile icon and name inline. Use the
-  adjacent dropdown to switch reviewer profiles before starting the pass.
-- The review action switches the selected task UI to `reviewing` while the headless
-  ACP review turn runs, and the task workflow stepper shows the in-progress state.
+- Configure the reviewer in the task workflow stepper's Review step: the dropdown
+  shows the reviewer profile icon and name, and picking one persists the choice for
+  the task (`start_pair_loop` writes `review_loop.reviewer_profile_id`). The ribbon
+  and the facts-rail review card both hint to run `/review` in chat.
+- Run a review by typing `/review` (optionally with a focus, e.g.
+  `/review check the error handling`) in the task chat. It launches the configured
+  reviewer as an inline `Subagent` block that streams the reviewer's tool calls,
+  reasoning, and message live in the transcript, then settles with its verdict chip.
 - **Only ACP providers can review.** A reviewer profile must be Claude, Codex,
   OpenCode, or Antigravity; a **Custom** agent has no ACP descriptor and the review
   fails fast with a clear error telling you to choose an ACP provider.
-- The workspace stage has a read-only **Review** tab that streams the agent's live
-  message (`review_output` chunks emitted by `native/src/sessions/review_loop.rs`
-  via the ACP review driver `review_runtime.rs`) into an `xterm.js` pane, so you can
-  watch the reviewer inspect the worktree in real time. Starting a review
-  auto-selects this tab; the facts-rail review card's `Watch live` / `View output`
-  button opens it too. The tab is read-only — there is no input, session, or
-  snapshot — and between runs it shows the last recorded reviewer output. The review
-  turn runs with no human present, so the driver auto-approves every ACP permission
-  request the agent raises.
+- The review turn runs with no human present, so the driver auto-approves every ACP
+  permission request the agent raises.
 - The task workflow stepper enables `Create PR` for worktree tasks once the
   GitHub CLI is connected. Creating a PR, merging, marking ready, and closing are
   all agent-driven through ACP chat: the action submits a prompt, the agent
@@ -484,16 +481,17 @@ Current behavior:
   - `unknown` when no parseable block is present (there is no natural-language
     fallback — a review that merely quotes a phrase like "blocking issue" is not
     classified).
-- Passing review marks the loop `passed` and moves the task to `done`.
-- Task cards show the saved review status once a review exists, including
-  completed `Review passed` state.
+- Each `/review` run is recorded; the facts-rail review card shows the latest run's
+  verdict and feedback, and task cards show the saved review status once a review
+  exists.
 - Blocking review or implementation feedback is stored as review output and shown
-  in the UI. It is no longer written into a worker PTY.
-- Unknown reviewer output marks the loop `error`.
+  in the UI.
+- Unknown reviewer output (no parseable verdict block) is recorded as an
+  unclear-review error on the run.
 
-The review-loop runtime emits two Tauri events: `review_loop_updated` (loop/run
-state changes, routed to the query cache) and `review_output` (the live reviewer
-stdout stream feeding the read-only Review pane).
+After a `/review` run is recorded, the runtime emits `review_loop_updated` (loop/run
+state changes, routed to the query cache) so the facts-rail review card and task
+board refresh.
 
 File ownership: see [AGENTS.md](../AGENTS.md).
 
@@ -540,8 +538,8 @@ Current behavior:
   scrollable pane, a Copy button, a Re-run action (re-fetches the PR head to pick up
   new commits and clears the prior verdict), and Delete.
 - For a **single** review the detail also has a **Review / Terminal** toggle: the
-  Terminal view is a read-only `xterm.js` pane (the same `ReviewTerminalPane` as the
-  task Review tab) that streams the agent's message live over the
+  Terminal view is a read-only `xterm.js` pane (`ReviewTerminalPane`) that streams
+  the agent's message live over the
   `pr_review_output` event, so you can watch it inspect the worktree. A running
   review opens on Terminal and a finished one on Review; the live buffer is
   ephemeral (kept while the review stays selected, not persisted). Consensus

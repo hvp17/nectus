@@ -71,9 +71,9 @@ owned by `useTaskReviewLoop` and `usePrReviews`.
 boards eager, then lazy-loads secondary views (Settings, PR Reviews, JIRA),
 on-demand overlays (composer, workspace manager, task workspace), and the command
 palette behind `Suspense`. Inside the task workspace, `TaskWorkspaceStage` keeps
-the header/ribbon eager but lazy-loads the active `Chat | Diff | Review` pane so
-chat, xterm reviewer output, and diff rendering code load only when that surface
-is shown.
+the header/ribbon eager but lazy-loads the active `Chat | Diff` pane so chat and
+diff rendering code load only when that surface is shown (task reviews now run
+inline as a `Subagent` block in the chat via `/review`, not a separate pane).
 
 ## One request, traced end to end
 
@@ -106,7 +106,7 @@ Starting or sending to an ACP chat shows every layer in motion:
    databases.
 
 The reverse contract — events the backend can emit — is the same for review loops
-(`review_loop_updated`, `review_output`) and PR reviews (`pr_review_updated`).
+(`review_loop_updated`) and PR reviews (`pr_review_updated`, `pr_review_output`).
 
 ## Where does X live?
 

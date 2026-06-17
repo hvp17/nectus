@@ -265,14 +265,6 @@ export interface ReviewLoopUpdatedEvent {
   reviewRun?: ReviewRun | null;
 }
 
-/** A chunk of a task reviewer's live stdout. A chunk at `startOffset` 0 marks the
- *  start of a new run, so the live view resets its buffer. */
-export interface ReviewOutputEvent {
-  taskId: number;
-  data: string;
-  startOffset: number;
-}
-
 /** A chunk of a single PR reviewer's live stdout. A chunk at `startOffset` 0 marks
  *  the start of a new run, so the live view resets its buffer. */
 export interface PrReviewOutputEvent {

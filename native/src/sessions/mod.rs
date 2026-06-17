@@ -9,22 +9,37 @@ mod review_runtime;
 mod verdict;
 
 use crate::db::Database;
-use crate::models::{AgentProfile, ReviewRunInput, ReviewVerdict, TaskSummary};
+use crate::models::{
+    AgentProfile, ReviewLoopUpdatedEvent, ReviewRun, ReviewRunInput, ReviewVerdict, TaskSummary,
+};
 use parking_lot::Mutex;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 
 pub(crate) use acp::acp_provider_infos;
 pub use acp_manager::AcpManager;
 
-pub(crate) fn spawn_task_review(
-    app: AppHandle,
-    db: Arc<Mutex<Database>>,
+/// Emit `review_loop_updated` so the task board + facts-rail review card pick up a
+/// freshly recorded inline-review run (and its verdict). A missing loop row is a
+/// no-op; the inline path always has one (`/review` requires a configured reviewer).
+fn emit_review_loop_update(
+    app: &AppHandle,
+    db: &Arc<Mutex<Database>>,
     task_id: i64,
-    cwd: PathBuf,
+    review_run: Option<ReviewRun>,
 ) {
-    review_loop::spawn_task_review(app, db, task_id, cwd);
+    let Ok(Some(review_loop)) = db.lock().review_loop_by_task_id(task_id) else {
+        return;
+    };
+    let _ = app.emit(
+        "review_loop_updated",
+        ReviewLoopUpdatedEvent {
+            task_id,
+            review_loop,
+            review_run,
+        },
+    );
 }
 
 pub(crate) fn spawn_pr_review(app: AppHandle, db: Arc<Mutex<Database>>, review_id: i64) {
@@ -39,8 +54,7 @@ pub(crate) fn spawn_consensus_pr_review(app: AppHandle, db: Arc<Mutex<Database>>
 /// review, or a continuation when a prior reviewer session is being resumed, with
 /// an optional `focus` appended), run the headless ACP review that streams a
 /// `Subagent` message into the task chat, then record the run and persist the
-/// resolved reviewer session id (capture once, keep) — mirroring the Review-pane
-/// path's recording in `review_loop::run_review_round`.
+/// resolved reviewer session id (capture once, keep).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn spawn_inline_review(
     app: AppHandle,
@@ -65,6 +79,7 @@ pub(crate) fn spawn_inline_review(
     let reviewer_profile_id = reviewer.id;
     let agent_profile_id = Some(reviewer.id);
     let message_id = format!("review-{}", uuid::Uuid::new_v4());
+    let emit_app = app.clone();
     tauri::async_runtime::spawn(async move {
         let result = review_runtime::run_inline_review(
             app,
@@ -79,9 +94,9 @@ pub(crate) fn spawn_inline_review(
             message_id,
         )
         .await;
-        // Record the run + persist the session id (capture once, keep), mirroring
-        // the pane path's recording in `review_loop::run_review_round`.
-        match result {
+        // Record the run + persist the session id (capture once, keep), then emit
+        // `review_loop_updated` so the task board + facts-rail review card refresh.
+        let recorded = match result {
             Ok(run) => {
                 if !resuming {
                     if let Some(sid) = run.session_id.as_deref() {
@@ -91,7 +106,7 @@ pub(crate) fn spawn_inline_review(
                 let verdict = review_loop::verdict_from_token(run.verdict);
                 let error = (verdict == ReviewVerdict::Unknown)
                     .then(|| review_loop::UNCLEAR_REVIEW_ERROR.to_string());
-                if let Err(e) = db.lock().record_review_run(ReviewRunInput {
+                match db.lock().record_review_run(ReviewRunInput {
                     task_id,
                     reviewer_profile_id,
                     verdict,
@@ -99,11 +114,15 @@ pub(crate) fn spawn_inline_review(
                     output: run.text,
                     error,
                 }) {
-                    tracing::warn!(?e, task_id, "failed to record inline review run");
+                    Ok(recorded) => Some(recorded),
+                    Err(e) => {
+                        tracing::warn!(?e, task_id, "failed to record inline review run");
+                        None
+                    }
                 }
             }
             Err(error) => {
-                if let Err(e) = db.lock().record_review_run(ReviewRunInput {
+                match db.lock().record_review_run(ReviewRunInput {
                     task_id,
                     reviewer_profile_id,
                     verdict: ReviewVerdict::Unknown,
@@ -111,9 +130,14 @@ pub(crate) fn spawn_inline_review(
                     output: String::new(),
                     error: Some(error),
                 }) {
-                    tracing::warn!(?e, task_id, "failed to record failed inline review run");
+                    Ok(recorded) => Some(recorded),
+                    Err(e) => {
+                        tracing::warn!(?e, task_id, "failed to record failed inline review run");
+                        None
+                    }
                 }
             }
-        }
+        };
+        emit_review_loop_update(&emit_app, &db, task_id, recorded);
     });
 }

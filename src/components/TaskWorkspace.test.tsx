@@ -93,10 +93,9 @@ function renderTaskWorkspace(input?: {
   attention?: TaskAttention;
   reviewLoop?: ReviewLoop | null;
   reviewRuns?: ReviewRun[];
-  liveReviewOutput?: string;
   githubStatus?: GithubStatus;
   pullRequest?: PullRequestInfo | null;
-  onStartReview?: (task: TaskSummary, reviewerProfileId: number) => void;
+  onConfigureReviewer?: (task: TaskSummary, reviewerProfileId: number) => void;
   onCreatePullRequest?: (task: TaskSummary, options?: { draft?: boolean }) => void;
   onRefreshPullRequest?: (task: TaskSummary) => void;
   onUpdateStatus?: (task: TaskSummary, status: TaskSummary["status"]) => void;
@@ -145,11 +144,10 @@ function renderTaskWorkspace(input?: {
       agentProfiles={agentProfiles}
       reviewLoop={input?.reviewLoop ?? null}
       reviewRuns={input?.reviewRuns ?? []}
-      liveReviewOutput={input?.liveReviewOutput}
       githubStatus={input?.githubStatus}
       pullRequest={input?.pullRequest}
       onClose={vi.fn()}
-      onStartReview={input?.onStartReview ?? vi.fn()}
+      onConfigureReviewer={input?.onConfigureReviewer ?? vi.fn()}
       onCreatePullRequest={input?.onCreatePullRequest ?? vi.fn()}
       onRefreshPullRequest={input?.onRefreshPullRequest ?? vi.fn()}
       onMergePullRequest={vi.fn()}
@@ -249,107 +247,42 @@ describe("TaskWorkspace", () => {
     expect(detail).toHaveAttribute("title", message);
   });
 
-  it("shows single-review controls without rounds", () => {
+  it("configures the reviewer without a run control or a review pane", () => {
     renderTaskWorkspace({ task: { ...task, status: "review" } });
 
-    expect(screen.getByRole("button", { name: /review with claude review/i })).toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: /reviewer/i })).not.toBeInTheDocument();
+    // The reviewer config dropdown stays; the old "Review" run button is gone.
+    expect(screen.getByRole("button", { name: /change reviewer/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /review with claude review/i })).not.toBeInTheDocument();
+    // Reviews now run via /review in chat — no read-only reviewer terminal toggle.
+    expect(screen.queryByLabelText("Show reviewer terminal")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /start pair loop/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("spinbutton", { name: /max rounds/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/round/i)).not.toBeInTheDocument();
   });
 
-  it("starts an immediate review from the workflow stepper", () => {
-    const onStartReview = vi.fn();
-    const reviewTask: TaskSummary = { ...task, status: "review" };
+  it("offers only the Chat and Diff stage toggles", () => {
+    renderTaskWorkspace({ task: { ...task, status: "review" } });
 
-    renderTaskWorkspace({ task: reviewTask, onStartReview });
-
-    screen.getByRole("button", { name: /review with claude review/i }).click();
-
-    expect(onStartReview).toHaveBeenCalledWith(reviewTask, 2);
+    expect(screen.getByLabelText("Show chat")).toBeInTheDocument();
+    expect(screen.getByLabelText("Show diff")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Show reviewer terminal")).not.toBeInTheDocument();
   });
 
-  it("changes the reviewer from the review action dropdown", async () => {
-    const onStartReview = vi.fn();
+  it("persists the reviewer choice from the review action dropdown", async () => {
+    const onConfigureReviewer = vi.fn();
     const reviewTask: TaskSummary = { ...task, status: "review" };
 
-    renderTaskWorkspace({ task: reviewTask, onStartReview });
+    renderTaskWorkspace({ task: reviewTask, onConfigureReviewer });
 
     fireEvent.keyDown(screen.getByRole("button", { name: /change reviewer/i }), { key: "Enter" });
     fireEvent.click(await screen.findByRole("menuitem", { name: /antigravity/i }));
-    screen.getByRole("button", { name: /review with antigravity/i }).click();
 
-    expect(onStartReview).toHaveBeenCalledWith(reviewTask, 3);
+    expect(onConfigureReviewer).toHaveBeenCalledWith(reviewTask, 3);
   });
 
-  it("runs task workflow actions from the sidebar stepper", () => {
-    const onStartReview = vi.fn();
-    const inReviewTask: TaskSummary = { ...task, status: "review" };
-
-    renderTaskWorkspace({ task: inReviewTask, onStartReview });
-
-    screen.getByRole("button", { name: /review with claude review/i }).click();
-    expect(onStartReview).toHaveBeenCalledWith(inReviewTask, 2);
-
-    expect(screen.getByRole("tab", { name: /create pr/i })).toBeEnabled();
-  });
-
-  it("opens the read-only reviewer terminal from the stage toggle", async () => {
+  it("points the user to /review in chat from the review step", () => {
     renderTaskWorkspace({ task: { ...task, status: "review" } });
 
-    fireEvent.click(screen.getByLabelText("Show reviewer terminal"));
-
-    expect(await screen.findByTestId("review-terminal")).toBeInTheDocument();
-    expect(screen.getByText(/no review output yet/i)).toBeInTheDocument();
-  });
-
-  it("auto-switches to the reviewer terminal while a review is running", async () => {
-    renderTaskWorkspace({
-      task: { ...task, status: "review" },
-      reviewLoop: {
-        taskId: task.id,
-        reviewerProfileId: 2,
-        status: "reviewing",
-        lastError: null,
-        createdAt: "2026-05-15T00:00:00.000Z",
-        updatedAt: "2026-05-15T00:00:00.000Z",
-      },
-    });
-
-    expect(await screen.findByTestId("review-terminal")).toBeInTheDocument();
-    expect(screen.getByText(/waiting for the reviewer/i)).toBeInTheDocument();
-  });
-
-  it("opens the reviewer terminal from the review card for a finished run", async () => {
-    renderTaskWorkspace({
-      task: { ...task, status: "review" },
-      reviewLoop: {
-        taskId: task.id,
-        reviewerProfileId: 2,
-        status: "passed",
-        lastError: null,
-        createdAt: "2026-05-15T00:00:00.000Z",
-        updatedAt: "2026-05-15T00:00:00.000Z",
-      },
-      reviewRuns: [
-        {
-          id: 1,
-          taskId: task.id,
-          reviewerProfileId: 2,
-          verdict: "pass",
-          prompt: "Review this",
-          output: "Inspected the worktree. NECTUS_NO_BLOCKERS",
-          error: null,
-          createdAt: "2026-05-15T00:00:00.000Z",
-        },
-      ],
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /open reviewer terminal/i }));
-
-    expect(await screen.findByTestId("review-terminal")).toBeInTheDocument();
-    expect(screen.queryByText(/no review output yet/i)).not.toBeInTheDocument();
+    // Both the ribbon hint and the facts-rail review card name the /review command.
+    expect(screen.getAllByText("/review").length).toBeGreaterThan(0);
   });
 
   it("moves the task to done from the current workflow step", () => {
@@ -458,9 +391,10 @@ describe("TaskWorkspace", () => {
       },
     });
 
-    const reviewButton = screen.getByRole("button", { name: /reviewing with claude review/i });
-
-    expect(reviewButton).toBeDisabled();
+    // While a review is in flight the step reads "Reviewing..." and the reviewer
+    // config dropdown is locked (an active loop cannot be re-pointed mid-run).
+    expect(screen.getByRole("tab", { name: /reviewing/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /change reviewer/i })).toBeDisabled();
   });
 
   it("keeps blocker feedback on the review workflow step", () => {

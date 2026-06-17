@@ -51,7 +51,7 @@ use super::verdict::{parse_verdict_block, VerdictToken};
 use crate::db::Database;
 use crate::models::{
     AgentProfile, ChatMessage, ChatMessageEvent, ChatPart, ChatRole, PrReviewOutputEvent,
-    ReviewOutputEvent, ReviewVerdictLabel, SubagentStatus,
+    ReviewVerdictLabel, SubagentStatus,
 };
 
 fn now() -> String {
@@ -95,10 +95,9 @@ pub(super) fn subagent_message(
     }
 }
 
-/// Where a review's live text is streamed: the task review pane (keyed by task id)
-/// or a single PR review (keyed by review id). Consensus members stream nowhere.
+/// Where a review's live text is streamed: a single PR review (keyed by review id).
+/// Consensus members stream nowhere.
 pub(super) enum ReviewTarget {
-    Task(i64),
     PrReview(i64),
 }
 
@@ -111,16 +110,6 @@ pub(super) struct ReviewSink {
 impl ReviewSink {
     fn emit(&self, data: String, start_offset: u64) {
         match self.target {
-            ReviewTarget::Task(task_id) => {
-                let _ = self.app.emit(
-                    "review_output",
-                    ReviewOutputEvent {
-                        task_id,
-                        data,
-                        start_offset,
-                    },
-                );
-            }
             ReviewTarget::PrReview(review_id) => {
                 let _ = self.app.emit(
                     "pr_review_output",

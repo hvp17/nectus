@@ -1,4 +1,4 @@
-import { Archive, CheckCircle2, GitBranch, ScanEye, XCircle } from "lucide-react";
+import { Archive, CheckCircle2, GitBranch, MessagesSquare, XCircle } from "lucide-react";
 import { AgentLogo } from "../AgentBrand";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -39,9 +39,6 @@ export interface TaskWorkspaceFactsRailProps {
   pullRequestBusy?: boolean;
   reviewLoop?: ReviewLoop | null;
   latestReviewRun?: ReviewRun;
-  reviewInProgress: boolean;
-  /** Whether there is any reviewer output (live or recorded) to view. */
-  reviewOutput: string;
   jiraSite?: string | null;
   busy?: boolean;
   isDeleting?: boolean;
@@ -58,8 +55,6 @@ export interface TaskWorkspaceFactsRailProps {
   /** Archive the task: it leaves the boards but keeps its worktree until deleted. */
   onArchiveTask: (task: TaskSummary) => void;
   onDeleteTask: (task: TaskSummary) => void;
-  /** Opens the read-only reviewer terminal on the stage. */
-  onWatchReview: () => void;
 }
 
 /// The calm inspector rail: agent identity, task metadata, GitHub/JIRA panels,
@@ -77,8 +72,6 @@ export function TaskWorkspaceFactsRail({
   pullRequestBusy = false,
   reviewLoop,
   latestReviewRun,
-  reviewInProgress,
-  reviewOutput,
   jiraSite,
   busy = false,
   isDeleting = false,
@@ -91,7 +84,6 @@ export function TaskWorkspaceFactsRail({
   onSetJiraLink,
   onArchiveTask,
   onDeleteTask,
-  onWatchReview,
 }: TaskWorkspaceFactsRailProps) {
   // A cross-repo task spans several repos; show the full set instead of the single
   // primary branch/worktree rows.
@@ -222,27 +214,20 @@ export function TaskWorkspaceFactsRail({
           <section className="flex flex-col gap-2.5 border-b px-4 py-3.5" aria-label="Task review">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-muted-foreground">Review</p>
-              <div className="flex items-center gap-1.5">
-                {(reviewInProgress || reviewOutput) && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-[11px]"
-                    aria-label="Open reviewer terminal"
-                    onClick={onWatchReview}
-                  >
-                    <ScanEye data-icon="inline-start" />
-                    {reviewInProgress ? "Watch live" : "View output"}
-                  </Button>
-                )}
-                {reviewLoop && (
-                  <Badge variant={REVIEW_LOOP_BADGE_VARIANTS[reviewLoop.status]} className="rounded-md">
-                    {REVIEW_LOOP_STATUS_SHORT_LABELS[reviewLoop.status]}
-                  </Badge>
-                )}
-              </div>
+              {reviewLoop && (
+                <Badge variant={REVIEW_LOOP_BADGE_VARIANTS[reviewLoop.status]} className="rounded-md">
+                  {REVIEW_LOOP_STATUS_SHORT_LABELS[reviewLoop.status]}
+                </Badge>
+              )}
             </div>
+
+            <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <MessagesSquare className="size-3 shrink-0" aria-hidden="true" />
+              <span>
+                Run <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10.5px]">/review</code> in chat to
+                review.
+              </span>
+            </p>
 
             {latestReviewRun && (
               <div className="rounded-md border bg-background p-3">
