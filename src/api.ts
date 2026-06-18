@@ -407,9 +407,6 @@ export const api = {
   async startPairLoop(taskId: number, reviewerProfileId: number): Promise<ReviewLoop> {
     return invoke("start_pair_loop", { taskId, reviewerProfileId });
   },
-  async runPairReview(taskId: number): Promise<ReviewLoop> {
-    return invoke("run_pair_review", { taskId });
-  },
   async stopPairLoop(taskId: number): Promise<ReviewLoop> {
     return invoke("stop_pair_loop", { taskId });
   },
@@ -433,6 +430,9 @@ export const api = {
     images?: ChatImageAttachment[],
   ): Promise<void> {
     return invoke("acp_send_prompt", { sessionId, text, images: images ?? null });
+  },
+  async acpStartReview(taskId: number, chatSessionId: string, focus?: string): Promise<void> {
+    return invoke("acp_start_review", { taskId, chatSessionId, focus: focus ?? null });
   },
   async acpRespondPermission(
     sessionId: string,

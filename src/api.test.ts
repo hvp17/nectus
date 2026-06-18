@@ -105,12 +105,8 @@ describe("api", () => {
     });
   });
 
-  it("runs an immediate pair review for a task", async () => {
-    await api.runPairReview(2);
-
-    expect(mockedInvoke).toHaveBeenCalledWith("run_pair_review", {
-      taskId: 2,
-    });
+  it("does not expose the retired Review-pane run command", () => {
+    expect("runPairReview" in api).toBe(false);
   });
 
   it("does not expose legacy terminal session commands", () => {

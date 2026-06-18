@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
@@ -8,22 +8,10 @@ import { queryKeys } from "../queries/keys";
 import type { ReviewLoop, ReviewRun } from "../types";
 import { useTaskReviewLoop } from "./useTaskReviewLoop";
 
-/** Render under a fresh QueryClient (the hook now reads through the query cache). */
+/** Render under a fresh QueryClient (the hook reads through the query cache). */
 function renderWithClient(ui: ReactNode, client = createQueryClient()) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
-
-const eventTestState = vi.hoisted(() => ({
-  handlers: new Map<string, (event: { payload: unknown }) => void>(),
-  listen: vi.fn(async (eventName: string, handler: (event: { payload: unknown }) => void) => {
-    eventTestState.handlers.set(eventName, handler);
-    return vi.fn();
-  }),
-}));
-
-vi.mock("@tauri-apps/api/event", () => ({
-  listen: eventTestState.listen,
-}));
 
 vi.mock("../api", () => ({
   api: {
@@ -55,7 +43,7 @@ const firstRun: ReviewRun = {
 };
 
 function Harness({ selectedTaskId }: { selectedTaskId?: number }) {
-  const { selectedReviewLoop, selectedReviewRuns, liveReviewOutput, message } = useTaskReviewLoop({
+  const { selectedReviewLoop, selectedReviewRuns, message } = useTaskReviewLoop({
     selectedTaskId,
   });
 
@@ -63,7 +51,6 @@ function Harness({ selectedTaskId }: { selectedTaskId?: number }) {
     <>
       <output data-testid="status">{selectedReviewLoop?.status ?? "none"}</output>
       <output data-testid="runs">{selectedReviewRuns.length}</output>
-      <output data-testid="live-output">{liveReviewOutput}</output>
       <output data-testid="message">{message ?? ""}</output>
     </>
   );
@@ -72,7 +59,6 @@ function Harness({ selectedTaskId }: { selectedTaskId?: number }) {
 describe("useTaskReviewLoop", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    eventTestState.handlers.clear();
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
       configurable: true,
       value: {},
@@ -109,113 +95,5 @@ describe("useTaskReviewLoop", () => {
     expect(client.getQueryCache().find({ queryKey: queryKeys.task.reviewRuns(-1) })).toBeUndefined();
     expect(client.getQueryCache().find({ queryKey: ["task", "review-loop", undefined] })).toBeUndefined();
     expect(client.getQueryCache().find({ queryKey: ["task", "review-runs", undefined] })).toBeUndefined();
-  });
-
-  it("streams review output chunks for the selected task", async () => {
-    renderWithClient(<Harness selectedTaskId={21} />);
-
-    await waitFor(() => {
-      expect(eventTestState.handlers.has("review_output")).toBe(true);
-    });
-
-    act(() => {
-      eventTestState.handlers.get("review_output")?.({
-        payload: { taskId: 21, data: "first", startOffset: 0 },
-      });
-    });
-    expect(screen.getByTestId("live-output").textContent).toBe("first");
-
-    act(() => {
-      eventTestState.handlers.get("review_output")?.({
-        payload: { taskId: 21, data: " second", startOffset: 5 },
-      });
-    });
-    expect(screen.getByTestId("live-output").textContent).toBe("first second");
-  });
-
-  it("starts a fresh live review output buffer at offset zero", async () => {
-    renderWithClient(<Harness selectedTaskId={21} />);
-
-    await waitFor(() => {
-      expect(eventTestState.handlers.has("review_output")).toBe(true);
-    });
-
-    act(() => {
-      eventTestState.handlers.get("review_output")?.({
-        payload: { taskId: 21, data: "old output", startOffset: 0 },
-      });
-      eventTestState.handlers.get("review_output")?.({
-        payload: { taskId: 21, data: "new output", startOffset: 0 },
-      });
-    });
-
-    expect(screen.getByTestId("live-output").textContent).toBe("new output");
-  });
-
-  it("ignores review output for other tasks", async () => {
-    renderWithClient(<Harness selectedTaskId={21} />);
-
-    await waitFor(() => {
-      expect(eventTestState.handlers.has("review_output")).toBe(true);
-    });
-
-    act(() => {
-      eventTestState.handlers.get("review_output")?.({
-        payload: { taskId: 99, data: "other task", startOffset: 0 },
-      });
-    });
-
-    expect(screen.getByTestId("live-output").textContent).toBe("");
-  });
-
-  it("clears live review output when the selected task changes", async () => {
-    const client = createQueryClient();
-    const view = renderWithClient(<Harness selectedTaskId={21} />, client);
-
-    await waitFor(() => {
-      expect(eventTestState.handlers.has("review_output")).toBe(true);
-    });
-    act(() => {
-      eventTestState.handlers.get("review_output")?.({
-        payload: { taskId: 21, data: "task 21 output", startOffset: 0 },
-      });
-    });
-    expect(screen.getByTestId("live-output").textContent).toBe("task 21 output");
-
-    view.rerender(
-      <QueryClientProvider client={client}>
-        <Harness selectedTaskId={22} />
-      </QueryClientProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId("live-output").textContent).toBe("");
-    });
-  });
-
-  it("clears live review output when a new review run starts", async () => {
-    const client = createQueryClient();
-    renderWithClient(<Harness selectedTaskId={21} />, client);
-
-    await waitFor(() => {
-      expect(eventTestState.handlers.has("review_output")).toBe(true);
-    });
-    act(() => {
-      eventTestState.handlers.get("review_output")?.({
-        payload: { taskId: 21, data: "previous live output", startOffset: 0 },
-      });
-    });
-    expect(screen.getByTestId("live-output").textContent).toBe("previous live output");
-
-    act(() => {
-      client.setQueryData(queryKeys.task.reviewLoop(21), {
-        ...reviewLoop,
-        status: "reviewing",
-      });
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId("live-output").textContent).toBe("");
-    });
   });
 });

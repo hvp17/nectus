@@ -73,22 +73,19 @@ export function TaskWorkspaceOverlay({ task, backLabel, repoName, onClose }: Tas
   const { updateStatus, renameTask, setTaskJiraLink, setArchived } = useTaskActions();
   const requestDeleteTask = useTaskDeletion();
 
-  // Start (or resume) the review loop, then kick off an immediate review.
-  const startReview = useCallback(
+  // Persist the task's reviewer choice (`start_pair_loop`). This only configures
+  // the reviewer that the inline `/review` command will use — it does not run a
+  // review. Idempotent on the same reviewer while a loop is already active.
+  const configureReviewer = useCallback(
     (t: TaskSummary, reviewerProfileId: number) =>
       run(async () => {
-        let loop = review.selectedReviewLoop;
-        if (!loop || !isReviewLoopActive(loop.status)) {
-          loop = await api.startPairLoop(t.id, reviewerProfileId);
+        const current = review.selectedReviewLoop;
+        if (current && isReviewLoopActive(current.status) && current.reviewerProfileId === reviewerProfileId) {
+          return;
         }
-        const runningLoop = await api.runPairReview(t.id);
-        const reviewRuns = await api.listTaskReviewRuns(t.id);
-        const nextLoop = runningLoop ?? loop;
-        review.setSelectedReviewLoop(
-          nextLoop.status === "running" ? { ...nextLoop, status: "reviewing" } : nextLoop,
-        );
-        review.setSelectedReviewRuns(reviewRuns);
-        setMessage("Review: Started");
+        const loop = await api.startPairLoop(t.id, reviewerProfileId);
+        review.setSelectedReviewLoop(loop);
+        setMessage("Reviewer set");
       }),
     [review, run, setMessage],
   );
@@ -101,7 +98,6 @@ export function TaskWorkspaceOverlay({ task, backLabel, repoName, onClose }: Tas
       agentProfiles={agentProfiles}
       reviewLoop={review.selectedReviewLoop}
       reviewRuns={review.selectedReviewRuns}
-      liveReviewOutput={review.liveReviewOutput}
       githubStatus={github.githubStatus}
       pullRequest={github.pullRequest}
       pullRequestLoading={github.pullRequestLoading}
@@ -112,7 +108,7 @@ export function TaskWorkspaceOverlay({ task, backLabel, repoName, onClose }: Tas
       activeRepoId={activeRepoId}
       onSelectRepo={setActiveRepoId}
       onClose={onClose}
-      onStartReview={startReview}
+      onConfigureReviewer={configureReviewer}
       onCreatePullRequest={ship.createPullRequest}
       onRefreshPullRequest={github.refreshPullRequest}
       onMergePullRequest={ship.mergePullRequest}

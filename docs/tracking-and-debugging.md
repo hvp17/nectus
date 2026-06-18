@@ -165,8 +165,7 @@ Current commands:
 | `set_task_jira_link` | Set or clear the local JIRA story link on a task (never writes to JIRA). |
 | `list_agent_profiles` | Load agent profiles. |
 | `upsert_agent_profile` | Create or update an agent profile. |
-| `start_pair_loop` | Enable reviewer automation for a task. |
-| `run_pair_review` | Trigger an immediate headless reviewer pass in the task worktree or project path. |
+| `start_pair_loop` | Configure (persist) the reviewer profile for a task; the inline `/review` command reads `review_loop.reviewer_profile_id` from this. |
 | `stop_pair_loop` | Stop reviewer automation for a task. |
 | `get_task_review_loop` | Load a task's current review loop. |
 | `list_task_review_runs` | Load stored reviewer runs for a task. |
@@ -174,6 +173,7 @@ Current commands:
 | `get_task_chat` | Load the persisted ACP chat session and settled transcript for a task. Optional `agent_profile_id` scopes the read to that profile's latest session; omit it to load the latest session across all profiles. |
 | `acp_start_chat` | Start an ACP chat process for a task/profile in the task cwd. Launch uses the ACP provider descriptor (`native/src/sessions/acp.rs`), the login-shell env, augmented PATH, provider-specific executable env, then profile env as the final override layer. Sends ACP v1 `initialize` with `clientInfo`, persists returned runtime metadata, then calls `session/load` only when the agent advertises `loadSession`; otherwise it calls `session/new`. Cross-repo sibling worktrees are sent as `additionalDirectories`; profile `NECTUS_ACP_MCP_SERVERS_JSON` is sent as `mcpServers`. |
 | `acp_send_prompt` | Queue a prompt into a live ACP chat session (optional base64 image attachments). The runtime persists and emits the user turn, streams the agent turn, stores the settled reply, and snapshots a git checkpoint after each settled agent turn. |
+| `acp_start_review` | Run an inline `/review`: resolve the task's configured reviewer (`review_loop.reviewer_profile_id`), worktree cwd, and resumable reviewer session, then spawn a headless ACP review that streams a `Subagent` block into the task chat (optional `focus` text). Records the run and emits `review_loop_updated`. |
 | `acp_respond_permission` | Resolve a pending ACP permission request from the Chat tab. Allow/reject-always choices persist in `chat_permission_policies`. |
 | `acp_cancel_prompt` | Gracefully cancel the active ACP prompt by sending `session/cancel`. The child process and chat session handle stay alive so the session remains resumable/promptable. |
 | `acp_set_session_mode` | Send ACP `session/set_mode` for the live chat session. The agent reports the resulting mode through `session_chat_runtime`. |
@@ -198,9 +198,8 @@ Backend-to-frontend events:
 
 | Event | Payload | Source |
 | --- | --- | --- |
-| `review_loop_updated` | Review-loop state and optional review run. | `native/src/sessions/review_loop.rs` |
-| `review_output` | Task id, a chunk of the task reviewer's live ACP message, and the chunk's byte offset (a `0` offset starts a new run). Streamed by the task review loop via the ACP review driver. | `native/src/sessions/review_loop.rs` |
-| `session_chat` | ACP chat update: task id, chat session id, optional agent profile id, normalized `ChatMessage`, and `done` flag. Streaming updates are cache-only in the frontend (rAF-batched in `useEventBridge`); settled user/agent turns are persisted to `chat_messages`. Also feeds `liveLines`, `chatWorkingTaskIds`, and permission attention for triage. | `native/src/sessions/acp_manager.rs` |
+| `review_loop_updated` | Review-loop state and optional review run. Emitted after an inline `/review` run is recorded, so the facts-rail review card + task board refresh. | `native/src/sessions/mod.rs` |
+| `session_chat` | ACP chat update: task id, chat session id, optional agent profile id, normalized `ChatMessage`, and `done` flag. Streaming updates are cache-only in the frontend (rAF-batched in `useEventBridge`); settled user/agent turns are persisted to `chat_messages`. Also feeds `liveLines`, `chatWorkingTaskIds`, and permission attention for triage. The inline `/review` `Subagent` block is also delivered over this event. | `native/src/sessions/acp_manager.rs`, `native/src/sessions/review_runtime.rs` |
 | `session_chat_usage` | Context-window usage (`used` / `size` token counts) for the active chat session. | `native/src/sessions/acp_manager.rs` |
 | `session_chat_runtime` | Latest ACP session metadata: initialized capabilities, agent info/auth methods, slash commands, current mode, config options, title, and updated timestamp. Persisted to `chat_sessions.runtime_json` and routed into the chat transcript cache. | `native/src/sessions/acp_manager.rs` |
 | `chat_session_exited` | Chat session id, task id, optional agent profile id. Clears ephemeral chat runtime state (`liveLines`, `chatWorkingTaskIds`, permission attention) when the ACP connection ends. | `native/src/sessions/acp_manager.rs` |
@@ -218,10 +217,11 @@ Frontend event listeners:
   `chatWorkingTaskIds`, `taskAttention`, toasts/notifications). Each bridge
   channel is subscribed through `src/hooks/useTauriEvent.ts`, which owns the
   shared late-unlisten cleanup and subscription-error path.
-- The remaining per-component listeners are intentionally not in the bridge:
-  `src/hooks/useTaskReviewLoop.ts` listens for `review_output`, and
-  `src/hooks/usePrReviews.ts` listens for `pr_review_output`. Both accumulate the
-  reviewer's read-only live output for `src/components/ReviewTerminalPane.tsx`.
+- The remaining per-component listener is intentionally not in the bridge:
+  `src/hooks/usePrReviews.ts` listens for `pr_review_output` and accumulates the PR
+  reviewer's read-only live output for `src/components/ReviewTerminalPane.tsx`. Task
+  reviews run inline via `/review`, surfacing as a `Subagent` block over
+  `session_chat`, so they need no separate stream.
 
 ## Task Tracking Fields
 
@@ -517,12 +517,14 @@ Relevant code:
 
 Check:
 
-- The review loop status is `running` or `reviewing`.
-- `run_pair_review` can resolve a review cwd from the task worktree path, a task
-  repo worktree path, or the primary repo path. It does not require a running task
-  chat.
-- Manual review runs should emit `review_loop_updated` with status `reviewing`
-  before the headless ACP review turn finishes.
+- A reviewer is configured for the task (the `review_loop` row exists). `/review`
+  fails fast with "Configure a reviewer for this task before running /review" when
+  it does not — pick a reviewer in the Review step first (`start_pair_loop`).
+- `acp_start_review` can resolve a review cwd from the task worktree path, a task
+  repo worktree path, or the primary repo path. It does not require a separate task
+  chat session.
+- A completed `/review` run emits `review_loop_updated`, refreshing the facts-rail
+  review card and task board.
 - The reviewer profile is an ACP provider (Claude, Codex, OpenCode, Antigravity).
   A **Custom** reviewer has no ACP descriptor and the run fails fast with a clear
   error telling you to choose an ACP provider.

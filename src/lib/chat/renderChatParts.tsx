@@ -55,6 +55,7 @@ import type {
   ChatPart,
   ChatPlanStatus,
   ChatToolStatus,
+  ReviewVerdictLabel,
 } from "@/types";
 
 /** Callbacks a transcript threads down to interactive parts. */
@@ -67,6 +68,13 @@ const PLAN_STATUS_LABEL: Record<ChatPlanStatus, string> = {
   pending: "Pending",
   in_progress: "In progress",
   completed: "Done",
+};
+
+/** Verdict chip color per review verdict, for the inline subagent block header. */
+const SUBAGENT_VERDICT_CLASS: Record<ReviewVerdictLabel, string> = {
+  clean: "text-status-success",
+  blockers: "text-destructive",
+  feedback: "text-status-warning",
 };
 
 export function mapToolState(status: ChatToolStatus): DynamicToolUIPart["state"] {
@@ -290,6 +298,52 @@ export function renderChatPart({
           </PlanContent>
         </Plan>
       );
+    case "subagent": {
+      const verdictChip = part.verdict ? (
+        <Badge
+          className={cn("h-5 px-1.5 text-[10px] capitalize", SUBAGENT_VERDICT_CLASS[part.verdict])}
+          data-testid="subagent-verdict"
+          variant="outline"
+        >
+          {part.verdict}
+        </Badge>
+      ) : null;
+      const running = part.status === "running";
+      return (
+        <Tool key={partKey} data-testid="chat-subagent" defaultOpen={running}>
+          <ToolHeader
+            compact
+            glyph={toolGlyph("execute", running ? "running" : "completed")}
+            hideStatusBadge
+            state={mapToolState(running ? "running" : "completed")}
+            title={part.name}
+            toolName="subagent"
+            trailing={
+              part.status === "failed" ? (
+                <Badge className="h-5 px-1.5 text-[10px] text-destructive" variant="outline">
+                  Failed
+                </Badge>
+              ) : (
+                verdictChip
+              )
+            }
+            type="dynamic-tool"
+          />
+          <ToolContent>
+            {groupToolParts(part.parts).map((item) =>
+              item.kind === "tool-group"
+                ? renderToolGroup({ parts: item.parts, handlers, groupKey: `${partKey}-${item.key}` })
+                : renderChatPart({
+                    part: item.part,
+                    handlers,
+                    isStreaming: running && item.part.type === "text",
+                    partKey: `${partKey}-${item.key}`,
+                  }),
+            )}
+          </ToolContent>
+        </Tool>
+      );
+    }
     default:
       return null;
   }

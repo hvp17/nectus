@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders, resetAppStore } from "../test/testUtils";
 import { api } from "../api";
@@ -17,7 +17,6 @@ vi.mock("../api", () => ({
     listTaskReviewRuns: vi.fn(),
     jiraRestStatus: vi.fn(),
     startPairLoop: vi.fn(),
-    runPairReview: vi.fn(),
     listAcpProviders: vi.fn(),
     getTaskChat: vi.fn(),
     acpStartChat: vi.fn(),
@@ -82,26 +81,23 @@ beforeEach(() => {
   mockedApi.listTaskReviewRuns.mockResolvedValue([]);
   mockedApi.jiraRestStatus.mockResolvedValue({ connected: false, site: null, email: null, error: null });
   mockedApi.startPairLoop.mockResolvedValue(runningLoop);
-  mockedApi.runPairReview.mockResolvedValue(runningLoop);
   mockedApi.listAcpProviders.mockResolvedValue([]);
   mockedApi.getTaskChat.mockResolvedValue({ session: null, messages: [] });
   mockedApi.listChatCheckpoints.mockResolvedValue([]);
 });
 
-describe("TaskWorkspaceOverlay review action", () => {
-  it("starts the pair loop before running an immediate review", async () => {
+describe("TaskWorkspaceOverlay reviewer config", () => {
+  it("persists the reviewer choice via start_pair_loop (no run command)", async () => {
     renderWithProviders(<TaskWorkspaceOverlay task={reviewTask} backLabel="Board" onClose={vi.fn()} />);
 
-    const reviewButton = await screen.findByRole("button", { name: /review with claude review/i });
-    reviewButton.click();
+    const reviewerTrigger = await screen.findByRole("button", { name: /change reviewer/i });
+    fireEvent.keyDown(reviewerTrigger, { key: "Enter" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: /claude review/i }));
 
     await waitFor(() => {
       expect(mockedApi.startPairLoop).toHaveBeenCalledWith(42, 2);
-      expect(mockedApi.runPairReview).toHaveBeenCalledWith(42);
     });
-    // The loop must be (re)started before the immediate review runs.
-    expect(mockedApi.startPairLoop.mock.invocationCallOrder[0]).toBeLessThan(
-      mockedApi.runPairReview.mock.invocationCallOrder[0],
-    );
+    // The Review pane run command is retired — only config persists here.
+    expect("runPairReview" in mockedApi).toBe(false);
   });
 });

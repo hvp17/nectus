@@ -70,22 +70,9 @@ pub struct ReviewLoopUpdatedEvent {
     pub review_run: Option<ReviewRun>,
 }
 
-/// A chunk of a task reviewer's live stdout, streamed so the workspace can show
-/// the reviewer working in real time (read-only). `start_offset` is the byte
-/// offset of this chunk in the current run's output; a chunk at offset `0` marks
-/// the start of a new run, so the UI resets its buffer.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReviewOutputEvent {
-    pub task_id: i64,
-    pub data: String,
-    pub start_offset: u64,
-}
-
 /// A chunk of a single PR reviewer's live stdout, streamed so the Reviews view can
-/// show the reviewer working in real time (read-only). Mirrors `ReviewOutputEvent`
-/// but keyed by `review_id` rather than `task_id`. A chunk at offset `0` marks the
-/// start of a new run, so the UI resets its buffer.
+/// show the reviewer working in real time (read-only), keyed by `review_id`. A
+/// chunk at offset `0` marks the start of a new run, so the UI resets its buffer.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PrReviewOutputEvent {

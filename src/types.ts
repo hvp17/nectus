@@ -265,14 +265,6 @@ export interface ReviewLoopUpdatedEvent {
   reviewRun?: ReviewRun | null;
 }
 
-/** A chunk of a task reviewer's live stdout. A chunk at `startOffset` 0 marks the
- *  start of a new run, so the live view resets its buffer. */
-export interface ReviewOutputEvent {
-  taskId: number;
-  data: string;
-  startOffset: number;
-}
-
 /** A chunk of a single PR reviewer's live stdout. A chunk at `startOffset` 0 marks
  *  the start of a new run, so the live view resets its buffer. */
 export interface PrReviewOutputEvent {
@@ -402,6 +394,9 @@ export interface ChatPlanEntry {
   priority?: string | null;
 }
 
+export type SubagentStatus = "running" | "completed" | "failed";
+export type ReviewVerdictLabel = "clean" | "blockers" | "feedback";
+
 /** One normalized, renderable part of a turn (discriminated on `type`). */
 export type ChatPart =
   | { type: "text"; text: string }
@@ -418,7 +413,15 @@ export type ChatPart =
     }
   | { type: "file_edit"; path: string; additions: number; deletions: number; diff?: string | null }
   | { type: "permission"; requestId: string; title: string; options: ChatPermissionOption[] }
-  | { type: "plan"; entries: ChatPlanEntry[] };
+  | { type: "plan"; entries: ChatPlanEntry[] }
+  | {
+      type: "subagent";
+      name: string;
+      agentKind: AgentKind;
+      parts: ChatPart[];
+      status: SubagentStatus;
+      verdict?: ReviewVerdictLabel | null;
+    };
 
 /** One message turn: an ordered list of parts plus lifecycle timestamps. */
 export interface ChatMessage {

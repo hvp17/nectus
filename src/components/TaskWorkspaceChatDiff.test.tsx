@@ -104,7 +104,7 @@ function renderWorkspace() {
       reviewLoop={null}
       reviewRuns={[]}
       onClose={vi.fn()}
-      onStartReview={vi.fn()}
+      onConfigureReviewer={vi.fn()}
       onCreatePullRequest={vi.fn()}
       onRefreshPullRequest={vi.fn()}
       onMergePullRequest={vi.fn()}

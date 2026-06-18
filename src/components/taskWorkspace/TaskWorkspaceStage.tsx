@@ -7,7 +7,6 @@ import {
   LoaderCircle,
   MessagesSquare,
   RotateCw,
-  ScanEye,
 } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -30,13 +29,10 @@ import { ActionBar } from "./ActionBar";
 import { EditableTaskTitle } from "./EditableTaskTitle";
 import { TaskStatusBadges } from "./TaskStatusBadges";
 
-type StageTab = "diff" | "review" | "chat";
+type StageTab = "diff" | "chat";
 type TaskDiff = ReturnType<typeof useTaskDiff>;
 
 const TaskDiffView = lazy(() => import("../TaskDiffView").then((module) => ({ default: module.TaskDiffView })));
-const ReviewTerminalPane = lazy(() =>
-  import("../ReviewTerminalPane").then((module) => ({ default: module.ReviewTerminalPane })),
-);
 const ChatPane = lazy(() => import("../chat/ChatPane").then((module) => ({ default: module.ChatPane })));
 
 /// One step of the task workflow ribbon. `action` is the inline control rendered
@@ -66,8 +62,6 @@ export interface TaskWorkspaceStageProps {
   diff: TaskDiff;
   diffFileCount: number;
   diffTotals: { additions: number; deletions: number };
-  reviewOutput: string;
-  reviewInProgress: boolean;
   attention?: TaskAttention;
   displayedAttentionDetail?: string | null;
   attentionDetail?: string | null;
@@ -77,8 +71,8 @@ export interface TaskWorkspaceStageProps {
   onOpenChatFile?: (path: string) => void;
 }
 
-/// The working stage: header, the workflow ribbon, and the
-/// `Chat | Diff | Review` toggle with its active surface and attention bar.
+/// The working stage: header, the workflow ribbon, and the `Chat | Diff` toggle
+/// with its active surface and attention bar.
 export function TaskWorkspaceStage({
   task,
   backLabel,
@@ -93,8 +87,6 @@ export function TaskWorkspaceStage({
   diff,
   diffFileCount,
   diffTotals,
-  reviewOutput,
-  reviewInProgress,
   attention,
   displayedAttentionDetail,
   attentionDetail,
@@ -209,16 +201,6 @@ export function TaskWorkspaceStage({
                   </Badge>
                 )}
               </ToggleGroupItem>
-              <ToggleGroupItem value="review" aria-label="Show reviewer terminal" className="h-7 gap-1.5 px-2.5 text-xs">
-                <ScanEye className="size-3.5" aria-hidden="true" />
-                Review
-                {reviewInProgress && (
-                  <span
-                    className="size-[7px] shrink-0 rounded-full bg-primary motion-safe:animate-pulse"
-                    aria-hidden="true"
-                  />
-                )}
-              </ToggleGroupItem>
             </ToggleGroup>
 
             {(diffTotals.additions > 0 || diffTotals.deletions > 0) && (
@@ -264,8 +246,6 @@ export function TaskWorkspaceStage({
                 selectedFile={diffSelectedFile}
                 onSelectFile={diff.loadFile}
               />
-            ) : stageTab === "review" ? (
-              <ReviewTerminalPane output={reviewOutput} active={reviewInProgress} />
             ) : null}
           </Suspense>
         </div>

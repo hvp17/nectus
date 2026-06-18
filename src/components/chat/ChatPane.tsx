@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChatTranscript } from "./ChatTranscript";
+import { parseReviewCommand } from "@/lib/chat/reviewCommand";
 import type { ChatAvailableCommand, ChatConfigOption, ChatImageAttachment, ChatSessionMode } from "@/types";
 
 export interface ChatPaneProps {
@@ -151,16 +152,39 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
     async (text: string, images: ChatImageAttachment[]) => {
       const trimmed = text.trim();
       if (!trimmed || busy || chatHydrating || unsupportedAgent || missingAgent || selectedProfileIdForStart == null) return;
+
+      const startChat = async () => {
+        const session = await api.acpStartChat(taskId, selectedProfileIdForStart);
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.task.chat(taskId, selectedProfileIdForStart),
+        });
+        return session.id;
+      };
+
+      const review = parseReviewCommand(trimmed);
+      if (review.isReview) {
+        // /review runs a reviewer over the worktree changes; it has no use for
+        // composer attachments, so note the drop rather than discarding silently.
+        if (images.length > 0) {
+          useAppStore
+            .getState()
+            .setMessage("/review reviews the worktree changes and ignores attached images.");
+        }
+        setBusy(true);
+        try {
+          let id = activeSessionId;
+          if (!id) id = await startChat();
+          await api.acpStartReview(taskId, id, review.focus);
+        } catch (error) {
+          useAppStore.getState().setMessage(String(error));
+        } finally {
+          setBusy(false);
+        }
+        return;
+      }
+
       setBusy(true);
       try {
-        const startChat = async () => {
-          const session = await api.acpStartChat(taskId, selectedProfileIdForStart);
-          await queryClient.invalidateQueries({
-            queryKey: queryKeys.task.chat(taskId, selectedProfileIdForStart),
-          });
-          return session.id;
-        };
-
         let id = activeSessionId;
         if (!id) {
           id = await startChat();
@@ -297,7 +321,11 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
         <PromptInputFooter>
           <PromptInputTools>
             {supportsImages && !composerDisabled && <ChatAttachImageButton />}
-            <ChatCommandMenu commands={availableCommands} disabled={composerDisabled || !activeSessionId} />
+            <ChatCommandMenu
+          appCommands={[{ name: "review", description: "Review this task's changes (inline)" }]}
+          commands={availableCommands}
+          disabled={composerDisabled}
+        />
             <ChatPermissionModeSelect
               activeSessionId={activeSessionId}
               currentModeId={runtime?.currentModeId ?? null}
@@ -366,15 +394,22 @@ export function ChatPane({ taskId, agentProfileId, onOpenFile }: ChatPaneProps) 
   );
 }
 
+interface AppCommand {
+  name: string;
+  description: string;
+}
+
 function ChatCommandMenu({
+  appCommands = [],
   commands,
   disabled,
 }: {
+  appCommands?: AppCommand[];
   commands: ChatAvailableCommand[];
   disabled: boolean;
 }) {
   const { textInput } = usePromptInputController();
-  if (commands.length === 0) return null;
+  if (appCommands.length === 0 && commands.length === 0) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -389,22 +424,52 @@ function ChatCommandMenu({
         </PromptInputButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72">
-        {commands.map((command) => (
-          <DropdownMenuItem
-            key={command.name}
-            onSelect={(event) => {
-              event.preventDefault();
-              textInput.setInput(`/${command.name}${command.inputHint ? " " : ""}`);
-            }}
-          >
-            <span className="flex min-w-0 flex-col">
-              <span className="truncate font-mono text-xs">/{command.name}</span>
-              <span className="truncate text-xs text-muted-foreground">
-                {command.inputHint ?? command.description}
-              </span>
-            </span>
-          </DropdownMenuItem>
-        ))}
+        {appCommands.length > 0 && (
+          <>
+            <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              App
+            </div>
+            {appCommands.map((command) => (
+              <DropdownMenuItem
+                key={`app:${command.name}`}
+                onSelect={(event) => {
+                  event.preventDefault();
+                  textInput.setInput(`/${command.name} `);
+                }}
+              >
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate font-mono text-xs">/{command.name}</span>
+                  <span className="truncate text-xs text-muted-foreground">{command.description}</span>
+                </span>
+              </DropdownMenuItem>
+            ))}
+          </>
+        )}
+        {commands.length > 0 && (
+          <>
+            {appCommands.length > 0 && (
+              <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Agent
+              </div>
+            )}
+            {commands.map((command) => (
+              <DropdownMenuItem
+                key={command.name}
+                onSelect={(event) => {
+                  event.preventDefault();
+                  textInput.setInput(`/${command.name}${command.inputHint ? " " : ""}`);
+                }}
+              >
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate font-mono text-xs">/{command.name}</span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {command.inputHint ?? command.description}
+                  </span>
+                </span>
+              </DropdownMenuItem>
+            ))}
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
