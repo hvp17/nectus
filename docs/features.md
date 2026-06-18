@@ -26,10 +26,10 @@ The app shell is an always-collapsed icon rail plus a persistent navigator panel
   the workspace manager is open). The panel has two sections:
   - **Projects** — one row per local git project; clicking opens that project's
     board. Each row shows the project name, a state dot (color-coded by the most
-    urgent in-flight state: needs_you → running → review), and an agent count. A
-    hover-revealed **"+"** at the row's right edge opens the New Task composer
-    preselected to that project (Project mode). Each in-flight agent (Needs you /
-    Running / Review; Done/Idle excluded) is nested inline under its project row as
+    urgent in-flight state: needs_you → running → review → finished), and an agent
+    count. A hover-revealed **"+"** at the row's right edge opens the New Task
+    composer preselected to that project (Project mode). Each in-flight agent (Needs
+    you / Running / Review / Finished; Done/Idle excluded) is nested inline under its project row as
     a compact card showing the agent logo, branch, latest line, elapsed time, and a
     click-to-focus action. A hover **⋯ menu** on each project row offers
     **Rename project** (display name only; the path and worktree root are
@@ -57,7 +57,7 @@ The app shell is an always-collapsed icon rail plus a persistent navigator panel
     no in-flight agents have nothing to fold and show no chevron.
 - Mission Control is the default home: a cross-project, attention-first triage
   inbox. Every task across every project is grouped by who needs you —
-  **Needs you → Running → Review → Done → Idle** — and each row carries the
+  **Needs you → Running → Review → Finished → Done → Idle** — and each row carries the
   agent's latest line, elapsed time, and an inline action (Respond / Open /
   Review / PR). Clicking a row opens that task's terminal workspace. Mission
   Control always shows all projects; the old workspace scope-switcher has been
@@ -397,9 +397,15 @@ not used for task agents anymore. Reviewer resume is separate and documented und
 Attention tracking is UI state derived from backend events.
 
 - ACP permission parts in `session_chat` set `needs_input` attention.
+- A **completed agent turn** (a settled `session_chat` with no pending approval) sets
+  an `idle` attention carrying the agent's closing line. That drives the **`finished`**
+  agent state — kept in the in-flight surfaces (sidebar, Mission Control, task card with
+  a green **Finished** badge) so a turn that ended (e.g. the agent asked a question) is
+  surfaced as "waiting on you" instead of silently dropping to idle. The next streaming
+  chunk clears it (the agent is working again).
 - Chat text and tool parts update `liveLines` and `chatWorkingTaskIds`, which drive
   Mission Control, sidebar rows, task cards, and the icon-rail badge.
-- Settled turns and `chat_session_exited` clear the working state.
+- `chat_session_exited` clears the working state and attention.
 - Stale `tasks.active_session_id` and `tasks.attention` values from old PTY builds
   are cleared on app startup so they do not block ACP-only workflows.
 - Marking done, deleting a task, or answering a permission prompt clears the marker
@@ -407,7 +413,10 @@ Attention tracking is UI state derived from backend events.
 - Counts are shown as Mission Control summary pills and the icon-rail needs-input
   badge.
 - macOS notifications are sent for ACP attention and review/PR review updates when
-  permission is granted.
+  permission is granted. When an agent **finishes a turn**, a `<Agent> finished` toast
+  (with an **Open task** action) and matching OS notification fire — **suppressed for
+  the task you're currently viewing**, since you can already see it finish in the open
+  workspace.
 - The matching in-app toast for a known task carries an **Open task** action that
   focuses that task's workspace (selecting its repo and switching to the board
   view when needed). The macOS notification itself cannot be made clickable on

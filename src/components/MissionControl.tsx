@@ -189,7 +189,7 @@ function AttentionRow({
     <div
       className={cn(
         "relative grid w-full cursor-pointer grid-cols-[minmax(132px,auto)_minmax(0,1fr)_auto] items-center gap-3.5 overflow-hidden rounded-lg bg-card py-[13px] pr-[15px] pl-[17px] text-left shadow-xs ring-1 ring-border transition-shadow hover:shadow-sm hover:ring-primary/45",
-        "before:absolute before:inset-y-0 before:left-0 before:w-1 before:content-[''] data-[state=needs_you]:before:bg-status-warning data-[state=running]:before:bg-primary data-[state=review]:before:bg-status-info data-[state=done]:before:bg-status-success",
+        "before:absolute before:inset-y-0 before:left-0 before:w-1 before:content-[''] data-[state=needs_you]:before:bg-status-warning data-[state=running]:before:bg-primary data-[state=review]:before:bg-status-info data-[state=finished]:before:bg-status-success data-[state=done]:before:bg-status-success",
       )}
       data-state={state}
       role="button"

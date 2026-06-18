@@ -199,7 +199,7 @@ Backend-to-frontend events:
 | Event | Payload | Source |
 | --- | --- | --- |
 | `review_loop_updated` | Review-loop state and optional review run. Emitted after an inline `/review` run is recorded, so the facts-rail review card + task board refresh. | `native/src/sessions/mod.rs` |
-| `session_chat` | ACP chat update: task id, chat session id, optional agent profile id, normalized `ChatMessage`, and `done` flag. Streaming updates are cache-only in the frontend (rAF-batched in `useEventBridge`); settled user/agent turns are persisted to `chat_messages`. Also feeds `liveLines`, `chatWorkingTaskIds`, and permission attention for triage. The inline `/review` `Subagent` block is also delivered over this event. | `native/src/sessions/acp_manager.rs`, `native/src/sessions/review_runtime.rs` |
+| `session_chat` | ACP chat update: task id, chat session id, optional agent profile id, normalized `ChatMessage`, and `done` flag. Streaming updates are cache-only in the frontend (rAF-batched in `useEventBridge`); settled user/agent turns are persisted to `chat_messages`. Also feeds `liveLines`, `chatWorkingTaskIds`, and task attention for triage (a pending permission → `needs_input`; a settled turn → `idle`/finished, which fires a finish toast/notification unless that task is open). The inline `/review` `Subagent` block is also delivered over this event. | `native/src/sessions/acp_manager.rs`, `native/src/sessions/review_runtime.rs` |
 | `session_chat_usage` | Context-window usage (`used` / `size` token counts) for the active chat session. | `native/src/sessions/acp_manager.rs` |
 | `session_chat_runtime` | Latest ACP session metadata: initialized capabilities, agent info/auth methods, slash commands, current mode, config options, title, and updated timestamp. Persisted to `chat_sessions.runtime_json` and routed into the chat transcript cache. | `native/src/sessions/acp_manager.rs` |
 | `chat_session_exited` | Chat session id, task id, optional agent profile id. Clears ephemeral chat runtime state (`liveLines`, `chatWorkingTaskIds`, permission attention) when the ACP connection ends. | `native/src/sessions/acp_manager.rs` |
@@ -500,7 +500,11 @@ Check:
 
 - `session_chat` events are arriving for the task id/profile id you expect.
 - Permission parts in the normalized chat message include a pending request; those
-  set `taskAttention` until answered or until `chat_session_exited` clears it.
+  set `needs_input` `taskAttention` until answered or until `chat_session_exited` clears it.
+- A settled turn with no pending permission sets an `idle` (finished) `taskAttention`
+  carrying the closing line — the `finished` agent state — which the next streaming
+  chunk clears. A missing **Finished** badge means that settled `session_chat` (with
+  `done: true`) never arrived.
 - Text/tool parts are present in the stream; `applyChatRuntime` mirrors them into
   `liveLines` and `chatWorkingTaskIds`.
 - Stale `tasks.attention` / `active_session_id` values from old PTY builds are

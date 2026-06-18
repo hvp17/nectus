@@ -21,7 +21,9 @@ const { listeners, listenMock } = vi.hoisted(() => {
 });
 
 vi.mock("@tauri-apps/api/event", () => ({ listen: listenMock }));
-vi.mock("../api", () => ({ api: { listTasks: vi.fn().mockResolvedValue([]) } }));
+vi.mock("../api", () => ({
+  api: { listTasks: vi.fn().mockResolvedValue([]), sendSystemNotification: vi.fn().mockResolvedValue(true) },
+}));
 
 const baseTask: TaskSummary = {
   id: 7,
@@ -67,7 +69,15 @@ describe("useEventBridge", () => {
   beforeEach(() => {
     listeners.clear();
     listenMock.mockClear();
-    useAppStore.setState({ liveLines: {}, message: null, taskAttention: [], taskToast: null });
+    vi.mocked(api.sendSystemNotification).mockClear();
+    useAppStore.setState({
+      liveLines: {},
+      message: null,
+      taskAttention: [],
+      taskToast: null,
+      chatWorkingTaskIds: {},
+      selectedTaskId: undefined,
+    });
     (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
   });
 
@@ -119,6 +129,45 @@ describe("useEventBridge", () => {
 
     await waitFor(() => expect(useAppStore.getState().chatWorkingTaskIds).toEqual({}));
     expect(queryClient.getQueryData<import("../types").ChatTranscript>(queryKeys.task.chat(7, 1))?.messages).toHaveLength(1);
+  });
+
+  function fireTurnComplete(taskId: number) {
+    listeners.get("session_chat")?.({
+      payload: {
+        sessionId: "chat-1",
+        taskId,
+        agentProfileId: 1,
+        done: true,
+        message: {
+          id: "agent-1",
+          role: "agent",
+          parts: [{ type: "text", text: "All done." }],
+          createdAt: "2026-06-18T00:00:00.000Z",
+          completedAt: "2026-06-18T00:01:00.000Z",
+        },
+      },
+    });
+  }
+
+  it("fires a finish toast and OS notification when an unfocused agent turn completes", async () => {
+    await mountBridge([{ ...baseTask, activeSessionId: null }]);
+
+    act(() => fireTurnComplete(7));
+
+    await waitFor(() => expect(useAppStore.getState().taskToast?.taskId).toBe(7));
+    expect(useAppStore.getState().taskToast).toMatchObject({ kind: "success", agentKind: "codex" });
+    expect(api.sendSystemNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("suppresses the finish toast and notification for the task you're viewing", async () => {
+    useAppStore.setState({ selectedTaskId: 7 });
+    await mountBridge([{ ...baseTask, activeSessionId: null }]);
+
+    act(() => fireTurnComplete(7));
+
+    await waitFor(() => expect(useAppStore.getState().chatWorkingTaskIds).toEqual({}));
+    expect(useAppStore.getState().taskToast).toBeNull();
+    expect(api.sendSystemNotification).not.toHaveBeenCalled();
   });
 
   it("clears chat runtime when chat_session_exited fires", async () => {

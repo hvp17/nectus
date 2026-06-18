@@ -83,7 +83,7 @@ export const TaskCard = memo(function TaskCard({
         "group relative flex w-full flex-none cursor-grab flex-col gap-[9px] overflow-hidden rounded-lg bg-card p-3 pl-3.5 text-left shadow-xs ring-1 ring-border transition-[box-shadow,transform] hover:-translate-y-px hover:shadow-sm hover:ring-primary/45",
         "data-[dragging=true]:opacity-50 data-[selected=true]:shadow-[0_0_0_4px_color-mix(in_oklch,var(--primary)_18%,transparent),var(--shadow-md)] data-[selected=true]:ring-primary",
         // State rail: a 4px colored stripe hugging the card's left edge.
-        "before:absolute before:inset-y-0 before:left-0 before:w-1 before:content-[''] data-[state=needs_you]:before:bg-status-warning data-[state=running]:before:bg-primary data-[state=review]:before:bg-status-info data-[state=done]:before:bg-status-success",
+        "before:absolute before:inset-y-0 before:left-0 before:w-1 before:content-[''] data-[state=needs_you]:before:bg-status-warning data-[state=running]:before:bg-primary data-[state=review]:before:bg-status-info data-[state=finished]:before:bg-status-success data-[state=done]:before:bg-status-success",
       )}
       data-state={state}
       data-selected={isSelected ? "true" : undefined}
@@ -120,7 +120,7 @@ export const TaskCard = memo(function TaskCard({
           {attention?.kind === "idle" && (
             <Badge variant="success" className="font-extrabold h-5 px-1.5 text-[10px]">
               <CheckCircle2 size={11} />
-              Done
+              Finished
             </Badge>
           )}
           {chatWorking && attention?.kind !== "needs_input" && (
