@@ -76,6 +76,39 @@ describe("renderChatPart", () => {
     expect(screen.getByText(/cargo test acp_cancel/)).toBeInTheDocument();
   });
 
+  it("shows a command's path args relative to the session cwd", () => {
+    const cwd = "/Users/tomas/.nectus/worktrees/nectus/task-1";
+    const part: ChatPart = {
+      type: "tool",
+      toolCallId: "c1",
+      title: "Ran command",
+      kind: "execute",
+      status: "completed",
+      locations: [],
+      rawInput: { command: `find ${cwd}/src/lib/chat -type f` },
+      output: "ok",
+    };
+    renderWithProviders(<>{renderChatPart({ part, partKey: "0", handlers: { cwd } })}</>);
+    expect(screen.getByText(/Ran find src\/lib\/chat -type f/)).toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(cwd))).not.toBeInTheDocument();
+  });
+
+  it("shows a read tool's location relative to the session cwd", () => {
+    const cwd = "/Users/tomas/.nectus/worktrees/nectus/task-1";
+    const part: ChatPart = {
+      type: "tool",
+      toolCallId: "c2",
+      title: "Read",
+      kind: "read",
+      status: "completed",
+      locations: [{ path: `${cwd}/src/types.ts`, line: 12 }],
+      output: null,
+    };
+    renderWithProviders(<>{renderChatPart({ part, partKey: "0", handlers: { cwd } })}</>);
+    fireEvent.click(screen.getByRole("button")); // expand the tool body
+    expect(screen.getByText("src/types.ts:12")).toBeInTheDocument();
+  });
+
   it("renders an edit row with inline +/- stats and opens the diff on title click", () => {
     const part: ChatPart = {
       type: "file_edit",
@@ -137,5 +170,24 @@ describe("ChatMessageRow grouping", () => {
     expect(screen.getByTestId("chat-tool-group")).toBeInTheDocument();
     expect(screen.getByText("Read 2 files and searched code")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument(); // count pill
+  });
+
+  it("shows grouped read rows relative to the session cwd", () => {
+    const cwd = "/Users/tomas/.nectus/worktrees/nectus/task-1";
+    const message: ChatMessage = {
+      id: "m1",
+      role: "agent",
+      parts: [
+        { type: "tool", toolCallId: "a", title: "Read", kind: "read", status: "completed", locations: [{ path: `${cwd}/src/a.rs` }], output: null },
+        { type: "tool", toolCallId: "b", title: "Read", kind: "read", status: "completed", locations: [{ path: `${cwd}/src/b.rs` }], output: null },
+      ],
+      createdAt: "t0",
+      completedAt: "t1",
+    };
+    renderWithProviders(<ChatMessageRow handlers={{ cwd }} message={message} />);
+    fireEvent.click(screen.getByText("Read 2 files")); // expand the group body
+    expect(screen.getByText("src/a.rs")).toBeInTheDocument();
+    expect(screen.getByText("src/b.rs")).toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(cwd))).not.toBeInTheDocument();
   });
 });
