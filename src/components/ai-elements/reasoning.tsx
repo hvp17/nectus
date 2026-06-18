@@ -202,12 +202,14 @@ export type ReasoningContentProps = ComponentProps<
   typeof CollapsibleContent
 > & {
   children: string;
+  /** Forwarded to Streamdown so callers can route external links safely. */
+  linkSafety?: ComponentProps<typeof Streamdown>["linkSafety"];
 };
 
 const streamdownPlugins = { cjk, code, math, mermaid };
 
 export const ReasoningContent = memo(
-  ({ className, children, ...props }: ReasoningContentProps) => (
+  ({ className, children, linkSafety, ...props }: ReasoningContentProps) => (
     <CollapsibleContent
       className={cn(
         "mt-4 text-sm",
@@ -216,7 +218,9 @@ export const ReasoningContent = memo(
       )}
       {...props}
     >
-      <Streamdown plugins={streamdownPlugins}>{children}</Streamdown>
+      <Streamdown plugins={streamdownPlugins} linkSafety={linkSafety}>
+        {children}
+      </Streamdown>
     </CollapsibleContent>
   )
 );
