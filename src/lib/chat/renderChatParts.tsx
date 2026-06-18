@@ -37,6 +37,7 @@ import {
 } from "@/components/ai-elements/tool";
 import { cn } from "@/lib/utils";
 import { formatToolDisplayName } from "@/lib/chat/toolDisplayName";
+import { relativizeCommand, relativizePath } from "@/lib/chat/relativizePath";
 import {
   groupToolParts,
   groupToolSummary,
@@ -58,10 +59,12 @@ import type {
   ReviewVerdictLabel,
 } from "@/types";
 
-/** Callbacks a transcript threads down to interactive parts. */
+/** Callbacks and context a transcript threads down to its parts. */
 export interface ChatPartHandlers {
   onRespondPermission?: (requestId: string, optionId: string) => void;
   onOpenFile?: (path: string) => void;
+  /** Session working directory, used to show tool-call paths relative to it. */
+  cwd?: string | null;
 }
 
 const PLAN_STATUS_LABEL: Record<ChatPlanStatus, string> = {
@@ -135,7 +138,8 @@ export function renderChatPart({
     case "tool": {
       const state = mapToolState(part.status);
       const glyph = toolGlyph(part.kind, part.status);
-      const cmd = part.kind === "execute" ? commandText(part.rawInput) : null;
+      const rawCmd = part.kind === "execute" ? commandText(part.rawInput) : null;
+      const cmd = rawCmd != null ? relativizeCommand(rawCmd, handlers?.cwd) : null;
       const hasBody =
         part.locations.length > 0 || Boolean(part.output) || part.rawInput != null;
       const displayName =
@@ -179,7 +183,7 @@ export function renderChatPart({
                 <ul className="space-y-1 font-mono text-xs">
                   {part.locations.map((location, index) => (
                     <li key={`${location.path}-${index}`}>
-                      {location.path}
+                      {relativizePath(location.path, handlers?.cwd)}
                       {location.line != null ? `:${location.line}` : ""}
                     </li>
                   ))}
@@ -382,9 +386,10 @@ function renderToolGroup({
         <ul className="space-y-1.5">
           {parts.map((p, index) => {
             const verb = p.kind === "search" ? "Searched" : "Read";
-            const target =
-              p.locations[0]?.path ?? formatToolDisplayName(p.title, p.kind);
             const openable = p.locations[0]?.path;
+            const target = openable
+              ? relativizePath(openable, handlers?.cwd)
+              : formatToolDisplayName(p.title, p.kind);
             return (
               <li
                 key={`${p.toolCallId}-${index}`}

@@ -63,10 +63,10 @@ function ChatTranscriptAutoScroll({ messages }: { messages: ChatMessage[] }) {
  * Pure and data-driven — the live ACP stream and the persisted transcript both feed
  * the same shape.
  */
-export function ChatTranscript({ messages, onRespondPermission, onOpenFile }: ChatTranscriptProps) {
+export function ChatTranscript({ messages, onRespondPermission, onOpenFile, cwd }: ChatTranscriptProps) {
   const handlers = useMemo<ChatPartHandlers>(
-    () => ({ onRespondPermission, onOpenFile }),
-    [onRespondPermission, onOpenFile],
+    () => ({ onRespondPermission, onOpenFile, cwd }),
+    [onRespondPermission, onOpenFile, cwd],
   );
 
   return (
