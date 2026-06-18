@@ -297,7 +297,12 @@ Current behavior:
   (`execute`) rows show a terminal glyph, `Ran <cmd>`, a Success/Failed/Running
   badge, and a shell block on expand; edit rows show `Edited <file>` with inline
   `+N −M` stats and the new file text on expand (`file_edit.diff` is new text
-  only, so it is not a red/green diff — the title still opens the Diff tab). The
+  only, so it is not a red/green diff — the title still opens the Diff tab);
+  **skill calls** (the `Skill` tool) render as a single compact inline row — a
+  sparkle glyph, a muted `Skill` prefix and the skill id — instead of the generic
+  tool card, with the text shimmering while the skill launches and settling to
+  static once done (detection + the row live in `src/lib/chat/skillCall.ts` and
+  `renderSkillCall` in `renderChatParts.tsx`; no model/event change). The
   conversation shell auto-scrolls; the composer is the AI-Elements `PromptInput`
   with all controls consolidated into its footer toolbar: image attach (with an
   inline thumbnail-preview header), a slash-command menu, the **permission-mode**
