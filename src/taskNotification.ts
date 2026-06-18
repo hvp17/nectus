@@ -1,4 +1,4 @@
-import type { AgentKind } from "./types";
+import type { AgentKind, TaskSummary } from "./types";
 
 // An attention notification tied to a specific task. Rendered as a sonner toast
 // whose action navigates to the task workspace (see useTaskNotificationToast).
@@ -9,4 +9,15 @@ export interface TaskToast {
   body: string;
   kind: "success" | "info";
   agentKind: AgentKind;
+}
+
+/** The toast shown when an agent finishes a turn: "<Agent> finished" + which task. */
+export function taskFinishedToast(task: TaskSummary): TaskToast {
+  return {
+    taskId: task.id,
+    title: `${task.agentName ?? "Agent"} finished`,
+    body: task.title,
+    kind: "success",
+    agentKind: task.agentKind ?? "custom",
+  };
 }

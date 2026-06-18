@@ -4,6 +4,7 @@ import { queryKeys } from "../queries/keys";
 import { useTasksQuery } from "../queries/core";
 import { useAppStore } from "../store/appStore";
 import { notifySessionEvent } from "../sessionNotifications";
+import { taskFinishedToast } from "../taskNotification";
 import { upsertById, upsertNewestById } from "../lib/listState";
 import { applyChatRuntimeUpdate, clearChatRuntimeForTask } from "../lib/chat/applyChatRuntime";
 import { useTauriEvent } from "./useTauriEvent";
@@ -88,8 +89,15 @@ export function useEventBridge() {
           return { session, messages };
         },
       );
+      const store = useAppStore.getState();
       const task = tasksRef.current.find((item) => item.id === payload.taskId);
-      applyChatRuntimeUpdate(useAppStore.getState(), payload, task, messagesAfter);
+      const outcome = applyChatRuntimeUpdate(store, payload, task, messagesAfter);
+      // A completed turn notifies you it's waiting — but never for the task you're
+      // already looking at (you can see it finish in the open workspace).
+      if (outcome.finished && task && store.selectedTaskId !== task.id) {
+        store.setTaskToast(taskFinishedToast(task));
+        void notifySessionEvent(`${task.agentName ?? "Agent"} finished`, task.title);
+      }
     },
     [queryClient],
   );

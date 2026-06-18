@@ -22,7 +22,7 @@ export function SidebarAgentRow({ row, onOpen }: { row: AgentRow; onOpen: () => 
         "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary",
         // Left state rail: a 3px stripe colored by the row's attention state.
         "before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:content-['']",
-        "data-[state=needs_you]:before:bg-status-warning data-[state=running]:before:bg-primary data-[state=review]:before:bg-status-info",
+        "data-[state=needs_you]:before:bg-status-warning data-[state=running]:before:bg-primary data-[state=review]:before:bg-status-info data-[state=finished]:before:bg-status-success",
       )}
       data-state={state}
       onClick={onOpen}

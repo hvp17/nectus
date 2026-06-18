@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildAgentRows, deriveAgentState } from "./agentState";
+import { ACTIVE_AGENT_STATES, buildAgentRows, deriveAgentState } from "./agentState";
+import type { TaskAttention } from "../sessionAttention";
 import type { TaskSummary } from "../types";
 
 function task(overrides: Partial<TaskSummary>): TaskSummary {
@@ -52,6 +53,44 @@ describe("deriveAgentState persisted attention", () => {
     // column. This is the reload case: the signal must still surface.
     const t = task({ activeSessionId: null, attention: "needs_input" });
     expect(deriveAgentState(t)).toBe("needs_you");
+  });
+});
+
+describe("deriveAgentState finished turn", () => {
+  function finishedAttention(overrides: Partial<TaskAttention> = {}): TaskAttention {
+    return {
+      taskId: 1,
+      kind: "idle",
+      title: "A task",
+      message: "Done editing.",
+      updatedAt: "2026-06-18T00:00:00.000Z",
+      ...overrides,
+    };
+  }
+
+  it("treats an idle (finished-turn) attention as the finished state, kept active", () => {
+    // The agent ended its turn and handed control back — it must stay visible in
+    // the in-flight surfaces instead of silently dropping to idle.
+    const t = task({ status: "in_progress", activeSessionId: null });
+    expect(deriveAgentState(t, finishedAttention())).toBe("finished");
+    expect(ACTIVE_AGENT_STATES).toContain("finished");
+  });
+
+  it("surfaces the agent's closing line as the finished row line", () => {
+    const t = task({ id: 1, status: "in_progress", activeSessionId: null });
+    const [row] = buildAgentRows([t], [finishedAttention({ message: "Which do you prefer?" })], repoNames);
+    expect(row.state).toBe("finished");
+    expect(row.line).toBe("Which do you prefer?");
+  });
+
+  it("ranks a done task ahead of a lingering finished attention", () => {
+    const t = task({ status: "done", activeSessionId: null });
+    expect(deriveAgentState(t, finishedAttention())).toBe("done");
+  });
+
+  it("ranks an in-flight turn (running) ahead of a stale finished attention", () => {
+    const t = task({ id: 1, status: "in_progress", activeSessionId: null });
+    expect(deriveAgentState(t, finishedAttention(), { 1: true })).toBe("running");
   });
 });
 

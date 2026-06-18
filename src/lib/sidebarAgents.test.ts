@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildSidebarAgents, dominantState } from "./sidebarAgents";
+import type { TaskAttention } from "../sessionAttention";
 import type { Repo, TaskSummary, Workspace } from "../types";
 
 function task(overrides: Partial<TaskSummary>): TaskSummary {
@@ -32,6 +33,22 @@ describe("buildSidebarAgents", () => {
     expect(byRepo.get(1)?.map((r) => r.task.id)).toEqual([1]);
     expect(byRepo.get(2)?.map((r) => r.task.id)).toEqual([2]);
     expect(byWorkspace.get(10)?.map((r) => r.task.id).sort()).toEqual([1, 2]);
+  });
+
+  it("keeps a finished-turn agent in the sidebar instead of dropping it", () => {
+    // Regression: a completed turn used to clear attention and fall to idle, which
+    // is excluded from the sidebar. A finished turn must stay pinned until acted on.
+    const finished: TaskAttention = {
+      taskId: 1,
+      kind: "idle",
+      title: "T",
+      message: "Finished editing.",
+      updatedAt: "2026-06-07T00:00:00.000Z",
+    };
+    const { byRepo } = buildSidebarAgents([task({ id: 1, repoId: 1 })], [finished], repos, workspaces, {}, 0, {});
+
+    expect(byRepo.get(1)?.map((r) => r.task.id)).toEqual([1]);
+    expect(byRepo.get(1)?.[0].state).toBe("finished");
   });
 
   it("dominantState returns the most urgent active state present, else undefined", () => {

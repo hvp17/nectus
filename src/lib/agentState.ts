@@ -7,7 +7,7 @@ import type { TaskSummary } from "../types";
  * A single derived state per task drives ordering, rail colour, and inline action
  * everywhere a task surfaces, so "the same concept is the same hue" holds across views.
  */
-export type AgentState = "needs_you" | "running" | "review" | "done" | "idle";
+export type AgentState = "needs_you" | "running" | "review" | "finished" | "done" | "idle";
 
 export interface AgentStateMeta {
   label: string;
@@ -19,18 +19,21 @@ export const AGENT_STATE_META: Record<AgentState, AgentStateMeta> = {
   needs_you: { label: "Needs you", dot: "var(--status-warning)" },
   running: { label: "Running", dot: "var(--primary)" },
   review: { label: "Review", dot: "var(--status-info)" },
+  finished: { label: "Finished", dot: "var(--status-success)" },
   done: { label: "Done", dot: "var(--status-success)" },
   idle: { label: "Idle", dot: "var(--muted-foreground)" },
 };
 
 /** Triage priority — lower sorts first (most urgent on top). */
-export const AGENT_STATE_ORDER: AgentState[] = ["needs_you", "running", "review", "done", "idle"];
+export const AGENT_STATE_ORDER: AgentState[] = ["needs_you", "running", "review", "finished", "done", "idle"];
 
-// The "in flight" states — an agent has a live ACP turn, is blocked on you, or
-// is running a review. Shared so the running-agents flyout, Mission Control's
-// summary pills, and any future "active" surface agree on what counts as active,
-// in AGENT_STATE_ORDER priority.
-export const ACTIVE_AGENT_STATES: AgentState[] = ["needs_you", "running", "review"];
+// The "in flight" states — an agent has a live ACP turn, is blocked on you, just
+// finished a turn and is handing back to you, or is running a review. Shared so
+// the sidebar agent lists, Mission Control's summary pills, and any future
+// "active" surface agree on what counts as active, in AGENT_STATE_ORDER priority.
+// `finished` stays here (not `idle`) so a completed turn is pinned until acted on
+// instead of silently dropping off the in-flight surfaces.
+export const ACTIVE_AGENT_STATES: AgentState[] = ["needs_you", "running", "review", "finished"];
 
 // Every review-loop status counts as the "review" state, so the rail colour and
 // the TaskCard review badge always agree. Driving the set from the label map
@@ -51,7 +54,10 @@ export function deriveAgentState(
   if (task.reviewLoopStatus && REVIEW_STATUSES.has(task.reviewLoopStatus)) return "review";
   if (task.status === "review") return "review";
   if (task.status === "done") return "done";
-  if (attention?.kind === "idle") return "idle";
+  // A live "idle" attention means the agent just ended a turn — surface it as a
+  // distinct `finished` state (kept active) rather than plain idle, which is the
+  // "no recent agent activity" fallback below.
+  if (attention?.kind === "idle") return "finished";
   return "idle";
 }
 
@@ -62,6 +68,9 @@ export function deriveAgentLine(task: TaskSummary, state: AgentState, attention?
   }
   if (state === "review") {
     return task.reviewLoopStatus ? REVIEW_LOOP_STATUS_LABELS[task.reviewLoopStatus] : "In review";
+  }
+  if (state === "finished") {
+    return attention?.message?.trim() || "Finished working";
   }
   if (state === "done") {
     return task.prUrl ? "Pull request opened" : "Marked done";
