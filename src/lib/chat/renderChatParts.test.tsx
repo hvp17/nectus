@@ -109,6 +109,48 @@ describe("renderChatPart", () => {
     expect(screen.getByText("src/types.ts:12")).toBeInTheDocument();
   });
 
+  it("renders a skill call as a compact inline row, not the tool card", () => {
+    const part: ChatPart = {
+      type: "tool",
+      toolCallId: "s1",
+      title: "Skill",
+      status: "completed",
+      locations: [],
+      rawInput: { skill: "superpowers:brainstorming" },
+      output: "Launching skill: superpowers:brainstorming",
+    };
+    renderWithProviders(<>{renderChatPart({ part, partKey: "0" })}</>);
+    const row = screen.getByTestId("chat-skill-call");
+    expect(row).toBeInTheDocument();
+    expect(row).toHaveAttribute("data-status", "completed");
+    expect(screen.getByText("superpowers:brainstorming")).toBeInTheDocument();
+    // No generic tool card / PARAMETERS / RESULT sections for a skill call.
+    expect(screen.queryByTestId("chat-tool")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Parameters/i)).not.toBeInTheDocument();
+  });
+
+  it("shimmers a running skill call and settles to static text when completed", () => {
+    const running: ChatPart = {
+      type: "tool",
+      toolCallId: "s2",
+      title: "Skill",
+      status: "running",
+      locations: [],
+      rawInput: { skill: "superpowers:brainstorming" },
+      output: null,
+    };
+    const { rerender } = renderWithProviders(
+      <>{renderChatPart({ part: running, partKey: "0" })}</>,
+    );
+    expect(screen.getByTestId("chat-skill-shimmer")).toBeInTheDocument();
+    expect(screen.queryByTestId("chat-skill-label")).not.toBeInTheDocument();
+
+    const completed: ChatPart = { ...running, status: "completed", output: "done" };
+    rerender(<>{renderChatPart({ part: completed, partKey: "0" })}</>);
+    expect(screen.queryByTestId("chat-skill-shimmer")).not.toBeInTheDocument();
+    expect(screen.getByTestId("chat-skill-label")).toBeInTheDocument();
+  });
+
   it("renders an edit row with inline +/- stats and opens the diff on title click", () => {
     const part: ChatPart = {
       type: "file_edit",

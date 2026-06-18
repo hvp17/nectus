@@ -1,8 +1,9 @@
 import type { DynamicToolUIPart } from "ai";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { CollapsibleTrigger } from "@/components/ui/collapsible";
 import { CodeBlock } from "@/components/ai-elements/code-block";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 import {
   Confirmation,
   ConfirmationAction,
@@ -38,6 +39,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatToolDisplayName } from "@/lib/chat/toolDisplayName";
 import { relativizeCommand, relativizePath } from "@/lib/chat/relativizePath";
+import { isSkillCall, skillCallName } from "@/lib/chat/skillCall";
 import {
   groupToolParts,
   groupToolSummary,
@@ -136,6 +138,9 @@ export function renderChatPart({
         </Reasoning>
       );
     case "tool": {
+      if (isSkillCall(part)) {
+        return renderSkillCall({ part, partKey });
+      }
       const state = mapToolState(part.status);
       const glyph = toolGlyph(part.kind, part.status);
       const rawCmd = part.kind === "execute" ? commandText(part.rawInput) : null;
@@ -351,6 +356,48 @@ export function renderChatPart({
     default:
       return null;
   }
+}
+
+/**
+ * A Skill call renders as a single compact inline row — a sparkle glyph plus a
+ * muted "Skill" prefix and the skill id — instead of the generic tool card. The
+ * text shimmers while the skill is launching and settles to static once done.
+ */
+function renderSkillCall({ part, partKey }: { part: GroupToolPart; partKey: string }) {
+  const skill = skillCallName(part);
+  const running = part.status === "running" || part.status === "pending";
+  const failed = part.status === "failed";
+  const tint = running
+    ? "text-status-info"
+    : failed
+      ? "text-destructive"
+      : "text-status-success";
+  const label = skill ? `Skill ${skill}` : "Skill";
+  return (
+    <div
+      key={partKey}
+      className="mb-0.5 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs"
+      data-status={part.status}
+      data-testid="chat-skill-call"
+    >
+      <Sparkles className={cn("size-3.5 shrink-0", tint)} />
+      {running ? (
+        <span data-testid="chat-skill-shimmer">
+          <Shimmer as="span" className="text-xs">
+            {label}
+          </Shimmer>
+        </span>
+      ) : (
+        <span
+          className={cn("truncate", failed ? "text-destructive" : "text-muted-foreground")}
+          data-testid="chat-skill-label"
+        >
+          Skill{skill ? " " : ""}
+          {skill && <span className="font-mono text-foreground/70">{skill}</span>}
+        </span>
+      )}
+    </div>
+  );
 }
 
 function renderToolGroup({
