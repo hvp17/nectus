@@ -16,6 +16,8 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
+import { ChatLinkDialog } from "@/components/chat/ChatLinkDialog";
+import type { LinkSafetyConfig } from "streamdown";
 import {
   Plan,
   PlanAction,
@@ -60,6 +62,16 @@ import type {
   ChatToolStatus,
   ReviewVerdictLabel,
 } from "@/types";
+
+/**
+ * Route chat-link clicks through the app's opener plugin instead of
+ * streamdown's default `window.open`, which is a no-op inside the Tauri webview.
+ * See {@link ChatLinkDialog}.
+ */
+const chatLinkSafety: LinkSafetyConfig = {
+  enabled: true,
+  renderModal: (props) => <ChatLinkDialog {...props} />,
+};
 
 /** Callbacks and context a transcript threads down to its parts. */
 export interface ChatPartHandlers {
@@ -127,14 +139,16 @@ export function renderChatPart({
     case "text":
       return (
         <div key={partKey} data-testid="chat-text">
-          <MessageResponse isAnimating={isStreaming}>{part.text}</MessageResponse>
+          <MessageResponse isAnimating={isStreaming} linkSafety={chatLinkSafety}>
+            {part.text}
+          </MessageResponse>
         </div>
       );
     case "reasoning":
       return (
         <Reasoning key={partKey} data-testid="chat-reasoning" defaultOpen={false} isStreaming={isStreaming}>
           <ReasoningTrigger />
-          <ReasoningContent>{part.text}</ReasoningContent>
+          <ReasoningContent linkSafety={chatLinkSafety}>{part.text}</ReasoningContent>
         </Reasoning>
       );
     case "tool": {

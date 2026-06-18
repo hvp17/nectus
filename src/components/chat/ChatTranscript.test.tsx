@@ -2,7 +2,14 @@ import { describe, it, expect, vi } from "vitest";
 import { screen, fireEvent } from "@testing-library/react";
 import { renderWithProviders } from "../../test/testUtils";
 import { ChatTranscript } from "./ChatTranscript";
+import { openExternal } from "../../lib/openExternal";
 import type { ChatMessage } from "../../types";
+
+vi.mock("../../lib/openExternal", () => ({
+  openExternal: vi.fn(),
+}));
+
+const mockedOpenExternal = vi.mocked(openExternal);
 
 const messages: ChatMessage[] = [
   {
@@ -85,5 +92,58 @@ describe("ChatTranscript", () => {
     renderWithProviders(<ChatTranscript messages={messages} onOpenFile={onOpenFile} />);
     fireEvent.click(screen.getByTestId("chat-file-chip"));
     expect(onOpenFile).toHaveBeenCalledWith("src/main.rs");
+  });
+
+  it("routes a markdown link in agent output through the app opener", () => {
+    const linkMessages: ChatMessage[] = [
+      {
+        id: "a-link",
+        role: "agent",
+        parts: [
+          {
+            type: "text",
+            text: "Opened [PR #119](https://github.com/hvp17/nectus/pull/119).",
+          },
+        ],
+        createdAt: "t1",
+        completedAt: "t2",
+      },
+    ];
+
+    renderWithProviders(<ChatTranscript messages={linkMessages} />);
+
+    // streamdown renders the link as a button that opens the safety dialog.
+    fireEvent.click(screen.getByRole("button", { name: "PR #119" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open link" }));
+
+    expect(mockedOpenExternal).toHaveBeenCalledWith(
+      "https://github.com/hvp17/nectus/pull/119",
+    );
+  });
+
+  it("routes a markdown link in agent reasoning through the app opener", () => {
+    const reasoningMessages: ChatMessage[] = [
+      {
+        id: "a-reason",
+        role: "agent",
+        parts: [
+          {
+            type: "reasoning",
+            text: "Checking [the docs](https://example.com/docs) first.",
+          },
+        ],
+        createdAt: "t1",
+        completedAt: "t2",
+      },
+    ];
+
+    renderWithProviders(<ChatTranscript messages={reasoningMessages} />);
+
+    // Reasoning is collapsed by default; expand it to reveal the link.
+    fireEvent.click(screen.getByText(/thought for/i));
+    fireEvent.click(screen.getByRole("button", { name: "the docs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open link" }));
+
+    expect(mockedOpenExternal).toHaveBeenCalledWith("https://example.com/docs");
   });
 });
